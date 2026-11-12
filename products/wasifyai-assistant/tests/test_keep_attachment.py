@@ -252,3 +252,19 @@ async def test_an_attached_recording_is_kept_as_a_song(engine, tmp_path):
     assert r.output["kind"] == "track" and "track id" in r.text
     wrong = await rig.keep({"attachment_id": upload, "as_kind": "video"})
     assert wrong.status == "refused" and "as a video" in wrong.text
+
+
+async def test_the_attachment_of_a_sent_message_is_still_kept(engine):
+    """Sending the message takes the upload (it is kept with the conversation from then on), so
+    the keep reads the person's own file, not an unused upload record. This is what the chat does
+    when a model names an attachment after the message was sent."""
+    rig = Rig(engine)
+    upload = await rig.attach(png())
+    for record in list(rig.state.uploads.rows.values()):
+        await rig.state.uploads.consume(record)  # what sending the message does
+    r = await rig.keep({"attachment_id": upload})
+    assert r.status == "ok", r.text
+    # a name that is no attachment id finds nothing, and never a path
+    for ident in ("../../x", "uploads/" + upload):
+        r = await rig.keep({"attachment_id": ident})
+        assert r.status == "refused"

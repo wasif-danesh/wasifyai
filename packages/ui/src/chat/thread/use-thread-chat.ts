@@ -81,6 +81,8 @@ export function useThreadChat({
   const local = useRef(state);
   const abort = useRef<AbortController | null>(null);
   const turn = useRef<Turn | null>(null);
+  // a saved chat being opened: a message sent before it is there waits for it, so it is not sent as a new chat
+  const opening = useRef<Promise<unknown> | null>(null);
   const notify = useRef(onConversation);
   notify.current = onConversation;
   // the clients are read when a turn runs, not when the hook renders, so a new object each render is harmless
@@ -184,12 +186,16 @@ export function useThreadChat({
    */
   const send = useCallback(
     async (text: string, opts: { parentId?: string | null } = {}) => {
+      // written before the saved chat was on screen: the box saw no messages and so no parent, but it
+      // can only be a new message, and it goes under the end of the branch that has now opened
+      const early = opening.current !== null;
+      if (early) await opening.current;
       const message = text.trim();
       // a file with no words is a message too (the engine names the chat after the file)
       if ((!message && !files.current?.length) || local.current.chat.phase === "working") return;
       await closeCard();
       await before.current?.();
-      const parentId = opts.parentId === undefined ? local.current.headId : opts.parentId;
+      const parentId = early || opts.parentId === undefined ? local.current.headId : opts.parentId;
       const userId = newId();
       const replyId = newId();
       const input: Record<string, unknown> = {
@@ -306,12 +312,17 @@ export function useThreadChat({
   useEffect(() => {
     if (!conversationId || conversationId === local.current.chat.conversationId) return;
     let gone = false;
-    clients.current.api
+    const loading = clients.current.api
       .get(conversationId, { tree: true })
       .then((c) => !gone && dispatch({ type: "loaded", conversation: c }))
-      .catch((e) => !gone && chat({ type: "failed", message: describe(e), retryable: false }));
+      .catch((e) => !gone && chat({ type: "failed", message: describe(e), retryable: false }))
+      .finally(() => {
+        if (opening.current === loading) opening.current = null;
+      });
+    opening.current = loading;
     return () => {
       gone = true;
+      if (opening.current === loading) opening.current = null;
     };
   }, [conversationId, chat, dispatch]);
 

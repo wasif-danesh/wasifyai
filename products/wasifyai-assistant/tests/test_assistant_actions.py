@@ -209,6 +209,33 @@ async def test_an_unknown_action_or_a_bad_field_is_told_in_words_so_the_model_ca
     assert "'prompt' is required" in words and "'size'" in words
 
 
+async def test_an_action_called_straight_by_its_id_is_taken_as_its_proposal(tmp_path, ctx):
+    """A model often calls `image.generate(prompt)` as if it were a tool; the chat takes it as the
+    proposal it meant, so the card still asks. A name that is neither stays an error."""
+    rig = Rig(
+        tmp_path,
+        [{"tool_calls": [
+            {"name": "image.generate", "arguments": {"prompt": "a fox"}}]},
+         {"text": "Done."}],
+        FakeHost(),
+    )  # fmt: skip
+    await rig.turn_with({"text": "draw a fox", "approvals": True})
+    ask = await rig.paused()
+    assert ask and ask["action_id"] == "image.generate"
+    assert next(f for f in ask["fields"] if f["name"] == "prompt")["value"] == "a fox"
+
+
+def test_only_a_name_shaped_like_an_action_id_becomes_a_proposal():
+    from wasifyai_assistant.tools import as_tool_call
+
+    assert as_tool_call("library.list", {"kind": "image"}) == (
+        PROPOSE, {"action_id": "library.list", "params": {"kind": "image"}}
+    )  # fmt: skip
+    assert as_tool_call("how_to", {"question": "q"}) == ("how_to", {"question": "q"})
+    assert as_tool_call("make_picture", {}) == ("make_picture", {})
+    assert as_tool_call("rm -rf .x", {}) == ("rm -rf .x", {})
+
+
 async def test_the_card_is_the_default_and_the_person_can_edit_it_before_running(tmp_path, ctx):
     host = FakeHost()
     rig = Rig(

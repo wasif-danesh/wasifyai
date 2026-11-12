@@ -266,6 +266,7 @@ async def attach_document(rig: Rig, text: str, user: str = "u1") -> str:
     record = new_upload("t1", "wasifyai-assistant", user, len(data), "text")
     await rig.state.storage.put_for(record.owner, record.key, data, "text/plain")
     await rig.state.uploads.add(record)
+    await rig.state.uploads.consume(record)  # sending the message takes it
     return record.id
 
 

@@ -528,3 +528,14 @@ async def test_beats_of_a_song_that_is_not_there_is_an_answer_not_a_crash(tmp_pa
     h.rig.state.music_analysis = FakeAnalysis()
     r = await h.go("music.analyse", {"track_id": "nope"})
     assert not r.ok
+
+
+def test_transcribe_says_what_is_missing_when_no_recording_is_named():
+    from pydantic import ValidationError
+    from wasifyai_voice.actions import TranscribeIn
+
+    with pytest.raises(ValidationError, match="say which recording"):
+        TranscribeIn()
+    with pytest.raises(ValidationError, match="not both"):
+        TranscribeIn(source_id="t1", path="/x.wav")
+    assert TranscribeIn(source_id="t1").source_id == "t1"

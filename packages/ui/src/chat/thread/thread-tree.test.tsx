@@ -94,6 +94,36 @@ describe("useThreadChat with branches", () => {
     expect(result.current.state.chat.messages.map((m) => m.id)).toEqual(["u1", "a1", "u2", "a2b"]);
   });
 
+  it("a message sent while a saved chat is still opening goes into that chat, not a new one", async () => {
+    const inputs: object[] = [];
+    let open: (c: Conversation) => void = () => {};
+    const slow = api({
+      get: vi.fn(
+        () =>
+          new Promise<Conversation>((r) => {
+            open = r;
+          }),
+      ),
+    });
+    const { result } = renderHook(() =>
+      useThreadChat({ runs: runs(inputs), api: slow, conversationId: "c1" }),
+    );
+    let sending: Promise<void> = Promise.resolve();
+    act(() => {
+      sending = result.current.send("and the next thing", { parentId: null }); // the empty box saw no parent
+    });
+    expect(inputs).toHaveLength(0); // it waits for the chat
+    await act(async () => {
+      open(saved);
+      await sending;
+    });
+    expect(inputs[0]).toMatchObject({
+      text: "and the next thing",
+      conversation_id: "c1",
+      parent_message_id: "a2b",
+    });
+  });
+
   it("answers a message again under it, without asking it twice", async () => {
     const inputs: object[] = [];
     const { result } = renderHook(() =>

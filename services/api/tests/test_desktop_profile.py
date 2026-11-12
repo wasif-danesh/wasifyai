@@ -171,6 +171,16 @@ def test_recipes_favourites_and_saving_a_copy_on_the_desktop_profile(data_dir, m
         )
         assert pre.status_code == 200
         assert "PATCH" in pre.headers["access-control-allow-methods"]
+        # a file attached in the chat says its name in a header; the browser asks for it first
+        named = c.options(
+            "/products/wasifyai-assistant/attachments/media",
+            headers={
+                "origin": "tauri://localhost",
+                "access-control-request-method": "POST",
+                "access-control-request-headers": "authorization,content-type,x-file-name",
+            },
+        )
+        assert named.status_code == 200, named.text
 
         fav = c.patch(f"{path}/{made['image_id']}", json={"favourite": True}, headers=auth())
         assert fav.status_code == 200 and fav.json()["favourite"] is True

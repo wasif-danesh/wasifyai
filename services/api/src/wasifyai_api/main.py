@@ -121,7 +121,14 @@ def create_app(given: Injected | None = None) -> FastAPI:
                 o.strip() for o in settings.desktop_allowed_origins.split(",") if o.strip()
             ],
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["authorization", "content-type", "last-event-id", "x-request-id"],
+            # x-file-name: a document, recording or video attached in the chat says its name
+            allow_headers=[
+                "authorization",
+                "content-type",
+                "last-event-id",
+                "x-request-id",
+                "x-file-name",
+            ],
             expose_headers=["x-request-id"],
         )
 

@@ -253,8 +253,13 @@ class TranscribeIn(Strict):
 
     @model_validator(mode="after")
     def _one_source(self) -> "TranscribeIn":
-        if bool(self.source_id) == bool(self.path):
+        if self.source_id and self.path:
             raise ValueError("give either a recording of the library or a file path, not both")
+        if not self.source_id and not self.path:
+            raise ValueError(
+                "say which recording: the id of a recording of the library (an attached file is "
+                "kept there first), or a file path"
+            )
         return self
 
 

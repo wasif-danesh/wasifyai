@@ -6,11 +6,10 @@ recording or a clip checked the same way (stage CE2). The model only knows its i
 tells it; the file is read here, under the person's own prefix, and handed to the library kind that
 takes it (`LibraryKind.keep`), which stores it as an Images import would."""
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk import UploadError
 from wasifyai_platform_sdk.actions import Action, ActionContext, CallBinding, Outcome
+from wasifyai_platform_sdk.actions.helpers import attached_file
 from wasifyai_platform_sdk.actions.library import LibraryKind, creation_uri
 
 from wasifyai_assistant.attachments import STORED
@@ -45,17 +44,13 @@ class KeepOut(BaseModel):
     uri: str
 
 
-async def find_attachment(ctx: ActionContext, attachment_id: str) -> tuple[str, Any] | None:
-    """The kind and upload record of one of the person's chat attachments, or None."""
-    uploads = getattr(ctx.deps.state, "uploads", None)
-    if uploads is None:
-        return None
+async def find_attachment(ctx: ActionContext, attachment_id: str) -> tuple[str, bytes] | None:
+    """The kind and bytes of one of the person's chat attachments, or None (`attached_file`:
+    the attachment of a sent message counts, and only the person's own)."""
     for kind, ext in STORED_AS.items():
-        record = await uploads.find(
-            ctx.actor.tenant_id, PRODUCT_ID, ctx.actor.user_id, f"uploads/{attachment_id}.{ext}"
-        )
-        if record is not None:
-            return kind, record
+        data = await attached_file(ctx, attachment_id, ext)
+        if data is not None:
+            return kind, data
     return None
 
 
@@ -79,7 +74,7 @@ async def _keep(p: KeepIn, ctx: ActionContext) -> Outcome:
         return Outcome.refused(
             "That attachment is not there any more. Please attach the file again.", "not_found"
         )
-    kind, record = found
+    kind, data = found
     library = keeper(ctx, kind, p.as_kind.strip())
     if library is None or library.keep is None:
         return Outcome.refused(
@@ -87,14 +82,6 @@ async def _keep(p: KeepIn, ctx: ActionContext) -> Outcome:
             + (f" as a {p.as_kind.strip()}." if p.as_kind.strip() else "."),
             "unavailable",
         )
-    with ctx.deps.acting_as(ctx.actor, PRODUCT_ID):
-        try:
-            data = await ctx.deps.storage.get(record.key)
-        except FileNotFoundError:
-            return Outcome.refused(
-                "That attachment is not there any more. Please attach the file again.",
-                "not_found",
-            )
     try:
         item = await library.keep(ctx, data, p.title.strip() or "")
     except UploadError as e:

@@ -7,6 +7,7 @@ they said it may run), `open_screen` offers a button, and the searches and the w
 they were. Only the tools listed here exist: adding one is a code change that is reviewed."""
 
 import json
+import re
 from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, field
 from typing import Any
@@ -293,6 +294,19 @@ def parse_arguments(raw: str) -> dict[str, Any]:
     except ValueError:
         return {}
     return value if isinstance(value, dict) else {}
+
+
+ACTION_ID = re.compile(r"[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+")
+
+
+def as_tool_call(name: str, arguments: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """A model often calls an action of its list straight by its id (`library.list(kind)`) instead
+    of through `propose_action`: such a call is taken as the proposal it meant, so the action's own
+    checks, card and asking still apply. A name that is no tool and no action id is left as it is
+    (and answered "There is no tool called …")."""
+    if name in TOOL_NAMES or not ACTION_ID.fullmatch(name):
+        return name, arguments
+    return PROPOSE, {"action_id": name, "params": arguments}
 
 
 def _text(arguments: dict[str, Any], key: str, limit: int) -> str:

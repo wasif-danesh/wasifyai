@@ -78,6 +78,7 @@ class Harness:
         record = new_upload("t1", "wasifyai-assistant", "u1", len(data), "text")
         await state.storage.put_for(record.owner, record.key, data, "text/plain")
         await state.uploads.add(record)
+        await state.uploads.consume(record)  # sending the message takes the upload
         return record.id
 
 

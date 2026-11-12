@@ -3,6 +3,7 @@
 import asyncio
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from wasifyai_platform_sdk.actions.model import ActionRefused
 from wasifyai_platform_sdk.uploads import UPLOAD_CREATED, UploadError, new_upload, process_image
@@ -20,24 +21,35 @@ def need_deps(ctx: Any) -> Any:
 CHAT_PRODUCT = "wasifyai-assistant"  # whose uploads the chat's attachments are (ADR-0083)
 
 
+async def attached_file(ctx: Any, attachment_id: str, ext: str) -> bytes | None:
+    """The bytes of a file the person attached in the chat (`uploads/<id>.<ext>`), or None.
+
+    It is read from the person's own chat files, not looked up as an unused upload: sending the
+    message takes the upload (the file is kept with the conversation from then on), so a file of
+    a sent message has no open upload record. The storage is scoped to the person, so only their
+    own files are found, and the id must be a UUID, so nothing else can be named."""
+    try:
+        ident = str(UUID(attachment_id.strip()))
+    except ValueError:
+        return None
+    deps = need_deps(ctx)
+    if deps.storage is None:
+        return None
+    try:
+        with deps.acting_as(ctx.actor, CHAT_PRODUCT):
+            return await deps.storage.get(f"uploads/{ident}.{ext}")
+    except FileNotFoundError:
+        return None
+
+
 async def attached_document(ctx: Any, attachment_id: str) -> str:
     """The words of a document the person attached in the chat, or a refusal in words
-    (docs/chat-does-everything-plan.md, CE4 and CE5). Only the person's own uploads are found."""
-    deps = need_deps(ctx)
-    a = ctx.actor
-    gone = "That attached document is not there any more. Please attach it again."
-    uploads, storage = getattr(deps.state, "uploads", None), deps.storage
-    record = None
-    if uploads is not None and storage is not None:
-        key = f"uploads/{attachment_id.strip()}.txt"
-        record = await uploads.find(a.tenant_id, CHAT_PRODUCT, a.user_id, key)
-    if record is None or storage is None:
-        raise ActionRefused("not_found", gone)
-    try:
-        with deps.acting_as(a, CHAT_PRODUCT):
-            data = await storage.get(record.key)
-    except FileNotFoundError:
-        raise ActionRefused("not_found", gone) from None
+    (docs/chat-does-everything-plan.md, CE4 and CE5). Only the person's own files are found."""
+    data = await attached_file(ctx, attachment_id, "txt")
+    if data is None:
+        raise ActionRefused(
+            "not_found", "That attached document is not there any more. Please attach it again."
+        )
     return data.decode("utf-8", errors="replace")
 
 

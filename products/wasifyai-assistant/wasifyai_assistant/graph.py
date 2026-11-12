@@ -72,6 +72,7 @@ from wasifyai_assistant.tools import (
     TOOL_DEFINITIONS,
     WEB_TOOLS,
     ToolOutcome,
+    as_tool_call,
     call_tool,
     card_of,
     estimate_of,
@@ -775,10 +776,10 @@ def build_assistant_graph(
                 parts: list[dict[str, Any]] = reasoning_part(thought)
                 if text.strip():
                     parts.append({"type": "text", "text": text})
-                pending = [
-                    {"id": c.id, "name": c.name, "arguments": parse_arguments(c.arguments)}
-                    for c in calls
-                ]
+                pending = []
+                for c in calls:
+                    name, arguments = as_tool_call(c.name, parse_arguments(c.arguments))
+                    pending.append({"id": c.id, "name": name, "arguments": arguments})
                 for c in pending:
                     parts.append(
                         {

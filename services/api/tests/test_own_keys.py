@@ -70,7 +70,8 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     c, _, _ = rig()
     body = c.get("/desktop/keys").json()
     assert list(rows(body)) == [
-        "chat", "media", "images", "video", "voice", "music", "sfx", "lipsync", "model3d",
+        "chat", "media", "images", "video", "voice", "voiceclone", "transcribe", "voicechange",
+        "music", "sfx", "lipsync", "model3d",
     ]  # fmt: skip
     assert all(p["keys"] == [] and p["use"] is None for p in body["products"])
     by = rows(body)
@@ -80,9 +81,11 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     ]  # fmt: skip
     # one media key serves every media product (decision 9); the tie order throughout
     assert by["media"]["providers"] == ["runware", "wavespeed", "fal"]
-    for media in ("images", "video", "music", "lipsync"):
+    for media in ("images", "video", "voice", "voiceclone", "music", "lipsync"):
         assert by[media]["providers"] == ["runware", "wavespeed", "fal"], media
-    for media in ("voice", "sfx", "model3d"):
+    for media in ("transcribe", "voicechange"):
+        assert by[media]["providers"] == ["wavespeed", "fal"], media
+    for media in ("sfx", "model3d"):
         assert by[media]["providers"] == ["fal"], media
     assert [p["id"] for p in body["providers"]] == [
         "anthropic", "openai", "gemini", "deepseek", "zai", "openrouter",

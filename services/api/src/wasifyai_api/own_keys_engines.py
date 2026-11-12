@@ -28,18 +28,20 @@ from typing import Any, Protocol
 import httpx
 from PIL import Image, ImageOps
 from wasifyai_platform_sdk import (
+    ConvertRequest,
     LipSyncRequest,
     LipSyncResult,
     MusicRequest,
     MusicResult,
     SpeechResult,
+    TranscriptResult,
     VoiceEngineError,
 )
 from wasifyai_platform_sdk.cloud_queues import queue_for
 from wasifyai_platform_sdk.fal import FalError, FalQueue
 from wasifyai_platform_sdk.offers import Priced, cost_event, no_offer, order, run_cheapest
 from wasifyai_platform_sdk.usage import UsageRecorder, record_safely
-from wasifyai_platform_sdk.voice_models import OptionSpec, VoiceInfo, VoiceModel
+from wasifyai_platform_sdk.voice_models import VoiceModel
 
 from wasifyai_api.audio_runtime import _wav_rate, _wav_seconds
 from wasifyai_api.comfy_music import to_wav
@@ -48,15 +50,27 @@ from wasifyai_api.lipsync_runtime import _video_size
 from wasifyai_api.logging import product_id as current_product
 from wasifyai_api.logging import tenant_id as current_tenant
 from wasifyai_api.own_keys import KeyChoice, KeyRoute, offer_of
+from wasifyai_api.own_keys_voice import (
+    KEYED_CHANGE,
+    KEYED_CLONE,
+    KEYED_TRANSCRIBE,
+    KEYED_VOICE,
+    VOICE_PRODUCTS,
+    change_model,
+    clone_model,
+    clone_request,
+    convert_request,
+    design_request,
+    made_voice,
+    new_voice_id,
+    speak_request,
+    speaker_model,
+    transcribe_model,
+    transcribe_request,
+    transcript_of,
+    voice_key,
+)
 
-# the voice model's id while Voice runs on the key: the one model offered for speaking
-KEYED_VOICE = "key:voice"
-# the voices fal.ai's Kokoro offers (its page lists the American ones only)
-FAL_VOICES = (
-    "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole",
-    "af_nova", "af_river", "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir",
-    "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa",
-)  # fmt: skip
 FAL_MATTE = "fal-ai/birefnet"  # the cut-out of a picture, on the same key as the 3D model
 FAL_3D_RESOLUTION = 1024  # what this computer's run uses too (`--res 1024`)
 WITH_KEY = "Runs on fal.ai with your key: the picture is sent there."
@@ -116,6 +130,7 @@ async def on_cheapest[T](
 
 
 MEDIA_PROVIDERS = ("fal", "wavespeed", "runware")
+TOOL_PRODUCTS = ("voiceclone", "transcribe", "voicechange")  # the voice tools (CP7)
 
 
 def _cloud(keys: Routes, product: str) -> KeyRoute | None:
@@ -126,19 +141,26 @@ def _cloud(keys: Routes, product: str) -> KeyRoute | None:
 
 
 def keyed_voice_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
+    """The speaking model offered while Voice runs on a cloud model: its named voices."""
     name = route.title or route.model
     title = f"{name} · {route.provider.title}" if admin else f"{name} · with your key"
-    return VoiceModel(
-        id=KEYED_VOICE, title=title, engine="remote",
-        family="kokoro_tts", package="", server_task="tts", tasks=("speak",),
-        recommended=("speak",), languages=("en-us",), sample_rate=24000,
-        voices=tuple(
-            VoiceInfo(v, v[3:].capitalize(), "en-us", "female" if v[1] == "f" else "male")
-            for v in FAL_VOICES
-        ),
-        default_voice="af_heart",
-        options=(OptionSpec("speed", "float", "Speed", "How fast it speaks.", 1.0, 0.5, 2.0),),
-    )  # fmt: skip
+    return speaker_model(_model_id("voice", route), title, route.provider.id)
+
+
+def keyed_tool_model(product: str, route: KeyRoute, admin: bool = False) -> VoiceModel:
+    """The model offered for copying or designing a voice, writing down speech or changing a voice
+    while that product runs on a cloud model; a copy model offers what its keyed offers can do."""
+    name = route.title or route.model
+    title = f"{name} · {route.provider.title}" if admin else f"{name} · with your key"
+    if product == "voiceclone":
+        can = {v for c in route.offers() for v in c.offer.can}
+        tasks = tuple(t for t in ("clone", "design") if t in can)
+        if not tasks:
+            raise VoiceEngineError("not_with_key", f"{name} can do nothing with these keys.")
+        return clone_model(tasks, title, route.provider.id, _model_id(product, route))
+    if product == "transcribe":
+        return transcribe_model(title, route.provider.id)
+    return change_model(title, route.provider.id)
 
 
 # ---- music, sound effects and lip sync on the key ------------------------------------------------
@@ -390,13 +412,15 @@ class KeyedSpeechEngine:
         """The models on the key now, by their id (music, sound effects and lip sync are offered
         before this computer's models; speaking replaces them)."""
         out: dict[str, VoiceModel] = {}
-        for product in ("voice", "music", "sfx", "lipsync"):
+        for product in ("voice", *TOOL_PRODUCTS, "music", "sfx", "lipsync"):
             route = self._where(product)
             if route is None:
                 continue
             try:
                 model = (
                     keyed_voice_model(route, self._admin) if product == "voice"
+                    else keyed_tool_model(product, route, self._admin)
+                    if product in TOOL_PRODUCTS
                     else keyed_lipsync_model(route, self._admin) if product == "lipsync"
                     else keyed_music_model(product, route, self._admin)
                 )  # fmt: skip
@@ -406,7 +430,7 @@ class KeyedSpeechEngine:
         return out
 
     def _where(self, product: str) -> KeyRoute | None:
-        return _fal(self._keys, product) if product == "voice" else _cloud(self._keys, product)
+        return _cloud(self._keys, product)
 
     def _row(self, model: VoiceModel, route: KeyRoute) -> dict[str, Any]:
         return {
@@ -419,7 +443,7 @@ class KeyedSpeechEngine:
         keyed = self._keyed()
         if not keyed:
             return local
-        product = {KEYED_VOICE: "voice", KEYED_MUSIC: "music", KEYED_SFX: "sfx",
+        product = {**VOICE_PRODUCTS, KEYED_MUSIC: "music", KEYED_SFX: "sfx",
                    KEYED_LIPSYNC: "lipsync"}  # fmt: skip
         rows = [
             self._row(m, route)
@@ -456,42 +480,249 @@ class KeyedSpeechEngine:
     ) -> SpeechResult:
         if model.id != KEYED_VOICE:
             return await self._local.speak(model, text, voice, options, beside=beside)
-        route = await self._keys.route("voice")
-        if route is None:
-            raise VoiceEngineError(
-                "not_with_key", "Voice runs on this computer now. Choose a model and try again."
-            )
-        body: dict[str, Any] = {"prompt": text, "voice": voice or model.default_voice}
+        route = await self._route("voice")
+        model_id = _model_id("voice", route)
+        chosen = voice or model.default_voice
         speed = options.get("speed")
-        if isinstance(speed, int | float):
-            body["speed"] = float(speed)
+        speed = float(speed) if isinstance(speed, int | float) else None
         t0 = time.monotonic()
 
-        async def attempt(c: KeyChoice) -> bytes:
-            async with self._client() as http:
-                fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
-                result = await fal.call(c.offer.endpoint, body, _no_progress)
-                wav, _ = await fal.fetch(result.get("audio"), "audio/wav")
-                return wav
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            body = speak_request(model_id, c.provider.id, c.offer.endpoint, text, chosen, speed)
+            return await self._audio(c, c.offer.endpoint, body)
 
-        try:
-            # Kokoro is on fal.ai only; more speaking models and providers come in CP7
-            wav, _used = await on_cheapest(
-                route, "voice", {"characters": len(text)}, attempt, self._usage, only="fal"
+        (data, ext), used = await self._cheapest(route, "voice", {"characters": len(text)}, attempt)
+        wav = await self._wav(data, ext, used)
+        return SpeechResult(
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            chosen, 0.0, time.monotonic() - t0,
+        )  # fmt: skip
+
+    # ---- the voice tools on a cloud model (ADR-0100, CP7) --------------------------------------
+
+    async def _audio(
+        self, c: KeyChoice, endpoint: str, body: dict[str, Any], hold: Any = None
+    ) -> tuple[bytes, str]:
+        """The audio a provider makes for `body`: its bytes and their kind (wav or mp3)."""
+        async with self._client() as http:
+            queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+            data, ctype, result = await queue.make(
+                endpoint, body, "audio", "audio/mpeg", _no_progress
             )
+            if hold is not None:
+                hold.update(result)
+            return data, ".wav" if "wav" in ctype else ".mp3"
+
+    async def _cheapest[T](
+        self, route: KeyRoute, product: str, job: dict[str, Any],
+        attempt: Callable[[KeyChoice], Awaitable[T]], needs: tuple[str, ...] = (),
+        only: str | None = None,
+    ) -> tuple[T, Priced[KeyChoice]]:  # fmt: skip
+        try:
+            return await on_cheapest(route, product, job, attempt, self._usage, needs, only)
         except FalError as e:
             raise VoiceEngineError(e.code, e.message) from None
         except TimeoutError:
-            raise VoiceEngineError("provider_refused", "fal.ai took too long.") from None
-        seconds = _wav_seconds(wav)
-        if seconds <= 0:
             raise VoiceEngineError(
-                "engine_failed", "fal.ai sent the speech in a form this app cannot read."
+                "provider_refused", f"{route.provider.title} took too long."
+            ) from None
+
+    async def _wav(self, data: bytes, ext: str, used: Priced[KeyChoice]) -> bytes:
+        unread = VoiceEngineError(
+            "engine_failed",
+            f"{used.choice.provider.title} sent the speech in a form this app cannot read.",
+        )
+        try:
+            wav = data if ext == ".wav" and data[:4] == b"RIFF" else await to_wav(data, ext)
+        except VoiceEngineError:
+            raise unread from None
+        if _wav_seconds(wav) <= 0:
+            raise unread
+        return wav
+
+    async def _send(self, c: KeyChoice, data: bytes, name: str) -> str:
+        """A recording up to the provider first: its address, or Runware's upload id."""
+        async with self._client() as http:
+            queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+            return await queue.upload(data, name)
+
+    def _kept(self) -> Any:
+        """Where MiniMax's voices are remembered (the person's settings; none on the web)."""
+        return self._keys if hasattr(self._keys, "kept_voice") else None
+
+    async def _kept_route(
+        self, route: KeyRoute, kind: str, made_from: bytes
+    ) -> tuple[KeyRoute, str] | None:
+        """A MiniMax voice made before from the same recording or words, on a provider with a key:
+        a route to MiniMax Speech there (priced per character) and the voice's id; else None."""
+        from wasifyai_api.own_keys_catalogue import media_model
+
+        kept, key = self._kept(), voice_key(kind, made_from)
+        speech = media_model("voice", "minimax-speech-2.8-hd")
+        if kept is None or speech is None:
+            return None
+        for c in route.offers():
+            voice_id = await kept.kept_voice(key, c.provider.id)
+            there = speech.offer_of(c.provider.id)
+            if voice_id and there is not None:
+                choice = KeyChoice(c.provider, c.key, c.base_url, there)
+                again = KeyRoute(
+                    c.provider, speech.model, c.key, c.base_url, (choice,), speech.title
+                )
+                return again, voice_id
+        return None
+
+    async def _made_voice(
+        self, route: KeyRoute, kind: str, made_from: bytes, text: str,
+        make: Callable[[KeyChoice, str], Awaitable[dict[str, Any]]],
+    ) -> tuple[tuple[bytes, str], Priced[KeyChoice]]:  # fmt: skip
+        """A MiniMax voice: one made before speaks again where it was made, priced per character;
+        otherwise it is made now (which says `text` too) and remembered by what made it."""
+        again = await self._kept_route(route, kind, made_from)
+        if again is not None:
+            speech_route, voice_id = again
+
+            async def speak(c: KeyChoice) -> tuple[bytes, str]:
+                body = speak_request(
+                    "minimax-speech-2.8-hd", c.provider.id, c.offer.endpoint, text, voice_id, None
+                )
+                return await self._audio(c, c.offer.endpoint, body)
+
+            return await self._cheapest(
+                speech_route, "voiceclone", {"characters": len(text)}, speak
             )
+        kept = self._kept()
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            asked, result = new_voice_id(), {}
+            body = await make(c, asked)
+            made = await self._audio(c, c.offer.endpoint_for(kind), body, hold=result)
+            if kept is not None:
+                await kept.keep_voice(
+                    voice_key(kind, made_from), c.provider.id, made_voice(result, asked)
+                )
+            return made
+
+        job = {"characters": len(text), "task": kind}
+        return await self._cheapest(route, "voiceclone", job, attempt, (kind,))
+
+    async def clone(
+        self, model: VoiceModel, text: str, reference: Path, reference_text: str | None,
+        options: dict[str, Any],
+    ) -> SpeechResult:  # fmt: skip
+        if model.id != KEYED_CLONE:
+            return await self._local.clone(model, text, reference, reference_text, options)  # type: ignore[no-any-return]
+        route = await self._route("voiceclone")
+        model_id = _model_id("voiceclone", route)
+        recording = await asyncio.to_thread(reference.read_bytes)
+        t0 = time.monotonic()
+
+        async def make(c: KeyChoice, voice_id: str) -> dict[str, Any]:
+            sent = await self._send(c, recording, reference.name)
+            endpoint = c.offer.endpoint_for("clone")
+            return clone_request(
+                model_id, c.provider.id, endpoint, text, sent, reference_text, voice_id
+            )
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            return await self._audio(c, c.offer.endpoint_for("clone"), await make(c, ""))
+
+        if model_id == "minimax-voice":
+            (data, ext), used = await self._made_voice(route, "clone", recording, text, make)
+        else:
+            job = {"characters": len(text), "task": "clone"}
+            (data, ext), used = await self._cheapest(route, "voiceclone", job, attempt, ("clone",))
+        wav = await self._wav(data, ext, used)
         return SpeechResult(
-            wav, _wav_rate(wav) or model.sample_rate, seconds, _used.offer.endpoint, body["voice"],
-            0.0,
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            None, 0.0, time.monotonic() - t0,
+        )  # fmt: skip
+
+    async def design(
+        self, model: VoiceModel, text: str, description: str, options: dict[str, Any]
+    ) -> SpeechResult:
+        if model.id != KEYED_CLONE:
+            return await self._local.design(model, text, description, options)  # type: ignore[no-any-return]
+        route = await self._route("voiceclone")
+        model_id = _model_id("voiceclone", route)
+        t0 = time.monotonic()
+
+        async def make(c: KeyChoice, voice_id: str) -> dict[str, Any]:
+            return design_request(model_id, c.provider.id, text, description, voice_id)
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            return await self._audio(c, c.offer.endpoint_for("design"), await make(c, ""))
+
+        if model_id == "minimax-voice":
+            (data, ext), used = await self._made_voice(
+                route, "design", description.encode(), text, make
+            )
+        else:
+            job = {"characters": len(text), "task": "design"}
+            (data, ext), used = await self._cheapest(route, "voiceclone", job, attempt, ("design",))
+        wav = await self._wav(data, ext, used)
+        return SpeechResult(
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            None, 0.0, time.monotonic() - t0,
+        )  # fmt: skip
+
+    async def transcribe(
+        self, model: VoiceModel, wav: bytes, options: dict[str, Any], *, beside: bool = False
+    ) -> TranscriptResult:
+        if model.id != KEYED_TRANSCRIBE:
+            return await self._local.transcribe(model, wav, options, beside=beside)  # type: ignore[no-any-return]
+        route = await self._route("transcribe")
+        model_id = _model_id("transcribe", route)
+        language = options.get("language")
+        language = str(language) if language else None
+        t0 = time.monotonic()
+
+        async def attempt(c: KeyChoice) -> dict[str, Any]:
+            sent = await self._send(c, wav, "speech.wav")
+            body = transcribe_request(model_id, c.provider.id, sent, language)
+            async with self._client() as http:
+                queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+                return await queue.call(c.offer.endpoint, body, _no_progress)
+
+        result, used = await self._cheapest(
+            route, "transcribe", {"seconds": max(_wav_seconds(wav), 1.0)}, attempt
+        )
+        text, segments, seconds = transcript_of(result)
+        return TranscriptResult(
+            text,
+            segments,
+            seconds or _wav_seconds(wav),
+            used.offer.endpoint,
             time.monotonic() - t0,
+        )
+
+    async def convert(
+        self, model: VoiceModel, req: ConvertRequest, source: Path, reference: Path
+    ) -> SpeechResult:
+        if model.id != KEYED_CHANGE:
+            return await self._local.convert(model, req, source, reference)  # type: ignore[no-any-return]
+        route = await self._route("voicechange")
+        said, voice = (
+            await asyncio.to_thread(source.read_bytes),
+            await asyncio.to_thread(reference.read_bytes),
+        )
+        t0 = time.monotonic()
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            body = convert_request(
+                c.provider.id,
+                await self._send(c, said, source.name),
+                await self._send(c, voice, reference.name),
+            )
+            return await self._audio(c, c.offer.endpoint, body)
+
+        (data, ext), used = await self._cheapest(
+            route, "voicechange", {"seconds": req.source_seconds}, attempt
+        )
+        wav = await self._wav(data, ext, used)
+        return SpeechResult(
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            None, 0.0, time.monotonic() - t0,
         )  # fmt: skip
 
     async def _route(self, product: str) -> KeyRoute:

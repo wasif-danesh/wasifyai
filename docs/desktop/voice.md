@@ -25,6 +25,30 @@ Recordings: the runtime reads WAV only. Other formats are converted with ffmpeg 
 macOS's `afconvert`; with neither the person is told to install ffmpeg or save a WAV. Bundling ffmpeg is an open
 question for the owner (licence and size).
 
+### Voice on cloud models (ADR-0100, stage CP7)
+
+With a Runware, WaveSpeed or fal.ai key (for the product, or for Every media product), each voice task can run on a
+cloud model, chosen in its own picker. Four cloud products carry them, each with its own model in use:
+
+| Product (Settings › Your keys) | Tasks | Models and offers |
+|---|---|---|
+| Voice | Speak | Kokoro (fal.ai), ElevenLabs v4 (WaveSpeed, fal.ai), Gemini 3.8 Flash TTS (fal.ai, WaveSpeed), Chatterbox (fal.ai, WaveSpeed), MiniMax Speech 2.8 HD (Runware, fal.ai, WaveSpeed) |
+| Copy or design a voice | Clone, design | Qwen3-TTS (copy and design on Runware, design on fal.ai), Chatterbox (copy on WaveSpeed), MiniMax voice (copy and design on fal.ai and WaveSpeed) |
+| Speech to text | Transcribe | Scribe v2 (fal.ai), Whisper (WaveSpeed) |
+| Change a voice | Convert | Chatterbox (fal.ai, WaveSpeed) |
+
+Each speaking model offers its own named voices (`own_keys_voice.py`, `SPEAKERS`); Chatterbox has one. A MiniMax voice
+costs $1.50 to $3.10 to make, so it is made once: the voice MiniMax keeps is remembered by the recording or the words
+that made it (`own_keys.voices` in the settings), and later speech in it goes to MiniMax Speech 2.8 HD on the provider
+where it was made, per character. Recordings go to fal.ai's and WaveSpeed's stores first and to Runware with its
+`mediaStorage` task. Scribe's timed words are joined into sentences for the transcript. Dubbing and Audiobook use
+whichever models their steps resolve, so they follow these choices. Edit speech and splitting stay on this computer.
+
+Not built: ElevenLabs' voice changer (it changes to its own named voices, and the screen changes to a recorded voice);
+Wizper (its price is not listed); Qwen3-TTS copying on fal.ai (two requests, a voice file and then speech). Not yet
+known, for CP13: WaveSpeed's field names for ElevenLabs, Gemini, Scribe, Whisper and Chatterbox's speech to speech, and
+whether WaveSpeed takes ElevenLabs' voices by name. Checked against fakes only.
+
 ### Dictation: the Mic in the chat box (ADR-0083, stage CO4)
 
 The chat box writes down what the person says. The window records the microphone (`getUserMedia` and an `AudioWorklet` loaded from `/recorder-worklet.js`, a file of the app itself because the window's content policy

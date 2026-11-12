@@ -491,7 +491,7 @@ describe("speech and listening", () => {
     expect(use).toHaveBeenLastCalledWith("voice", null);
   });
 
-  it("listening and the other voice tools do not follow the Voice key", async () => {
+  it("listening has its own cloud models and does not follow the Voice key (ADR-0100, CP7)", async () => {
     const { keys, use } = onKey("voice", "fal-ai/kokoro");
     const ready = [voiceModel({ id: "a", state: "ready" })];
     const api = voiceChoices(
@@ -499,10 +499,31 @@ describe("speech and listening", () => {
       "listening",
       "transcribe",
     );
-    expect(api.cloud).toBeUndefined();
+    expect(api.cloud?.product).toBe("Speech to text");
     expect((await api.list()).choices.some((r) => r.place === "cloud")).toBe(false);
     await api.choose("a");
     expect(use).not.toHaveBeenCalled();
+  });
+
+  it("a cloud model for copying a voice is chosen for its own product", async () => {
+    const { keys, use } = cloudKeys("voiceclone", ["qwen3-tts"], null);
+    const local = voiceModel({
+      id: "voxcpm2",
+      tasks: ["speak", "clone", "design"],
+      state: "ready",
+    });
+    const api = voiceChoices(
+      { voice: voice([local]), models, memory: memory(), engines: engines(), keys },
+      "voice",
+      "clone",
+    );
+    expect(api.cloud?.product).toBe("Copy or design a voice");
+    const rows = (await api.list()).choices.filter((r) => r.place === "cloud");
+    expect(rows.map((r) => [r.id, r.engineId])).toEqual([
+      ["cloud:voiceclone:fal:qwen3-tts", "key:voiceclone"],
+    ]);
+    await api.choose("cloud:voiceclone:fal:qwen3-tts");
+    expect(use).toHaveBeenCalledWith("voiceclone", { provider: "fal", model: "qwen3-tts" });
   });
 
   it("lip sync lists its cloud models and a cloud model of music is chosen for music", async () => {

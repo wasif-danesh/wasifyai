@@ -57,6 +57,8 @@ from wasifyai_api.settings_store import SettingsStore
 log = logging.getLogger(__name__)
 
 SETTINGS = "own_keys"
+VOICES = "own_keys.voices"  # MiniMax voices made from a recording or words, by what made them
+
 FAL_QUEUE = "https://queue.fal.run"
 OPENROUTER_TEXT = "https://openrouter.ai/api/v1"
 ANTHROPIC_API = "https://api.anthropic.com"
@@ -120,6 +122,9 @@ PRODUCTS = (
     Product("images", "Images", "media"),
     Product("video", "Video", "media"),
     Product("voice", "Voice", "media"),
+    Product("voiceclone", "Copy or design a voice", "media"),
+    Product("transcribe", "Speech to text", "media"),
+    Product("voicechange", "Change a voice", "media"),
     Product("music", "Music", "media"),
     Product("sfx", "Sound effects", "media"),
     Product("lipsync", "Lip sync", "media"),
@@ -164,6 +169,8 @@ CAN = {
     "mask": ("image.inpaint",),
     "animate": ("video.animate",),
     "extend": ("video.extend",),
+    "clone": ("clone",),
+    "design": ("design",),
 }
 
 
@@ -512,6 +519,20 @@ class OwnKeysService:
         if p is not None and p.kind == "media":
             return catalogue.media_model(product, model) is not None
         return catalogue.find(product, provider, model) is not None
+
+    async def kept_voice(self, key: str, provider: str) -> str | None:
+        """A MiniMax voice made before from the same recording or words on `provider` (CP7)."""
+        kept = await self._store.get(VOICES)
+        row = kept.get(key) if isinstance(kept, dict) else None
+        return (
+            str(row["voice"]) if isinstance(row, dict) and row.get("provider") == provider else None
+        )
+
+    async def keep_voice(self, key: str, provider: str, voice: str) -> None:
+        kept = await self._store.get(VOICES)
+        rows = dict(kept) if isinstance(kept, dict) else {}
+        rows[key] = {"provider": provider, "voice": voice}
+        await self._store.put(VOICES, rows, "desktop")
 
     def known(self, product: str) -> KeyRoute | None:
         """`route` as of the last `warm`: read at start and after every change in Settings."""

@@ -106,7 +106,10 @@ async def _search(p: SearchIn, ctx: ActionContext) -> Outcome:
     results = [{**h, "uri": creation_uri(h["kind"], h["id"])} for h in hits]
     if not hits:
         return Outcome.ok({"results": []}, "Nothing matched in the person's library.")
-    lines = [f"- {h['kind']}: {h.get('text') or h['id']}" for h in hits]
+    # each with its id: the chat acts on an item by its id, never by its title
+    lines = [
+        f"- {h['kind']}: {h.get('text') or 'Untitled'} ({h['kind']} id {h['id']})" for h in hits
+    ]
     return Outcome.ok(
         {"results": results},
         f"Found {len(hits)} in the person's library:\n" + "\n".join(lines),

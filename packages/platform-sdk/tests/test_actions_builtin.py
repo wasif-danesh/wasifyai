@@ -95,14 +95,14 @@ async def run(ex, action_id, params, origin="assistant", **kw):
     return await ex.run_action(action_id, params, origin, actor=ME, policy=AUTO, **kw)
 
 
-async def test_search_returns_references_and_the_sentence_the_assistant_always_gave(tmp_path):
+async def test_search_returns_references_and_tells_the_chat_each_id(tmp_path):
     ex, host, *_ = rig(tmp_path)
     host.hits = [
         {"kind": "image", "product_id": "wasifyai-image", "id": "img-9", "text": "a red teapot"}
     ]
     r = await run(ex, "library.search", {"query": "teapot"})
     assert r.ok
-    assert r.text == "Found 1 in the person's library:\n- image: a red teapot"
+    assert r.text == "Found 1 in the person's library:\n- image: a red teapot (image id img-9)"
     assert r.output["results"][0] | {"uri": "x"} == {
         "kind": "image", "product_id": "wasifyai-image", "id": "img-9", "text": "a red teapot",
         "uri": "x",

@@ -11,7 +11,7 @@ import asyncio
 import logging
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from wasifyai_platform_sdk.actions import (
     CHAT,
     NOTEBOOKS,
@@ -127,6 +127,49 @@ async def _list(p: ListIn, ctx: ActionContext) -> Outcome:
 
 class CreateIn(Strict):
     title: str = Field("Untitled notebook", min_length=1, max_length=200)
+    attachment_ids: list[str] = Field(
+        default_factory=list, max_length=4,
+        description="Documents the person attached in the chat, by their attachment id, to add "
+        "as the notebook's first sources.",
+    )  # fmt: skip
+
+
+# a document attached in the chat is kept by the assistant as its words (ADR-0083): the upload
+# `uploads/{id}.txt` of the assistant product, under the person's own prefix
+CHAT_PRODUCT = "wasifyai-assistant"
+
+
+async def attached_text(ctx: ActionContext, attachment_id: str) -> str:
+    """The words of a document the person attached in the chat, or a refusal in words
+    (docs/chat-does-everything-plan.md, CE4). Only the person's own uploads are found."""
+    deps = need_deps(ctx)
+    a = ctx.actor
+    uploads = getattr(deps.state, "uploads", None)
+    record = None
+    if uploads is not None and deps.storage is not None:
+        key = f"uploads/{attachment_id.strip()}.txt"
+        record = await uploads.find(a.tenant_id, CHAT_PRODUCT, a.user_id, key)
+    if record is None or deps.storage is None:
+        raise ActionRefused(
+            "not_found", "That attached document is not there any more. Please attach it again."
+        )
+    try:
+        with deps.acting_as(a, CHAT_PRODUCT):
+            data = await deps.storage.get(record.key)
+    except FileNotFoundError:
+        raise ActionRefused(
+            "not_found", "That attached document is not there any more. Please attach it again."
+        ) from None
+    return data.decode("utf-8", errors="replace")
+
+
+def title_from(text: str) -> str:
+    """A note's name from its words: its first line, without Markdown marks, not long."""
+    for line in text.splitlines():
+        line = line.strip().lstrip("#").strip(" *_>-")
+        if line:
+            return line[:80]
+    return "Attached document"
 
 
 class NotebookOut(BaseModel):
@@ -137,20 +180,47 @@ class NotebookOut(BaseModel):
 
 async def _create(p: CreateIn, ctx: ActionContext) -> Outcome:
     rt, a = _rt(ctx), ctx.actor
+    texts = [await attached_text(ctx, i) for i in p.attachment_ids]  # all there before anything
     made = await _call(rt.store.create_notebook, a.tenant_id, a.user_id, p.title)
+    for text in texts:
+        await _call(
+            rt.store.add_note, a.tenant_id, a.user_id, made["id"], title=title_from(text),
+            content=text, folder_id=None,
+        )  # fmt: skip
+    if texts:
+        rt.worker.wake()
     await _reindex(ctx, made["id"])
+    added = (
+        f" with {len(texts)} attached document{'s' if len(texts) > 1 else ''} as its sources; "
+        "they are being read and can be asked about soon"
+        if texts
+        else ". Add sources to it with notebook.add_source"
+    )
     return Outcome.ok(
         {"notebook_id": made["id"], "title": made["title"], "uri": _uri(made["id"])},
-        f'The notebook "{made["title"]}" was made. Add sources to it with notebook.add_source.',
+        f'The notebook "{made["title"]}" (notebook_id {made["id"]}) was made{added}.',
     )
 
 
 class AddSourceIn(Strict):
     notebook_id: str = Field(min_length=1, max_length=64)
     title: str = Field(
-        min_length=1, max_length=hardening.MAX_TITLE, description="A name for the note."
-    )
-    content: str = Field(min_length=1, max_length=1_000_000, description="The text of the note.")
+        "", max_length=hardening.MAX_TITLE,
+        description="A name for the note; the first line of an attached document when left out.",
+    )  # fmt: skip
+    content: str = Field("", max_length=1_000_000, description="The text of the note.")
+    attachment_id: str = Field(
+        "", max_length=64,
+        description="Instead of content: a document the person attached in the chat.",
+    )  # fmt: skip
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "AddSourceIn":
+        if bool(self.content) == bool(self.attachment_id):
+            raise ValueError("give either content or attachment_id")
+        if self.content and not self.title:
+            raise ValueError("a note needs a title")
+        return self
 
 
 class SourceOut(BaseModel):
@@ -161,9 +231,10 @@ class SourceOut(BaseModel):
 
 async def _add_source(p: AddSourceIn, ctx: ActionContext) -> Outcome:
     rt, a = _rt(ctx), ctx.actor
+    content = await attached_text(ctx, p.attachment_id) if p.attachment_id else p.content
     doc = await _call(
-        rt.store.add_note, a.tenant_id, a.user_id, p.notebook_id, title=p.title,
-        content=p.content, folder_id=None,
+        rt.store.add_note, a.tenant_id, a.user_id, p.notebook_id,
+        title=p.title or title_from(content), content=content, folder_id=None,
     )  # fmt: skip
     rt.worker.wake()
     await _reindex(ctx, p.notebook_id)
@@ -333,8 +404,14 @@ def actions() -> list[Action]:
         Action(
             id="notebook.create", title="Create a notebook",
             summary="Make an empty notebook.",
-            description="Make a new, empty notebook. Add sources to it afterwards.",
-            input=CreateIn, output=NotebookOut, examples=({"title": "Trip to Lisbon"},),
+            description=(
+                "Make a new notebook. To make one from documents the person attached in this "
+                "chat, give their attachment ids as attachment_ids: they become its first sources. "
+                "Otherwise it is empty; add sources afterwards."
+            ),
+            input=CreateIn, output=NotebookOut,
+            examples=({"title": "Trip to Lisbon"},
+                      {"title": "Launch", "attachment_ids": [SAMPLE_ID]}),
             effect="make", flags=("private",), requires=(HERE, NOTEBOOKS), product=PRODUCT_ID,
             bind=CallBinding(_create), ui="notebook.create",
         ),
@@ -342,12 +419,13 @@ def actions() -> list[Action]:
             id="notebook.add_source", title="Add a note to a notebook",
             summary="Add a text note as a source of a notebook.",
             description=(
-                "Add a text note (a title and the text) as a source of a notebook. It is read in "
-                "the background and can then be asked about. Files and web pages are added in the "
-                "app."
+                "Add a source to a notebook: a text note (a title and the text), or a document "
+                "the person attached in this chat (attachment_id). It is read in the background "
+                "and can then be asked about. Web pages are added in the app."
             ),
             input=AddSourceIn, output=SourceOut,
-            examples=({"notebook_id": SAMPLE_ID, "title": "Budget", "content": "Budget: 40,000."},),
+            examples=({"notebook_id": SAMPLE_ID, "title": "Budget", "content": "Budget: 40,000."},
+                      {"notebook_id": SAMPLE_ID, "attachment_id": SAMPLE_ID}),
             effect="change", flags=("private",), requires=(HERE, NOTEBOOKS), product=PRODUCT_ID,
             bind=CallBinding(_add_source, check=_notebook_exists), ui="notebook.list",
         ),

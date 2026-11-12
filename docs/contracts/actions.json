@@ -8305,7 +8305,7 @@
       "id": "notebook.add_source",
       "title": "Add a note to a notebook",
       "summary": "Add a text note as a source of a notebook.",
-      "description": "Add a text note (a title and the text) as a source of a notebook. It is read in the background and can then be asked about. Files and web pages are added in the app.",
+      "description": "Add a source to a notebook: a text note (a title and the text), or a document the person attached in this chat (attachment_id). It is read in the background and can then be asked about. Web pages are added in the app.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -8316,24 +8316,29 @@
             "type": "string"
           },
           "title": {
-            "description": "A name for the note.",
+            "default": "",
+            "description": "A name for the note; the first line of an attached document when left out.",
             "maxLength": 500,
-            "minLength": 1,
             "title": "Title",
             "type": "string"
           },
           "content": {
+            "default": "",
             "description": "The text of the note.",
             "maxLength": 1000000,
-            "minLength": 1,
             "title": "Content",
+            "type": "string"
+          },
+          "attachment_id": {
+            "default": "",
+            "description": "Instead of content: a document the person attached in the chat.",
+            "maxLength": 64,
+            "title": "Attachment Id",
             "type": "string"
           }
         },
         "required": [
-          "notebook_id",
-          "title",
-          "content"
+          "notebook_id"
         ],
         "title": "AddSourceIn",
         "type": "object"
@@ -8366,6 +8371,10 @@
           "notebook_id": "0b7c1f9e-0000-4000-8000-000000000000",
           "title": "Budget",
           "content": "Budget: 40,000."
+        },
+        {
+          "notebook_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "attachment_id": "0b7c1f9e-0000-4000-8000-000000000000"
         }
       ],
       "effect": "change",
@@ -8524,7 +8533,7 @@
       "id": "notebook.create",
       "title": "Create a notebook",
       "summary": "Make an empty notebook.",
-      "description": "Make a new, empty notebook. Add sources to it afterwards.",
+      "description": "Make a new notebook. To make one from documents the person attached in this chat, give their attachment ids as attachment_ids: they become its first sources. Otherwise it is empty; add sources afterwards.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -8534,6 +8543,15 @@
             "minLength": 1,
             "title": "Title",
             "type": "string"
+          },
+          "attachment_ids": {
+            "description": "Documents the person attached in the chat, by their attachment id, to add as the notebook's first sources.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4,
+            "title": "Attachment Ids",
+            "type": "array"
           }
         },
         "title": "CreateIn",
@@ -8565,6 +8583,12 @@
       "examples": [
         {
           "title": "Trip to Lisbon"
+        },
+        {
+          "title": "Launch",
+          "attachment_ids": [
+            "0b7c1f9e-0000-4000-8000-000000000000"
+          ]
         }
       ],
       "effect": "make",

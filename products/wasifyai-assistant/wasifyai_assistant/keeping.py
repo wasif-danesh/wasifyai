@@ -23,6 +23,8 @@ Keep = Callable[[str, str], Awaitable[str | None]]
 
 # what an id field takes, so a clip named as `source_id` (a recording: Dub, Transcribe) is kept as a
 # track and as `video_id` (Extend) as a clip; a field not named here keeps the usual kind
+# fields that take an attachment as it is (the keep itself; notebook sources, CE4)
+TAKES_ATTACHMENT = {"attachment_id", "attachment_ids"}
 AS_KIND = {"source_id": "track", "video_id": "video", "image_id": "image", "image_ids": "image"}
 
 
@@ -56,10 +58,14 @@ async def kept_in_place(
     done: dict[tuple[str, str], str],
 ) -> dict[str, Any]:
     """`params` with each attachment it names replaced by its library id. `done` remembers what
-    was kept in this run, so one file is kept once. A value that is not an attachment, and the
-    params of `library.keep_attachment` itself, are left as they are."""
-    if action_id == KEEP or not names:
+    was kept in this run, so one file is kept once. A field that takes an attachment itself
+    (`attachment_id`, `attachment_ids`: the keep, a notebook's sources) gets its id for a file
+    name, and nothing is kept for it. A value that is not an attachment is left as it is."""
+    if not names:
         return params
+
+    def named(value: Any) -> Any:
+        return names.get(value.strip(), value) if isinstance(value, str) else value
 
     async def one(value: Any, as_kind: str) -> Any:
         if not isinstance(value, str):
@@ -76,8 +82,10 @@ async def kept_in_place(
 
     out: dict[str, Any] = {}
     for key, value in params.items():
-        if not key.endswith(("_id", "_ids")):  # only where a library item belongs, never a prompt
-            out[key] = value
+        if key in TAKES_ATTACHMENT:
+            out[key] = [named(v) for v in value] if isinstance(value, list) else named(value)
+        elif action_id == KEEP or not key.endswith(("_id", "_ids")):
+            out[key] = value  # only where a library item belongs, never a prompt
         elif isinstance(value, list):  # image.reference takes two pictures
             out[key] = [await one(v, AS_KIND.get(key, "")) for v in value]
         else:

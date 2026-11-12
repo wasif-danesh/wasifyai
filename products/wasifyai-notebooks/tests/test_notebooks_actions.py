@@ -249,3 +249,56 @@ def test_every_notebook_action_is_run_in_this_file():
     source = Path(__file__).read_text()
     missing = [a.id for a in actions() if f'"{a.id}"' not in source]
     assert not missing, f"no test runs {missing}"
+
+
+# ---- documents attached in the chat (docs/chat-does-everything-plan.md, CE4) ----
+
+
+async def attach_document(rig: Rig, text: str, user: str = "u1") -> str:
+    """A document as the chat keeps one: its words, an upload of the assistant product."""
+    from wasifyai_platform_sdk import InMemoryUploadStore, ScopedStorage, new_upload
+
+    if rig.state.uploads is None:
+        rig.state.storage = ScopedStorage(memory_storage())
+        rig.state.uploads = InMemoryUploadStore()
+    assert rig.state.storage is not None and rig.state.uploads is not None
+    data = text.encode()
+    record = new_upload("t1", "wasifyai-assistant", user, len(data), "text")
+    await rig.state.storage.put_for(record.owner, record.key, data, "text/plain")
+    await rig.state.uploads.add(record)
+    return record.id
+
+
+async def test_a_notebook_is_made_from_attached_documents_named_by_their_first_line(rig):
+    plan = await attach_document(rig, "# Launch plan\n\nThe launch is on Friday.")
+    budget = await attach_document(rig, "Budget: 40,000 dollars.")
+    r = await rig.go("notebook.create", {"title": "Launch", "attachment_ids": [plan, budget]})
+    assert r.ok, r.text
+    nid = r.output["notebook_id"]
+    assert nid in r.text and "2 attached documents" in r.text
+    docs = rig.store.list_documents("t1", "u1", nid)
+    assert sorted(d["title"] for d in docs) == ["Budget: 40,000 dollars.", "Launch plan"]
+
+
+async def test_a_note_can_come_from_an_attached_document_and_not_from_someone_elses(rig):
+    nid = await a_notebook(rig)
+    mine = await attach_document(rig, "Travel: 2,000 dollars.")
+    r = await rig.go("notebook.add_source", {"notebook_id": nid, "attachment_id": mine})
+    assert r.ok, r.text
+    assert r.output["title"] == "Travel: 2,000 dollars."
+    theirs = await attach_document(rig, "Their secret.", user="someone-else")
+    gone = await rig.go("notebook.add_source", {"notebook_id": nid, "attachment_id": theirs})
+    assert gone.status == "refused" and "attach it again" in gone.text
+    # nothing is made when one of the documents is missing
+    before = len(rig.store.list_notebooks("t1", "u1"))
+    r = await rig.go("notebook.create", {"title": "X", "attachment_ids": [mine, theirs]})
+    assert r.status == "refused" and len(rig.store.list_notebooks("t1", "u1")) == before
+
+
+async def test_a_note_is_either_words_or_an_attachment(rig):
+    nid = await a_notebook(rig)
+    both = {"notebook_id": nid, "title": "T", "content": "x", "attachment_id": "a1234567"}
+    assert (await rig.go("notebook.add_source", both)).status != "ok"
+    assert (
+        await rig.go("notebook.add_source", {"notebook_id": nid, "content": "x"})
+    ).status != "ok"

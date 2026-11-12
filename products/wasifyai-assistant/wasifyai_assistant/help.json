@@ -1005,14 +1005,13 @@
   "synonyms": [
    "add a source",
    "add a note",
-   "add text"
+   "add text",
+   "add this file to my notebook"
   ],
   "fields": [
-   "notebook_id",
-   "title",
-   "content"
+   "notebook_id"
   ],
-  "body": "# Add a note to a notebook\n\nAction: `notebook.add_source`\n\n## What it is for\n\nAdd a text note as a source of a notebook. Files and web pages are added in the app.\n\n## Steps in the app\n\n1. Open **Notebook › View notebooks** and choose the notebook.\n2. Add a source and choose a note.\n\n## Fields\n\n- `notebook_id`: The notebook.\n- `title`: A name for the note.\n- `content`: The text.\n\n## Limits\n\n- Up to 1,000,000 characters per note.\n\n## Needs\n\n- Notebooks to be set up.\n\n## Examples\n\n- Add my budget numbers as a note.\n\n## Problems\n\n- **Still being read** Wait a moment before asking about it."
+  "body": "# Add a note to a notebook\n\nAction: `notebook.add_source`\n\n## What it is for\n\nAdd a text note, or a document you attached in the chat, as a source of a notebook. Web pages are added in the app.\n\n## Steps in the app\n\n1. Open **Notebook › View notebooks** and choose the notebook.\n2. Add a source and choose a note.\n\n## Fields\n\n- `notebook_id`: The notebook.\n- `title`: A name for the note; for an attached document, its first line when left out.\n- `content`: The text.\n- `attachment_id`: Instead of `content`, a document attached in the chat.\n\n## Limits\n\n- Up to 1,000,000 characters per note. An attached document gives the words the chat read from it (up to 200,000\n  characters); for a whole long PDF with its pages, add the file in the notebook itself.\n\n## Needs\n\n- Notebooks to be set up.\n\n## Examples\n\n- Add my budget numbers as a note.\n\n## Problems\n\n- **Still being read** Wait a moment before asking about it."
  },
  {
   "action": "notebook.ask",
@@ -1035,10 +1034,12 @@
   "screen": "notebook.create",
   "synonyms": [
    "new notebook",
-   "start a notebook"
+   "start a notebook",
+   "make a notebook from this file",
+   "notebook from these documents"
   ],
   "fields": [],
-  "body": "# Create a notebook\n\nAction: `notebook.create`\n\n## What it is for\n\nMake an empty notebook, then add sources to it.\n\n## Steps in the app\n\n1. Open **Notebook › Create**.\n2. Give it a name.\n\n## Fields\n\n- `title`: A name, up to 200 characters.\n\n## Limits\n\n- Nothing.\n\n## Needs\n\n- Notebooks to be set up.\n\n## Examples\n\n- Make a notebook called Trip to Lisbon.\n\n## Problems\n\n- **Limit reached** Delete a notebook you no longer need."
+  "body": "# Create a notebook\n\nAction: `notebook.create`\n\n## What it is for\n\nMake a notebook, then add sources to it. In the chat, attach documents and ask for a notebook from them: they become\nits first sources.\n\n## Steps in the app\n\n1. Open **Notebook › Create**.\n2. Give it a name.\n\n## Fields\n\n- `title`: A name, up to 200 characters.\n- `attachment_ids`: Up to 4 documents attached in the chat, to add as its first sources.\n\n## Limits\n\n- Nothing.\n\n## Needs\n\n- Notebooks to be set up.\n\n## Examples\n\n- Make a notebook called Trip to Lisbon.\n- Make a notebook from these two PDFs and give me a summary.\n\n## Problems\n\n- **Limit reached** Delete a notebook you no longer need."
  },
  {
   "action": "notebook.list",

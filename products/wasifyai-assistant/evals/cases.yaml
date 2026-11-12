@@ -1248,6 +1248,7 @@ cases:
     attach: [{ kind: document, name: report.pdf, text: "Quarterly report. Sales rose 12% in the third quarter." }]
     expect: propose_action
     action: [notebook.create, notebook.add_source]
+    on_attachment: true  # the report itself as a source, by its id or name (CE4), not its words retyped
   - id: menu-notebook-create-follow
     menu: notebook.create
     after: &notebook

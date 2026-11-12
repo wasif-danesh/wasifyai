@@ -219,3 +219,16 @@ def test_the_action_asked_for_on_an_attachment_passes_since_the_chat_keeps_it_fi
     assert not ev.judge_first(case, {"tool_calls": [words]})[0]
     prompt_only = call("propose_action", action_id="video.animate", params={"prompt": ident})
     assert not ev.judge_first(case, {"tool_calls": [prompt_only]})[0]
+
+
+def test_a_case_on_an_attachment_needs_the_attachment_named():
+    case = {
+        "id": "n", "expect": "propose_action", "action": ["notebook.create"], "on_attachment": True,
+        "attach": [{"kind": "document", "name": "report.pdf", "text": "Sales rose."}],
+    }  # fmt: skip
+    by_name = call(
+        "propose_action", action_id="notebook.create", params={"attachment_ids": ["report.pdf"]}
+    )
+    assert ev.judge_first(case, {"tool_calls": [by_name]})[0]
+    retyped = call("propose_action", action_id="notebook.create", params={"title": "Sales rose."})
+    assert not ev.judge_first(case, {"tool_calls": [retyped]})[0]

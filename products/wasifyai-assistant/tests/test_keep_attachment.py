@@ -137,8 +137,16 @@ async def test_an_attachment_named_in_an_id_field_is_kept_once_and_replaced():
     assert out == {"image_ids": ["lib-a1", "lib-b2"], "prompt": "beach.png", "seed": 3}
     again = await kept_in_place("video.animate", {"image_id": "a1"}, names, keep, done)
     assert again == {"image_id": "lib-a1"} and calls == ["a1", "b2"]  # kept once per file
-    # the keep itself, and a value that is no attachment, are left alone
-    assert await kept_in_place("library.keep_attachment", {"attachment_id": "a1"}, names, keep, {})
+    # a field that takes an attachment gets its id for a file name, and nothing is kept for it
+    keep_it = await kept_in_place(
+        "library.keep_attachment", {"attachment_id": "beach.png"}, names, keep, {}
+    )
+    assert keep_it == {"attachment_id": "a1"}
+    notebook = await kept_in_place(
+        "notebook.create", {"title": "T", "attachment_ids": ["beach.png", "b2"]}, names, keep, {}
+    )
+    assert notebook == {"title": "T", "attachment_ids": ["a1", "b2"]} and calls == ["a1", "b2"]
+    # a value that is no attachment is left alone
     assert await kept_in_place("image.edit", {"image_id": "lib-9"}, names, keep, {}) == {
         "image_id": "lib-9"
     }

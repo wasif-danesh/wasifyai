@@ -599,6 +599,8 @@ def judge_first(case: dict, message: dict) -> tuple[bool, str]:
         return True, f"proposed {args.get('action_id')} on the attachment"
     if expect == "propose_action" and actions and args.get("action_id") not in actions:
         return False, f"proposed {args.get('action_id')!r}, wanted one of {actions}"
+    if case.get("on_attachment") and not names_attachment(case, params):
+        return False, f"{params!r} does not name the attachment"
     mentions = [str(m).lower() for m in case.get("mentions") or []]
     text_arg = json.dumps({**args, **params}, ensure_ascii=False).lower()
     if mentions and not any(m in text_arg for m in mentions):

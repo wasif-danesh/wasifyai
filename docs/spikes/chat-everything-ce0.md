@@ -96,3 +96,10 @@ baseline), follow-ups 18 of 26. New passes: Extend, Clone a voice, Change a voic
 Still failing with a file: the four picture tools (the model opens the screen or answers in words), Lip sync (it
 proposes `image.edit`), Transcribe, Split, Edit speech, the music video of Creative Studio (`creative.plan` without the
 song) and teaching from photos (CE5).
+
+## After CE4
+
+`notebook.create` takes attached documents (`attachment_ids`) and `notebook.add_source` one (`attachment_id`), and the
+chat is told so. The actions work end to end in the tests. On the local model the notebook cases pass 1 of 5: with two
+PDFs attached it still calls `search_creations` first, and on the plain asks it looks a guide up and answers in words.
+That is the small model's habit noted above; CE7 and CE8 look at it.

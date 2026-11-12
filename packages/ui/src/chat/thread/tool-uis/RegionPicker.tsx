@@ -54,13 +54,13 @@ export function RegionPicker({
   onChange: (r: Region) => void;
   disabled?: boolean;
 }) {
-  const { image, missing } = useImage(imageId, images);
+  const { image: picture, missing } = useImage(imageId, images);
   const frame = useRef<HTMLDivElement>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const [drawing, setDrawing] = useState<Region | null>(null);
   if (missing)
     return <p className="text-muted-foreground text-sm">This picture is no longer there.</p>;
-  if (!image) return <div className="aspect-square w-48 animate-pulse rounded-lg bg-muted" />;
+  if (!picture) return <div className="aspect-square w-48 animate-pulse rounded-lg bg-muted" />;
 
   const at = (e: PointerEvent) => {
     const box = frame.current?.getBoundingClientRect();
@@ -106,11 +106,11 @@ export function RegionPicker({
         }}
       >
         <img
-          src={image.image_url}
-          alt={image.prompt}
+          src={picture.image_url}
+          alt={picture.prompt}
           draggable={false}
-          width={image.width || undefined}
-          height={image.height || undefined}
+          width={picture.width || undefined}
+          height={picture.height || undefined}
           className="block h-auto max-h-80 w-auto max-w-full rounded-lg border object-contain"
         />
         {shown ? (

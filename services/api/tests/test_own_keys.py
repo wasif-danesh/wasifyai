@@ -80,9 +80,9 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     ]  # fmt: skip
     # one media key serves every media product (decision 9); the tie order throughout
     assert by["media"]["providers"] == ["runware", "wavespeed", "fal"]
-    for media in ("images", "video", "music"):
+    for media in ("images", "video", "music", "lipsync"):
         assert by[media]["providers"] == ["runware", "wavespeed", "fal"], media
-    for media in ("voice", "sfx", "lipsync", "model3d"):
+    for media in ("voice", "sfx", "model3d"):
         assert by[media]["providers"] == ["fal"], media
     assert [p["id"] for p in body["providers"]] == [
         "anthropic", "openai", "gemini", "deepseek", "zai", "openrouter",

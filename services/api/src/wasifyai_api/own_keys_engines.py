@@ -255,14 +255,21 @@ def keyed_lipsync_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
             "not_with_key",
             f"{route.model} is not a lip sync model this app can use on {route.provider.title}.",
         )
+    price, where = dict(m.price), route.provider.title
+    for size in m.sizes:  # the cheapest offer with a key at each size (ADR-0100, CP6)
+        priced = order(route.offers(), offer_of, {"seconds": 1, "resolution": f"{size}p"})
+        if priced and priced[0].cost > 0:
+            price[size] = priced[0].cost
+            if size == m.default_size:
+                where = priced[0].choice.provider.title
     return VoiceModel(
         id=KEYED_LIPSYNC, title=_title(m.name, route, admin), engine="remote",
         family=route.provider.id,
         package="", server_task="lipsync", tasks=("lipsync",), recommended=("lipsync",),
         languages=("multi",), sample_rate=0,
         lipsync={"max_voice_s": m.longest, "sizes": list(m.sizes), "default_size": m.default_size,
-                 "fps": LIPSYNC_FPS, "where": route.provider.title,
-                 "price_per_s": {str(k): v for k, v in m.price.items()},
+                 "fps": LIPSYNC_FPS, "where": where,
+                 "price_per_s": {str(k): v for k, v in price.items()},
                  "work_per_s": {str(k): v for k, v in m.work.items()},
                  "frame": m.frame, "frame_short": {str(k): v for k, v in m.frame_short.items()}},
     )  # fmt: skip
@@ -306,14 +313,28 @@ def music_body(endpoint: str, req: MusicRequest) -> dict[str, Any]:
 
 
 def lipsync_body(
-    model_id: str, endpoint: str, image: str, audio: str, req: LipSyncRequest
-) -> dict[str, Any]:
+    model_id: str, endpoint: str, image: str, audio: str, req: LipSyncRequest,
+    provider: str = "fal",
+) -> dict[str, Any]:  # fmt: skip
     """What the model is sent: the picture already cut to the video's shape, the size as the
     provider names it, the model's own speed setting, and on fal.ai the length where the model asks
-    for it (InfiniteTalk, in frames); the others take the voice's own length."""
+    for it (InfiniteTalk, in frames); the others take the voice's own length. On Runware it is a
+    `videoInference` task with the picture and the voice in `inputs`; on WaveSpeed the fields are
+    `image` and `audio` (ADR-0100, CP6, the fields read in `docs/spikes/cloud-v1-cp0.md`)."""
     model = LIPSYNC_MODELS.get(model_id)
     short = min(req.width, req.height)
     size = "720p" if short >= 720 else "480p"
+    if provider == "runware":  # Kling and OmniHuman: the picture's own size, a prompt
+        return {
+            "taskType": "videoInference", "positivePrompt": LIPSYNC_PROMPT,
+            "inputs": {"image": image, "audio": audio}, "outputFormat": "MP4",
+            "includeCost": True,
+        }  # fmt: skip
+    if provider == "wavespeed":  # Fabric and InfiniteTalk: a size; InfiniteTalk a prompt
+        ws: dict[str, Any] = {"image": image, "audio": audio, "resolution": size}
+        if endpoint == "wavespeed-ai/infinitetalk":
+            ws["prompt"] = LIPSYNC_PROMPT
+        return ws
     body: dict[str, Any] = {"image_url": image, "audio_url": audio}
     if endpoint != "veed/fabric-1.0/fast":  # Fabric takes the picture, the voice and the size only
         body["prompt"] = LIPSYNC_PROMPT
@@ -529,17 +550,17 @@ class KeyedSpeechEngine:
         size = "720p" if min(req.width, req.height) >= 720 else "480p"
 
         async def attempt(c: KeyChoice) -> bytes:
-            if c.provider.id != "fal":  # the other providers' lip sync comes in CP6
-                raise FalError("not_with_key", f"Lip sync is not sent to {c.provider.title} yet.",
-                               before_running=True)  # fmt: skip
             async with self._client() as http:
-                queue = FalQueue(c.key, http, max(self._timeout, 3600.0), self._poll, c.base_url)
-                # fal.ai refuses a voice inside the request ("URL too long"): upload both first
+                queue = queue_for(
+                    c.provider.id, c.key, http, max(self._timeout, 3600.0), self._poll, c.base_url
+                )
+                # the picture and the voice go up first (fal.ai refuses a voice inside the request,
+                # "URL too long"; WaveSpeed takes addresses; Runware a voice by its upload id)
                 face, said = (
                     await queue.upload(image, "face.png"),
                     await queue.upload(audio, voice.name),
                 )
-                body = lipsync_body(model_id, c.offer.endpoint, face, said, req)
+                body = lipsync_body(model_id, c.offer.endpoint, face, said, req, c.provider.id)
                 mp4, _, _ = await queue.make(
                     c.offer.endpoint, body, "video", "video/mp4", _no_progress
                 )

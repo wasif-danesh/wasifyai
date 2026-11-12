@@ -134,17 +134,22 @@ CATALOGUE: tuple[CloudModel, ...] = (
     _media("sfx", "elevenlabs-sfx-v2", "ElevenLabs Sound Effects", "0.5 to 22 s, can loop.",
            offer("fal", "fal-ai/elevenlabs/sound-effects/v2", 0.002, "second")),
     # ---- lip sync (speed: seconds of work per second of video, fal.ai, 2026-11-12, docs/spikes/lipsync-cloud-race.md;
-    # LongCat Avatar was taken off the same day: a black video).
+    # LongCat Avatar was taken off the same day: a black video). ADR-0100, CP6: the cheaper offer beside fal.ai
     _media("lipsync", "fabric-1.0", "Fabric 1.0 Fast", "VEED. Quickest; crops to a square. Up to 1 min.",
+           # WaveSpeed lists 480p; its 720p is taken as double, as on fal.ai and Runware (the price refresh checks it)
+           offer("wavespeed", "veed/fabric-1.0", 0.07, "second", setting="resolution", by={"480p": 0.07, "720p": 0.14}),
            offer("fal", "veed/fabric-1.0/fast", 0.10, "second", setting="resolution", by={"480p": 0.10, "720p": 0.20}),
            speed="5 to 25 s per second of video at 480p (two runs)"),
     _media("lipsync", "kling-avatar-v2", "Kling Avatar v2", "Keeps the picture's shape; moves the head most. Up to 1 min.",
+           offer("runware", "klingai:avatar@2.0-standard", 0.044, "second"),
            offer("fal", "fal-ai/kling-video/ai-avatar/v2/standard", 0.06, "second"),
            speed="about 40 s per second of video"),
     _media("lipsync", "omnihuman-1.5", "OmniHuman 1.5", "ByteDance, turbo. Natural blinks and movement. 720p, up to 1 min.",
+           offer("runware", "bytedance:5@2", 0.132, "second"),
            offer("fal", "fal-ai/bytedance/omnihuman/v1.5", 0.16, "second"),
            speed="about 45 s per second of video"),
     _media("lipsync", "infinitalk", "InfiniteTalk", "Head and body, speed set to high. Up to 28 s.",
+           offer("wavespeed", "wavespeed-ai/infinitetalk", 0.03, "second", setting="resolution", by={"480p": 0.03, "720p": 0.06}),
            offer("fal", "fal-ai/infinitalk", 0.20, "second", setting="resolution", by={"480p": 0.20, "720p": 0.40}),
            speed="about 50 s per second of video at 480p"),
     # ---- 3D

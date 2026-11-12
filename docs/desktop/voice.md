@@ -128,7 +128,7 @@ must say `mark: required` or it does not load, and there is no switch. The syste
 moderation, daily limit) are not part of the desktop; consent and the mark are.
 
 **In the cloud (2026-11-12).** With a fal.ai key saved for Lip sync, the picker's Cloud tab offers VEED Fabric 1.0
-Fast, Kling Avatar v2, OmniHuman 1.5 and InfiniteTalk. Lip sync is fal.ai only (owner, 2026-11-12); LongCat and WaveSpeed's models were taken off. Each row says
+Fast, Kling Avatar v2, OmniHuman 1.5 and InfiniteTalk. LongCat was taken off (owner, 2026-11-12); the cheaper offers on WaveSpeed and Runware came back with ADR-0100 (below). Each row says
 its price and, where measured, its time per video second (`docs/spikes/lipsync-cloud-race.md`: Fabric 5 to 25 s (25 s used for the estimate),
 Kling about 40 s, OmniHuman about 45 s, InfiniteTalk about 50 s at 480p). Before Make the screen says the time and
 the cost of this voice at the chosen size; no length is forced. The picture and the voice go up to fal.ai's file
@@ -136,6 +136,16 @@ store first, then the model is asked (`own_keys_engines.py`, `lipsync_body`). Fa
 sent, so the screen hides the shape and sends a square picture; Kling and InfiniteTalk keep the shape at a size they
 pick, and the screen says their measured size as "about" (`frame`, `frame_short`). On the web the admin puts
 the same four on fal.ai in Admin › Media (row `speech.lipsync`, `docs/runbooks/web-notebooks-voice.md`).
+
+**The cheaper offers (ADR-0100, stage CP6).** The same four models also run where they are cheaper, with fal.ai kept as
+the fallback: Fabric 1.0 on WaveSpeed ($0.07 a second at 480p), InfiniteTalk on WaveSpeed ($0.03), Kling Avatar v2
+on Runware ($0.044) and OmniHuman 1.5 on Runware ($0.132). A key for Lip sync or for Every media product on any of the
+three providers is enough. Each job goes to the cheapest offer with a key, and a provider that refuses before running
+hands it to the next. The screen's price per second is the cheapest keyed offer's at each size, and its "where" is the
+provider of the default size. WaveSpeed is sent `image`, `audio` and the size (and InfiniteTalk a prompt), both
+uploaded to its store first; Runware is sent a `videoInference` task with the picture inside it and the voice uploaded
+first (`mediaStorage`). The measured times and frame sizes are fal.ai's; WaveSpeed's Fabric at 720p is priced at double
+its 480p until the price refresh (CP12) reads it. Checked against fakes only; the real run is CP13.
 
 Not built on this computer: other lip sync models (InfiniteTalk, LivePortrait, the CUDA `liveavatar`), video as the input,
 faster settings that keep the face (at 720p a clip costs about 2.5 minutes of work per second of video on a 64 GB M5 Pro, 6.7 minutes in portrait; 448 px is ten times faster but changes the face), choosing where the crop is, several faces, a CUDA lock for Windows and Linux, and

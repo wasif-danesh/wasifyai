@@ -64,10 +64,13 @@ class Settings(BaseSettings):
 
     # Search over My creations (ADR-0041). The embedder is the `creation-embedder` alias; the index
     # records which model made each row, and a row made by another model is re-embedded.
-    search_min_similarity: float = 0.57  # the floor under which a meaning match is not shown
+    # the floor under which a meaning match is not shown: 0.57 suited bge-m3; OpenAI's
+    # text-embedding-3-small (ADR-0100) scores lower, so 0.35 until the search evaluation is run
+    # on it with a real key (stage CP13)
+    search_min_similarity: float = 0.35
     # What made each index row: the embedder and the text format. Change it when an admin changes
     # the alias's model or when `search_text` changes: the background indexer re-embeds everything.
-    search_index_model: str = "bge-m3/v2"
+    search_index_model: str = "text-embedding-3-small-1024/v2"  # ADR-0100
     search_reconcile_every_s: int = 300
     search_reconcile_batch: int = 200  # items embedded per check: about 3 seconds of work
 

@@ -142,3 +142,7 @@ def test_more_ways_a_small_model_says_it_was_not_found():
     ):
         out = check_labels(sentence, g.citations)
         assert "[" not in out.text and out.removed >= 1, sentence
+
+
+def test_the_history_never_makes_a_prompt_over_100k_tokens():
+    assert history_budget(262_144, "q") == history_budget(75_000, "q") < 75_000

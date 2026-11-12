@@ -136,3 +136,31 @@ def test_the_service_says_set_it_up_first_when_the_component_is_missing(monkeypa
     monkeypatch.setattr(dvb.vb, "platform_key", lambda: "darwin-arm64")
     monkeypatch.setattr(svc, "install", lambda: None)
     assert svc.problem() == "Motion graphics is not set up yet. Set it up first."
+
+
+async def test_with_chat_on_a_cloud_model_the_draft_goes_there(service, monkeypatch):
+    """ADR-0100: while Chat and writing runs on the person's key, Motion graphics asks that model
+    (Claude Haiku 5.5 by default), not the one on this computer."""
+    from wasifyai_api import own_keys_text
+
+    asked: list[tuple[str, str, Any]] = []
+
+    class Keyed:
+        def __init__(self, local, keys, usage) -> None:
+            assert local is None and usage is service.usage
+
+        async def stream(self, capability, binding, system, prompt, schema=None):
+            asked.append((capability, system, schema))
+            yield '{"a": '
+            yield '"cloud"}'
+
+    class Keys:
+        async def route(self, product):
+            return object() if product == "chat" else None
+
+    monkeypatch.setattr(own_keys_text, "KeyedTextProvider", Keyed)
+    service.language = FakeLanguage()
+    service.own_keys = Keys()
+    assert await service.complete("Fill it.", "a promo", SCHEMA) == '{"a": "cloud"}'
+    assert asked == [("video_builder.draft", "Fill it.", SCHEMA)]
+    assert FakeClient.seen == []  # this computer's model was not asked

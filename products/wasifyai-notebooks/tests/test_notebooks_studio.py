@@ -530,3 +530,9 @@ async def test_an_infographic_says_why_when_no_picture_could_be_made(tmp_path, c
     state2, _ = await studio(rig, "infographic")
     art2 = rig.store.get_artifact("t1", "u1", rig.nb["id"], state2["artifact_id"])
     assert art2["status"] == "failed" and "image engine is not installed" in art2["error"]
+
+
+def test_the_sources_never_make_a_prompt_over_100k_tokens():
+    """ADR-0100: past 100K tokens Claude Haiku 5.5 costs five times as much; a big local window
+    does not lift the cap."""
+    assert budget_chars(262_144) == budget_chars(75_000) == (75_000 - 2_500) * 3

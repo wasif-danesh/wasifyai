@@ -18,11 +18,16 @@ DEFAULT_QUERY = "the main points, findings, figures and conclusions"
 GAP = "\n\n[...]\n\n"
 RESERVE_TOKENS = 2_500  # the system prompt and the reply
 CHARS_PER_TOKEN = 3
+# A prompt over 100K tokens costs five times as much on Claude Haiku 5.5 (ADR-0100), and its
+# tokenizer counts about 30% more than this estimate: 75K estimated stays under 100K counted.
+PROMPT_CAP_TOKENS = 75_000
 
 
 def budget_chars(context_tokens: int) -> int:
-    """What of a window goes to the sources: the rest of it after the prompt and the reply."""
-    return max(4_000, (context_tokens - RESERVE_TOKENS) * CHARS_PER_TOKEN)
+    """What of a window goes to the sources: the rest of it after the prompt and the reply, never
+    more than `PROMPT_CAP_TOKENS`."""
+    usable = min(context_tokens, PROMPT_CAP_TOKENS)
+    return max(4_000, (usable - RESERVE_TOKENS) * CHARS_PER_TOKEN)
 
 
 @dataclass(frozen=True)

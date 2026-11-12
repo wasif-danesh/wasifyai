@@ -101,7 +101,7 @@ ollama:
   externalUrl: ""                        # set to use an Ollama outside the cluster
   # What the pod pulls. Keep in step with the `ollama_chat/` and `ollama/` models in
   # services/api/src/wasifyai_api/model_defaults.yaml (a test checks this).
-  models: ["gemma4:e4b", "nomic-embed-text", "bge-m3"]
+  models: []  # ADR-0100: no default alias uses Ollama any more (CP11 removes it)
   image: ollama/ollama:latest
   storage: 20Gi
   storageClass: ""

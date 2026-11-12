@@ -1,10 +1,12 @@
-"""Chat and every text product on the person's own key (ADR-0095, stage K2).
+"""Chat and every text product on the person's own key (ADR-0095, stage K2; ADR-0100, stage CP2).
 
 `KeyedTextProvider` is the text provider the product graphs get on the desktop. While Chat and
-writing is set to "With my key", a chat, a lyric, an enhanced prompt, a notebook answer, the
-assistant, a picture description or a training judge goes to that provider with that key, through
-the same OpenAI-compatible calls the local model gets. Otherwise everything goes to the model chosen
-on this computer (`LocalTextProvider`), as before. Embeddings always stay on this computer.
+writing is set to a cloud model, a chat, a lyric, an enhanced prompt, a notebook answer, the
+assistant, a picture description or a training judge goes to that vendor with that key: Anthropic
+through its own Messages API (`anthropic_text.py`; Claude Haiku 5.5 is the default), every other
+vendor through the same OpenAI-compatible calls the local model gets. Otherwise everything goes to
+the model chosen on this computer (`LocalTextProvider`), as before. Embeddings always stay on this
+computer (ADR-0100, decision 4).
 
 A provider's refusal is said in words (`said_of`); the app adds no refusal of its own (ADR-0094)."""
 
@@ -25,6 +27,7 @@ from wasifyai_platform_sdk.usage import (
     record_safely,
 )
 
+from wasifyai_api.anthropic_text import AnthropicText
 from wasifyai_api.own_keys import KeyRoute, OwnKeysService, said_of, text_client
 
 PRODUCT = "chat"  # the one setting every text product follows
@@ -38,6 +41,11 @@ class KeyedTextProvider:
 
     async def _route(self) -> KeyRoute | None:
         return await self._keys.route(PRODUCT)
+
+    def _anthropic(self, route: KeyRoute) -> AnthropicText | None:
+        if route.provider.id != "anthropic":
+            return None
+        return AnthropicText(route.key, route.model, self._usage)
 
     @staticmethod
     def _client(route: KeyRoute) -> AsyncOpenAI:
@@ -61,6 +69,10 @@ class KeyedTextProvider:
         route = await self._route()
         if route is None:
             async for text in self._local.stream(capability, binding, system, prompt, schema):
+                yield text
+            return
+        if (claude := self._anthropic(route)) is not None:
+            async for text in claude.stream(capability, system, prompt, schema):
                 yield text
             return
         ctx = require_context()
@@ -114,6 +126,10 @@ class KeyedTextProvider:
         route = await self._route()
         if route is None:
             async for chunk in self._local.chat(capability, binding, messages, tools, thinking):
+                yield chunk
+            return
+        if (claude := self._anthropic(route)) is not None:
+            async for chunk in claude.chat(capability, messages, tools, thinking):
                 yield chunk
             return
         client = self._client(route)

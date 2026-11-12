@@ -943,6 +943,7 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     if desktop.video_builder is not None:  # and the model it asks to fill a template
         desktop.video_builder.language = desktop.language
         desktop.video_builder.usage = s.usage
+        desktop.video_builder.own_keys = desktop.own_keys
     s.desktop_language = desktop.language
     s.desktop_vision = desktop.vision
     s.desktop_hub = desktop.hub

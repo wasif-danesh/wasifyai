@@ -39,7 +39,7 @@ from wasifyai_api.engine_workers import WorkerDirectory, record_engine_seconds
 
 log = logging.getLogger("wasifyai_api.remote_builder")
 
-CHAT_ALIAS = "chat"  # the gateway alias that fills a template from a description
+CHAT_ALIAS = "planner"  # the gateway alias that fills a template from a description (ADR-0100)
 
 
 @dataclass
@@ -330,8 +330,7 @@ class RemoteBuilderEngine:
                     model=CHAT_ALIAS,
                     messages=[{"role": "system", "content": system},
                               {"role": "user", "content": prompt}],
-                    temperature=0,
-                    max_tokens=max_tokens,
+                    max_tokens=max_tokens,  # no temperature: Claude Haiku 5.5 takes none
                     response_format={
                         "type": "json_schema",
                         "json_schema": {"name": "reply", "schema": schema, "strict": True},

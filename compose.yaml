@@ -57,6 +57,9 @@ services:
       LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?run make setup}
       DATABASE_URL: postgresql://wasifyai:wasifyai@postgres:5432/wasifyai?schema=litellm
       STORE_MODEL_IN_DB: "True"
+      # the default aliases read these (ADR-0100); empty until set in .env
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes: ["./deploy/compose/litellm.yaml:/app/config.yaml:ro"]
     ports: ["4000:4000"]
   api:

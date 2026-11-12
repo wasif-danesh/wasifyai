@@ -115,3 +115,29 @@ photos" still ends in words after a guide lookup, so the training cases stay at 
 The inpaint follow-up ("change only the tree in that picture") now passes on the local model; the plain ask and the ask
 with a photo still end in words after guide lookups. Finding an area is tested with a scripted picture reader; it has
 not been tried with a real one (the local default has none), which CE8 does.
+
+## After CE7
+
+Each guide `how_to` returns now begins with how to do it from the chat (`From the chat: propose_action image.edit(image_id,
+prompt). If the person asked you to do this, propose it now`). Four chain cases were added (the second step of Dub,
+Audiobook, Creative Studio and Train, given the first step's result). 47 of 78 passed: plain asks 16 of 26 and the
+chains 4 of 4 (20 of 30 together), asks with an attachment 11 of 22, follow-ups 16 of 26.
+
+| Menu item | Passed | Menu item | Passed |
+|---|---|---|---|
+| images.create | 2/3 | voice.speak | 1/3 |
+| images.edit | 2/3 | voice.transcribe | 1/3 |
+| images.inpaint | 3/3 | voice.convert | 1/3 |
+| images.reference | 0/3 | voice.voices | 2/3 |
+| video.create | 2/2 | voice.edit | 2/3 |
+| video.animate | 3/3 | voice.dub | 2/4 |
+| video.extend | 2/3 | voice.audiobook | 3/4 |
+| model3d | 3/3 | voice.lipsync | 0/3 |
+| music.create | 2/3 | notebook.create | 3/3 |
+| music.lyrics | 1/2 | notebook.list | 0/2 |
+| music.separate | 2/3 | library | 3/3 |
+| creative | 1/4 | train | 2/4 |
+| motion | 3/3 | models | 1/2 |
+
+Still failing: Make a picture from two pictures (the model makes a new picture instead), Lip sync (it proposes a picture),
+the notebooks list (it answers in words), and some asks that still end in words after a lookup.

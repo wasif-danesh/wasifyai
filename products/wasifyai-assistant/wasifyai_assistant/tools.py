@@ -22,7 +22,7 @@ from wasifyai_platform_sdk.actions import (
 from wasifyai_platform_sdk.actions.model import ID_PATTERN
 
 from wasifyai_assistant import help as guides
-from wasifyai_assistant.features import where_of, where_of_screen
+from wasifyai_assistant.features import NOT_PROPOSED, where_of, where_of_screen
 
 ORIGIN = "assistant"
 # the person said the assistant may make things in this chat without a card (ADR-0071 decision 5)
@@ -504,8 +504,10 @@ async def how_to(
     if not found:
         return ToolOutcome("ok", {"guides": []}, NO_GUIDE)
     rows = guides.as_rows(found)
+    needs = guides.fields_of(row["action"] for row in rows)
     for row in rows:
         row["where"] = where_of(row["action"])
+        row["do_now"] = do_now(row["action"], needs.get(row["action"], ()), served)
         state = await ready(row["action"]) if ready else None
         row["status"] = status_line(state)
         if state is not None:
@@ -513,12 +515,27 @@ async def how_to(
             row["step"] = state.step
             row["setup_screen"] = state.ui
     text = "\n\n".join(
-        (f"Where: {r['where']}\n" if r["where"] else "")
+        (f"{r['do_now']}\n" if r["do_now"] else "")
+        + (f"Where: {r['where']}\n" if r["where"] else "")
         + r["text"]
         + (f"\n{r['status']}" if r["status"] else "")
         for r in rows
     )
     return ToolOutcome("ok", {"guides": rows}, text)
+
+
+def do_now(action_id: str, fields: Collection[str], served: Collection[str] | None) -> str:
+    """The line that puts a guide's action within reach (docs/chat-does-everything-plan.md, CE7):
+    a small model that looked a guide up tended to explain the steps of the screen instead of
+    doing what it was asked. "" for an action the chat does not propose."""
+    if action_id.split(".", 1)[0] in NOT_PROPOSED or (
+        served is not None and action_id not in served
+    ):
+        return ""
+    return (
+        f"From the chat: propose_action {action_id}({', '.join(fields)}). If the person asked "
+        "you to do this, propose it now; give the steps only when they asked how."
+    )
 
 
 def open_screen(screen_id: str, served: Collection[str] | None) -> ToolOutcome:

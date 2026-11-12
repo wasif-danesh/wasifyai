@@ -544,3 +544,15 @@ def test_the_model_is_told_the_ids_of_what_an_action_made_unless_its_sentence_sa
         text='In the library as "Beach" (image id p1).', output={"kind": "image", "id": "p1"},
     )  # fmt: skip
     assert outcome_of(PROPOSE, kept).text == kept.text  # said once, not twice
+
+
+def test_a_guide_says_its_action_can_be_proposed_now():
+    """CE7: a small model that looked a guide up tended to explain the screen's steps instead of
+    doing what it was asked; the guide now says how to do it from the chat."""
+    from wasifyai_assistant.tools import do_now
+
+    line = do_now("image.edit", ("image_id", "prompt"), None)
+    assert line.startswith("From the chat: propose_action image.edit(image_id, prompt).")
+    assert "propose it now" in line
+    assert do_now("image.edit", ("image_id",), {"image.generate"}) == ""  # not served here
+    assert do_now("job.cancel", (), None) == ""  # jobs have tools of their own

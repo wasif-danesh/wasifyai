@@ -1148,6 +1148,18 @@ cases:
     expect: propose_action
     action: dub.script
     mentions: [7a1e5c20-0000-4000-8000-00000000c001]
+  - id: menu-dub-chain
+    menu: voice.dub
+    after:
+      say: "Dub my interview recording into French."
+      action: dub.script
+      params: { source_kind: track, source_id: 7a1e5c20-0000-4000-8000-00000000c101, language: fr }
+      output: { language: fr, segments: [{ start: 0.0, end: 2.5, text: "Bonjour à tous." }, { start: 2.5, end: 5.0, text: "Merci d'être venus." }], vocals_track: 7a1e5c20-0000-4000-8000-00000000c102, background_track: 7a1e5c20-0000-4000-8000-00000000c103 }
+      text: "The script has 2 lines in French. Check them, then make the dub."
+    say: "The lines look right. Make the dub."
+    expect: propose_action
+    action: dub.make
+    mentions: [7a1e5c20-0000-4000-8000-00000000c101, bonjour]
   - id: menu-audiobook
     menu: voice.audiobook
     say: "Make an audiobook of this: Chapter 1. It was a cold morning in the village, and the baker was late."
@@ -1161,6 +1173,18 @@ cases:
     expect: propose_action
     action: [audiobook.plan, audiobook.make]
     mentions: [fox]
+  - id: menu-audiobook-chain
+    menu: voice.audiobook
+    after:
+      say: "Make an audiobook of this: Chapter 1. It was a cold morning in the village. Chapter 2. The baker was late."
+      action: audiobook.plan
+      params: { text: "Chapter 1. It was a cold morning in the village. Chapter 2. The baker was late." }
+      output: { chapters: [{ title: Chapter 1, chars: 46, estimated_seconds: 4 }, { title: Chapter 2, chars: 32, estimated_seconds: 3 }], chars: 78, estimated_seconds: 7 }
+      text: "Found 2 chapters, about 7 s to read aloud."
+    say: "Good, read it aloud now."
+    expect: propose_action
+    action: audiobook.make
+    mentions: [cold morning]
   - id: menu-audiobook-follow
     menu: voice.audiobook
     after:
@@ -1293,6 +1317,18 @@ cases:
     expect: propose_action
     action: creative.plan
     mentions: [7a1e5c20-0000-4000-8000-00000000d001]
+  - id: menu-creative-chain
+    menu: creative
+    after:
+      say: "Make a music video for my summer song: a road trip at golden hour."
+      action: creative.plan
+      params: { brief: { track_id: 7a1e5c20-0000-4000-8000-00000000d001, idea: "a road trip at golden hour" } }
+      output: { project_id: 7a1e5c200000400080000000000e0001, uri: "wasify://creation/creative/7a1e5c200000400080000000000e0001", title: Summer Road, shots: 12, plain_shots: 0, seconds: 60 }
+      text: 'The plan "Summer Road" has 12 shots for 60 s (project_id 7a1e5c200000400080000000000e0001).'
+    say: "Looks good. Make the shots."
+    expect: propose_action
+    action: creative.make_shots
+    mentions: [7a1e5c200000400080000000000e0001]
   - id: menu-motion
     menu: motion
     say: "Make a title card that says 'Grand Opening'."
@@ -1381,6 +1417,18 @@ cases:
     expect: propose_action
     action: image.generate
     mentions: [rexdog]
+  - id: menu-train-chain
+    menu: train
+    after:
+      say: "Teach it my dog Rex from these photos."
+      action: train.make_set
+      params: { name: Rex, kind: character, image_ids: [7a1e5c20-0000-4000-8000-00000000a311, 7a1e5c20-0000-4000-8000-00000000a312] }
+      output: { what: pictures, set_id: 7a1e5c200000400080000000000a3010, name: Rex, count: 12, magic_word: rexdog, described: 12 }
+      text: 'The set "Rex" has 12 pictures, 12 described; its magic word is "rexdog" (dataset_id 7a1e5c200000400080000000000a3010). It is ready: teach it with train.start and this dataset_id (about 25 minutes).'
+    say: "Teach it from that set."
+    expect: propose_action
+    action: train.start
+    mentions: [7a1e5c200000400080000000000a3010]
   - id: menu-models
     menu: models
     say: "Which image models do I have?"

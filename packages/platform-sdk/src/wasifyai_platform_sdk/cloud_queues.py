@@ -21,6 +21,7 @@ from wasifyai_platform_sdk.fal import (
     FalError,
     FalQueue,
     ProgressFn,
+    media_type,
     not_sent,
     refused_before,
 )
@@ -96,6 +97,37 @@ class WaveSpeedQueue:
         self._timeout = timeout_s
         self._poll = poll_s
         self._base = base_url.rstrip("/")
+
+    async def upload(self, data: bytes, name: str) -> str:
+        """Put a file in WaveSpeed's store and answer its address (kept 7 days): ask for a place
+        (`media/uploads`), send the bytes there without the key, use its `download_url`. A refusal
+        here comes before anything runs."""
+        ctype = media_type(data)
+        try:
+            r = await self._http.post(
+                f"{self._base}/media/uploads", headers=self._headers, timeout=30,
+                json={"filename": name, "size": len(data), "content_type": ctype},
+            )  # fmt: skip
+            if r.status_code >= 400:
+                raise _refused(self.title, r, before=True)
+            got = r.json().get("data") or {}
+            place, address = (got.get("upload") or {}).get("url"), got.get("download_url")
+            if not place or not address:
+                raise FalError("provider_refused", f"{self.title} gave no place to upload.", True)
+            up = await self._http.put(
+                str(place), content=data, headers={"Content-Type": ctype},
+                timeout=max(60.0, self._timeout),
+            )  # fmt: skip
+        except httpx.HTTPError:
+            raise FalError("connection_lost", f"{self.title} could not be reached.", True) from None
+        except ValueError:
+            nowhere = f"{self.title} gave no place to upload."
+            raise FalError("provider_refused", nowhere, True) from None
+        if up.status_code >= 400:
+            raise FalError(
+                "provider_refused", f"{self.title} did not take the file ({up.status_code}).", True
+            )
+        return str(address)
 
     async def call(
         self, endpoint: str, body: dict[str, Any], on_progress: ProgressFn

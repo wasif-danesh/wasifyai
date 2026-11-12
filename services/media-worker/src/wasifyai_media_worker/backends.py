@@ -23,10 +23,11 @@ from wasifyai_platform_sdk import (
     SecretsUnavailable,
     input_image_name,
 )
-from wasifyai_platform_sdk.cloud_queues import RunwareTasks, WaveSpeedQueue
+from wasifyai_platform_sdk.cloud_queues import RunwareTasks, WaveSpeedQueue, queue_for
 from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue
 from wasifyai_platform_sdk.offers import Offer, Priced, no_offer, order, run_cheapest
 
+from wasifyai_media_worker.cloud_recipes import RECIPES, ask_of, runware_send
 from wasifyai_media_worker.comfy import ComfyClient, ComfyError, ProgressFn, use_picture
 from wasifyai_media_worker.settings import WorkerSettings
 
@@ -511,6 +512,40 @@ def job_settings(job: JobRequest) -> dict[str, Any]:
     return out
 
 
+class RecipeRunner:
+    """A picture or clip of a catalogue model on one offer, sent as that model's recipe for the
+    provider says (`cloud_recipes.py`, stages CP4 and CP5): inputs uploaded the provider's way."""
+
+    local_gpu = False
+
+    def __init__(
+        self, model: str, c: CloudChoice, http: httpx.AsyncClient, timeout_s: float, poll_s: float
+    ):
+        self.backend = c.provider
+        self._recipe = RECIPES[(c.provider, model)]
+        self._offer = c.offer
+        self._queue = queue_for(c.provider, c.key, http, timeout_s, poll_s, c.base_url)
+
+    async def run(
+        self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
+    ) -> Files:
+        name, kind = next(
+            ((n, s.get("type", "image")) for n, s in job.outputs.items()), ("output", "image")
+        )
+        video = kind == "video"
+        send = runware_send if isinstance(self._queue, RunwareTasks) else self._queue.upload
+        try:
+            endpoint, body = await self._recipe(ask_of(job, files), self._offer, send)
+            data, ctype, _ = await self._queue.make(
+                endpoint, body, "video" if video else "images",
+                "video/mp4" if video else "image/png", on_progress,
+            )  # fmt: skip
+        except FalError as e:
+            raise _fal_failed(e) from None
+        await on_progress(1.0)
+        return {name: (data, ctype, _EXT.get(ctype, "mp4" if video else "png"))}
+
+
 class OfferRunner:
     """A picture or clip of a cloud model on the cheapest of its offers with a key: priced for the
     job, the next offer when one refuses before running, never resent once it may have run. After a
@@ -537,6 +572,8 @@ class OfferRunner:
         self.cost: Priced[CloudChoice] | None = None
 
     def _runner(self, c: CloudChoice) -> Any:
+        if (c.provider, self.model) in RECIPES:
+            return RecipeRunner(self.model, c, self._http, self._timeout, self._poll)
         if c.provider == "fal":
             return FalRunner(
                 c.key, c.offer.endpoint, self._http, self._timeout, self._poll, c.base_url,

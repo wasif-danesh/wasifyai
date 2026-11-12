@@ -91,3 +91,16 @@ Vary re-runs the recipe with a new seed; Edit this result makes the picture Edit
 `docs/phase2-stage-c-plan.md`.
 
 The window may `PATCH`: the desktop CORS list includes it (the self-test found it was missing).
+
+## Cloud models (ADR-0100, stage CP4)
+
+With a Runware, WaveSpeed or fal.ai key (Settings › Your keys, for Images or for Every media product), the picker's
+Cloud tab offers GPT Image 2.5, Nano Banana 2.1, Grok Imagine Image 2.0, FLUX.3 klein and Z-Image Turbo, each once,
+"from" its lowest price with the keys there are. Each job runs on the cheapest offer that can do it: make, change
+(Edit) and combine (Reference) on every model; Inpaint (`mask`) on GPT Image 2.5 and Z-Image Turbo only, so the screen
+blocks Inpaint before Make for the other three. A provider that refuses before running hands the job to the next
+offer. The requests are `services/media-worker/.../cloud_recipes.py` (the field names of each provider's schema,
+`docs/spikes/fal-v1-fa0-inputs.md` and `docs/spikes/cloud-v1-cp0.md`); input pictures go to fal.ai's and WaveSpeed's
+file stores first and inside the task on Runware; OpenAI's mask is turned into its clear-where-it-changes form. Looks
+taught on this computer are for this computer's models and are refused on a cloud model; looks taught on fal.ai come
+with stage CP10 (FLUX.3 klein's `lora` endpoint is in its offer). Checked against fakes only; the real run is CP13.

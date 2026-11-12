@@ -137,6 +137,8 @@ export type ModelChoice = {
   speed?: string;
   /** a cloud model's key worked when last tested */
   works?: boolean;
+  /** what a cloud model can do with the keys there are ("image.inpaint"), for its screen to offer */
+  can?: string[];
   /** the id the screen's engine knows a cloud model by while it is in use (`key:lipsync`), when not this row's id */
   engineId?: string;
 };

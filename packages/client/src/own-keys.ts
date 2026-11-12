@@ -63,6 +63,8 @@ export type CloudModel = {
   providers: string[];
   /** a provider without a key whose price is lower: "Runware" (null when none) */
   cheaper_with: string | null;
+  /** what a media model can do with the keys there are ("image.generate", "image.inpaint"); empty for text */
+  can?: string[];
   /** how long it took when measured, in words ("about 5 s per second of video"); empty when unknown */
   speed?: string;
   /** the key worked when last tested */

@@ -8,7 +8,7 @@ import pytest
 from wasifyai_api.own_keys import OwnKeysService, Provider, Tried
 from wasifyai_api.own_keys_media import KeyedMediaRouter
 from wasifyai_api.settings_store import InMemorySettingsStore
-from wasifyai_media_worker.backends import CloudChoice, FalRunner, OfferRunner
+from wasifyai_media_worker.backends import CloudChoice, FalRunner, OfferRunner, RecipeRunner
 from wasifyai_platform_sdk import InMemorySecretStore, JobRequest
 from wasifyai_platform_sdk.offers import offer
 
@@ -45,7 +45,7 @@ async def test_with_no_key_every_job_stays_on_this_computer():
 async def test_a_product_on_a_cloud_model_runs_its_offers_with_its_own_key():
     router, keys, local = rig()
     await keys.save_key("images", "fal", "img-key")
-    await keys.use("images", None, "flux-2")
+    await keys.use("images", None, "flux-3-klein")
     await keys.save_key("video", "fal", "vid-key")
     await keys.use("video", "fal", "fal-ai/ltx-2/text-to-video/fast")  # an endpoint, as before
     pic = await router.resolve(job("wasifyai-image", "image.generate"))
@@ -54,10 +54,10 @@ async def test_a_product_on_a_cloud_model_runs_its_offers_with_its_own_key():
     assert pic.local_gpu is False  # the processor takes no GPU lock for it
     fal_pic = pic._runner(pic._choices[0])
     fal_clip = clip._runner(clip._choices[0])
-    assert isinstance(fal_pic, FalRunner) and isinstance(fal_clip, FalRunner)
-    assert fal_pic._model == "fal-ai/flux-2"
-    assert fal_pic._headers == {"Authorization": "Key img-key"}
-    assert fal_pic._endpoints == {"edit": "fal-ai/flux-2/edit"}
+    # a catalogue model goes out as its recipe for the provider (CP4); LTX-2 still by FalRunner
+    assert isinstance(fal_pic, RecipeRunner) and isinstance(fal_clip, FalRunner)
+    assert fal_pic.backend == "fal" and fal_pic._queue._headers == {"Authorization": "Key img-key"}
+    assert fal_pic._offer.endpoint_for("edit") == "blackforestlabs/flux-3/klein/edit-image"
     assert fal_clip._model == "fal-ai/ltx-2/text-to-video/fast"
     assert fal_clip._endpoints == {"animate": "fal-ai/ltx-2/image-to-video/fast"}
     assert fal_clip._headers == {"Authorization": "Key vid-key"}
@@ -68,11 +68,11 @@ async def test_a_product_on_a_cloud_model_runs_its_offers_with_its_own_key():
 async def test_back_to_this_computer_applies_to_the_next_job():
     router, keys, local = rig()
     await keys.save_key("images", "fal", "img-key")
-    await keys.use("images", None, "flux-2")
+    await keys.use("images", None, "flux-3-klein")
     assert isinstance(await router.resolve(job("wasifyai-image", "image.generate")), OfferRunner)
     await keys.use("images", None, None)
     assert await router.resolve(job("wasifyai-image", "image.generate")) is local
-    await keys.use("images", None, "flux-2")  # the key stayed saved
+    await keys.use("images", None, "flux-3-klein")  # the key stayed saved
     await keys.remove_key("images", "fal")
     assert await router.resolve(job("wasifyai-image", "image.generate")) is local
 
@@ -84,15 +84,15 @@ async def test_one_key_under_every_media_product_serves_them_all_and_a_products_
     assert [k["provider"] for k in view["media"]["keys"]] == ["fal"]
     cloud = await keys.cloud("lipsync")
     assert cloud["has_keys"] and len(cloud["models"]) == 4  # offered with no key of its own
-    await keys.use("images", None, "flux-2")
+    await keys.use("images", None, "flux-3-klein")
     route = await keys.route("images")
     assert route is not None and route.key == "shared-key"
     await keys.save_key("images", "fal", "own-key")
     route = await keys.route("images")
     assert route is not None and route.key == "own-key"
     # a model none of the keys can run is refused in words
-    with pytest.raises(Exception, match="FLUX.1 schnell needs a Runware key"):
-        await keys.use("images", None, "flux-1-schnell")
+    with pytest.raises(Exception, match="Nano Banana 2.1 needs a Runware or WaveSpeed key"):
+        await keys.use("images", None, "nano-banana-2.1")
     # the shared key gone, its products run here again (unless they have their own)
     await keys.remove_key("images", "fal")
     await keys.remove_key("media", "fal")
@@ -192,3 +192,37 @@ async def test_a_job_that_may_have_run_is_not_sent_again():
         with pytest.raises(Exception):  # noqa: B017 - the worker retries a busy service itself
             await runner.run(job("wasifyai-image", "image.generate"), _progress)
     assert "queue.fal.run" not in fake.hosts and runner.cost is None
+
+
+async def test_z_image_paints_on_fal_with_the_picture_and_mask_in_its_file_store():
+    from tests.test_own_keys_engines import Fal
+
+    fal = Fal({"images": [{"url": "https://files.example/out.png"}]}, a_png())
+    _, keys, _ = rig()
+    await keys.save_key("images", "fal", "img-key")
+    await keys.use("images", None, "z-image-turbo")
+    route = await keys.route("images")
+    assert route is not None
+    async with fal.client() as http:
+        runner = await KeyedMediaRouter(object(), keys, http, 60, 0).resolve(  # type: ignore[arg-type]
+            job("wasifyai-image", "image.inpaint")
+        )
+        await runner.run(
+            job("wasifyai-image", "image.inpaint"), _progress, {"image": a_png(), "mask": a_png()}
+        )
+    ((url, body),) = fal.posts()
+    assert url == "https://queue.fal.run/fal-ai/z-image/turbo/inpaint"
+    assert body["image_url"] == "https://v3.fal.media/files/in0"
+    assert body["mask_image_url"] == "https://v3.fal.media/files/in1"
+    assert runner.cost.offer.provider == "fal" and runner.cost.cost == 0.005
+
+
+async def test_the_cloud_tab_says_what_each_picture_model_can_do_with_the_keys_there_are():
+    _, keys, _ = rig()
+    await keys.save_key("images", "wavespeed", "k")
+    rows = {m["model"]: m for m in (await keys.cloud("images"))["models"]}
+    assert rows["gpt-image-2.5"]["can"] == [
+        "image.generate", "image.edit", "image.reference", "image.inpaint",
+    ]  # fmt: skip
+    assert rows["nano-banana-2.1"]["can"] == ["image.generate", "image.edit", "image.reference"]
+    assert "z-image-turbo" not in rows  # no WaveSpeed offer

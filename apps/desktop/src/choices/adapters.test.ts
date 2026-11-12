@@ -742,6 +742,12 @@ describe("a media model on several providers", () => {
     expect(c.price).toBe("$0.15 per song");
   });
 
+  it("carries what a picture model can do with the keys there are, for its screen", () => {
+    const c = cloudRow("images", { ...row, can: ["image.generate", "image.inpaint"] });
+    expect(c.can).toEqual(["image.generate", "image.inpaint"]);
+    expect(cloudRow("music", row).can).toBeUndefined();
+  });
+
   it("says when a key it does not have would be cheaper", () => {
     const c = cloudRow("music", {
       ...row,

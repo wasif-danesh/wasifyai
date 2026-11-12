@@ -156,6 +156,26 @@ class KeyChoice:
     offer: Offer
 
 
+# what a media model can do, as the capabilities the screens ask for: making is always offered, the
+# rest by what an offer `can` (stages CP4 and CP5)
+MAKES = {"images": "image.generate", "video": "video.generate"}
+CAN = {
+    "edit": ("image.edit", "image.reference"),
+    "mask": ("image.inpaint",),
+    "animate": ("video.animate",),
+    "extend": ("video.extend",),
+}
+
+
+def capabilities(product: str, offers: list[Offer]) -> list[str]:
+    """What the offers a key can run let a product's model do, for its screen to offer."""
+    out = [MAKES[product]] if product in MAKES else []
+    for o in offers:
+        for verb in sorted(o.can):
+            out.extend(c for c in CAN.get(verb, ()) if c not in out)
+    return out
+
+
 def offer_of(c: KeyChoice) -> Offer:
     return c.offer
 
@@ -554,6 +574,7 @@ class OwnKeysService:
             "chosen": use.get("model") == m.model,
             "providers": [x.offer.provider for x in order(able, lambda o: o, {})],
             "cheaper_with": PROVIDERS[lowest.provider].title if cheaper else None,
+            "can": capabilities(m.product, able),
         }  # fmt: skip
 
     async def view(self) -> dict[str, Any]:
@@ -614,7 +635,7 @@ class OwnKeysService:
                         "model": m.model, "title": m.title, "about": m.about,
                         "price": m.price_words, "speed": m.speed, "works": k["state"] == "ok",
                         "chosen": use.get("provider") == v.id and use.get("model") == m.model,
-                        "providers": [v.id], "cheaper_with": None,
+                        "providers": [v.id], "cheaper_with": None, "can": [],
                     })  # fmt: skip
             return {"product": p.id, "models": models, "has_keys": bool(row["keys"])}
         keyed = self._media_keys(row["keys"], by_id[MEDIA]["keys"], p.id)

@@ -99,6 +99,7 @@ export function cloudRow(product: string, m: CloudModel, engineId?: string): Mod
     price: m.price,
     ...(m.speed ? { speed: m.speed } : {}),
     works: m.works,
+    ...(m.can?.length ? { can: m.can } : {}),
     ...(engineId ? { engineId } : {}),
   };
 }

@@ -195,7 +195,6 @@ function KeyRow({
           />
           {saved.state === "ok" ? "Saved · works" : "Key not working"}
         </span>
-        {saved.model ? <span className="text-muted-foreground text-xs">{saved.model}</span> : null}
         <span className="ms-auto flex gap-2">
           <Button
             type="button"
@@ -260,19 +259,12 @@ function AddKey({
   const [provider, setProvider] = useState(providers[0]?.id ?? "");
   const chosen = providers.find((v) => v.id === provider);
   const [key, setKey] = useState("");
-  const [base, setBase] = useState("");
-  const [model, setModel] = useState("");
   const [tried, setTried] = useState<KeyTest | null>(null);
   const [busy, setBusy] = useState<"test" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const ids = { provider: useId(), key: useId(), base: useId(), model: useId() };
-  const body = {
-    key: key.trim(),
-    ...(chosen?.needs_base ? { base_url: base.trim(), model: model.trim() } : {}),
-  };
-  const ready = Boolean(
-    provider && key.trim() && (!chosen?.needs_base || (base.trim() && model.trim())),
-  );
+  const ids = { provider: useId(), key: useId() };
+  const body = { key: key.trim() };
+  const ready = Boolean(provider && key.trim());
 
   async function run(what: "test" | "save", fn: () => Promise<void>) {
     setBusy(what);
@@ -320,29 +312,6 @@ function AddKey({
           />
         </div>
       </div>
-      {chosen?.needs_base ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor={ids.base}>The server's address</Label>
-            <Input
-              id={ids.base}
-              value={base}
-              placeholder="https://my-server.example/v1"
-              spellCheck={false}
-              onChange={(e) => setBase(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor={ids.model}>The model it runs</Label>
-            <Input
-              id={ids.model}
-              value={model}
-              spellCheck={false}
-              onChange={(e) => setModel(e.target.value)}
-            />
-          </div>
-        </div>
-      ) : null}
       <p className="m-0 text-muted-foreground text-xs">
         What you make with a {chosen?.title ?? "cloud"} model is sent to{" "}
         {chosen?.host || "that server"} with this key. Their terms and prices apply.

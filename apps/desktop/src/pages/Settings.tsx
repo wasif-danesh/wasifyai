@@ -414,7 +414,7 @@ const GROUPS: Group[] = [
         id: "own-keys",
         title: "Your keys",
         words:
-          "api key provider openrouter openai anthropic gemini groq fal wavespeed runware hosted cloud own key",
+          "api key provider anthropic claude haiku openai gpt gemini google deepseek z.ai glm openrouter runware wavespeed fal hosted cloud own key",
         body: <YourKeys api={ownKeysApi} />,
         own: true,
       },

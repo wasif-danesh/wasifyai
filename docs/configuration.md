@@ -162,9 +162,11 @@ An alias (`default-chat`, `lyrics-writer`, `prompt-enhancer`, `creation-embedder
 - **Defaults** are in `services/api/src/wasifyai_api/model_defaults.yaml` (Gemma 4 E4B, nomic-embed-text and the
   multilingual bge-m3 on Ollama). The API seeds them into LiteLLM's database at start, once. `make setup` pulls the
   Ollama models named there, and Helm's `ollama.models` must list the same ones (a test checks it).
-- **Overrides** are made in the admin area (`/admin/models`): pick a provider (Ollama, Gemini, Groq,
-  Cerebras, OpenRouter, any OpenAI-compatible server, or any LiteLLM model string), a model and, for
-  hosted providers, an API key. They apply to new requests at once. "Reset" returns to the default.
+- **Overrides** are made in the admin area (`/admin/models`): pick a provider (a text vendor of ADR-0100:
+  Anthropic, OpenAI, Google Gemini, DeepSeek, Z.ai or OpenRouter; or the stack's own Ollama, directly or
+  through its OpenAI-compatible route, until the web runs on cloud models only), a model and, for a
+  vendor, an API key. Z.ai goes through LiteLLM's `openai/` at its own fixed address
+  (`https://api.z.ai/api/paas/v4`). They apply to new requests at once. "Reset" returns to the default.
 - **Keys** are write-only: the model gateway stores them encrypted with `LITELLM_SALT_KEY` (set it once
   and never change it, or the saved keys become unreadable). They are never shown, logged or audited.
 - LiteLLM keeps its tables in the `litellm` schema of the platform Postgres; `litellm.yaml` /

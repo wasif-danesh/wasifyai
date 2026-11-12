@@ -28,6 +28,9 @@ STALE_CANDIDATE_MINUTES = 10
 NO_KEY = "none"  # what "no API key" is stored as; also what Ollama and local servers get
 
 
+ZAI_BASE = "https://api.z.ai/api/paas/v4"
+
+
 @dataclass(frozen=True)
 class Provider:
     id: str
@@ -37,20 +40,40 @@ class Provider:
     needs_base: bool
     hint: str  # an example model name, shown as a placeholder only
     embed_prefix: str | None = None  # when embeddings use another prefix
+    fixed_base: str | None = None  # a vendor reached through `openai/` at its own address (Z.ai)
 
 
 PROVIDERS: dict[str, Provider] = {
     p.id: p
     for p in (
-        Provider("ollama", "Ollama (local)", "ollama_chat/", False, True, "gemma4:e4b", "ollama/"),
-        Provider("gemini", "Google Gemini", "gemini/", True, False, "gemini-2.5-flash"),
-        Provider("groq", "Groq", "groq/", True, False, "llama-3.3-70b-versatile"),
-        Provider("cerebras", "Cerebras", "cerebras/", True, False, "llama-3.3-70b"),
-        Provider("openrouter", "OpenRouter", "openrouter/", True, False, "google/gemma-3-27b-it"),
+        # ADR-0100: the admin chooses the text vendors; Claude Haiku 5.5 on Anthropic is the
+        # default. Ollama and its OpenAI-compatible route are the stack's own local models, kept
+        # until the web runs on cloud models only (stage CP12 of docs/cloud-v1-plan.md).
+        Provider("anthropic", "Anthropic", "anthropic/", True, False, "claude-haiku-5-5"),
+        Provider("openai", "OpenAI", "openai/", True, False, "gpt-6-luna"),
+        Provider("gemini", "Google Gemini", "gemini/", True, False, "gemini-3.8-flash"),
+        Provider("deepseek", "DeepSeek", "deepseek/", True, False, "deepseek-flash"),
         Provider(
-            "openai_compatible", "OpenAI-compatible server", "openai/", False, True, "model-name"
+            "zai",
+            "Z.ai",
+            "openai/",
+            True,
+            False,
+            "glm-5.3-flash",
+            fixed_base=ZAI_BASE,
         ),
-        Provider("litellm", "Other (LiteLLM model string)", "", True, False, "provider/model-name"),
+        Provider(
+            "openrouter", "OpenRouter", "openrouter/", True, False, "anthropic/claude-haiku-5.5"
+        ),
+        Provider("ollama", "Ollama (local)", "ollama_chat/", False, True, "gemma4:e4b", "ollama/"),
+        Provider(
+            "openai_compatible",
+            "Ollama, OpenAI-compatible route (local)",
+            "openai/",
+            False,
+            True,
+            "gemma4:e4b",
+        ),
     )
 }
 
@@ -117,7 +140,11 @@ def _fill(value: str, substitutions: dict[str, str]) -> str:
 def describe(params: dict[str, Any]) -> tuple[str, str]:
     """(provider id, model name) for a LiteLLM model string."""
     model = str(params.get("model", ""))
-    if model.startswith("openai/") and params.get("api_base"):
+    base = str(params.get("api_base") or "").rstrip("/")
+    if model.startswith("openai/") and base:
+        for p in PROVIDERS.values():
+            if p.fixed_base and base == p.fixed_base:
+                return p.id, model.removeprefix("openai/")
         return "openai_compatible", model.removeprefix("openai/")
     for p in PROVIDERS.values():
         for prefix in (p.prefix, p.embed_prefix):
@@ -133,10 +160,10 @@ def validate_binding(b: Binding) -> Binding:
     model = b.model.strip()
     if not MODEL_NAME.match(model):
         raise ModelAccessError("the model name has characters that are not allowed")
-    api_base = (b.api_base or "").strip() or None
+    api_base = provider.fixed_base or (b.api_base or "").strip() or None
     if provider.needs_base and not api_base:
         raise ModelAccessError(f"{provider.label} needs a server address")
-    if api_base:
+    if api_base and not provider.fixed_base:
         _check_url(api_base)
     key = (b.api_key or "").strip() or None
     if key and (len(key) > 512 or re.search(r"\s", key)):

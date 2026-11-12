@@ -98,5 +98,7 @@
 | [0096](0096-motion-graphics-scene-editor.md) | Motion graphics becomes a scene editor for promotion and social content, with the assistant built in (mockup `docs/spikes/motion-editor-mockup.html`) | Accepted (2026-10-31; mockup approved; MX1 to MX7 built) |
 | [0097](0097-several-image-and-video-models.md) | Images and Video offer several models, each taught with AI Toolkit (plan `docs/image-video-models-plan.md`) | Accepted (2026-11-07) |
 | [0098](0098-writing-training-on-windows-and-linux.md) | Teaching writing on Windows and Linux: PEFT + TRL on CUDA PyTorch, mlx-lm stays on the Mac (spike `docs/spikes/writing-peft-wp0.md`) | Proposed |
+| [0099](0099-fal-only-v1-web-on-cloud-models.md) | OpenRouter for text models, fal.ai for media models in v1; the desktop runs local and cloud models, the web only cloud models (plan `docs/fal-only-v1-plan.md`) | Accepted; changed by ADR-0100 |
+| [0100](0100-haiku-text-and-cheapest-media-provider.md) | Text on Claude Haiku 5.5 by default with the person's choice of vendor; media on the cheapest of Runware, WaveSpeed and fal.ai (plan `docs/cloud-v1-plan.md`) | Accepted (2026-11-12) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

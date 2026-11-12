@@ -252,7 +252,8 @@ def runware_image(refs: int, quality: str | None = None) -> Recipe:
 
 
 async def runware_send(data: bytes, name: str) -> str:
-    """Runware takes a file inside the task, as a data URI: nothing goes up first."""
+    """Runware takes a picture inside the task, as a data URI: nothing goes up first (a clip or a
+    voice goes up first: `RunwareTasks.upload`)."""
     return data_uri(data)
 
 

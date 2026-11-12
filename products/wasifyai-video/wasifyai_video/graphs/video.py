@@ -128,6 +128,8 @@ class VideoState(TypedDict, total=False):
     keep_frames: int
     new_frames: int
     temp_key: str
+    sent_frames: int  # how much of the source the job was given (all of it, or its end)
+    result_whole: bool  # a cloud model's answer: what it was given, then the new part (CP5)
     # job and result
     video_id: str
     job_id: str
@@ -395,18 +397,18 @@ def build_video_graph(
         looks: dict[str, Any] = {"loras": state["loras"]} if state.get("loras") else {}
         if state.get("lora_files"):
             looks["lora_files"] = state["lora_files"]
-        temp_key = ""
+        temp_key, sent = "", 0
         try:
             if extend:
                 # the worker reads a job's inputs only from the user's uploads: a copy of the clip
                 temp_key = f"uploads/extend-{uuid4()}.mp4"
                 assert caps.storage is not None
                 clip = await caps.storage.get(state["source_video_key"])
-                from_frame = state["keep_frames"]
+                from_frame, sent = state["keep_frames"], state["source_frames"]
                 if state["source_frames"] > 3 * TAIL_FRAMES:
                     # only the end is needed, and the engine holds every frame it is given in memory
                     clip = await tail_of(clip, TAIL_FRAMES, state["source_frames"])
-                    from_frame = TAIL_FRAMES - OVERLAP_FRAMES
+                    from_frame, sent = TAIL_FRAMES - OVERLAP_FRAMES, TAIL_FRAMES
                 await caps.storage.put(temp_key, clip, "video/mp4")
                 handle = await caps.video.extend(
                     prompt=state["prompt"],
@@ -447,7 +449,10 @@ def build_video_graph(
                 }
             )
             raise
-        return {"video_id": video_id, "job_id": handle.job_id, "temp_key": temp_key}
+        started: VideoState = {"video_id": video_id, "job_id": handle.job_id, "temp_key": temp_key}
+        if extend:
+            started["sent_frames"] = sent
+        return started
 
     async def await_job_node(state: VideoState) -> VideoState:
         try:
@@ -456,6 +461,8 @@ def build_video_graph(
             message = exc.result.error.message if exc.result.error else FAILED
             await fail_clip(state, message)
             raise
+        if "extended" in result.outputs:  # a cloud model's Extend: the clip it was given, then more
+            return {"result_key": result.outputs["extended"].key, "result_whole": True}
         return {"result_key": result.outputs["video"].key}
 
     # ---- finish -------------------------------------------------------------------------
@@ -468,11 +475,16 @@ def build_video_graph(
             # Final layout {tenant}/wasifyai-video/{user}/{video_id}/video.mp4; the worker's jobs/
             # paths are temporary.
             if state["mode"] == "extend":
-                # the old clip up to the frames the new one repeats, then the new clip, as one file
+                # the old clip up to the frames the new one repeats, then the new clip, as one file;
+                # a cloud model's clip repeats all it was given, at its own size
+                source = await caps.storage.get(state["source_video_key"])
+                size, keep = None, state["keep_frames"]
+                if state.get("result_whole"):
+                    width, height, _ = await poster_of(source)
+                    size = (width, height)
+                    keep = state["source_frames"] - state.get("sent_frames", state["source_frames"])
                 joined = await join_clips(
-                    await caps.storage.get(state["source_video_key"]),
-                    await caps.storage.get(state["result_key"]),
-                    state["keep_frames"],
+                    source, await caps.storage.get(state["result_key"]), keep, size
                 )
                 video_key = f"{video_id}/video.mp4"
                 await caps.storage.put(video_key, joined, "video/mp4")

@@ -21,6 +21,7 @@ from wasifyai_platform_sdk.fal import (
     FalError,
     FalQueue,
     ProgressFn,
+    data_uri,
     media_type,
     not_sent,
     refused_before,
@@ -215,6 +216,26 @@ class RunwareTasks:
             raise FalError("provider_refused", f"{self.title} could not make it: {said}", first)
         data = j.get("data") or []
         return [d for d in data if isinstance(d, dict)]
+
+    async def upload(self, data: bytes, name: str) -> str:
+        """A file as a task names it: a picture goes inside the task (a data URI); a clip or a
+        voice, which Runware takes only by address or upload id, goes up first with a
+        `mediaStorage` task and is named by its `mediaUUID`. A refusal here comes before anything
+        runs."""
+        if media_type(data).startswith("image/"):
+            return data_uri(data)
+        task = {
+            "taskType": "mediaStorage", "taskUUID": str(uuid.uuid4()), "operation": "upload",
+            "media": data_uri(data),
+        }  # fmt: skip
+        try:
+            rows = await self._post([task], first=True)
+        except FalError as e:
+            raise FalError(e.code, e.message, True) from None
+        stored = next((d.get("mediaUUID") for d in rows if d.get("mediaUUID")), None)
+        if not stored:
+            raise FalError("provider_refused", f"{self.title} did not keep the file.", True)
+        return str(stored)
 
     async def call(
         self, endpoint: str, body: dict[str, Any], on_progress: ProgressFn

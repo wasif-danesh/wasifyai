@@ -101,11 +101,16 @@ class Runware:
         self.requests: list[httpx.Request] = []
         self.task = ""
         self.asks = 0
+        self.stored: list[str] = []
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.requests.append(req)
         if str(req.url) == "https://api.runware.ai/v1":
             (task,) = json.loads(req.content)
+            if task["taskType"] == "mediaStorage":  # a clip or a voice goes up first
+                self.stored.append(task["media"])
+                n = len(self.stored) - 1
+                return httpx.Response(200, json={"data": [{"mediaUUID": f"media-{n}"}]})
             if task["taskType"] == "getResponse":
                 self.asks += 1
                 if self.asks == 1:

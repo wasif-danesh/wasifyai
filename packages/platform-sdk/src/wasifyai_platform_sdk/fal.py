@@ -42,9 +42,12 @@ def refused_before(r: httpx.Response) -> bool:
 
 
 def media_type(data: bytes) -> str:
-    """The type of a picture or a voice from its first bytes (PNG, WAV, MP3, else JPEG)."""
+    """The type of a picture, a voice or a clip from its first bytes (PNG, WAV, MP3, MP4, else
+    JPEG)."""
     if data[:4] == b"\x89PNG":
         return "image/png"
+    if data[4:8] == b"ftyp":
+        return "video/mp4"
     if data[:4] == b"RIFF":
         return "audio/wav"
     if data[:3] == b"ID3" or data[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):

@@ -27,7 +27,7 @@ from wasifyai_platform_sdk.cloud_queues import RunwareTasks, WaveSpeedQueue, que
 from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue
 from wasifyai_platform_sdk.offers import Offer, Priced, no_offer, order, run_cheapest
 
-from wasifyai_media_worker.cloud_recipes import RECIPES, ask_of, runware_send
+from wasifyai_media_worker.cloud_recipes import RECIPES, ask_of
 from wasifyai_media_worker.comfy import ComfyClient, ComfyError, ProgressFn, use_picture
 from wasifyai_media_worker.settings import WorkerSettings
 
@@ -533,7 +533,9 @@ class RecipeRunner:
             ((n, s.get("type", "image")) for n, s in job.outputs.items()), ("output", "image")
         )
         video = kind == "video"
-        send = runware_send if isinstance(self._queue, RunwareTasks) else self._queue.upload
+        if job.capability == "video.extend":
+            name = "extended"  # the clip it was sent, then the new part: the product joins it (CP5)
+        send = self._queue.upload  # each provider's way: a file store, or inside the task
         try:
             endpoint, body = await self._recipe(ask_of(job, files), self._offer, send)
             data, ctype, _ = await self._queue.make(

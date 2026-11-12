@@ -211,3 +211,25 @@ async def test_a_clip_the_model_made_is_not_looked_at_again(tmp_path, ctx):
     vid = await make_source(rig, store, frames=49, mode="text")
     await start(rig, store, vid)
     assert rig.asked() == []
+
+
+# ---- a cloud model's Extend (ADR-0100, CP5): it answers what it was sent, then the new part -------
+
+
+@pytest.mark.parametrize(("frames", "sent"), [(49, 49), (300, 24)])
+async def test_a_cloud_models_clip_is_joined_after_what_it_was_not_sent_at_the_sources_size(
+    tmp_path, ctx, frames, sent
+):
+    rig, store = make_rig(tmp_path), InMemoryVideoStore()
+    vid = await make_source(rig, store, frames=frames)
+    s = await start(rig, store, vid)
+    (job,) = rig.sink.submitted
+    clip = await rig.raw.get(object_key("t1", "wasifyai-video", "u1", job.prompt["video_key"]))
+    assert frame_count(clip) == sent  # a long clip's end only, as for this computer's model
+    await s.finish_job(data=mp4(size=(256, 144), frames=sent + 120), output="extended")
+    assert s.state["status"] == "done"
+    row = next(v for v in store.videos if v.id == s.state["video_id"])
+    assert (row.width, row.height) == (128, 96)  # brought to the source's size
+    joined = await rig.raw.get(object_key("t1", "wasifyai-video", "u1", f"{row.id}/video.mp4"))
+    assert frame_count(joined) == frames + 120  # nothing repeated, nothing lost
+    assert not await exists(rig, f"jobs/{job.job_id}/extended.mp4")

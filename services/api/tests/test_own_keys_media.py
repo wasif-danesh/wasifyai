@@ -8,7 +8,7 @@ import pytest
 from wasifyai_api.own_keys import OwnKeysService, Provider, Tried
 from wasifyai_api.own_keys_media import KeyedMediaRouter
 from wasifyai_api.settings_store import InMemorySettingsStore
-from wasifyai_media_worker.backends import CloudChoice, FalRunner, OfferRunner, RecipeRunner
+from wasifyai_media_worker.backends import CloudChoice, OfferRunner, RecipeRunner
 from wasifyai_platform_sdk import InMemorySecretStore, JobRequest
 from wasifyai_platform_sdk.offers import offer
 
@@ -47,20 +47,19 @@ async def test_a_product_on_a_cloud_model_runs_its_offers_with_its_own_key():
     await keys.save_key("images", "fal", "img-key")
     await keys.use("images", None, "flux-3-klein")
     await keys.save_key("video", "fal", "vid-key")
-    await keys.use("video", "fal", "fal-ai/ltx-2/text-to-video/fast")  # an endpoint, as before
+    await keys.use("video", None, "minimax-h3-max")
     pic = await router.resolve(job("wasifyai-image", "image.generate"))
     clip = await router.resolve(job("wasifyai-video", "video.animate"))
     assert isinstance(pic, OfferRunner) and isinstance(clip, OfferRunner)
     assert pic.local_gpu is False  # the processor takes no GPU lock for it
     fal_pic = pic._runner(pic._choices[0])
     fal_clip = clip._runner(clip._choices[0])
-    # a catalogue model goes out as its recipe for the provider (CP4); LTX-2 still by FalRunner
-    assert isinstance(fal_pic, RecipeRunner) and isinstance(fal_clip, FalRunner)
+    # a catalogue model goes out as its recipe for the provider (CP4, CP5)
+    assert isinstance(fal_pic, RecipeRunner) and isinstance(fal_clip, RecipeRunner)
     assert fal_pic.backend == "fal" and fal_pic._queue._headers == {"Authorization": "Key img-key"}
     assert fal_pic._offer.endpoint_for("edit") == "blackforestlabs/flux-3/klein/edit-image"
-    assert fal_clip._model == "fal-ai/ltx-2/text-to-video/fast"
-    assert fal_clip._endpoints == {"animate": "fal-ai/ltx-2/image-to-video/fast"}
-    assert fal_clip._headers == {"Authorization": "Key vid-key"}
+    assert fal_clip._offer.endpoint_for("extend") == "minimax/h3-max/extend-video"
+    assert fal_clip._queue._headers == {"Authorization": "Key vid-key"}
     # other products are not affected by these keys
     assert await router.resolve(job("wasifyai-voice", "music.generate")) is local
 

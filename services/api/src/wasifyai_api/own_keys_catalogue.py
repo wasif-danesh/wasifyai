@@ -96,10 +96,31 @@ CATALOGUE: tuple[CloudModel, ...] = (
            offer("runware", "runware:z-image@turbo", 0.002, "picture", "mask"),
            offer("fal", "fal-ai/z-image/turbo", 0.005, "picture", "mask",
                  endpoints={"inpaint": "fal-ai/z-image/turbo/inpaint"})),
-    # ---- video
-    _media("video", "ltx-2-fast", "LTX-2 fast", "Makes and animates clips, 6 to 10 s.",
-           offer("fal", "fal-ai/ltx-2/text-to-video/fast", 0.04, "second", "animate",
-                 endpoints={"animate": "fal-ai/ltx-2/image-to-video/fast"})),
+    # ---- video (ADR-0100, CP5: per second at 720p, 768p for MiniMax H3, without sound; "animate"
+    # starts from a picture, "extend" makes a clip longer; prices as listed 2026-11-12)
+    _media("video", "gemini-omni-flash-1.2", "Gemini Omni Flash 1.2", "Google. Makes and animates clips of 3 to 15 s, wide or tall; extends them with a Runware key.",
+           offer("runware", "google:gemini@omni-flash-1.2", 0.07, "second", "animate", "extend"),
+           offer("wavespeed", "google/gemini-omni-1.2-flash/text-to-video", 0.07, "second", "animate",
+                 endpoints={"animate": "google/gemini-omni-1.2-flash/image-to-video"})),
+    _media("video", "seedance-2.5", "Seedance 2.5", "ByteDance. The best motion; makes, animates and extends clips of 4 to 30 s.",
+           offer("runware", "bytedance:seedance@2.5", 0.23, "second", "animate", "extend"),
+           offer("wavespeed", "bytedance/seedance-2.5/text-to-video", 0.36, "second", "animate", "extend",
+                 endpoints={"animate": "bytedance/seedance-2.5/image-to-video",
+                            "extend": "bytedance/seedance-2.5/video-extend"})),
+    _media("video", "minimax-h3-max", "MiniMax H3 Max", "MiniMax. Makes and animates clips of 5 to 10 s; extends them with a fal.ai key.",
+           offer("runware", "minimax:h3@max", 0.08, "second", "animate"),
+           offer("fal", "minimax/h3-max/text-to-video", 0.08, "second", "animate", "extend",
+                 endpoints={"animate": "minimax/h3-max/image-to-video",
+                            "extend": "minimax/h3-max/extend-video"})),
+    _media("video", "minimax-h3-max-turbo", "MiniMax H3 Max Turbo", "MiniMax, quicker and half the price; extends clips with a fal.ai key.",
+           offer("runware", "minimax:h3@max-turbo", 0.04, "second", "animate"),
+           offer("fal", "minimax/h3-max-turbo/text-to-video", 0.04, "second", "animate", "extend",
+                 endpoints={"animate": "minimax/h3-max-turbo/image-to-video",
+                            "extend": "minimax/h3-max-turbo/extend-video"})),
+    _media("video", "grok-imagine-video-1.5-lite", "Grok Imagine Video 1.5 lite", "xAI. The cheapest; makes and animates clips of 1 to 15 s.",
+           offer("runware", "xai:grok-imagine@video-1.5-lite", 0.03, "second", "animate"),
+           offer("fal", "xai/grok-imagine-video/v1.5/lite/text-to-video", 0.03, "second", "animate",
+                 endpoints={"animate": "xai/grok-imagine-video/v1.5/lite/image-to-video"})),
     # ---- voice
     _media("voice", "kokoro", "Kokoro", "Speaks text in American voices.",
            offer("fal", "fal-ai/kokoro", 0.02, "1k_chars")),
@@ -113,7 +134,7 @@ CATALOGUE: tuple[CloudModel, ...] = (
     _media("sfx", "elevenlabs-sfx-v2", "ElevenLabs Sound Effects", "0.5 to 22 s, can loop.",
            offer("fal", "fal-ai/elevenlabs/sound-effects/v2", 0.002, "second")),
     # ---- lip sync (speed: seconds of work per second of video, fal.ai, 2026-11-12, docs/spikes/lipsync-cloud-race.md;
-    # LongCat Avatar was taken off the same day: a black video)
+    # LongCat Avatar was taken off the same day: a black video).
     _media("lipsync", "fabric-1.0", "Fabric 1.0 Fast", "VEED. Quickest; crops to a square. Up to 1 min.",
            offer("fal", "veed/fabric-1.0/fast", 0.10, "second", setting="resolution", by={"480p": 0.10, "720p": 0.20}),
            speed="5 to 25 s per second of video at 480p (two runs)"),

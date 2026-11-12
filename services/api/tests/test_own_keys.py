@@ -80,9 +80,9 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     ]  # fmt: skip
     # one media key serves every media product (decision 9); the tie order throughout
     assert by["media"]["providers"] == ["runware", "wavespeed", "fal"]
-    for media in ("images", "music"):
+    for media in ("images", "video", "music"):
         assert by[media]["providers"] == ["runware", "wavespeed", "fal"], media
-    for media in ("video", "voice", "sfx", "lipsync", "model3d"):
+    for media in ("voice", "sfx", "lipsync", "model3d"):
         assert by[media]["providers"] == ["fal"], media
     assert [p["id"] for p in body["providers"]] == [
         "anthropic", "openai", "gemini", "deepseek", "zai", "openrouter",
@@ -142,7 +142,7 @@ def test_test_saves_nothing_and_uses_the_saved_key_when_none_is_given():
 @pytest.mark.parametrize(
     ("product", "provider", "body", "words"),
     [
-        ("video", "wavespeed", {"key": GOOD}, "no video models"),
+        ("sfx", "runware", {"key": GOOD}, "no sound effects models"),
         ("images", "openai", {"key": GOOD}, "no images models"),
         ("images", "openrouter", {"key": GOOD}, "no images models"),  # no media on OpenRouter
         ("chat", "fal", {"key": GOOD}, "no chat and writing models"),  # no text through fal.ai
@@ -291,13 +291,14 @@ async def test_keys_of_providers_no_longer_offered_are_deleted_on_first_start():
         "keys.music.fal": GOOD,
         "keys.music.wavespeed": GOOD,
         "keys.images.runware": GOOD,
+        "keys.video.runware": GOOD,
     }
     saved = await store.get(SETTINGS)
     assert isinstance(saved, dict)
     assert list(saved["chat"]["keys"]) == ["openai", "openrouter"] and "use" not in saved["chat"]
     assert list(saved["music"]["keys"]) == ["fal", "wavespeed"]
     assert list(saved["images"]["keys"]) == ["runware"]
-    assert saved["video"]["keys"] == {}  # Runware has no video model in the catalogue yet
+    assert list(saved["video"]["keys"]) == ["runware"]  # Runware has video models (CP5)
 
 
 # ---- the real testers, against fake providers ---------------------------------------------------

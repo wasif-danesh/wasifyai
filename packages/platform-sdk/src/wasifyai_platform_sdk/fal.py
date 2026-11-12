@@ -21,11 +21,24 @@ ProgressFn = Callable[[float], Awaitable[None]]
 
 class FalError(Exception):
     """`code`: provider_refused, connection_lost, missing_output or unavailable (worth a retry);
-    `message` is a sentence for the screen and never holds the key."""
+    `message` is a sentence for the screen and never holds the key. `before_running`: the
+    provider refused before the job could run (a 4xx answer to the upload or the request, or no
+    connection at all), so nothing was charged and another provider may take it (ADR-0100)."""
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, before_running: bool = False):
         super().__init__(message)
         self.code, self.message = code, message
+        self.before_running = before_running
+
+
+def not_sent(e: httpx.HTTPError) -> bool:
+    """The request never reached the provider (no connection was made)."""
+    return isinstance(e, httpx.ConnectError | httpx.ConnectTimeout)
+
+
+def refused_before(r: httpx.Response) -> bool:
+    """A refusal of a request before it ran: a 4xx answer (a 5xx may come after it started)."""
+    return 400 <= r.status_code < 500
 
 
 def media_type(data: bytes) -> str:
@@ -93,7 +106,7 @@ class FalQueue:
                 json={}, headers=self._headers, timeout=30,
             )  # fmt: skip
             if tok.status_code >= 400:
-                raise self._refused(tok)
+                raise self._refused(tok, before=True)
             t = tok.json()
             base = str(t.get("base_url") or self._cdn).rstrip("/")
             up = await self._http.post(
@@ -104,29 +117,36 @@ class FalQueue:
                 },
             )  # fmt: skip
         except httpx.HTTPError:
-            raise FalError("connection_lost", "fal.ai could not be reached.") from None
+            raise FalError("connection_lost", "fal.ai could not be reached.", True) from None
         except (KeyError, ValueError):
-            raise FalError("provider_refused", "fal.ai did not give a place to upload.") from None
+            raise FalError(
+                "provider_refused", "fal.ai did not give a place to upload.", True
+            ) from None
         if up.status_code >= 400:
-            raise FalError("provider_refused", f"fal.ai did not take the file ({up.status_code}).")
+            raise FalError(
+                "provider_refused", f"fal.ai did not take the file ({up.status_code}).", True
+            )
         url = (
             up.json().get("access_url")
             if up.headers.get("content-type", "").startswith("application/json")
             else None
         )
         if not url:
-            raise FalError("provider_refused", "fal.ai did not say where the file went.")
+            raise FalError("provider_refused", "fal.ai did not say where the file went.", True)
         return str(url)
 
-    def _refused(self, r: httpx.Response) -> FalError:
+    def _refused(self, r: httpx.Response, before: bool = False) -> FalError:
         if r.status_code in (401, 403):
-            return FalError("provider_refused", "fal.ai did not accept the key.")
+            return FalError("provider_refused", "fal.ai did not accept the key.", before)
         if r.status_code == 429:
-            return FalError("provider_refused", "fal.ai says too many requests. Try again soon.")
+            return FalError(
+                "provider_refused", "fal.ai says too many requests. Try again soon.", before
+            )
         said = fal_said(r)
         return FalError(
             "provider_refused",
             f"fal.ai could not make it: {said}" if said else f"fal.ai answered {r.status_code}.",
+            before,
         )
 
     async def call(
@@ -138,10 +158,10 @@ class FalQueue:
             r = await self._http.post(
                 f"{self._base}/{endpoint}", json=body, headers=self._headers, timeout=60
             )
-        except httpx.HTTPError:
-            raise FalError("connection_lost", "fal.ai could not be reached.") from None
+        except httpx.HTTPError as e:
+            raise FalError("connection_lost", "fal.ai could not be reached.", not_sent(e)) from None
         if r.status_code >= 400:
-            raise self._refused(r)
+            raise self._refused(r, before=refused_before(r))
         sub = r.json()
         started = time.monotonic()
         try:

@@ -16,7 +16,14 @@ from typing import Any
 
 import httpx
 
-from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue, ProgressFn
+from wasifyai_platform_sdk.fal import (
+    FAL_QUEUE,
+    FalError,
+    FalQueue,
+    ProgressFn,
+    not_sent,
+    refused_before,
+)
 
 WAVESPEED_API = "https://api.wavespeed.ai/api/v3"
 RUNWARE_API = "https://api.runware.ai/v1"
@@ -41,15 +48,18 @@ def _said(r: httpx.Response) -> str:
     return ""
 
 
-def _refused(title: str, r: httpx.Response) -> FalError:
+def _refused(title: str, r: httpx.Response, before: bool = False) -> FalError:
     if r.status_code in (401, 403):
-        return FalError("provider_refused", f"{title} did not accept the key.")
+        return FalError("provider_refused", f"{title} did not accept the key.", before)
     if r.status_code == 429:
-        return FalError("provider_refused", f"{title} says too many requests. Try again soon.")
+        return FalError(
+            "provider_refused", f"{title} says too many requests. Try again soon.", before
+        )
     said = _said(r)
     return FalError(
         "provider_refused",
         f"{title} could not make it: {said}" if said else f"{title} answered {r.status_code}.",
+        before,
     )
 
 
@@ -96,10 +106,12 @@ class WaveSpeedQueue:
             r = await self._http.post(
                 f"{self._base}/{endpoint}", json=body, headers=self._headers, timeout=60
             )
-        except httpx.HTTPError:
-            raise FalError("connection_lost", f"{self.title} could not be reached.") from None
+        except httpx.HTTPError as e:
+            raise FalError(
+                "connection_lost", f"{self.title} could not be reached.", not_sent(e)
+            ) from None
         if r.status_code >= 400:
-            raise _refused(self.title, r)
+            raise _refused(self.title, r, refused_before(r))
         pid = (r.json().get("data") or {}).get("id")
         if not pid:
             raise FalError("missing_output", f"{self.title} did not take the request.")
@@ -154,18 +166,21 @@ class RunwareTasks:
         self._poll = poll_s
         self._base = base_url.rstrip("/")
 
-    async def _post(self, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def _post(self, tasks: list[dict[str, Any]], first: bool = False) -> list[dict[str, Any]]:
+        """`first`: the request that starts the task; a refusal of it came before running."""
         try:
             r = await self._http.post(self._base, json=tasks, headers=self._headers, timeout=60)
-        except httpx.HTTPError:
-            raise FalError("connection_lost", f"{self.title} could not be reached.") from None
+        except httpx.HTTPError as e:
+            raise FalError(
+                "connection_lost", f"{self.title} could not be reached.", first and not_sent(e)
+            ) from None
         if r.status_code >= 400:
-            raise _refused(self.title, r)
+            raise _refused(self.title, r, first and refused_before(r))
         j = r.json()
         errors = j.get("errors") or j.get("error")
         if errors:
             said = _said(r) or str(errors)[:300]
-            raise FalError("provider_refused", f"{self.title} could not make it: {said}")
+            raise FalError("provider_refused", f"{self.title} could not make it: {said}", first)
         data = j.get("data") or []
         return [d for d in data if isinstance(d, dict)]
 
@@ -177,7 +192,7 @@ class RunwareTasks:
         task_id = str(uuid.uuid4())
         task = {**body, "taskUUID": task_id, "model": endpoint, "deliveryMethod": "async"}
         started = time.monotonic()
-        rows = await self._post([task])
+        rows = await self._post([task], first=True)
         while True:
             done = next(
                 (d for d in rows if d.get("taskUUID") == task_id

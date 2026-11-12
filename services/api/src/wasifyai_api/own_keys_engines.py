@@ -10,13 +10,17 @@ fal.ai; the cut-out with fal.ai's BiRefNet, so the 3D component need not be set 
 
 Both read `known`, which is kept up to date on every change, because the products ask them
 synchronously (`ready()`, `models()`, `resolve()`). On the desktop that is `OwnKeysService` (the
-person's key); on the web `AdminProviders` (the admin's fal.ai rows in Admin › Media, stage K5)."""
+person's key); on the web `AdminProviders` (the admin's fal.ai rows in Admin › Media, stage K5).
+
+Each job is priced on every offer of the route that can do it and runs on the cheapest; a provider
+that refuses before running hands it to the next (`on_cheapest`, ADR-0100 stage CP3). What it cost
+is written as a `cloud.cost` usage event."""
 
 import asyncio
 import io
 import math
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -33,13 +37,17 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.cloud_queues import queue_for
 from wasifyai_platform_sdk.fal import FalError, FalQueue
+from wasifyai_platform_sdk.offers import Priced, cost_event, no_offer, order, run_cheapest
+from wasifyai_platform_sdk.usage import UsageRecorder, record_safely
 from wasifyai_platform_sdk.voice_models import OptionSpec, VoiceInfo, VoiceModel
 
 from wasifyai_api.audio_runtime import _wav_rate, _wav_seconds
 from wasifyai_api.comfy_music import to_wav
 from wasifyai_api.desktop_model3d import ATLAS, RunResult
 from wasifyai_api.lipsync_runtime import _video_size
-from wasifyai_api.own_keys import KeyRoute
+from wasifyai_api.logging import product_id as current_product
+from wasifyai_api.logging import tenant_id as current_tenant
+from wasifyai_api.own_keys import KeyChoice, KeyRoute, offer_of
 
 # the voice model's id while Voice runs on the key: the one model offered for speaking
 KEYED_VOICE = "key:voice"
@@ -68,8 +76,43 @@ async def _no_progress(_p: float) -> None:
 
 
 def _fal(keys: Routes, product: str) -> KeyRoute | None:
+    """The route of a product whose model has a fal.ai offer with a key (speaking and 3D)."""
     route = keys.known(product)
-    return route if route is not None and route.provider.id == "fal" else None
+    if route is None or not any(c.provider.id == "fal" for c in route.offers()):
+        return None
+    return route
+
+
+async def on_cheapest[T](
+    route: KeyRoute,
+    product: str,
+    job: dict[str, Any],
+    attempt: Callable[[KeyChoice], Awaitable[T]],
+    usage: UsageRecorder | None = None,
+    needs: tuple[str, ...] = (),
+    only: str | None = None,
+) -> tuple[T, Priced[KeyChoice]]:
+    """Run a job on the cheapest offer of `route` that can do it, the next on a refusal before
+    running, and write what it cost. `attempt(choice)` sends the job to that offer."""
+    ordered = order(route.offers(), offer_of, job, needs, only)
+    if not ordered:
+        raise no_offer(route.title or route.model, [c.offer for c in route.offers()], needs, only)
+
+    async def one(p: Priced[KeyChoice]) -> T:
+        return await attempt(p.choice)
+
+    made, used = await run_cheapest(ordered, one)
+    if usage is not None and used.cost > 0:
+        tenant = current_tenant.get()
+        pid = current_product.get()
+        await record_safely(
+            usage,
+            cost_event(
+                used, route.model, "default" if tenant in ("", "-") else tenant,
+                pid if pid not in ("", "-") else f"keys:{product}",
+            ),
+        )  # fmt: skip
+    return made, used
 
 
 MEDIA_PROVIDERS = ("fal", "wavespeed", "runware")
@@ -83,7 +126,8 @@ def _cloud(keys: Routes, product: str) -> KeyRoute | None:
 
 
 def keyed_voice_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
-    title = f"{route.model} · {route.provider.title}" if admin else f"{route.model} · with your key"
+    name = route.title or route.model
+    title = f"{name} · {route.provider.title}" if admin else f"{name} · with your key"
     return VoiceModel(
         id=KEYED_VOICE, title=title, engine="remote",
         family="kokoro_tts", package="", server_task="tts", tasks=("speak",),
@@ -107,14 +151,16 @@ KEYED_LIPSYNC = "key:lipsync"
 MINIMAX_MODES = {
     "song": {"lyrics": "optional", "instrumental": "toggle", "duration": [120, 120, 120]}
 }
-MINIMAX = ("fal-ai/minimax-music/v2.6", "minimax/music-2.6", "minimax:music@2.6")
+MINIMAX = ("fal-ai/minimax-music/v2.6", "minimax/music-2.6", "minimax:music@2.6")  # its endpoints
+# by the catalogue's id for the model (`own_keys_catalogue.py`); an admin's row on the web names
+# fal.ai's endpoint, so that is found too (`_music_of`)
 MUSIC_MODELS: dict[str, tuple[str, dict[str, Any]]] = {
-    **{m: ("MiniMax Music 2.6", MINIMAX_MODES) for m in MINIMAX},
-    "fal-ai/elevenlabs/music": (
+    "minimax-music-2.6": ("MiniMax Music 2.6", MINIMAX_MODES),
+    "elevenlabs-music": (
         "ElevenLabs Music",
         {"song": {"lyrics": "unused", "instrumental": "toggle", "duration": [3, 30, 600]}},
     ),
-    "fal-ai/elevenlabs/sound-effects/v2": (
+    "elevenlabs-sfx-v2": (
         "ElevenLabs Sound Effects",
         {"sfx": {"duration": [0.5, 5, 22]}},
     ),
@@ -144,23 +190,23 @@ class CloudLipSync:
     frame_short: dict[int, int] = field(default_factory=dict)
 
 
-LIPSYNC_MODELS: dict[str, CloudLipSync] = {
+LIPSYNC_MODELS: dict[str, CloudLipSync] = {  # by the catalogue's id, as MUSIC_MODELS
     # Fabric's time: 4.8 s per video second for a 3 s clip in the race, 25 s for a 5.6 s clip from
     # the app; the slower one is shown so the screen does not promise too little
-    "veed/fabric-1.0/fast": CloudLipSync(
+    "fabric-1.0": CloudLipSync(
         "Fabric 1.0 Fast", 60.0, (480, 720), 480, {480: 0.10, 720: 0.20}, {480: 25.0},
         frame="square", frame_short={480: 640},
     ),
-    "fal-ai/kling-video/ai-avatar/v2/standard": CloudLipSync(
+    "kling-avatar-v2": CloudLipSync(
         "Kling Avatar v2", 60.0, (720,), 720, {720: 0.0562}, {720: 40.0}, sends_size=False,
         frame_short={720: 912},
     ),
     # 720p: fal.ai says it is quicker and better than 1080p, and takes up to 60 s of voice
-    "fal-ai/bytedance/omnihuman/v1.5": CloudLipSync(
+    "omnihuman-1.5": CloudLipSync(
         "OmniHuman 1.5", 60.0, (720,), 720, {720: 0.16}, {720: 43.0}, {"turbo_mode": True},
         frame="square", frame_short={720: 960},
     ),
-    "fal-ai/infinitalk": CloudLipSync(
+    "infinitalk": CloudLipSync(
         "InfiniteTalk", 28.0, (480, 720), 480, {480: 0.20, 720: 0.40}, {480: 52.0},
         {"acceleration": "high"}, frame_short={480: 576},
     ),
@@ -171,13 +217,21 @@ LIPSYNC_PROMPT = "A person talks naturally to the camera, with natural expressio
 CROP_CENTRE = (0.5, 0.4)  # as the lip sync engine on this computer crops (`lipsync_server`)
 
 
+def _model_id(product: str, route: KeyRoute) -> str:
+    """The catalogue's id of the route's model (an admin's row names fal.ai's endpoint)."""
+    from wasifyai_api.own_keys_catalogue import media_model
+
+    m = media_model(product, route.model)
+    return m.model if m else route.model
+
+
 def _title(name: str, route: KeyRoute, admin: bool) -> str:
     return f"{name} · {route.provider.title}" if admin else f"{name} · with your key"
 
 
 def keyed_music_model(product: str, route: KeyRoute, admin: bool = False) -> VoiceModel:
     """The music (or sound effects) model offered while that product runs on the key."""
-    name, modes = MUSIC_MODELS.get(route.model, (route.model, {}))
+    name, modes = MUSIC_MODELS.get(_model_id(product, route), (route.model, {}))
     if not modes:
         raise VoiceEngineError(
             "not_with_key",
@@ -195,7 +249,7 @@ def keyed_lipsync_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
     """The lip sync model offered while Lip sync runs on the key: its sizes, 25 frames each second,
     and, for the screen, its price and measured time per video second at each size and the frame
     it makes (square, or the picture's shape) with its measured short side."""
-    m = LIPSYNC_MODELS.get(route.model)
+    m = LIPSYNC_MODELS.get(_model_id("lipsync", route))
     if m is None:
         raise VoiceEngineError(
             "not_with_key",
@@ -251,11 +305,13 @@ def music_body(endpoint: str, req: MusicRequest) -> dict[str, Any]:
     return {"text": req.description, "duration_seconds": req.duration}
 
 
-def lipsync_body(endpoint: str, image: str, audio: str, req: LipSyncRequest) -> dict[str, Any]:
+def lipsync_body(
+    model_id: str, endpoint: str, image: str, audio: str, req: LipSyncRequest
+) -> dict[str, Any]:
     """What the model is sent: the picture already cut to the video's shape, the size as the
     provider names it, the model's own speed setting, and on fal.ai the length where the model asks
     for it (InfiniteTalk, in frames); the others take the voice's own length."""
-    model = LIPSYNC_MODELS.get(endpoint)
+    model = LIPSYNC_MODELS.get(model_id)
     short = min(req.width, req.height)
     size = "720p" if short >= 720 else "480p"
     body: dict[str, Any] = {"image_url": image, "audio_url": audio}
@@ -296,8 +352,10 @@ class KeyedSpeechEngine:
         timeout_s: float = 300,
         poll_s: float = 1.0,
         admin: bool = False,
+        usage: UsageRecorder | None = None,
     ):
         self._admin = admin
+        self._usage = usage
         self._local = local
         self._keys = keys
         self._client = client
@@ -378,7 +436,7 @@ class KeyedSpeechEngine:
         if model.id != KEYED_VOICE:
             return await self._local.speak(model, text, voice, options, beside=beside)
         route = await self._keys.route("voice")
-        if route is None or route.provider.id != "fal":
+        if route is None:
             raise VoiceEngineError(
                 "not_with_key", "Voice runs on this computer now. Choose a model and try again."
             )
@@ -387,28 +445,37 @@ class KeyedSpeechEngine:
         if isinstance(speed, int | float):
             body["speed"] = float(speed)
         t0 = time.monotonic()
-        async with self._client() as http:
-            fal = FalQueue(route.key, http, self._timeout, self._poll, route.base_url)
-            try:
-                result = await fal.call(route.model, body, _no_progress)
+
+        async def attempt(c: KeyChoice) -> bytes:
+            async with self._client() as http:
+                fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
+                result = await fal.call(c.offer.endpoint, body, _no_progress)
                 wav, _ = await fal.fetch(result.get("audio"), "audio/wav")
-            except FalError as e:
-                raise VoiceEngineError(e.code, e.message) from None
-            except TimeoutError:
-                raise VoiceEngineError("provider_refused", "fal.ai took too long.") from None
+                return wav
+
+        try:
+            # Kokoro is on fal.ai only; more speaking models and providers come in CP7
+            wav, _used = await on_cheapest(
+                route, "voice", {"characters": len(text)}, attempt, self._usage, only="fal"
+            )
+        except FalError as e:
+            raise VoiceEngineError(e.code, e.message) from None
+        except TimeoutError:
+            raise VoiceEngineError("provider_refused", "fal.ai took too long.") from None
         seconds = _wav_seconds(wav)
         if seconds <= 0:
             raise VoiceEngineError(
                 "engine_failed", "fal.ai sent the speech in a form this app cannot read."
             )
         return SpeechResult(
-            wav, _wav_rate(wav) or model.sample_rate, seconds, route.model, body["voice"], 0.0,
+            wav, _wav_rate(wav) or model.sample_rate, seconds, _used.offer.endpoint, body["voice"],
+            0.0,
             time.monotonic() - t0,
         )  # fmt: skip
 
     async def _route(self, product: str) -> KeyRoute:
         route = await self._keys.route(product)
-        if route is None or route.provider.id not in MEDIA_PROVIDERS:
+        if route is None or not any(c.provider.id in MEDIA_PROVIDERS for c in route.offers()):
             raise VoiceEngineError(
                 "not_with_key", "That runs on this computer now. Choose a model and try again."
             )
@@ -417,28 +484,32 @@ class KeyedSpeechEngine:
     async def music(self, model: VoiceModel, req: MusicRequest) -> MusicResult:
         if model.id not in (KEYED_MUSIC, KEYED_SFX):
             return await self._local.music(model, req)  # type: ignore[no-any-return]
-        route = await self._route("sfx" if model.id == KEYED_SFX else "music")
-        body = music_body(route.model, req)
+        product = "sfx" if model.id == KEYED_SFX else "music"
+        route = await self._route(product)
         t0 = time.monotonic()
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str, dict[str, Any]]:
+            body = music_body(c.offer.endpoint, req)
+            async with self._client() as http:
+                queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+                return await queue.make(c.offer.endpoint, body, "audio", "audio/mpeg", _no_progress)
+
         name = route.provider.title
-        async with self._client() as http:
-            queue = queue_for(
-                route.provider.id, route.key, http, self._timeout, self._poll, route.base_url
+        try:
+            (data, ctype, result), used = await on_cheapest(
+                route, product, {"seconds": req.duration}, attempt, self._usage
             )
-            try:
-                data, ctype, result = await queue.make(
-                    route.model, body, "audio", "audio/mpeg", _no_progress
-                )
-            except FalError as e:
-                raise VoiceEngineError(e.code, e.message) from None
-            except TimeoutError:
-                raise VoiceEngineError("provider_refused", f"{name} took too long.") from None
+            name = used.choice.provider.title
+        except FalError as e:
+            raise VoiceEngineError(e.code, e.message) from None
+        except TimeoutError:
+            raise VoiceEngineError("provider_refused", f"{name} took too long.") from None
         wav = await to_wav(data, ".wav" if "wav" in ctype else ".mp3")
         seconds = _wav_seconds(wav)
         if seconds <= 0:
             raise VoiceEngineError("engine_failed", f"{name} sent audio this app cannot read.")
         return MusicResult(
-            wav, _wav_rate(wav) or model.sample_rate, seconds, route.model,
+            wav, _wav_rate(wav) or model.sample_rate, seconds, used.offer.endpoint,
             result.get("seed") if isinstance(result.get("seed"), int) else None, 0.0,
             time.monotonic() - t0,
         )  # fmt: skip
@@ -454,29 +525,42 @@ class KeyedSpeechEngine:
         )
         audio = await asyncio.to_thread(voice.read_bytes)
         t0 = time.monotonic()
-        name = route.provider.title
-        async with self._client() as http:
-            # lip sync runs on fal.ai only (owner, 2026-11-12)
-            queue = FalQueue(
-                route.key, http, max(self._timeout, 3600.0), self._poll, route.base_url
-            )  # fmt: skip
-            try:
+        model_id = _model_id("lipsync", route)
+        size = "720p" if min(req.width, req.height) >= 720 else "480p"
+
+        async def attempt(c: KeyChoice) -> bytes:
+            if c.provider.id != "fal":  # the other providers' lip sync comes in CP6
+                raise FalError("not_with_key", f"Lip sync is not sent to {c.provider.title} yet.",
+                               before_running=True)  # fmt: skip
+            async with self._client() as http:
+                queue = FalQueue(c.key, http, max(self._timeout, 3600.0), self._poll, c.base_url)
                 # fal.ai refuses a voice inside the request ("URL too long"): upload both first
                 face, said = (
                     await queue.upload(image, "face.png"),
                     await queue.upload(audio, voice.name),
                 )
-                body = lipsync_body(route.model, face, said, req)
-                mp4, _, _ = await queue.make(route.model, body, "video", "video/mp4", _no_progress)
-            except FalError as e:
-                raise VoiceEngineError(e.code, e.message) from None
-            except TimeoutError:
-                raise VoiceEngineError("provider_refused", f"{name} took too long.") from None
+                body = lipsync_body(model_id, c.offer.endpoint, face, said, req)
+                mp4, _, _ = await queue.make(
+                    c.offer.endpoint, body, "video", "video/mp4", _no_progress
+                )
+                return mp4
+
+        name = route.provider.title
+        try:
+            mp4, used = await on_cheapest(
+                route, "lipsync", {"seconds": req.voice_seconds, "resolution": size}, attempt,
+                self._usage,
+            )  # fmt: skip
+            name = used.choice.provider.title
+        except FalError as e:
+            raise VoiceEngineError(e.code, e.message) from None
+        except TimeoutError:
+            raise VoiceEngineError("provider_refused", f"{name} took too long.") from None
         width, height = _video_size(mp4)
         if not (width and height):
             raise VoiceEngineError("engine_failed", f"{name} sent a video this app cannot read.")
         return LipSyncResult(
-            mp4, req.voice_seconds, LIPSYNC_FPS, width, height, route.model, 0.0,
+            mp4, req.voice_seconds, LIPSYNC_FPS, width, height, used.offer.endpoint, 0.0,
             time.monotonic() - t0,
         )  # fmt: skip
 
@@ -493,8 +577,10 @@ class KeyedModel3d:
         timeout_s: float = 900,
         poll_s: float = 2.0,
         admin: bool = False,
+        usage: UsageRecorder | None = None,
     ):
         self._where = BY_ADMIN if admin else WITH_KEY
+        self._usage = usage
         self._local = local
         self._keys = keys
         self._client = client
@@ -541,18 +627,28 @@ class KeyedModel3d:
         }  # fmt: skip
 
     async def _run(
-        self, route: KeyRoute, picture: bytes, body: dict[str, Any], endpoint: str, field: str,
-        out: Path, on_progress: Callable[[float], Any] = _no_progress,
+        self, route: KeyRoute, picture: bytes, body: dict[str, Any], endpoint: str | None,
+        field: str, out: Path, on_progress: Callable[[float], Any] = _no_progress,
     ) -> RunResult:  # fmt: skip
         """`body` on fal.ai with `picture` as its `image_url`, uploaded to fal.ai's file store first
-        (a picture inside the request can be refused as too long, as a voice was)."""
+        (a picture inside the request can be refused as too long, as a voice was). `endpoint` None
+        is the route's model, on its cheapest offer (3D on more providers comes in CP9)."""
         t0 = time.monotonic()
-        try:
+
+        async def attempt(c: KeyChoice) -> bytes:
             async with self._client() as http:
-                fal = FalQueue(route.key, http, self._timeout, self._poll, route.base_url)
-                body = {"image_url": await fal.upload(picture, "picture.png"), **body}
-                result = await fal.call(endpoint, body, on_progress)
+                fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
+                sent = {"image_url": await fal.upload(picture, "picture.png"), **body}
+                result = await fal.call(endpoint or c.offer.endpoint, sent, on_progress)
                 data, _ = await fal.fetch(result.get(field), "application/octet-stream")
+                return data
+
+        try:
+            if endpoint is None:
+                data, _ = await on_cheapest(route, "model3d", {}, attempt, self._usage, only="fal")
+            else:  # a helper on the same key (the cut-out): not the model, not priced
+                fal = next(c for c in route.offers() if c.provider.id == "fal")
+                data = await attempt(fal)
         except FalError as e:
             return RunResult(False, "failed", e.message, time.monotonic() - t0)
         except TimeoutError:
@@ -600,4 +696,4 @@ class KeyedModel3d:
             if on_progress is not None:
                 on_progress(p, "Waiting for fal.ai" if p < 0.1 else "Making it on fal.ai")
 
-        return await self._run(route, data, body, route.model, "model_glb", out_glb, told)
+        return await self._run(route, data, body, None, "model_glb", out_glb, told)

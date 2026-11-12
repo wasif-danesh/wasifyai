@@ -58,7 +58,8 @@ def _check_model(backend: str, capability: str, config: dict[str, Any]) -> None:
     if backend != "fal" or capability not in CHECKED_ROWS:
         return
     product, what = CHECKED_ROWS[capability]
-    known = [m.model for m in models_of(product, "fal")]
+    # the admin's row names fal.ai's endpoint (Admin › Media takes the three keys in CP11)
+    known = [o.endpoint for m in models_of(product, "fal") if (o := m.offer_of("fal"))]
     model = str(config.get("model") or "")
     if model not in known:
         raise MediaAccessError(

@@ -9,6 +9,8 @@ import base64
 import logging
 import mimetypes
 import time
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -23,6 +25,7 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.cloud_queues import RunwareTasks, WaveSpeedQueue
 from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue
+from wasifyai_platform_sdk.offers import Offer, Priced, no_offer, order, run_cheapest
 
 from wasifyai_media_worker.comfy import ComfyClient, ComfyError, ProgressFn, use_picture
 from wasifyai_media_worker.settings import WorkerSettings
@@ -275,10 +278,20 @@ NOT_WITH_KEY = {
 
 
 def _fal_failed(e: FalError) -> Exception:
-    """The worker's own error for a fal.ai failure: a busy service is retried."""
-    if e.code == "unavailable":
-        return BackendUnavailable(e.message)
-    return ComfyError(e.code, e.message)
+    """The worker's own error for a fal.ai failure: a busy service is retried. A refusal before
+    running stays marked, so the router can send the job to the next offer (`OfferRunner`)."""
+    err: Exception = (
+        BackendUnavailable(e.message) if e.code == "unavailable" else ComfyError(e.code, e.message)
+    )
+    err.before_running = e.before_running  # type: ignore[attr-defined]
+    return err
+
+
+def _not_here(message: str) -> ComfyError:
+    """A job this offer cannot take, found before anything was sent: the next offer may."""
+    err = ComfyError("not_with_key", message)
+    err.before_running = True  # type: ignore[attr-defined]
+    return err
 
 
 class FalRunner:
@@ -295,10 +308,12 @@ class FalRunner:
         timeout_s: float,
         poll_s: float = 2.0,
         base_url: str = FAL_QUEUE,
+        endpoints: dict[str, str] | None = None,
     ):
         self._queue = FalQueue(key, http, timeout_s, poll_s, base_url)
         self._headers = self._queue._headers
         self._model = model
+        self._endpoints = endpoints or {}  # the offer's endpoint for a verb ("edit", "animate")
 
     async def _request(
         self, job: JobRequest, files: InputFiles | None
@@ -308,16 +323,12 @@ class FalRunner:
         request can be refused as too long (a voice was, in the owner's real run of 2026-11-12)."""
         what = NOT_WITH_KEY.get(job.capability)
         if what:
-            raise ComfyError(
-                "not_with_key",
+            raise _not_here(
                 f"{what} is not done with your key yet. Run it on this computer: Settings › "
-                "Your keys.",
+                "Your keys."
             )
         if job.inputs.get("loras"):
-            raise ComfyError(
-                "not_with_key",
-                "Styles and looks made on this computer cannot be used with your key.",
-            )
+            raise _not_here("Styles and looks made on this computer cannot be used with your key.")
         prompt = job.inputs.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             raise ComfyError("invalid_input", "The request has no description.")
@@ -335,7 +346,7 @@ class FalRunner:
             pictures = [files[n] for n in ("image", "image2") if files and n in files]
             if not pictures:
                 raise ComfyError("invalid_input", "The picture for this job is missing.")
-            endpoint = self._endpoint(FAL_EDIT, "Changing a picture")  # nothing goes up if not
+            endpoint = self._endpoint("edit", FAL_EDIT, "Changing a picture")  # nothing goes up
             body["image_urls"] = [
                 await self._queue.upload(p, f"picture{i}.png") for i, p in enumerate(pictures)
             ]
@@ -349,19 +360,23 @@ class FalRunner:
                 return self._model, body
             if not files or "image" not in files:
                 raise ComfyError("invalid_input", "The picture for this job is missing.")
-            endpoint = self._endpoint(FAL_ANIMATE, "Animating a picture")
+            endpoint = self._endpoint("animate", FAL_ANIMATE, "Animating a picture")
             body["image_url"] = await self._queue.upload(files["image"], "picture.png")
             return endpoint, body
-        raise ComfyError("not_with_key", "This is not done with your key.")
+        raise _not_here("This is not done with your key.")
 
-    def _endpoint(self, table: dict[str, str], what: str) -> str:
-        # a model named for the job itself (an admin's row for Change a picture: fal-ai/flux-2/edit)
-        found = table.get(self._model) or (self._model if self._model in table.values() else None)
+    def _endpoint(self, verb: str, table: dict[str, str], what: str) -> str:
+        # the offer's own endpoint for the verb; else a model named for the job itself (an admin's
+        # row for Change a picture: fal-ai/flux-2/edit)
+        found = (
+            self._endpoints.get(verb)
+            or table.get(self._model)
+            or (self._model if self._model in table.values() else None)
+        )
         if found is None:
-            raise ComfyError(
-                "not_with_key",
+            raise _not_here(
                 f"{what} needs a model fal.ai can do it with; {self._model} cannot. Choose "
-                "another model, or run it on this computer: Settings › Your keys.",
+                "another model, or run it on this computer: Settings › Your keys."
             )
         return found
 
@@ -419,15 +434,12 @@ class CloudImageRunner:
 
     def _body(self, job: JobRequest) -> dict[str, Any]:
         if job.capability != "image.generate":
-            raise ComfyError(
-                "not_with_key",
+            raise _not_here(
                 f"Only making a picture runs on {self._queue.title} in this app. Choose a fal.ai "
-                "or a computer model in the picker for this.",
+                "or a computer model in the picker for this."
             )
         if job.inputs.get("loras"):
-            raise ComfyError(
-                "not_with_key", "Styles and looks made on this computer cannot be used with a key."
-            )
+            raise _not_here("Styles and looks made on this computer cannot be used with a key.")
         prompt = job.inputs.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             raise ComfyError("invalid_input", "The request has no description.")
@@ -462,6 +474,94 @@ class CloudImageRunner:
             raise _fal_failed(e) from None
         await on_progress(1.0)
         return {name: (data, ctype, _EXT.get(ctype, "png"))}
+
+
+# ---- the cheapest offer for each job (ADR-0100, stage CP3) --------------------------------------
+
+
+@dataclass(frozen=True)
+class CloudChoice:
+    """An offer of the job's model that a key can run."""
+
+    provider: str
+    key: str
+    base_url: str
+    offer: Offer
+
+
+# what a job needs from an offer beyond making, by capability
+NEEDS: dict[str, tuple[str, ...]] = {
+    "image.edit": ("edit",),
+    "image.reference": ("edit",),
+    "image.inpaint": ("mask",),
+    "video.animate": ("animate",),
+    "video.extend": ("extend",),
+}
+
+
+def job_settings(job: JobRequest) -> dict[str, Any]:
+    """What a job's price is counted in: one picture, or the clip's seconds (24 frames each)."""
+    frames = job.inputs.get("length")
+    out: dict[str, Any] = {"count": 1}
+    if isinstance(frames, int) and frames > 0:
+        out["seconds"] = frames / 24
+    for k in ("resolution",):
+        if isinstance(job.inputs.get(k), str):
+            out[k] = job.inputs[k]
+    return out
+
+
+class OfferRunner:
+    """A picture or clip of a cloud model on the cheapest of its offers with a key: priced for the
+    job, the next offer when one refuses before running, never resent once it may have run. After a
+    run, `cost` is the offer it ran on and its price, for the `cloud.cost` usage event."""
+
+    local_gpu = False
+
+    def __init__(
+        self,
+        model: str,
+        title: str,
+        choices: Sequence[CloudChoice],
+        http: httpx.AsyncClient,
+        timeout_s: float,
+        poll_s: float = 2.0,
+    ):
+        self.model = model
+        self._title = title
+        self._choices = list(choices)
+        self._http = http
+        self._timeout = timeout_s
+        self._poll = poll_s
+        self.backend = self._choices[0].provider if self._choices else "cloud"
+        self.cost: Priced[CloudChoice] | None = None
+
+    def _runner(self, c: CloudChoice) -> Any:
+        if c.provider == "fal":
+            return FalRunner(
+                c.key, c.offer.endpoint, self._http, self._timeout, self._poll, c.base_url,
+                dict(c.offer.endpoints),
+            )  # fmt: skip
+        return CloudImageRunner(
+            c.provider, c.key, c.offer.endpoint, self._http, self._timeout, self._poll, c.base_url
+        )
+
+    async def run(
+        self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
+    ) -> Files:
+        needs = NEEDS.get(job.capability, ())
+        ordered = order(self._choices, lambda c: c.offer, job_settings(job), needs)
+        if not ordered:
+            e = no_offer(self._title, [c.offer for c in self._choices], needs, None)
+            raise ComfyError(e.code, e.message)
+
+        async def attempt(p: Priced[CloudChoice]) -> Files:
+            self.backend = p.choice.provider
+            return await self._runner(p.choice).run(job, on_progress, files)  # type: ignore[no-any-return]
+
+        made, used = await run_cheapest(ordered, attempt)
+        self.cost = used
+        return made
 
 
 class BackendRouter:

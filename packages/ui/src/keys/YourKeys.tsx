@@ -2,7 +2,8 @@
 // Settings > Your keys (ADR-0095, amendment of 2026-11-11; the approved mockup is docs/spikes/provider-keys-mockup.html,
 // third version): keys only. One row per product with the provider keys saved for it (several are fine), each with
 // Test and Remove, and "Add a key". A row never names a model: the product's model picker lists the models of each
-// provider with a key under Cloud. A key goes to the engine once and is never shown again.
+// provider with a key under Cloud. "Every media product" holds media keys that serve them all (ADR-0100, decision 9);
+// a product's own key for the same provider wins. A key goes to the engine once and is never shown again.
 import type {
   KeyProduct,
   KeyProvider,
@@ -26,6 +27,15 @@ function problem(e: unknown): string {
 
 const titleOf = (providers: KeyProvider[], id: string) =>
   providers.find((v) => v.id === id)?.title ?? id;
+
+/** What a row with no key of its own means. */
+function noKey(product: KeyProduct): string {
+  if (product.id === "media") return "No key: add one to use cloud models in every media product.";
+  if (product.kind === "media") {
+    return `No key of its own: ${product.title} uses the keys under Every media product, or this computer's models.`;
+  }
+  return `No key: ${product.title} uses this computer's models only.`;
+}
 
 export function YourKeys({ api }: { api: OwnKeysApi }) {
   const [keys, setKeys] = useState<OwnKeys | null>(null);
@@ -57,8 +67,10 @@ export function YourKeys({ api }: { api: OwnKeysApi }) {
       <h3 className="m-0 font-semibold text-base">Your keys</h3>
       <p className="m-0 text-muted-foreground text-sm">
         Save a provider key for a product, and that provider's models for it appear in the product's
-        model picker, under Cloud. A key is kept in this computer's keychain, used only by its
-        product, and never shown again. Testing a key costs nothing.
+        model picker, under Cloud. One Runware, WaveSpeed or fal.ai key under Every media product
+        serves pictures, video, voice, music, lip sync and 3D; more keys let each job go to the
+        cheapest. A key is kept in this computer's keychain, used only by its products, and never
+        shown again. Testing a key costs nothing.
       </p>
       {!keys.can_save ? (
         <Notice tone="warn" title="Keys cannot be kept here">
@@ -115,9 +127,7 @@ function ProductKeys({
           />
         ))}
         {product.keys.length === 0 && !adding ? (
-          <p className="m-0 text-muted-foreground text-sm">
-            No key: {product.title} uses this computer's models only.
-          </p>
+          <p className="m-0 text-muted-foreground text-sm">{noKey(product)}</p>
         ) : null}
         {adding ? (
           <AddKey

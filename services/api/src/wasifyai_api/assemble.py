@@ -757,7 +757,7 @@ async def _web_voice(s: ApiServices, settings: Settings, queue: Callable[[], Eng
         local = build_local_engine(settings, Path(pdir))
         s.audio = CombinedSpeechEngine(local, hosted) if hosted is not None else local
     if s.audio is not None and s.admin_providers is not None:  # Speak on fal.ai (K5)
-        s.audio = KeyedSpeechEngine(s.audio, s.admin_providers, admin=True)
+        s.audio = KeyedSpeechEngine(s.audio, s.admin_providers, admin=True, usage=s.usage)
 
 
 def _web_notebooks(s: ApiServices, settings: Settings) -> None:
@@ -799,7 +799,7 @@ async def _web_model3d(s: ApiServices, settings: Settings, queue: Callable[[], E
     s.model3d_blobs = StorageBlobs(s.storage)
     s.model3d = RemoteModel3dEngine(queue(), s.storage.backing, s.engine_workers, usage=s.usage)
     if s.admin_providers is not None:  # 3D models on fal.ai when the admin chose it (K5)
-        s.model3d = KeyedModel3d(s.model3d, s.admin_providers, admin=True)
+        s.model3d = KeyedModel3d(s.model3d, s.admin_providers, admin=True, usage=s.usage)
     await sweep_model3d(s)
 
 
@@ -950,9 +950,9 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     s.own_keys = desktop.own_keys  # the person's own provider keys (ADR-0095)
     if desktop.own_keys is not None:  # speaking and 3D follow theirs too (K4)
         if desktop.audio is not None:
-            s.audio = KeyedSpeechEngine(desktop.audio, desktop.own_keys)
+            s.audio = KeyedSpeechEngine(desktop.audio, desktop.own_keys, usage=desktop.usage)
         if desktop.model3d is not None:
-            s.model3d = KeyedModel3d(desktop.model3d, desktop.own_keys)
+            s.model3d = KeyedModel3d(desktop.model3d, desktop.own_keys, usage=desktop.usage)
     if desktop.web is not None:  # web search: off until the person allows it (ADR-0083)
         desktop.web.usage = s.usage
         s.web = desktop.web

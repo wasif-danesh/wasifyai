@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Cloud models in the picker (ADR-0095, amendment of 2026-11-11): every model of every provider with a key saved for
-// the product in Settings › Your keys is a row under the picker's Cloud tab. Choosing one makes the product run there;
-// choosing a model on this computer takes the product off the cloud. The keys stay saved either way.
+// Cloud models in the picker (ADR-0095, amendment of 2026-11-11; ADR-0100): every model the product's keys in
+// Settings › Your keys can run is a row under the picker's Cloud tab, a media model once whatever provider runs it
+// (each job goes to its cheapest offer with a key). Choosing one makes the product run there; choosing a model on
+// this computer takes the product off the cloud. The keys stay saved either way.
 import type { CloudModel, OwnKeysApi } from "@wasifyai/client";
 import type { ModelChoice } from "@wasifyai/ui";
 import { routePath } from "../router";
@@ -27,6 +28,7 @@ export function parseCloud(
 /** The product names, for the picker's Cloud tab when no key is saved. */
 const PRODUCT_TITLES: Record<string, string> = {
   chat: "Chat and writing",
+  media: "Every media product",
   images: "Images",
   video: "Video",
   voice: "Voice",
@@ -61,13 +63,26 @@ export function cloudOf(products: string[]) {
   return { product: titles.join(" or "), setUp: openYourKeys };
 }
 
+/** Where a cloud row runs, in words: one provider, or the cheapest of several for each job. */
+export function runsOn(m: CloudModel, titles: Record<string, string> = PROVIDER_TITLES): string {
+  const names = (m.providers?.length ? m.providers : [m.provider]).map((p) => titles[p] ?? p);
+  if (names.length < 2) return `Runs on ${m.provider_title} with your key`;
+  return `Runs on the cheapest of ${names.slice(0, -1).join(", ")} or ${names.at(-1)} for each job, with your keys`;
+}
+
+const PROVIDER_TITLES: Record<string, string> = {
+  runware: "Runware",
+  wavespeed: "WaveSpeed",
+  fal: "fal.ai",
+};
+
 export function cloudRow(product: string, m: CloudModel, engineId?: string): ModelChoice {
   const what = SENT[product] ?? "what you describe and the pictures you add";
+  const cheaper = m.cheaper_with ? ` A ${m.cheaper_with} key would make it cheaper.` : "";
   return {
     id: cloudId(product, m.provider, m.model),
     title: m.title,
-    plain:
-      `${m.about} Runs on ${m.provider_title} with your key, which sends ${what} there.`.trim(),
+    plain: `${m.about} ${runsOn(m)}, which sends ${what} there.${cheaper}`.trim(),
     tier: "also",
     state: "ready",
     chosen: m.chosen,

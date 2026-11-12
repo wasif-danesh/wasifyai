@@ -218,7 +218,8 @@ async def test_a_picture_on_wavespeed_has_its_size_and_changing_one_is_refused()
         router = KeyedMediaRouter(object(), keys, http, 60, 0)
         runner = await router.resolve(job(width=1024, height=768, seed=5))
         await runner.run(job(width=1024, height=768, seed=5), _progress)
-        with pytest.raises(Exception, match="Only making a picture runs on WaveSpeed"):
+        # Z-Image Turbo's only offer cannot change a picture: the router says so, nothing is sent
+        with pytest.raises(Exception, match="Z-Image Turbo cannot do edit"):
             await runner.run(job("image.edit"), _progress)
     ((url, body),) = ws.posts()
     assert url == "https://api.wavespeed.ai/api/v3/wavespeed-ai/z-image/turbo"
@@ -227,3 +228,49 @@ async def test_a_picture_on_wavespeed_has_its_size_and_changing_one_is_refused()
 
 async def _progress(_p: float) -> None:
     return None
+
+
+# ---- the cheapest offer, and the next on a refusal before running (ADR-0100, CP3) ---------------
+
+
+class Both:
+    """Runware refusing the key (an error answer before anything runs) and WaveSpeed making it."""
+
+    def __init__(self):
+        self.ws = WaveSpeed(a_wav(3.0), "audio/wav")
+        self.hosts: list[str] = []
+
+    def __call__(self, req: httpx.Request) -> httpx.Response:
+        self.hosts.append(req.url.host)
+        if req.url.host == "api.runware.ai":
+            return httpx.Response(401, json={"errors": [{"message": "Invalid API key"}]})
+        return self.ws(req)
+
+    def client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(transport=httpx.MockTransport(self))
+
+
+async def test_a_song_goes_to_the_next_offer_when_the_cheapest_refuses_and_its_cost_is_kept():
+    from wasifyai_platform_sdk.usage import InMemoryUsageRecorder
+
+    both = Both()
+    keys = OwnKeysService(
+        InMemorySettingsStore(), InMemorySecretStore(), {"text": accept, "media": accept}
+    )
+    await keys.save_key("media", "runware", KEY)  # one key for every media product
+    await keys.save_key("music", "wavespeed", KEY)
+    await keys.use("music", None, "minimax-music-2.6")
+    await keys.warm()
+    usage = InMemoryUsageRecorder()
+    engine = KeyedSpeechEngine(LocalVoice(), keys, both.client, poll_s=0, usage=usage)
+    model = engine.resolve("music", None)
+    req = check_music(model, "song", "Warm city pop at night", None, True, None, None, None)
+    res = await engine.music(model, req)
+    # the same price on both: the tie goes to Runware, which refused, so WaveSpeed made it
+    assert both.hosts[0] == "api.runware.ai" and "api.wavespeed.ai" in both.hosts
+    assert res.model_id == "minimax/music-2.6"
+    (cost,) = usage.events
+    assert (cost.kind, cost.quantity, cost.unit) == ("cloud.cost", 0.15, "dollars")
+    assert cost.meta == {
+        "provider": "wavespeed", "model": "minimax-music-2.6", "endpoint": "minimax/music-2.6",
+    }  # fmt: skip

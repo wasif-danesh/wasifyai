@@ -326,10 +326,12 @@
     "where": "Train models",
     "actions": [
       "decision.decide",
+      "train.make_set",
       "train.start"
     ],
     "does": [
       "Decide with a model I taught",
+      "Make a set to teach from",
       "Teach a character or style"
     ],
     "about": "teach it something of your own, learnt on this computer, in four ways: a character or style for pictures (from 15 to 25 pictures), your way of writing (from examples of questions and answers), a model that decides (yes or no, a category or a score, from texts with the right answer), or a look or motion for video (from pictures and short clips)"

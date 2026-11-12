@@ -177,8 +177,8 @@ def test_the_first_set_is_there(catalogue):
     # 80 with creative.make_shots, redo_shot, choose_take and preview (ADR-0090 CS2)
     # 84 with video.keep and creative.edit_cut, cut and export (ADR-0090 CS3)
     # 85 with creative.animate (CS4); 86 with speech.join (CS5)
-    # 87 with library.keep_attachment (chat-does-everything CE1)
-    assert 35 <= len(ids) <= 87
+    # 87 with library.keep_attachment (chat-does-everything CE1), 88 with train.make_set (CE5)
+    assert 35 <= len(ids) <= 88
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",

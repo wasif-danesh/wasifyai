@@ -2,9 +2,9 @@
 pictures (a long action: `job.status` and `job.cancel` follow and stop it), and the trained models
 as a kind of creation (list, look at, rename, delete, save a copy).
 
-A set of pictures is made on the screen (the pictures are the person's files, the description of
-each is written by the app), so an agent starts a run on a set
-that already exists and is ready."""
+A set is made on the screen, or from the chat with `train.make_set` (sets.py: library pictures
+with the screen's checks, descriptions and magic word; or an attached table of examples); then
+`train.start` teaches from it."""
 
 import asyncio
 from pathlib import Path
@@ -39,6 +39,7 @@ from wasifyai_training.runtime import (
     store_for,
     words_of,
 )
+from wasifyai_training.sets import MakeSetIn, MakeSetOut, make_set
 from wasifyai_training.store import NotFound
 from wasifyai_training.video import manager_for as video_manager_for
 from wasifyai_training.writing import manager_for as writing_manager_for
@@ -385,6 +386,37 @@ def _save(folder: Path, stem: str, data: bytes) -> Path:
 def actions() -> list[Action]:
     common = {"requires": (need_product(PRODUCT_ID), ENGINE), "product": PRODUCT_ID, "ui": "train"}
     return [
+        Action(
+            id="train.make_set",
+            title="Make a set to teach from",
+            summary="Make a set of pictures, or of examples, that train.start can teach from.",
+            description=(
+                "Make the set train.start teaches from, as the Train screen does. With "
+                "what=pictures: from 8 or more pictures of the library (attached photos may be "
+                "named by their attachment id; the app keeps them first), it checks each "
+                "picture, writes a description of each and chooses a magic word; kind says "
+                "whether they show a character (a pet, a person), a style or an object. With "
+                "what=writing: from an attached table of questions and answers. With "
+                "what=decision: from an attached table of texts and their right answers, with "
+                "the question asked of every text. It says what is still missing, or that the "
+                "set is ready; then propose train.start with the id it returns."
+            ),
+            input=MakeSetIn,
+            output=MakeSetOut,
+            examples=(
+                {"name": "Marlo", "kind": "character", "image_ids": [SAMPLE_ID] * 8},
+                {
+                    "what": "decision",
+                    "name": "Reviews",
+                    "question": "Is this review positive?",
+                    "attachment_id": "0b7c1f9e-0000-4000-8000-000000000000",
+                },
+            ),
+            effect="make",
+            flags=("private",),
+            bind=CallBinding(make_set),
+            **common,
+        ),
         Action(
             id="train.start",
             title="Teach a character or style",

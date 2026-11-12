@@ -45,6 +45,8 @@ export const FOLLOW_UPS: Record<string, { label: string; ask: string }[]> = {
   video: [{ label: "Make it longer", ask: "Make that clip longer." }],
   track: [{ label: "Split the voice out", ask: "Split that song into voice and music." }],
   speech: [{ label: "Write it out", ask: "Write out what that recording says." }],
+  // a set `train.make_set` made that is ready to teach from (CE5)
+  set: [{ label: "Teach it", ask: "Teach it from that set." }],
 };
 
 /** The follow-up buttons under a result. */
@@ -89,6 +91,11 @@ export function ActionResultCard({
   const change = tool.status === "ok" ? undoOfTool?.(tool.id) : null;
   const setup = typeof out.setup === "string" ? out.setup : "";
   const screen = typeof out.screen === "string" ? out.screen : "";
+  const readySet =
+    tool.status === "ok" &&
+    typeof out.set_id === "string" &&
+    typeof out.what === "string" &&
+    !out.missing;
   return (
     <div className="grid max-w-md gap-2 rounded-lg border p-3 text-sm">
       <p className="flex items-start gap-2">
@@ -132,6 +139,7 @@ export function ActionResultCard({
         ) : null}
       </div>
       {made ? <FollowUps kind={made[0]} /> : null}
+      {readySet ? <FollowUps kind="set" /> : null}
     </div>
   );
 }

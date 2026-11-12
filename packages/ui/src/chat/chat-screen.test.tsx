@@ -201,6 +201,37 @@ describe("ChatScreen", () => {
     expect(inputs[1]).toMatchObject({ text: "Make that picture move." });
   });
 
+  it("offers to teach from a set the chat made that is ready (CE5)", async () => {
+    const inputs: object[] = [];
+    const made = (id: string, missing?: string) => [
+      ev("tool_call", {
+        id,
+        name: "propose_action",
+        arguments: { action_id: "train.make_set", params: { name: "Marlo" } },
+      }),
+      ev("tool_result", {
+        id,
+        name: "propose_action",
+        status: "ok",
+        output: {
+          action_id: "train.make_set",
+          message: "The set is made.",
+          what: "pictures",
+          set_id: `s-${id}`,
+          ...(missing ? { missing } : {}),
+        },
+      }),
+      ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Marlo" } }),
+    ];
+    const runs = runsThat(made("t1"), inputs);
+    const user = userEvent.setup();
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "make a set{Enter}");
+    await user.click(await screen.findByRole("button", { name: "Teach it" }));
+    await waitFor(() => expect(inputs).toHaveLength(2));
+    expect(inputs[1]).toMatchObject({ text: "Teach it from that set." });
+  });
+
   it("plays a clip an action made, in the chat, with a way to open it", async () => {
     const runs = runsThat([
       ev("tool_call", {

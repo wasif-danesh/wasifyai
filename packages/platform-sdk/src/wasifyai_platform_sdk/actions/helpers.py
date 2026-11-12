@@ -17,6 +17,30 @@ def need_deps(ctx: Any) -> Any:
     return deps
 
 
+CHAT_PRODUCT = "wasifyai-assistant"  # whose uploads the chat's attachments are (ADR-0083)
+
+
+async def attached_document(ctx: Any, attachment_id: str) -> str:
+    """The words of a document the person attached in the chat, or a refusal in words
+    (docs/chat-does-everything-plan.md, CE4 and CE5). Only the person's own uploads are found."""
+    deps = need_deps(ctx)
+    a = ctx.actor
+    gone = "That attached document is not there any more. Please attach it again."
+    uploads, storage = getattr(deps.state, "uploads", None), deps.storage
+    record = None
+    if uploads is not None and storage is not None:
+        key = f"uploads/{attachment_id.strip()}.txt"
+        record = await uploads.find(a.tenant_id, CHAT_PRODUCT, a.user_id, key)
+    if record is None or storage is None:
+        raise ActionRefused("not_found", gone)
+    try:
+        with deps.acting_as(a, CHAT_PRODUCT):
+            data = await storage.get(record.key)
+    except FileNotFoundError:
+        raise ActionRefused("not_found", gone) from None
+    return data.decode("utf-8", errors="replace")
+
+
 async def stage_picture(ctx: Any, product_id: str, data: bytes) -> str:
     """Put a picture of the library where a product's graph expects an uploaded one, as the upload
     route does (re-encoded, with nothing of the original's metadata), and return the key a run

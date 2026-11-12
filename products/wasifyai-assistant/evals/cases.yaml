@@ -1368,7 +1368,7 @@ cases:
     attach: [{ kind: image, name: rex1.jpg }, { kind: image, name: rex2.jpg }, { kind: image, name: rex3.jpg }]
     expect: propose_action
     action: [train.make_set, library.keep_attachment]
-    kept_for: [train.start]
+    kept_for: [train.make_set, train.start]
   - id: menu-train-follow
     menu: train
     after:

@@ -9619,6 +9619,181 @@
       "help": "docs/help/styles.remove.md"
     },
     {
+      "id": "train.make_set",
+      "title": "Make a set to teach from",
+      "summary": "Make a set of pictures, or of examples, that train.start can teach from.",
+      "description": "Make the set train.start teaches from, as the Train screen does. With what=pictures: from 8 or more pictures of the library (attached photos may be named by their attachment id; the app keeps them first), it checks each picture, writes a description of each and chooses a magic word; kind says whether they show a character (a pet, a person), a style or an object. With what=writing: from an attached table of questions and answers. With what=decision: from an attached table of texts and their right answers, with the question asked of every text. It says what is still missing, or that the set is ready; then propose train.start with the id it returns.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "what": {
+            "default": "pictures",
+            "description": "pictures: a set of pictures to teach the image model a character, style or object. writing: questions and answers to teach a writing model. decision: texts with the right answers to teach a decision model.",
+            "enum": [
+              "pictures",
+              "writing",
+              "decision"
+            ],
+            "title": "What",
+            "type": "string"
+          },
+          "name": {
+            "description": "A name for the set, e.g. Marlo.",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "kind": {
+            "default": "character",
+            "description": "pictures: what they show, character (a pet, a person), style or object.",
+            "maxLength": 12,
+            "title": "Kind",
+            "type": "string"
+          },
+          "image_ids": {
+            "description": "pictures: the library pictures to teach from (8 or more; 15 to 25 is best). An attached photo may be named by its attachment id.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Image Ids",
+            "type": "array"
+          },
+          "magic_word": {
+            "default": "",
+            "description": "pictures: a made-up word of 4 to 12 letters that will draw it; left out, the app picks one.",
+            "maxLength": 12,
+            "title": "Magic Word",
+            "type": "string"
+          },
+          "attachment_id": {
+            "default": "",
+            "description": "writing or decision: an attached table, one example a row: the question (or text) in the first column, the answer in the last.",
+            "maxLength": 64,
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "question": {
+            "default": "",
+            "description": "decision: the question the model answers about every text, e.g. 'Is this review positive?'",
+            "maxLength": 300,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "MakeSetIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "what": {
+            "title": "What",
+            "type": "string"
+          },
+          "set_id": {
+            "title": "Set Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "skipped": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "magic_word": {
+            "default": "",
+            "title": "Magic Word",
+            "type": "string"
+          },
+          "described": {
+            "default": 0,
+            "title": "Described",
+            "type": "integer"
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Missing"
+          }
+        },
+        "required": [
+          "what",
+          "set_id",
+          "name",
+          "count"
+        ],
+        "title": "MakeSetOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "name": "Marlo",
+          "kind": "character",
+          "image_ids": [
+            "0b7c1f9e0000400080000000deadbeef",
+            "0b7c1f9e0000400080000000deadbeef",
+            "0b7c1f9e0000400080000000deadbeef",
+            "0b7c1f9e0000400080000000deadbeef",
+            "0b7c1f9e0000400080000000deadbeef",
+            "0b7c1f9e0000400080000000deadbeef",
+            "0b7c1f9e0000400080000000deadbeef",
+            "0b7c1f9e0000400080000000deadbeef"
+          ]
+        },
+        {
+          "what": "decision",
+          "name": "Reviews",
+          "question": "Is this review positive?",
+          "attachment_id": "0b7c1f9e-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-training"
+        },
+        {
+          "kind": "runtime",
+          "name": "training"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-training",
+      "ui": "train",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/train.make_set.md"
+    },
+    {
       "id": "train.start",
       "title": "Teach a character or style",
       "summary": "Teach the image model a character, style or object from a set of pictures.",

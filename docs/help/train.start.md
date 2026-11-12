@@ -12,7 +12,8 @@ Action: `train.start`
 Teach the image model something of your own from your pictures: a character, a pet, a person, your art
 style or an object. You only add pictures. The app checks each one, writes a
 description of each, suggests a magic word, and teaches the model. Then writing the magic word in a prompt
-draws it. The set of pictures is made on the **Train models** screen; an agent starts the run on a set that is ready.
+draws it. The set of pictures is made on the **Train models** screen, or from the chat with **Make a set to teach from**
+(`train.make_set`); an agent starts the run on a set that is ready.
 While the trainer is a preview, the run does everything except learn, and says so.
 
 ## Steps in the app

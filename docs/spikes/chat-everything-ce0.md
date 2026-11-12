@@ -103,3 +103,9 @@ song) and teaching from photos (CE5).
 chat is told so. The actions work end to end in the tests. On the local model the notebook cases pass 1 of 5: with two
 PDFs attached it still calls `search_creations` first, and on the plain asks it looks a guide up and answers in words.
 That is the small model's habit noted above; CE7 and CE8 look at it.
+
+## After CE5
+
+`train.make_set` makes the set `train.start` teaches from (pictures with descriptions and a magic word, or examples from
+an attached table), tested end to end with the preview trainer. On the local model "Teach it my dog Rex from these
+photos" still ends in words after a guide lookup, so the training cases stay at 1 of 3.

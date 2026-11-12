@@ -25,7 +25,7 @@ from wasifyai_platform_sdk.actions import (
     RunBinding,
     need_product,
 )
-from wasifyai_platform_sdk.actions.helpers import need_deps
+from wasifyai_platform_sdk.actions.helpers import attached_document, need_deps
 from wasifyai_platform_sdk.search import search_text
 
 from wasifyai_notebooks import hardening
@@ -134,35 +134,6 @@ class CreateIn(Strict):
     )  # fmt: skip
 
 
-# a document attached in the chat is kept by the assistant as its words (ADR-0083): the upload
-# `uploads/{id}.txt` of the assistant product, under the person's own prefix
-CHAT_PRODUCT = "wasifyai-assistant"
-
-
-async def attached_text(ctx: ActionContext, attachment_id: str) -> str:
-    """The words of a document the person attached in the chat, or a refusal in words
-    (docs/chat-does-everything-plan.md, CE4). Only the person's own uploads are found."""
-    deps = need_deps(ctx)
-    a = ctx.actor
-    uploads = getattr(deps.state, "uploads", None)
-    record = None
-    if uploads is not None and deps.storage is not None:
-        key = f"uploads/{attachment_id.strip()}.txt"
-        record = await uploads.find(a.tenant_id, CHAT_PRODUCT, a.user_id, key)
-    if record is None or deps.storage is None:
-        raise ActionRefused(
-            "not_found", "That attached document is not there any more. Please attach it again."
-        )
-    try:
-        with deps.acting_as(a, CHAT_PRODUCT):
-            data = await deps.storage.get(record.key)
-    except FileNotFoundError:
-        raise ActionRefused(
-            "not_found", "That attached document is not there any more. Please attach it again."
-        ) from None
-    return data.decode("utf-8", errors="replace")
-
-
 def title_from(text: str) -> str:
     """A note's name from its words: its first line, without Markdown marks, not long."""
     for line in text.splitlines():
@@ -180,7 +151,7 @@ class NotebookOut(BaseModel):
 
 async def _create(p: CreateIn, ctx: ActionContext) -> Outcome:
     rt, a = _rt(ctx), ctx.actor
-    texts = [await attached_text(ctx, i) for i in p.attachment_ids]  # all there before anything
+    texts = [await attached_document(ctx, i) for i in p.attachment_ids]  # all there before anything
     made = await _call(rt.store.create_notebook, a.tenant_id, a.user_id, p.title)
     for text in texts:
         await _call(
@@ -231,7 +202,7 @@ class SourceOut(BaseModel):
 
 async def _add_source(p: AddSourceIn, ctx: ActionContext) -> Outcome:
     rt, a = _rt(ctx), ctx.actor
-    content = await attached_text(ctx, p.attachment_id) if p.attachment_id else p.content
+    content = await attached_document(ctx, p.attachment_id) if p.attachment_id else p.content
     doc = await _call(
         rt.store.add_note, a.tenant_id, a.user_id, p.notebook_id,
         title=p.title or title_from(content), content=content, folder_id=None,

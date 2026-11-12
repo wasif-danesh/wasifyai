@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from wasifyai_platform_sdk.actions import (
     Action,
     ActionContext,
     ActionRefused,
+    CallBinding,
     LibraryItem,
     LibraryKind,
     Outcome,
@@ -21,7 +22,9 @@ from wasifyai_platform_sdk.actions import (
     need_product,
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps, stage_picture
+from wasifyai_platform_sdk.errors import RunError
 
+from wasifyai_image.area import caps_of, find_area
 from wasifyai_image.images import ImageRecord, image_store
 from wasifyai_image.routes import file_name, save_copy
 from wasifyai_image.schemas import MAX_PROMPT_CHARS
@@ -116,11 +119,37 @@ class InpaintIn(Strict):
         min_length=1, max_length=MAX_PROMPT_CHARS,
         description="What to put in the area, in English.",
     )  # fmt: skip
-    region: Region = Field(
-        description="The area to change, as a rectangle. Everything outside it stays as it is."
+    region: Region | None = Field(
+        default=None,
+        description="The area to change, as a rectangle. Everything outside it stays as it is. "
+        "Leave it out and name the area in words instead.",
     )
+    area: str = Field(
+        "", max_length=200,
+        description="Or the area in words, e.g. 'the sky' or 'his shirt': the app finds it in "
+        "the picture.",
+    )  # fmt: skip
     styles: list[StyleIn] = styles_field()
     model: str | None = model_field()
+
+    @model_validator(mode="after")
+    def _somewhere(self) -> "InpaintIn":
+        if self.region is None and not self.area.strip():
+            raise ValueError("Give the area to change: a region, or the area in words.")
+        return self
+
+
+class FindAreaIn(Strict):
+    image_id: str = Field(min_length=1, max_length=64, description="The picture to look in.")
+    area: str = Field(
+        min_length=1, max_length=200, description="What to find, e.g. 'the sky' or 'his shirt'."
+    )
+
+
+class FindAreaOut(BaseModel):
+    image_id: str
+    area: str
+    region: Region
 
 
 class ImageOut(BaseModel):
@@ -214,11 +243,50 @@ def _mask_of(data: bytes, region: Region) -> bytes:
     return out.getvalue()
 
 
+NO_READER = (
+    "To change an area named in words, choose a model that can read pictures first (Select chat "
+    "model), or draw a box on the picture."
+)
+
+
+async def _region_named(ctx: ActionContext, data: bytes, words: str) -> Region:
+    """The region `words` names in the picture, by the model that reads pictures (area.py)."""
+    caps = caps_of(need_deps(ctx).state)
+    if caps is None:
+        raise ActionRefused("no_vision_model", NO_READER)
+    try:
+        found = await find_area(caps, data, words)
+    except RunError as e:
+        raise ActionRefused("no_vision_model", e.message) from None
+    except Exception:
+        raise ActionRefused("no_vision_model", NO_READER) from None
+    if found is None:
+        raise ActionRefused(
+            "not_found_in_picture",
+            f'"{words.strip()}" was not found in that picture. Draw a box on it instead.',
+        )
+    return Region(**found)
+
+
+async def _find_area(p: FindAreaIn, ctx: ActionContext) -> Outcome:
+    data = await _read(ctx, p.image_id)
+    if data is None:
+        raise ActionRefused("not_found", "That picture is not in the library.")
+    region = await _region_named(ctx, data, p.area)
+    r = region.model_dump()
+    return Outcome.ok(
+        {"image_id": p.image_id, "area": p.area, "region": r},
+        f'"{p.area}" is at left {r["left"]}, top {r["top"]}, width {r["width"]}, height '
+        f"{r['height']} of the picture. Propose image.inpaint with this region.",
+    )
+
+
 async def _inpaint_input(p: InpaintIn, ctx: ActionContext) -> dict:
     data = await _read(ctx, p.image_id)
     if data is None:
         raise ActionRefused("not_found", "That picture is not in the library.")
-    mask = await asyncio.to_thread(_mask_of, data, p.region)
+    region = p.region or await _region_named(ctx, data, p.area)
+    mask = await asyncio.to_thread(_mask_of, data, region)
     return {
         "mode": "inpaint", "prompt": p.prompt,
         "image_key": await stage_picture(ctx, PRODUCT_ID, data),
@@ -310,20 +378,36 @@ def actions() -> list[Action]:
             summary="Change only a rectangle of a library picture; the rest stays as it is.",
             description=(
                 "Change one area of a picture of the library and leave every pixel outside it "
-                "as it was. Give the area as a rectangle (shares of the picture's width and "
-                "height) and say what to put there. It saves a new picture and keeps the "
-                "original. The model sometimes ignores a small area; a larger one works better. "
-                "Use image.edit to change the whole picture."
+                "as it was. Name the area in words (area: 'the sky', 'the sofa'; the app finds "
+                "it with the model that reads pictures) or give it as a rectangle (region: "
+                "shares of the picture's width and height), and say what to put there. It saves "
+                "a new picture and keeps the original. The model sometimes ignores a small "
+                "area; a larger one works better. Use image.edit to change the whole picture."
             ),
             input=InpaintIn, output=ImageOut,
             examples=({"image_id": "0b7c1f9e-0000-4000-8000-000000000000",
                        "prompt": "a white coffee cup with steam",
-                       "region": {"left": 0.6, "top": 0.55, "width": 0.3, "height": 0.35}},),
+                       "region": {"left": 0.6, "top": 0.55, "width": 0.3, "height": 0.35}},
+                      {"image_id": "0b7c1f9e-0000-4000-8000-000000000000",
+                       "prompt": "a sunset sky", "area": "the sky"}),
             effect="make", requires=(need_product(PRODUCT_ID),), long=True, product=PRODUCT_ID,
             bind=RunBinding(
                 PRODUCT_ID, "image", _inpaint_input, _inpaint_result, check=_inpaint_check
             ),
             ui="images.inpaint",
+        ),
+        Action(
+            id="image.find_area", title="Find an area of a picture",
+            summary="Find where something is in a library picture, as a rectangle.",
+            description=(
+                "Find one thing in a picture of the library ('the sky', 'his shirt') with the "
+                "model that reads pictures, and get its rectangle for image.inpaint. The chat "
+                "does this by itself when image.inpaint names its area in words."
+            ),
+            input=FindAreaIn, output=FindAreaOut,
+            examples=({"image_id": "0b7c1f9e-0000-4000-8000-000000000000", "area": "the sky"},),
+            effect="read", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_find_area), ui="images.inpaint",
         ),
     ]  # fmt: skip
 

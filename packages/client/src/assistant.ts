@@ -334,7 +334,12 @@ export type CardDetails = {
   pauses_chat?: boolean;
   /** why the card asks when outside text is in the chat: "after reading a result from github" (ADR-0070) */
   provenance?: string;
+  /** the rectangle of the picture `params.image_id` the action changes (image.inpaint), as shares from 0 to 1 (CE6) */
+  region?: Region;
 };
+
+/** A rectangle on a picture, as shares of its width and height (0 is the left or top edge). */
+export type Region = { left: number; top: number; width: number; height: number };
 
 /** A tool call that waits for the person's answer (an `interrupt` event: the `confirm_action` card of ADR-0071). */
 export type ToolApproval = {
@@ -365,6 +370,18 @@ export function cardDetails(raw: Record<string, unknown>): CardDetails {
       out.estimate = { seconds: e.seconds, runs: e.runs };
   }
   if (Array.isArray(raw.badges)) out.badges = raw.badges.filter((b) => typeof b === "string");
+  const box = raw.region;
+  if (box && typeof box === "object") {
+    const b = box as Record<string, unknown>;
+    const n = (v: unknown) => typeof v === "number" && v >= 0 && v <= 1;
+    if (n(b.left) && n(b.top) && n(b.width) && n(b.height))
+      out.region = {
+        left: b.left as number,
+        top: b.top as number,
+        width: b.width as number,
+        height: b.height as number,
+      };
+  }
   if (Array.isArray(raw.fields)) {
     const fields = raw.fields.flatMap((f): CardField[] => {
       if (!f || typeof f !== "object") return [];

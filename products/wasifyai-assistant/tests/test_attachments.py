@@ -255,3 +255,97 @@ async def test_a_proposal_that_names_an_attachment_keeps_it_first_and_asks_with_
     assert ask and ask["kind"] == "confirm_action" and ask["action_id"] == "test.change"
     assert "lib-1" in str(ask) and "beach.png" not in str(ask.get("params", ""))
     assert host.runs == []  # the change waits for the person
+
+
+async def test_an_area_named_in_words_is_found_before_the_card_and_drawn_on_it(tmp_path, ctx):
+    """The model proposes image.inpaint with `area: "the sky"`: the chat asks image.find_area
+    first (no card for that) and the card carries the rectangle, which the card draws on the
+    picture; the rectangle is not a field typed in, and is kept when a field is changed (CE6)."""
+    from pydantic import BaseModel
+    from wasifyai_assistant.tools import card_fields
+    from wasifyai_platform_sdk.actions import (
+        Action,
+        ActionExecutor,
+        ActionRegistry,
+        CallBinding,
+        Outcome,
+        builtin_actions,
+    )
+
+    asked: list[tuple[str, str]] = []
+    sky = {"left": 0.0, "top": 0.0, "width": 1.0, "height": 0.4}
+
+    class FindIn(BaseModel):
+        image_id: str
+        area: str
+
+    class FindOut(BaseModel):
+        image_id: str
+        area: str
+        region: dict
+
+    async def find(p: FindIn, _ctx) -> Outcome:
+        asked.append((p.image_id, p.area))
+        return Outcome.ok({"image_id": p.image_id, "area": p.area, "region": sky}, "Found.")
+
+    class Box(BaseModel):
+        left: float
+        top: float
+        width: float
+        height: float
+
+    class InpaintIn(BaseModel):
+        image_id: str
+        prompt: str
+        area: str = ""
+        region: Box | None = None
+
+    async def inpaint(p: InpaintIn, _ctx) -> Outcome:
+        return Outcome.ok({"image_id": "lib-2"}, "Changed.")
+
+    fake_find = Action(
+        id="image.find_area", title="Find", summary="Find.", description="Find.", input=FindIn,
+        output=FindOut, effect="read", product="wasifyai-image", bind=CallBinding(find),
+        surfaces=("assistant",), ui_exempt="test",
+    )  # fmt: skip
+    fake_inpaint = Action(
+        id="image.inpaint", title="Change part", summary="Change.", description="Change.",
+        input=InpaintIn, output=InpaintIn, effect="make", product="wasifyai-image",
+        bind=CallBinding(inpaint), surfaces=("assistant",), ui_exempt="test",
+    )  # fmt: skip
+    host = FakeHost()
+    call = {
+        "action_id": "image.inpaint",
+        "params": {"image_id": "lib-1", "prompt": "a sunset sky", "area": "the sky"},
+    }
+    rig = Rig(tmp_path, [{"tool_calls": [{"name": "propose_action", "arguments": call}]}], host)
+    rig.caps.extras["actions"] = ActionExecutor(
+        ActionRegistry([*builtin_actions(), fake_find, fake_inpaint]), host
+    )
+    await rig.turn_with({"text": "make the sky a sunset", "approvals": True})
+    ask = await rig.paused()
+    assert asked == [("lib-1", "the sky")]  # found without a card of its own
+    assert ask and ask["action_id"] == "image.inpaint"
+    assert ask["region"] == sky and ask["params"]["image_id"] == "lib-1"
+    assert "region" not in {f["name"] for f in card_fields(fake_inpaint, ask["params"])}
+
+
+async def test_an_area_is_looked_for_only_when_words_name_it():
+    from wasifyai_assistant.locating import area_found
+
+    calls: list[str] = []
+
+    async def find(image_id: str, area: str):
+        calls.append(area)
+        return {"left": 0.1, "top": 0.1, "width": 0.2, "height": 0.2} if area == "sofa" else None
+
+    box = {"left": 0.5, "top": 0.5, "width": 0.1, "height": 0.1}
+    given = {"image_id": "i", "prompt": "p", "area": "sofa", "region": box}
+    assert await area_found("image.inpaint", given, find) is given
+    assert await area_found("image.edit", {"image_id": "i", "area": "sofa"}, find) == {
+        "image_id": "i", "area": "sofa",
+    }  # fmt: skip
+    missing = {"image_id": "i", "prompt": "p", "area": "dragon"}
+    assert await area_found("image.inpaint", missing, find) is missing
+    got = await area_found("image.inpaint", {"image_id": "i", "area": "sofa"}, find)
+    assert got["region"]["left"] == 0.1 and calls == ["dragon", "sofa"]

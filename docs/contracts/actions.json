@@ -2597,6 +2597,127 @@
       "help": "docs/help/image.edit.md"
     },
     {
+      "id": "image.find_area",
+      "title": "Find an area of a picture",
+      "summary": "Find where something is in a library picture, as a rectangle.",
+      "description": "Find one thing in a picture of the library ('the sky', 'his shirt') with the model that reads pictures, and get its rectangle for image.inpaint. The chat does this by itself when image.inpaint names its area in words.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "image_id": {
+            "description": "The picture to look in.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Image Id",
+            "type": "string"
+          },
+          "area": {
+            "description": "What to find, e.g. 'the sky' or 'his shirt'.",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Area",
+            "type": "string"
+          }
+        },
+        "required": [
+          "image_id",
+          "area"
+        ],
+        "title": "FindAreaIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "Region": {
+            "additionalProperties": false,
+            "description": "A rectangle on the picture, as shares of its width and height (0 is the left or top edge).",
+            "properties": {
+              "left": {
+                "description": "Where it starts, from the left edge.",
+                "maximum": 1,
+                "minimum": 0,
+                "title": "Left",
+                "type": "number"
+              },
+              "top": {
+                "description": "Where it starts, from the top edge.",
+                "maximum": 1,
+                "minimum": 0,
+                "title": "Top",
+                "type": "number"
+              },
+              "width": {
+                "description": "How wide it is.",
+                "exclusiveMinimum": 0,
+                "maximum": 1,
+                "title": "Width",
+                "type": "number"
+              },
+              "height": {
+                "description": "How tall it is.",
+                "exclusiveMinimum": 0,
+                "maximum": 1,
+                "title": "Height",
+                "type": "number"
+              }
+            },
+            "required": [
+              "left",
+              "top",
+              "width",
+              "height"
+            ],
+            "title": "Region",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "region": {
+            "$ref": "#/$defs/Region"
+          }
+        },
+        "required": [
+          "image_id",
+          "area",
+          "region"
+        ],
+        "title": "FindAreaOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "image_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "area": "the sky"
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-image"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-image",
+      "ui": "images.inpaint",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/image.find_area.md"
+    },
+    {
       "id": "image.generate",
       "title": "Make a picture",
       "summary": "Make a new picture from a description.",
@@ -2760,7 +2881,7 @@
       "id": "image.inpaint",
       "title": "Change part of a picture",
       "summary": "Change only a rectangle of a library picture; the rest stays as it is.",
-      "description": "Change one area of a picture of the library and leave every pixel outside it as it was. Give the area as a rectangle (shares of the picture's width and height) and say what to put there. It saves a new picture and keeps the original. The model sometimes ignores a small area; a larger one works better. Use image.edit to change the whole picture.",
+      "description": "Change one area of a picture of the library and leave every pixel outside it as it was. Name the area in words (area: 'the sky', 'the sofa'; the app finds it with the model that reads pictures) or give it as a rectangle (region: shares of the picture's width and height), and say what to put there. It saves a new picture and keeps the original. The model sometimes ignores a small area; a larger one works better. Use image.edit to change the whole picture.",
       "input": {
         "$defs": {
           "Region": {
@@ -2848,8 +2969,23 @@
             "type": "string"
           },
           "region": {
-            "$ref": "#/$defs/Region",
-            "description": "The area to change, as a rectangle. Everything outside it stays as it is."
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Region"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The area to change, as a rectangle. Everything outside it stays as it is. Leave it out and name the area in words instead."
+          },
+          "area": {
+            "default": "",
+            "description": "Or the area in words, e.g. 'the sky' or 'his shirt': the app finds it in the picture.",
+            "maxLength": 200,
+            "title": "Area",
+            "type": "string"
           },
           "styles": {
             "description": "Styles to apply (desktop only), from styles.list; put each style's word in the prompt.",
@@ -2877,8 +3013,7 @@
         },
         "required": [
           "image_id",
-          "prompt",
-          "region"
+          "prompt"
         ],
         "title": "InpaintIn",
         "type": "object"
@@ -2931,6 +3066,11 @@
             "width": 0.3,
             "height": 0.35
           }
+        },
+        {
+          "image_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "prompt": "a sunset sky",
+          "area": "the sky"
         }
       ],
       "effect": "make",

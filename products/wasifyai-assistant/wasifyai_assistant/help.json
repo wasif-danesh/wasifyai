@@ -385,6 +385,21 @@
   "body": "# Change a picture\n\nAction: `image.edit`\n\n## What it is for\n\nChange a picture you already have by saying what to change. The original stays.\n\n## Steps in the app\n\n1. Open **Images › Edit**.\n2. Choose a picture from your library.\n3. Say what to change.\n4. Choose Create.\n\n## Fields\n\n- `image_id`: The picture to change.\n- `prompt`: What to change.\n- `model`: which image model makes it, by its id (for example `qwen-image-2.1`); left out, the default. A model\n  that cannot do this is refused (\"This model cannot ...\").\n\n## Limits\n\n- 500 characters.\n\n## Needs\n\n- The image engine (Models).\n\n## Examples\n\n- Make the sky a sunset.\n\n## Problems\n\n- **Not in the library** Choose a picture that still exists."
  },
  {
+  "action": "image.find_area",
+  "title": "Find an area of a picture",
+  "screen": "images.inpaint",
+  "synonyms": [
+   "where is the sky",
+   "find the sofa in this picture",
+   "which part is his shirt"
+  ],
+  "fields": [
+   "image_id",
+   "area"
+  ],
+  "body": "# Find an area of a picture\n\nAction: `image.find_area`\n\n## What it is for\n\nFind one thing in a picture of your library, such as the sky, the sofa or a shirt, and get the rectangle around it, so\n**Change part of a picture** can change only that. The chat does this by itself when you name the area in words.\n\n## Steps in the app\n\n1. In the chat, ask to change part of a picture in words (\"make only the sky a sunset\").\n2. The chat finds the area and shows it as a box on the picture in its card. Drag across the picture to draw another.\n\nOn **Images › Inpaint** you paint the area yourself.\n\n## Fields\n\n- `image_id`: The picture to look in.\n- `area`: What to find, in words.\n\n## Limits\n\n- One thing at a time. The box is a little larger than what was found, so the change blends in.\n- How well it finds things depends on the model that reads pictures.\n\n## Needs\n\n- A model that can read pictures (Select chat model).\n\n## Examples\n\n- Find the sky in my beach photo.\n\n## Problems\n\n- **\"…\" was not found in that picture** Draw a box on the picture instead.\n- **Choose a model that can read pictures first** Choose one, or draw the box yourself."
+ },
+ {
   "action": "image.generate",
   "title": "Make a picture",
   "screen": "images.create",
@@ -410,14 +425,16 @@
    "paint over",
    "replace an area",
    "fill an area",
-   "edit a region"
+   "edit a region",
+   "change only the sky",
+   "replace the sofa",
+   "change his shirt"
   ],
   "fields": [
    "image_id",
-   "prompt",
-   "region"
+   "prompt"
   ],
-  "body": "# Change part of a picture\n\nAction: `image.inpaint`\n\n## What it is for\n\nChange only one area of a picture and leave everything outside it exactly as it was: put a cup on the table, change a cushion's colour,\nreplace the animal. The original stays.\n\n## Steps in the app\n\n1. Open **Images › Inpaint**.\n2. Choose a picture.\n3. Paint the area to change, or drag a rectangle over it.\n4. Say what to put there.\n5. Choose Create.\n\n## Fields\n\n- `image_id`: The picture to change.\n- `prompt`: What to put in the area.\n- `region`: The area, as a rectangle: `left`, `top`, `width` and `height` as shares of the picture (0 to 1). In the app you paint it.\n- `model`: which image model makes it, by its id (for example `qwen-image-2.1`); left out, the default. A model\n  that cannot do this is refused (\"This model cannot ...\").\n\n## Limits\n\n- 500 characters.\n- The area must cover something and not nearly all of the picture.\n- The picture is worked on at about one megapixel, so a larger picture comes back at that size.\n- A small area is sometimes ignored by the model; a larger one works better.\n\n## Needs\n\n- The image engine (Models).\n\n## Examples\n\n- A white coffee cup with steam, in a rectangle at the lower right of a plant photo.\n- A plush red velvet cushion, painted over the seat of a chair.\n\n## Problems\n\n- **Not in the library** Choose a picture that still exists.\n- **Paint the part of the picture you want to change** The area was empty.\n- **Leave part of the picture unpainted** The area covered almost everything; use Edit to change the whole picture.\n- **Nothing changed** Make the area larger and describe the thing plainly."
+  "body": "# Change part of a picture\n\nAction: `image.inpaint`\n\n## What it is for\n\nChange only one area of a picture and leave everything outside it exactly as it was: put a cup on the table, change a cushion's colour,\nreplace the animal. The original stays.\n\n## Steps in the app\n\n1. Open **Images › Inpaint**.\n2. Choose a picture.\n3. Paint the area to change, or drag a rectangle over it.\n4. Say what to put there.\n5. Choose Create.\n\nIn the chat, say what to change in words (\"make only the sky a sunset\"): the chat finds the sky with the model that\nreads pictures and shows it as a box on the picture in its card; press Make it, or drag across the picture to draw\nanother box first. Under a picture in the chat, **Change an area** lets you draw the box yourself and say what goes\nthere.\n\n## Fields\n\n- `image_id`: The picture to change.\n- `prompt`: What to put in the area.\n- `region`: The area, as a rectangle: `left`, `top`, `width` and `height` as shares of the picture (0 to 1). In the app you paint it.\n- `area`: Instead of `region`, the area in words (\"the sky\", \"his shirt\"); the app finds it in the picture.\n- `model`: which image model makes it, by its id (for example `qwen-image-2.1`); left out, the default. A model\n  that cannot do this is refused (\"This model cannot ...\").\n\n## Limits\n\n- 500 characters.\n- The area must cover something and not nearly all of the picture.\n- The picture is worked on at about one megapixel, so a larger picture comes back at that size.\n- A small area is sometimes ignored by the model; a larger one works better.\n\n## Needs\n\n- The image engine (Models).\n- For an area named in words, a model that can read pictures (Select chat model). Without one, draw the box.\n\n## Examples\n\n- A white coffee cup with steam, in a rectangle at the lower right of a plant photo.\n- A plush red velvet cushion, painted over the seat of a chair.\n\n## Problems\n\n- **Not in the library** Choose a picture that still exists.\n- **\"…\" was not found in that picture** Draw a box on the picture instead.\n- **Choose a model that can read pictures first** Choose one, or draw a box on the picture.\n- **Paint the part of the picture you want to change** The area was empty.\n- **Leave part of the picture unpainted** The area covered almost everything; use Edit to change the whole picture.\n- **Nothing changed** Make the area larger and describe the thing plainly."
  },
  {
   "action": "image.reference",

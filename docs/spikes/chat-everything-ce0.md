@@ -109,3 +109,9 @@ That is the small model's habit noted above; CE7 and CE8 look at it.
 `train.make_set` makes the set `train.start` teaches from (pictures with descriptions and a magic word, or examples from
 an attached table), tested end to end with the preview trainer. On the local model "Teach it my dog Rex from these
 photos" still ends in words after a guide lookup, so the training cases stay at 1 of 3.
+
+## After CE6
+
+The inpaint follow-up ("change only the tree in that picture") now passes on the local model; the plain ask and the ask
+with a photo still end in words after guide lookups. Finding an area is tested with a scripted picture reader; it has
+not been tried with a real one (the local default has none), which CE8 does.

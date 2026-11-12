@@ -18,6 +18,7 @@ import type { ToolArtifact, ToolResult } from "../convert";
 import { useThreadEnv } from "../env";
 import { ActionResultCard, FollowUps, GuideCard, OpenScreenCard, creationOf } from "./ActionCards";
 import { ConfirmActionCard } from "./ConfirmActionCard";
+import { ChangeArea } from "./RegionPicker";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
 
@@ -96,6 +97,7 @@ function Propose(p: ToolCallMessagePartProps) {
       <div className="grid gap-2">
         <ImageToolCard {...shared} />
         {made ? <FollowUps kind="image" /> : null}
+        {made ? <ChangeArea imageId={made[1]} /> : null}
       </div>
     );
   if (actionId === "music.generate" || made?.[0] === "track")

@@ -95,6 +95,7 @@ export {
   type ToolStatus,
   type CardDetails,
   type CardField,
+  type Region,
   cardDetails,
   attachmentKind,
 } from "./assistant";

@@ -57,9 +57,11 @@
     "screen": "images.inpaint",
     "where": "Images › Inpaint",
     "actions": [
+      "image.find_area",
       "image.inpaint"
     ],
     "does": [
+      "Find an area of a picture",
       "Change part of a picture"
     ]
   },

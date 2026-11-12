@@ -240,6 +240,64 @@ async def test_a_bad_inpaint_request_never_reaches_the_graph(rig):
     assert rig.host.runs == []
 
 
+class Reader:
+    """The model that reads pictures, as far as finding an area needs it (CE6)."""
+
+    def __init__(self, reply: str) -> None:
+        self.reply, self.asked = reply, []
+
+    async def complete(self, name: str, system: str, user: Any, schema: Any = None) -> str:
+        self.asked.append((name, user[0]))
+        return self.reply
+
+
+def reads(rig, reply: str) -> Reader:
+    reader = Reader(reply)
+    rig.state.caps = {"wasifyai-image": SimpleNamespace(text=reader)}
+    return reader
+
+
+async def test_an_area_named_in_words_is_found_and_becomes_the_mask(rig):
+    await rig.keep()  # 64 x 48
+    reader = reads(rig, '<think>the sky</think> {"found": true, "box": [0, 0, 1000, 460]}')
+    found = await rig.go("image.find_area", {"image_id": IMAGE_ID, "area": "the sky"})
+    assert found.status == "ok", found.text
+    assert found.output["region"] == {"left": 0.0, "top": 0.0, "width": 1.0, "height": 0.5}
+    assert "Propose image.inpaint" in found.text
+    assert reader.asked == [("describe_image", "<area>the sky</area>")]
+    rig.host.script("wasifyai-image", done(image_id="img-5"))
+    r = await rig.go(
+        "image.inpaint", {"image_id": IMAGE_ID, "prompt": "a sunset sky", "area": "the sky"}
+    )
+    assert r.ok, r.text
+    [(_, graph_input)] = rig.host.runs
+    async with rig._as("u1"):
+        mask = Image.open(io.BytesIO(await rig.state.storage.get(graph_input["mask_key"])))
+    assert mask.convert("L").getbbox() == (0, 0, 64, 24)
+
+
+async def test_an_area_that_is_not_there_or_no_reader_is_refused_in_words(rig):
+    await rig.keep()
+    reads(rig, '{"found": false}')
+    r = await rig.go("image.inpaint", {"image_id": IMAGE_ID, "prompt": "x", "area": "a dragon"})
+    assert r.status == "refused" and "was not found" in r.text and "Draw a box" in r.text
+    rig.state.caps = None
+    r = await rig.go("image.find_area", {"image_id": IMAGE_ID, "area": "the sky"})
+    assert r.status == "refused" and "read pictures" in r.text
+    assert rig.host.runs == []
+
+
+def test_a_reply_becomes_a_padded_region_on_the_picture():
+    from wasifyai_image.area import region_of
+
+    assert region_of('{"found": true, "box": [100, 200, 500, 600]}') == {
+        "left": 0.06, "top": 0.16, "width": 0.48, "height": 0.48,
+    }  # fmt: skip
+    assert region_of('{"found": true, "box": [0.5, 0.5, 0.9, 0.9]}')["left"] == 0.46
+    assert region_of('{"found": true, "box": [5, 5, 6, 6]}') is None  # a speck
+    assert region_of("I cannot tell") is None and region_of('{"found": false}') is None
+
+
 async def test_the_library_lists_gets_exports_and_deletes_pictures(rig, tmp_path):
     await rig.keep()
     listed = await rig.go("library.list", {"kind": "image"})

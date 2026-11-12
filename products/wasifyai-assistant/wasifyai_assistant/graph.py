@@ -50,6 +50,7 @@ from wasifyai_assistant.attachments import (
 )
 from wasifyai_assistant.features import actions_prompt, focus_prompt
 from wasifyai_assistant.keeping import KEEP, attachment_names, kept_in_place
+from wasifyai_assistant.locating import FIND, TAKES_AREA, area_found
 from wasifyai_assistant.store import (
     HEAD,
     PRODUCT_ID,
@@ -693,6 +694,27 @@ def build_assistant_graph(
                         "params": await kept_in_place(action_id, params, named, keep, kept),
                     }
                     c["arguments"] = args  # the card and the saved call show the library id
+            if (
+                c["name"] == PROPOSE
+                and approval_id is None
+                and str(args.get("action_id", "")) in TAKES_AREA
+                and isinstance(args.get("params"), dict)
+            ):
+                # an area named in words is found first, so the card can draw it (CE6)
+                who = Identity(tenant_id=ctx.tenant_id, user_id=ctx.user_id)
+
+                async def find(image_id: str, area: str) -> dict[str, Any] | None:
+                    r = await executor.run_action(
+                        FIND, {"image_id": image_id, "area": area}, ORIGIN, actor=who,
+                        policy=POLICY,
+                    )  # fmt: skip
+                    region = r.output.get("region") if r.status == "ok" else None
+                    return region if isinstance(region, dict) else None
+
+                located = await area_found(str(args["action_id"]), args["params"], find)
+                if located is not args["params"]:
+                    args = {**args, "params": located}
+                    c["arguments"] = args
             if c["name"] == CALL_EXTERNAL and await trusted_read_only(args):
                 # ADR-0070 decision 4: a tool the person trusts to only read runs unasked, taint
                 # or not (the one relaxation of the taint rule)
@@ -789,6 +811,12 @@ def build_assistant_graph(
                     verdict = "approved" if approved else "declined"
                     results.append({**saved["interrupt_part"], "status": verdict})
                     edited = decision.get("params")
+                    proposed = c["arguments"].get("params")
+                    if isinstance(edited, dict) and edited and isinstance(proposed, dict):
+                        # the card's fields are plain values: a list or a rectangle it does not
+                        # show (pictures, a region) is kept as proposed unless the card sent one
+                        unshown = {k: v for k, v in proposed.items() if isinstance(v, dict | list)}
+                        edited = {**unshown, **edited}
                     if decision.get("expired"):
                         skip_rest = True
                         outcome = ToolOutcome("refused", {"message": MOVED_ON}, MOVED_ON)

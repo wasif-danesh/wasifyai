@@ -1,7 +1,7 @@
 ---
 action: image.inpaint
 screen: images.inpaint
-synonyms: [inpaint, change part of a picture, paint over, replace an area, fill an area, edit a region]
+synonyms: [inpaint, change part of a picture, paint over, replace an area, fill an area, edit a region, change only the sky, replace the sofa, change his shirt]
 ---
 # Change part of a picture
 
@@ -20,11 +20,17 @@ replace the animal. The original stays.
 4. Say what to put there.
 5. Choose Create.
 
+In the chat, say what to change in words ("make only the sky a sunset"): the chat finds the sky with the model that
+reads pictures and shows it as a box on the picture in its card; press Make it, or drag across the picture to draw
+another box first. Under a picture in the chat, **Change an area** lets you draw the box yourself and say what goes
+there.
+
 ## Fields
 
 - `image_id`: The picture to change.
 - `prompt`: What to put in the area.
 - `region`: The area, as a rectangle: `left`, `top`, `width` and `height` as shares of the picture (0 to 1). In the app you paint it.
+- `area`: Instead of `region`, the area in words ("the sky", "his shirt"); the app finds it in the picture.
 - `model`: which image model makes it, by its id (for example `qwen-image-2.1`); left out, the default. A model
   that cannot do this is refused ("This model cannot ...").
 
@@ -38,6 +44,7 @@ replace the animal. The original stays.
 ## Needs
 
 - The image engine (Models).
+- For an area named in words, a model that can read pictures (Select chat model). Without one, draw the box.
 
 ## Examples
 
@@ -47,6 +54,8 @@ replace the animal. The original stays.
 ## Problems
 
 - **Not in the library** Choose a picture that still exists.
+- **"…" was not found in that picture** Draw a box on the picture instead.
+- **Choose a model that can read pictures first** Choose one, or draw a box on the picture.
 - **Paint the part of the picture you want to change** The area was empty.
 - **Leave part of the picture unpainted** The area covered almost everything; use Edit to change the whole picture.
 - **Nothing changed** Make the area larger and describe the thing plainly.

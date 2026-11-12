@@ -561,6 +561,8 @@ def card_fields(action: Action, params: dict[str, Any]) -> list[dict[str, Any]]:
     fields: list[dict[str, Any]] = []
     for name, raw in (schema.get("properties") or {}).items():
         spec = _spec(raw if isinstance(raw, dict) else {})
+        if spec.get("type") in ("object", "array") or "$ref" in spec or "allOf" in spec:
+            continue  # a list or a rectangle is not typed in a field; it is kept as proposed
         choices = spec.get("enum")
         kind = (
             "choice"
@@ -635,6 +637,7 @@ def card_of(
     }
     if action is None:
         return {"title": action_id, "summary": summary, "params": shown, "action_id": action_id}
+    box = region_of(params.get("region"))
     badges = [BADGES[f] for f in action.flags if f in BADGES]
     if action.effect == "destroy":
         badges.append("deletes something")
@@ -651,7 +654,21 @@ def card_of(
         "estimate": estimate,
         "pauses_chat": pauses_chat,
         "provenance": provenance,
+        **({"region": box} if box else {}),
     }
+
+
+def region_of(value: Any) -> dict[str, float] | None:
+    """A rectangle on a picture (`image.inpaint`'s region: four shares from 0 to 1), for the
+    card to draw on the picture (CE6), or None when it is not one."""
+    keys = ("left", "top", "width", "height")
+    if not isinstance(value, dict) or set(value) != set(keys):
+        return None
+    try:
+        box = {k: float(value[k]) for k in keys}
+    except (TypeError, ValueError):
+        return None
+    return box if all(0 <= v <= 1 for v in box.values()) else None
 
 
 # ---- running a tool -----------------------------------------------------------------------------

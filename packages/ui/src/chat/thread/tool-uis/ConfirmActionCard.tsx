@@ -3,13 +3,15 @@
 // on it; the person's click goes back through the run's resume and the turn goes on. The fields are drawn from the
 // action's own schema and can be edited before Run; a `needs_consent` action shows its statement with a tick of its own.
 // Plain text only: what the card shows came from the assistant.
-import type { CardField, ChatPart } from "@wasifyai/client";
+import type { CardField, ChatPart, Region } from "@wasifyai/client";
 import { useMemo, useState } from "react";
 import { Badge } from "../../../components/badge";
 import { Button } from "../../../components/button";
 import { Input } from "../../../components/input";
 import { Spinner } from "../../../components/spinner";
 import { Textarea } from "../../../components/textarea";
+import { useThreadEnv } from "../env";
+import { RegionPicker } from "./RegionPicker";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
 type Values = Record<string, string | number | boolean>;
@@ -157,7 +159,13 @@ export function ConfirmActionCard({
   const [values, setValues] = useState<Values>(initial);
   const [consented, setConsented] = useState(false);
   const [noMoreAsking, setNoMoreAsking] = useState(false);
+  const { images } = useThreadEnv();
+  const [box, setBox] = useState<Region | null>(null); // another area the person drew (CE6)
   if (!a) return null;
+  const picture =
+    typeof (a.params ?? tool.arguments).image_id === "string"
+      ? String((a.params ?? tool.arguments).image_id)
+      : "";
   // what the card says about itself is not a parameter
   const params = Object.entries(a.params ?? tool.arguments)
     .filter(([k]) => !HEADING.has(k))
@@ -184,6 +192,15 @@ export function ConfirmActionCard({
             </li>
           ))}
         </ul>
+      ) : null}
+      {a.region && picture ? (
+        <RegionPicker
+          imageId={picture}
+          images={images}
+          region={box ?? a.region}
+          onChange={setBox}
+          disabled={decided}
+        />
       ) : null}
       {fields.length ? (
         <div className="grid gap-2">
@@ -250,7 +267,8 @@ export function ConfirmActionCard({
             size="sm"
             onClick={() => {
               if (noMoreAsking) onAutoRun?.();
-              onDecide?.(true, changed ? asParams(fields, values) : undefined);
+              const edited = changed || box ? asParams(fields, values) : undefined;
+              onDecide?.(true, edited && box ? { ...edited, region: box } : edited);
             }}
             disabled={!canRun}
           >

@@ -137,8 +137,8 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
             why = (
                 ""
                 if images is not False
-                else "This model reads pictures only with its picture reader (a file named "
-                "mmproj, kept next to the model). None was found for this model."
+                else "This model cannot look at pictures (it has no picture reader, a file "
+                "named mmproj). It can still keep, change or animate one you attach."
             )
         else:
             caps = (deps.state.caps or {}).get(PRODUCT_ID)
@@ -148,7 +148,12 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
                 binding = None
             thinking = bool(binding and binding.defaults.get("thinking_options"))
             images = bool(binding and "image" in getattr(binding, "inputs", []))
-            why = "" if images else "The chat model in use does not read pictures."
+            why = (
+                ""
+                if images
+                else "The chat model in use cannot look at pictures. It can still keep, change "
+                "or animate one you attach."
+            )
         stored = deps.state.uploads is not None and deps.storage is not None
         reader = None
         vision = deps.state.desktop_vision

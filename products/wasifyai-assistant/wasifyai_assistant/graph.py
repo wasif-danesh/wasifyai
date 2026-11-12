@@ -48,6 +48,7 @@ from wasifyai_assistant.attachments import (
     valid_id,
 )
 from wasifyai_assistant.features import actions_prompt, focus_prompt
+from wasifyai_assistant.keeping import KEEP, attachment_names, kept_in_place
 from wasifyai_assistant.store import (
     HEAD,
     PRODUCT_ID,
@@ -217,6 +218,7 @@ def model_messages(
     external: list[str] | None = None,
     instead: str = "",
     served: Collection[str] = (),
+    sees: bool = True,
 ) -> list[dict[str, Any]]:
     """The conversation as OpenAI-style messages (assistant text and tool calls, tool results).
     `attached`: what the person attached, as the model is given it (`attachments.py`).
@@ -241,7 +243,7 @@ def model_messages(
         recent = recent[1:]
     for m in recent:
         if m.role == "user":
-            out.append({"role": "user", "content": user_content(m, attached or {})})
+            out.append({"role": "user", "content": user_content(m, attached or {}, sees)})
         elif m.role == "assistant":
             calls = [
                 {
@@ -414,18 +416,16 @@ def build_assistant_graph(
                     },
                 )
             )  # fmt: skip
-        if any(p["kind"] == "image" for _, p in found):
-            can_see = getattr(host(), "can_see", None)
-            seen = can_see() if callable(can_see) else True
-            if inspect.isawaitable(seen):
-                seen = await seen
-            if seen is False:
-                return [], refuse_with(
-                    "no_vision",
-                    "The chat model in use cannot look at pictures. Choose one that can in "
-                    "the Model hub, or set up its picture reader, then attach the picture again.",
-                )
+        # a picture is taken even by a model that cannot look at it: it is told the picture is
+        # there and can keep it, change it or make it move (docs/chat-does-everything-plan.md, CE1)
         return found, None
+
+    async def model_sees() -> bool:
+        can_see = getattr(host(), "can_see", None)
+        seen = can_see() if callable(can_see) else True
+        if inspect.isawaitable(seen):
+            seen = await seen
+        return seen is not False
 
     async def check_request(state: AssistantState) -> AssistantState:
         ctx = require_context()
@@ -577,7 +577,10 @@ def build_assistant_graph(
         last_id: str | None = saved.get("last_id") or state["user_message_id"]
         first_history = await store.path(ctx.tenant_id, ctx.user_id, conv_id, last_id)
         # web text in the conversation: only reads run unasked
-        attached = await load_attached(first_history, caps.storage)
+        sees = await model_sees() if attachments_in(first_history) else True
+        named = attachment_names(first_history)  # what the model may call an attachment
+        kept: dict[str, str] = {}  # attachment id -> library id, kept in this run
+        attached = await load_attached(first_history, caps.storage, sees)
         # where outside text came from (the web, an outside server, a file); "" when none
         if resuming:
             taint_from = str(saved.get("taint_from") or "")
@@ -666,6 +669,25 @@ def build_assistant_graph(
                     # a screen's changes apply at once: the person sees them and can undo them;
                     # what costly still follows the chat's setting
                     policy = policy.model_copy(update={"change": "auto"})
+            if c["name"] == PROPOSE and approval_id is None and named:
+                # an attachment named where a library item belongs is kept first (CE1)
+                action_id = str(args.get("action_id", ""))
+                who = Identity(tenant_id=ctx.tenant_id, user_id=ctx.user_id)
+
+                async def keep(ident: str) -> str | None:
+                    r = await executor.run_action(
+                        KEEP, {"attachment_id": ident}, ORIGIN, actor=who, policy=POLICY
+                    )
+                    made = r.output.get("id") if r.status == "ok" else None
+                    return made if isinstance(made, str) else None
+
+                params = args.get("params") or {}
+                if isinstance(params, dict):
+                    args = {
+                        **args,
+                        "params": await kept_in_place(action_id, params, named, keep, kept),
+                    }
+                    c["arguments"] = args  # the card and the saved call show the library id
             if c["name"] == CALL_EXTERNAL and await trusted_read_only(args):
                 # ADR-0070 decision 4: a tool the person trusts to only read runs unasked, taint
                 # or not (the one relaxation of the taint rule)
@@ -688,7 +710,7 @@ def build_assistant_graph(
                     async for chunk in caps.text.chat(
                         "chat",
                         model_messages(
-                            history, search, attached, features, external, instead, served
+                            history, search, attached, features, external, instead, served, sees
                         ),
                         allow_tools,
                         thinking=thinking,

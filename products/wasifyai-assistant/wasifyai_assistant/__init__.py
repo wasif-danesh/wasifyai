@@ -7,11 +7,14 @@ PRODUCT_ID = "wasifyai-assistant"
 
 
 def register(registry: GraphRegistry) -> None:
+    from wasifyai_assistant.actions import actions
     from wasifyai_assistant.graph import build_assistant
     from wasifyai_assistant.index import conversation_index_source
     from wasifyai_assistant.routes import build_routes
 
     registry.register(PRODUCT_ID, build_assistant)
     registry.add_routes(PRODUCT_ID, build_routes)
+    # a file attached in the chat kept as a library item (docs/chat-does-everything-plan.md, CE1)
+    registry.add_actions(PRODUCT_ID, actions)
     # conversations are creations: searchable in My creations (ADR-0041, ADR-0057 decision 3)
     registry.add_index_source(PRODUCT_ID, conversation_index_source)

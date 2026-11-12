@@ -10,7 +10,7 @@ from collections.abc import Collection
 from functools import cache
 from pathlib import Path
 
-from wasifyai_assistant.help import titles
+from wasifyai_assistant.help import fields_of, titles
 
 FILE = Path(__file__).with_name("features.json")
 
@@ -105,8 +105,9 @@ def where_of_screen(screen_id: str) -> str:
 
 NOT_PROPOSED = frozenset({"web", "app", "job", "external"})  # these have tools of their own
 ACTIONS_PROMPT = (
-    " Actions you may propose with propose_action (id: what it does; where it is in the app): "
-    "{list}."
+    " Actions you may propose with propose_action (id(the fields it needs): what it does; where it "
+    "is in the app): {list}. Give params with exactly those field names; an id field takes the id "
+    "of a library item, never its name."
 )
 
 
@@ -114,12 +115,14 @@ def actions_prompt(served: Collection[str]) -> str:
     """The compact map of the actions this engine serves (ADR-0071 decision 3): about 600 tokens,
     made from the guides' titles and the menu, never typed by hand ("" if none)."""
     named = titles(served)
+    needs = fields_of(served)
     lines = []
     for action_id in sorted(served):
         # the web, the app's state and jobs have tools of their own; they are not proposed
         if action_id not in named or action_id.split(".", 1)[0] in NOT_PROPOSED:
             continue
         where = where_of(action_id)
-        lines.append(f"{action_id}: {named[action_id]}" + (f"; {where}" if where else ""))
+        sig = f"{action_id}({', '.join(needs.get(action_id, ()))})"
+        lines.append(f"{sig}: {named[action_id]}" + (f"; {where}" if where else ""))
     actions = ACTIONS_PROMPT.format(list=" | ".join(lines)) if lines else ""
     return actions + screens_prompt(served)  # last, so a small model still has it in mind

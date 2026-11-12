@@ -26,6 +26,7 @@ import json
 import re
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,9 @@ from wasifyai_assistant.tools import TOOL_DEFINITIONS, how_to, signature_of
 from wasifyai_platform_sdk.actions import Readiness
 
 CASES = Path(__file__).with_name("cases.yaml")
+# actions the menu cases want that a later stage of docs/chat-does-everything-plan.md adds
+PLANNED = {"library.keep_attachment": "CE1", "train.make_set": "CE5"}
+VISION = False  # whether the model looks at pictures (--vision); without it, it is told it cannot
 SIZES = ("square", "landscape", "portrait", "wide", "tall")
 SERVED = {g.action for g in guides.guides()}
 # what the assistant is really sent on the desktop: its prompt and the list of actions it may
@@ -323,6 +327,113 @@ def remote_size(case: dict) -> int:
     return int(case.get("remote_tools") or DEFAULT_REMOTE)
 
 
+# ---- menu cases (docs/chat-does-everything-plan.md, stage CE0) -----------------------------------
+# A `menu` case is a `tool` case tagged with the menu item it stands for. It may carry `attach`
+# (files the person attached: kind image, document, audio or video, a name, and a document's text)
+# and `after` (what the chat made just before: the action, its params, its output and the sentence
+# the action said), so a follow-up such as "now make it move" is judged on what the model was told.
+
+
+def attachment_refusal(case: dict, vision: bool) -> str | None:
+    """Why the app would not take the case's attachments at all, as the chat does today: a
+    recording or a clip (stage CE2). A picture is taken by every model; one that cannot look at it
+    is told so, and is still given its id (CE1)."""
+    kinds = {a["kind"] for a in case.get("attach") or []}
+    if kinds - {"image", "document"}:
+        return f"refused: the chat cannot take {sorted(kinds - {'image', 'document'})}"
+    return None
+
+
+TINY_PICTURE = (
+    "data:image/png;base64,"
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+def user_turn(case: dict, vision: bool) -> dict:
+    """The person's message of a case, with its attachments as the app gives them to the model."""
+    attach = case.get("attach") or []
+    if not attach:
+        return {"role": "user", "content": case["say"]}
+    from wasifyai_assistant.attachments import Attached, user_content
+    from wasifyai_assistant.store import Message
+
+    parts: list[dict[str, Any]] = [{"type": "text", "text": case["say"]}]
+    attached: dict[str, Attached] = {}
+    for i, a in enumerate(attach):
+        ident = attachment_ids(case)[i]  # an id like the app's
+        parts.append(
+            {"type": "attachment", "kind": a["kind"], "id": ident, "key": "", "name": a["name"]}
+        )
+        if a["kind"] == "document":
+            attached[ident] = Attached("document", a["name"], text=a.get("text", ""))
+        elif a["kind"] == "image" and vision:
+            attached[ident] = Attached("image", a["name"], data_url=TINY_PICTURE)
+    message = Message(id="m", conversation_id="c", seq=0, role="user", parts=parts)
+    return {"role": "user", "content": user_content(message, attached, sees=vision)}
+
+
+def attachment_ids(case: dict) -> list[str]:
+    """The ids the runner gives a case's attachments, in order (as `user_turn` names them)."""
+    return [
+        str(uuid.uuid5(uuid.NAMESPACE_URL, f"{case['id']}-{i}"))
+        for i, _ in enumerate(case.get("attach") or [])
+    ]
+
+
+def names_attachment(case: dict, params: dict) -> bool:
+    """An id param (`…_id`, `…_ids`) of the proposal is an attachment of the case, by its id or
+    its file name: what `keeping.kept_in_place` replaces with the kept library item."""
+    from wasifyai_assistant.keeping import attachment_names
+    from wasifyai_assistant.store import Message
+
+    parts = [
+        {"type": "attachment", "kind": a["kind"], "id": ident, "key": "", "name": a["name"]}
+        for ident, a in zip(attachment_ids(case), case.get("attach") or [], strict=True)
+    ]
+    names = attachment_names(
+        [Message(id="m", conversation_id="c", seq=0, role="user", parts=parts)]
+    )
+    for key, value in params.items():
+        if not key.endswith(("_id", "_ids")):
+            continue
+        for v in value if isinstance(value, list) else [value]:
+            if isinstance(v, str) and v.strip() in names:
+                return True
+    return False
+
+
+def earlier_turns(case: dict) -> list[dict]:
+    """What the chat made just before a follow-up, as the model is given it: the ask, the proposal
+    and the action's result as the app words it (`outcome_of`)."""
+    after = case.get("after")
+    if not after:
+        return []
+    from wasifyai_assistant.tools import outcome_of
+    from wasifyai_platform_sdk.actions import ActionResult
+
+    result = ActionResult(
+        status="ok", action_id=after["action"], text=after["text"], output=after.get("output") or {}
+    )
+    told = outcome_of("propose_action", result).text
+    call = {
+        "id": "earlier",
+        "type": "function",
+        "function": {
+            "name": "propose_action",
+            "arguments": json.dumps(
+                {"action_id": after["action"], "params": after.get("params") or {}}
+            ),
+        },
+    }
+    return [
+        {"role": "user", "content": after["say"]},
+        {"role": "assistant", "content": None, "tool_calls": [call]},
+        {"role": "tool", "tool_call_id": "earlier", "content": told},
+        {"role": "assistant", "content": after.get("reply", "Done.")},
+    ]
+
+
 def prompt_for(case: dict) -> str:
     """The system prompt of a case: the assistant's own, with the outside servers of its
     catalogue named, as the desktop names the ones the person connected."""
@@ -473,12 +584,18 @@ def judge_first(case: dict, message: dict) -> tuple[bool, str]:
             return False, f"argument {name} is missing"
     # a proposal: the right action, and its params are where the words are
     params = args.get("params") if isinstance(args.get("params"), dict) else {}
+    actions = case.get("action")
+    actions = actions if isinstance(actions, list) else [actions] if actions else []
+    kept_for = case.get("kept_for") or []
     if (
         expect == "propose_action"
-        and case.get("action")
-        and args.get("action_id") != case["action"]
+        and args.get("action_id") in kept_for
+        and names_attachment(case, params)
     ):
-        return False, f"proposed {args.get('action_id')!r}, wanted {case['action']}"
+        # the action asked for, on the attachment: the chat keeps it first by itself (keeping.py)
+        return True, f"proposed {args.get('action_id')} on the attachment"
+    if expect == "propose_action" and actions and args.get("action_id") not in actions:
+        return False, f"proposed {args.get('action_id')!r}, wanted one of {actions}"
     mentions = [str(m).lower() for m in case.get("mentions") or []]
     text_arg = json.dumps({**args, **params}, ensure_ascii=False).lower()
     if mentions and not any(m in text_arg for m in mentions):
@@ -931,9 +1048,13 @@ async def run_case(client: httpx.AsyncClient, base: str, model: str, case: dict)
         tools = [t for t in tools if not t["function"]["name"].startswith("web_")]
     if kind == "remote":
         return await run_remote(client, base, model, case, tools)
+    refused = attachment_refusal(case, VISION)
+    if refused:
+        return {"ok": False, "why": refused, "seconds": 0.0, "tokens": 0}
     messages: list[dict] = [
         {"role": "system", "content": prompt_for(case)},
-        {"role": "user", "content": case["say"]},
+        *earlier_turns(case),
+        user_turn(case, VISION),
     ]
     seconds, tokens = 0.0, 0
     proposed: list[str] = []
@@ -1013,7 +1134,13 @@ async def run_case(client: httpx.AsyncClient, base: str, model: str, case: dict)
 async def run(base: str, model: str, server=None, only: str | None = None) -> dict:
     cases = yaml.safe_load(CASES.read_text())["cases"]
     if only:
-        cases = [c for c in cases if c.get("kind", "tool") == only or c["id"].startswith(only)]
+        cases = [
+            c
+            for c in cases
+            if c.get("kind", "tool") == only
+            or c["id"].startswith(only)
+            or (only == "menu" and c.get("menu"))
+        ]
     results = []
     async with httpx.AsyncClient() as client:
         # a warm-up: the first request pays for the prompt cache
@@ -1030,6 +1157,8 @@ async def run(base: str, model: str, server=None, only: str | None = None) -> di
             except Exception as exc:  # a model that errors fails the case, not the run
                 row = {"ok": False, "why": f"error: {exc}", "seconds": 0.0, "tokens": 0}
             row = {"id": case["id"], "kind": case.get("kind", "tool"), **row}
+            if case.get("menu"):
+                row["menu"] = case["menu"]
             row["seconds"] = round(row["seconds"], 1)
             results.append(row)
             print(json.dumps(row, ensure_ascii=False), flush=True)
@@ -1048,6 +1177,12 @@ async def run(base: str, model: str, server=None, only: str | None = None) -> di
     counted_ok = sum(
         r["ok"] for r, c in zip(results, cases, strict=True) if int(c.get("extra_tools") or 0)
     )
+    by_menu: dict[str, dict[str, int]] = {}
+    for r in results:
+        if r.get("menu"):
+            m = by_menu.setdefault(r["menu"], {"passed": 0, "total": 0})
+            m["total"] += 1
+            m["passed"] += int(r["ok"])
     timed = [r for r in results if r["seconds"] and r["tokens"]]
     summary = {
         "model": model,
@@ -1057,6 +1192,7 @@ async def run(base: str, model: str, server=None, only: str | None = None) -> di
         "tool_cases_after_a_lookup": sum(1 for r in results if r.get("looked_up")),
         "with_extra_tools": {"passed": counted_ok, "total": counted},
         "remote_by_size": by_size,
+        "by_menu": dict(sorted(by_menu.items())),
         "median_seconds": sorted(r["seconds"] for r in results)[len(results) // 2]
         if results
         else 0,
@@ -1081,9 +1217,13 @@ async def main() -> int:
     ap.add_argument("--base-url", help="an OpenAI-compatible base URL, ending in /v1")
     ap.add_argument("--model", default="", help="the model name to send")
     ap.add_argument(
-        "--only", help="run one kind (tool, guide, status, safety, remote) or an id prefix"
+        "--only",
+        help="run one kind (tool, guide, status, safety, remote), an id prefix, or menu",
     )
+    ap.add_argument("--vision", action="store_true", help="the model looks at pictures")
     args = ap.parse_args()
+    global VISION
+    VISION = args.vision
     if args.gguf:
         from wasifyai_api.llama_server import LlamaServer
 

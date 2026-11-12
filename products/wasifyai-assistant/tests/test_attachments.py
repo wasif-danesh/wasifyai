@@ -44,6 +44,7 @@ async def test_a_picture_is_fitted_and_sent_as_an_image_part(tmp_path, ctx):
     assert state["status"] == "done"
     content = rig.model.chats[0]["messages"][1]["content"]
     assert content[0]["type"] == "text" and content[1]["type"] == "image_url"
+    assert f'the picture "red.png" (attachment id {pic})' in content[0]["text"]
     url = content[1]["image_url"]["url"]
     assert url.startswith("data:image/jpeg;base64,")
     import base64
@@ -95,18 +96,24 @@ async def test_old_documents_are_left_out_when_the_budget_is_used_and_the_messag
     assert sum(len(t) for t in texts) < TOTAL_DOC_CHARS + 2000
 
 
-async def test_a_picture_for_a_model_that_cannot_see_is_refused_in_words_and_nothing_is_stored(
+async def test_a_picture_for_a_model_that_cannot_see_is_named_by_its_id_and_not_shown(
     tmp_path, ctx
 ):
+    """A model without sight is still given the picture's id, so it can keep it in the library and
+    change it or make it move (docs/chat-does-everything-plan.md, CE1); the picture itself is not
+    sent to it."""
     host = FakeHost()
     host.can_see = lambda: False  # type: ignore[attr-defined]
-    rig = Rig(tmp_path, [{"text": "x"}], host)
+    rig = Rig(tmp_path, [{"text": "I will keep it first."}], host)
     pic = await rig.attach("image", png(100, 100))
-    state, _ = await rig.turn_with({"text": "look", "attachments": [{"id": pic, "name": "p.png"}]})
-    assert state["status"] == "refused" and state["refusal"]["code"] == "no_vision"
-    assert "cannot look at pictures" in state["refusal"]["message"]
-    assert await rig.store.recent("t1", "u1", 5) == []  # no empty conversation was made
-    assert pic in {r.id for r in rig.uploads.rows.values()}  # the upload is untouched
+    state, _ = await rig.turn_with(
+        {"text": "make the sky a sunset", "attachments": [{"id": pic, "name": "beach.png"}]}
+    )
+    assert state["status"] == "done"
+    content = rig.model.chats[0]["messages"][1]["content"]
+    assert isinstance(content, str)  # no image part
+    assert f'the picture "beach.png" (attachment id {pic})' in content
+    assert "You cannot look at it." in content
 
 
 async def test_a_missing_or_foreign_attachment_too_many_and_an_empty_message_are_refused(
@@ -178,3 +185,73 @@ async def test_a_message_with_only_a_file_is_named_after_the_file(tmp_path, ctx)
     rows = await rig.store.messages("t1", "u1", state["conversation_id"])
     assert [p["type"] for p in rows[0].parts] == ["attachment"]  # no empty text part was stored
     assert "Launch is on Friday." in str(rig.model.chats[0]["messages"][1]["content"])
+
+
+async def test_a_proposal_that_names_an_attachment_keeps_it_first_and_asks_with_the_library_id(
+    tmp_path, ctx
+):
+    """The model proposes the change straight away, naming the picture by its file name: the chat
+    keeps the picture in the library first (no card for that), and the card for the change shows
+    the library id (docs/chat-does-everything-plan.md, CE1)."""
+    from pydantic import BaseModel
+    from wasifyai_platform_sdk.actions import (
+        Action,
+        ActionExecutor,
+        ActionRegistry,
+        CallBinding,
+        Outcome,
+        builtin_actions,
+    )
+
+    kept: list[str] = []
+
+    class In(BaseModel):
+        attachment_id: str
+        title: str = ""
+
+    class Out(BaseModel):
+        kind: str
+        id: str
+        title: str
+
+    async def keep(p: In, _ctx) -> Outcome:
+        kept.append(p.attachment_id)
+        return Outcome.ok({"kind": "image", "id": "lib-1", "title": "beach"}, "Kept as lib-1.")
+
+    fake_keep = Action(
+        id="library.keep_attachment", title="Keep", summary="Keep.", description="Keep.",
+        input=In, output=Out, effect="make", product="wasifyai-assistant", bind=CallBinding(keep),
+        surfaces=("assistant",), ui_exempt="test",
+    )  # fmt: skip
+
+    class ChangeIn(BaseModel):
+        image_id: str
+        prompt: str
+
+    async def change(p: ChangeIn, _ctx) -> Outcome:
+        return Outcome.ok({"image_id": "lib-2"}, "Changed.")
+
+    fake_change = Action(
+        id="test.change", title="Change", summary="Change.", description="Change.",
+        input=ChangeIn, output=ChangeIn, effect="make", product="wasifyai-image",
+        bind=CallBinding(change), surfaces=("assistant",), ui_exempt="test",
+    )  # fmt: skip
+    host = FakeHost()
+    edit = {"action_id": "test.change", "params": {"image_id": "beach.png", "prompt": "a sunset"}}
+    rig = Rig(tmp_path, [{"tool_calls": [{"name": "propose_action", "arguments": edit}]}], host)
+    rig.caps.extras["actions"] = ActionExecutor(
+        ActionRegistry([*builtin_actions(), fake_keep, fake_change]), host
+    )
+    pic = await rig.attach("image", png(100, 100))
+    await rig.turn_with(
+        {
+            "text": "make the sky a sunset",
+            "approvals": True,
+            "attachments": [{"id": pic, "name": "beach.png"}],
+        }
+    )
+    ask = await rig.paused()
+    assert kept == [pic]  # kept without a card of its own
+    assert ask and ask["kind"] == "confirm_action" and ask["action_id"] == "test.change"
+    assert "lib-1" in str(ask) and "beach.png" not in str(ask.get("params", ""))
+    assert host.runs == []  # the change waits for the person

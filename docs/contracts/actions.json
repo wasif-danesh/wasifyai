@@ -3760,6 +3760,87 @@
       "help": "docs/help/library.get.md"
     },
     {
+      "id": "library.keep_attachment",
+      "title": "Keep an attached file",
+      "summary": "Save a file the person attached in this chat to the library, to work on it.",
+      "description": "Save a picture the person attached in this chat to their library and get its id. Do this first whenever the person asks to change, animate, make talk, turn into 3D or otherwise use an attached file: the other actions only take library items. Then propose the action they asked for with the id this returns.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "attachment_id": {
+            "description": "The attachment's id, as the chat names it.",
+            "maxLength": 64,
+            "minLength": 8,
+            "title": "Attachment Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "A name for it in the library; its file name if left out.",
+            "maxLength": 120,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attachment_id"
+        ],
+        "title": "KeepIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "title",
+          "uri"
+        ],
+        "title": "KeepOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "attachment_id": "0b7c1f9e-0000-4000-8000-000000000000"
+        },
+        {
+          "attachment_id": "0b7c1f9e-0000-4000-8000-000000000000",
+          "title": "Beach"
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "private"
+      ],
+      "requires": [],
+      "long": false,
+      "product": "wasifyai-assistant",
+      "ui": null,
+      "ui_exempt": "It runs from the chat: a file attached there becomes a library item. On the screens, each product's own Import or upload does the same.",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/library.keep_attachment.md"
+    },
+    {
       "id": "library.list",
       "title": "List my creations",
       "summary": "List the newest creations of one kind.",

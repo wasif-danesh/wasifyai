@@ -525,17 +525,24 @@ def test_documents_and_pictures_are_attached_kept_with_the_chat_and_deleted_with
         part = stored["messages"][0]["parts"][1]
         assert part["type"] == "attachment" and part["name"] == "plan.md" and "url" not in part
 
-        # a picture before the model has a projector: refused in words, nothing attached
+        # a picture before the model has a projector: taken, and the model is told its id and
+        # that it cannot look at it, so it can still keep, change or animate it (CE1)
         buf = io.BytesIO()
         Image.new("RGB", (40, 30), (200, 30, 30)).save(buf, "PNG")
         up = c.post(f"{base}/uploads/images", content=buf.getvalue(), headers=auth())
         assert up.status_code == 201, up.text
         pic = up.json()["upload_id"]
-        refused = ask_with(
+        blind = ask_with(
             c, {"input": {"text": "look", "attachments": [{"id": pic, "name": "a.png"}]}}
         )
-        out = refused[-1][1]["outputs"]
-        assert out["status"] == "refused" and out["refusal"]["code"] == "no_vision"
+        assert blind[-1][0] == "done"
+        log = [
+            json.loads(x)
+            for x in (data_dir / "engine/llamacpp/b1/llama-server.log").read_text().splitlines()
+        ]
+        assert (
+            f"(attachment id {pic})" in log[-1]["user"] and "cannot look at it" in log[-1]["user"]
+        )
 
         # with the projector next to the model the picture goes to the server with --mmproj
         (model_dir / "mmproj-F16.gguf").write_bytes(b"GGUF" + b"\0" * 100)
@@ -545,6 +552,8 @@ def test_documents_and_pictures_are_attached_kept_with_the_chat_and_deleted_with
         )
         assert chosen.status_code == 200, chosen.text
         assert c.get(f"{base}/options", headers=auth()).json()["attach"]["images"] is True
+        up = c.post(f"{base}/uploads/images", content=buf.getvalue(), headers=auth())
+        pic = up.json()["upload_id"]  # the first is kept with the first conversation now
         seen = ask_with(
             c, {"input": {"text": "look", "attachments": [{"id": pic, "name": "a.png"}]}}
         )

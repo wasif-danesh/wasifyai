@@ -848,3 +848,552 @@ cases:
     current: s5
     expect: none
     say: "What does this shot show?"
+
+  # ---- every menu item from the chat (docs/chat-does-everything-plan.md, stage CE0) ------------
+  # One plain ask, one with a file attached where the item starts from one, and one follow-up on
+  # what the chat just made. They describe what the chat should do, so a case for a stage not
+  # built yet fails: library.keep_attachment is CE1, train.make_set CE5. `kept_for`: the action the person
+  # asked for; proposing it with the attachment named in an id field passes too, since the chat keeps
+  # the attachment first by itself (keeping.py).
+  - id: menu-images-create
+    menu: images.create
+    say: "Make me a picture of a fox reading a book under a tree."
+    expect: propose_action
+    action: image.generate
+    mentions: [fox]
+  - id: menu-images-create-attach
+    menu: images.create
+    say: "Turn this sketch into a finished painting."
+    attach: [{ kind: image, name: sketch.png }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [image.edit, image.reference]
+  - id: menu-images-create-follow
+    menu: images.create
+    after: &fox
+      say: "Make me a picture of a fox reading a book under a tree."
+      action: image.generate
+      params: { prompt: "a fox reading a book under a tree" }
+      output: { image_id: 7a1e5c20-0000-4000-8000-00000000a001, product_id: wasifyai-image, width: 1024, height: 1024 }
+      text: 'The image was made (1024x1024) from "a fox reading a book under a tree" and saved to the library.'
+    say: "Make the same picture again, but wide."
+    expect: propose_action
+    action: [image.generate, image.edit]
+    mentions: [fox, 7a1e5c20-0000-4000-8000-00000000a001]
+  - id: menu-images-edit
+    menu: images.edit
+    say: "Change my picture of the red teapot so the teapot is blue."
+    expect: [search_creations, propose_action]
+    action: image.edit
+    mentions: [teapot]
+  - id: menu-images-edit-attach
+    menu: images.edit
+    say: "Make the sky in this photo a sunset."
+    attach: [{ kind: image, name: beach.jpg }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [image.edit]
+  - id: menu-images-edit-follow
+    menu: images.edit
+    after: *fox
+    say: "Now give the fox a red scarf."
+    expect: propose_action
+    action: image.edit
+    mentions: [7a1e5c20-0000-4000-8000-00000000a001]
+  - id: menu-images-inpaint
+    menu: images.inpaint
+    say: "In my living room picture, replace only the sofa with a green armchair."
+    expect: [search_creations, propose_action]
+    action: image.inpaint
+    mentions: [sofa, armchair, living room]
+  - id: menu-images-inpaint-attach
+    menu: images.inpaint
+    say: "Remove the person on the left of this photo, keep everything else."
+    attach: [{ kind: image, name: street.jpg }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [image.inpaint, image.edit]
+  - id: menu-images-inpaint-follow
+    menu: images.inpaint
+    after: *fox
+    say: "Change only the tree in that picture into a cherry tree."
+    expect: propose_action
+    action: [image.inpaint, image.edit]
+    mentions: [7a1e5c20-0000-4000-8000-00000000a001]
+  - id: menu-images-reference
+    menu: images.reference
+    say: "Put the cat from my cat picture on the chair from my chair picture."
+    expect: [search_creations, propose_action]
+    action: image.reference
+    mentions: [cat]
+  - id: menu-images-reference-attach
+    menu: images.reference
+    say: "Put the dog from the first photo into the garden of the second photo."
+    attach: [{ kind: image, name: dog.jpg }, { kind: image, name: garden.jpg }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [image.reference]
+  - id: menu-images-reference-follow
+    menu: images.reference
+    after: *fox
+    say: "Now make a new picture with this same fox sitting in a café."
+    expect: propose_action
+    action: [image.reference, image.edit]
+    mentions: [7a1e5c20-0000-4000-8000-00000000a001]
+  - id: menu-video-create
+    menu: video.create
+    say: "Make a short video of waves crashing on rocks at sunset."
+    expect: propose_action
+    action: video.generate
+    mentions: [waves]
+  - id: menu-video-create-follow
+    menu: video.create
+    after: &waves
+      say: "Make a short video of waves crashing on rocks at sunset."
+      action: video.generate
+      params: { prompt: "waves crashing on rocks at sunset" }
+      output: { video_id: 7a1e5c20-0000-4000-8000-00000000b001, product_id: wasifyai-video, seconds: 5 }
+      text: 'The video was made (5 s) from "waves crashing on rocks at sunset" and saved to the library.'
+    say: "Make another one in portrait for my phone."
+    expect: propose_action
+    action: video.generate
+    mentions: [waves]
+  - id: menu-video-animate
+    menu: video.animate
+    say: "Make my lighthouse picture move, with waves rolling in."
+    expect: [search_creations, propose_action]
+    action: video.animate
+    mentions: [lighthouse]
+  - id: menu-video-animate-attach
+    menu: video.animate
+    say: "Make this photo move: she smiles and turns her head."
+    attach: [{ kind: image, name: portrait.jpg }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [video.animate]
+  - id: menu-video-animate-follow
+    menu: video.animate
+    after: *fox
+    say: "Now make it move: the fox turns a page."
+    expect: propose_action
+    action: video.animate
+    mentions: [7a1e5c20-0000-4000-8000-00000000a001]
+  - id: menu-video-extend
+    menu: video.extend
+    say: "Carry on my waves video for a few more seconds."
+    expect: [search_creations, propose_action]
+    action: video.extend
+    mentions: [waves]
+  - id: menu-video-extend-attach
+    menu: video.extend
+    say: "Extend this clip by 5 seconds."
+    attach: [{ kind: video, name: clip.mp4 }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [video.extend]
+  - id: menu-video-extend-follow
+    menu: video.extend
+    after: *waves
+    say: "Make it longer: the sun goes down."
+    expect: propose_action
+    action: video.extend
+    mentions: [7a1e5c20-0000-4000-8000-00000000b001]
+  - id: menu-lipsync
+    menu: voice.lipsync
+    say: "Make my portrait picture say 'Welcome to the show'."
+    expect: [search_creations, propose_action]
+    action: lipsync.make
+    mentions: [welcome, portrait]
+  - id: menu-lipsync-attach
+    menu: voice.lipsync
+    say: "Make this face say 'Hello everyone'."
+    attach: [{ kind: image, name: face.jpg }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [lipsync.make]
+  - id: menu-lipsync-follow
+    menu: voice.lipsync
+    after: *fox
+    say: "Make the fox say 'Once upon a time'."
+    expect: propose_action
+    action: lipsync.make
+    mentions: [7a1e5c20-0000-4000-8000-00000000a001]
+  - id: menu-speak
+    menu: voice.speak
+    say: "Read this aloud: The meeting starts at nine."
+    expect: propose_action
+    action: speech.speak
+    mentions: [meeting]
+  - id: menu-speak-attach
+    menu: voice.speak
+    say: "Read this file out loud."
+    attach: [{ kind: document, name: speech.txt, text: "Ladies and gentlemen, thank you for coming tonight." }]
+    expect: propose_action
+    action: speech.speak
+    mentions: [ladies, thank you]
+  - id: menu-speak-follow
+    menu: voice.speak
+    after: &speech
+      say: "Read this aloud: The meeting starts at nine."
+      action: speech.speak
+      params: { text: "The meeting starts at nine." }
+      output: { speech_id: 7a1e5c20-0000-4000-8000-00000000c001, seconds: 2.1 }
+      text: "The speech was made (2.1 s) and saved to the library."
+    say: "Say it again in a deeper, slower voice."
+    expect: propose_action
+    action: speech.speak
+    mentions: [meeting]
+  - id: menu-transcribe
+    menu: voice.transcribe
+    say: "Write out the words of my podcast recording."
+    expect: [search_creations, propose_action]
+    action: speech.transcribe
+    mentions: [podcast]
+  - id: menu-transcribe-attach
+    menu: voice.transcribe
+    say: "Transcribe this."
+    attach: [{ kind: audio, name: interview.m4a }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [speech.transcribe]
+  - id: menu-transcribe-follow
+    menu: voice.transcribe
+    after: *speech
+    say: "Now turn that recording into text."
+    expect: propose_action
+    action: speech.transcribe
+    mentions: [7a1e5c20-0000-4000-8000-00000000c001]
+  - id: menu-voices
+    menu: voice.voices
+    say: "Design a new voice called Grandpa: a calm, warm older man."
+    expect: propose_action
+    action: voice.design
+    mentions: [calm, warm]
+  - id: menu-voices-attach
+    menu: voice.voices
+    say: "Clone my voice from this recording and call it Me."
+    attach: [{ kind: audio, name: myvoice.wav }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [voice.clone]
+  - id: menu-voices-follow
+    menu: voice.voices
+    after:
+      say: "Design a new voice called Narrator: deep and slow."
+      action: voice.design
+      params: { name: Narrator, description: "deep and slow" }
+      output: { voice_id: 7a1e5c20-0000-4000-8000-00000000f001, name: Narrator, kind: designed }
+      text: 'The voice "Narrator" was made and saved.'
+    say: "Use that voice to say 'Chapter one'."
+    expect: propose_action
+    action: speech.speak
+    mentions: [chapter one]
+  - id: menu-convert
+    menu: voice.convert
+    say: "Make my podcast recording sound like my cloned voice Ana."
+    expect: [search_creations, propose_action]
+    action: [voice.convert, voice.list]
+    mentions: [podcast, ana]
+  - id: menu-convert-attach
+    menu: voice.convert
+    say: "Make this recording sound like my saved voice Ana."
+    attach: [{ kind: audio, name: song.mp3 }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [voice.convert]
+  - id: menu-convert-follow
+    menu: voice.convert
+    after: *speech
+    say: "Make that sound like my saved voice Ana."
+    expect: propose_action
+    action: [voice.convert, voice.list]
+    mentions: [7a1e5c20-0000-4000-8000-00000000c001]
+  - id: menu-edit-speech
+    menu: voice.edit
+    say: "In my welcome speech recording, change 'Monday' to 'Tuesday'."
+    expect: [search_creations, propose_action]
+    action: voice.edit_speech
+    mentions: [tuesday, welcome]
+  - id: menu-edit-speech-attach
+    menu: voice.edit
+    say: "Change the word 'nine' to 'ten' in this recording."
+    attach: [{ kind: audio, name: announce.wav }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [voice.edit_speech]
+  - id: menu-edit-speech-follow
+    menu: voice.edit
+    after: *speech
+    say: "Change 'nine' to 'ten' in it."
+    expect: propose_action
+    action: voice.edit_speech
+    mentions: [7a1e5c20-0000-4000-8000-00000000c001]
+  - id: menu-dub
+    menu: voice.dub
+    say: "Dub my interview recording into Spanish."
+    expect: [search_creations, propose_action]
+    action: dub.script
+    mentions: [spanish, interview]
+  - id: menu-dub-attach
+    menu: voice.dub
+    say: "Dub this into French."
+    attach: [{ kind: video, name: talk.mp4 }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [dub.make, dub.script]
+  - id: menu-dub-follow
+    menu: voice.dub
+    after: *speech
+    say: "Now dub that into German."
+    expect: propose_action
+    action: dub.script
+    mentions: [7a1e5c20-0000-4000-8000-00000000c001]
+  - id: menu-audiobook
+    menu: voice.audiobook
+    say: "Make an audiobook of this: Chapter 1. It was a cold morning in the village, and the baker was late."
+    expect: propose_action
+    action: [audiobook.plan, audiobook.make]
+    mentions: [cold morning]
+  - id: menu-audiobook-attach
+    menu: voice.audiobook
+    say: "Make an audiobook from this story."
+    attach: [{ kind: document, name: story.txt, text: "Chapter 1\nThe fox lived by the river and loved books." }]
+    expect: propose_action
+    action: [audiobook.plan, audiobook.make]
+    mentions: [fox]
+  - id: menu-audiobook-follow
+    menu: voice.audiobook
+    after:
+      say: "Make an audiobook of this: Chapter 1. It was a cold morning in the village."
+      action: audiobook.make
+      params: { text: "Chapter 1. It was a cold morning in the village." }
+      output: { track_id: 7a1e5c20-0000-4000-8000-00000000d002 }
+      text: "The audiobook was made (1 chapter, 9 s) and saved to the library."
+    say: "Do it again with my saved voice Narrator."
+    expect: propose_action
+    action: audiobook.make
+    mentions: [narrator]
+  - id: menu-music
+    menu: music.create
+    say: "Make an upbeat pop song about summer road trips."
+    expect: propose_action
+    action: music.generate
+    mentions: [summer]
+  - id: menu-music-attach
+    menu: music.create
+    say: "Make a song with these lyrics."
+    attach: [{ kind: document, name: lyrics.txt, text: "Sun on the road, wind in my hair, singing along without a care." }]
+    expect: propose_action
+    action: music.generate
+    mentions: [sun on the road]
+  - id: menu-music-follow
+    menu: music.create
+    after: &song
+      say: "Make an upbeat pop song about summer road trips."
+      action: music.generate
+      params: { description: "upbeat pop song about summer road trips" }
+      output: { track_id: 7a1e5c20-0000-4000-8000-00000000d001, title: Summer Road, seconds: 60 }
+      text: 'The song "Summer Road" was made (60 s) and saved to the library.'
+    say: "Make another one, but instrumental."
+    expect: propose_action
+    action: music.generate
+    mentions: [instrumental]
+  - id: menu-lyrics
+    menu: music.lyrics
+    say: "Write lyrics for a sad country song about a lost dog."
+    expect: propose_action
+    action: music.lyrics
+    mentions: [dog]
+  - id: menu-lyrics-follow
+    menu: music.lyrics
+    after:
+      say: "Write lyrics for a sad country song about a lost dog."
+      action: music.lyrics
+      params: { idea: "a sad country song about a lost dog" }
+      output: { lyrics: "[verse]\nMy old dog Blue ran off one night\n[chorus]\nCome home, Blue, come home" }
+      text: "The lyrics were written."
+    say: "Now turn those lyrics into a song."
+    expect: propose_action
+    action: music.generate
+    mentions: [blue]
+  - id: menu-separate
+    menu: music.separate
+    say: "Split my summer song into vocals and music."
+    expect: [search_creations, propose_action]
+    action: music.separate
+    mentions: [summer]
+  - id: menu-separate-attach
+    menu: music.separate
+    say: "Take the vocals out of this song."
+    attach: [{ kind: audio, name: track.mp3 }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [music.separate]
+  - id: menu-separate-follow
+    menu: music.separate
+    after: *song
+    say: "Split it into its parts."
+    expect: propose_action
+    action: music.separate
+    mentions: [7a1e5c20-0000-4000-8000-00000000d001]
+  - id: menu-notebook-create
+    menu: notebook.create
+    say: "Make a new notebook called Garden plans."
+    expect: propose_action
+    action: notebook.create
+    mentions: [garden]
+  - id: menu-notebook-create-attach
+    menu: notebook.create
+    say: "Make a notebook from this report."
+    attach: [{ kind: document, name: report.pdf, text: "Quarterly report. Sales rose 12% in the third quarter." }]
+    expect: propose_action
+    action: [notebook.create, notebook.add_source]
+  - id: menu-notebook-create-follow
+    menu: notebook.create
+    after: &notebook
+      say: "Make a new notebook called Garden plans."
+      action: notebook.create
+      params: { title: Garden plans }
+      output: { notebook_id: 7a1e5c20-0000-4000-8000-00000000e001, title: Garden plans }
+      text: 'The notebook "Garden plans" was made.'
+    say: "Add a note to it: plant tomatoes in May."
+    expect: propose_action
+    action: notebook.add_source
+    mentions: [7a1e5c20-0000-4000-8000-00000000e001]
+  - id: menu-notebook-list
+    menu: notebook.list
+    say: "What notebooks do I have?"
+    expect: propose_action
+    action: notebook.list
+  - id: menu-notebook-list-follow
+    menu: notebook.list
+    after: *notebook
+    say: "Make a study guide from that notebook."
+    expect: propose_action
+    action: notebook.studio_output
+    mentions: [7a1e5c20-0000-4000-8000-00000000e001]
+  - id: menu-creative
+    menu: creative
+    say: "Make a music video for my summer song: a road trip at golden hour."
+    expect: [search_creations, propose_action]
+    action: creative.plan
+    mentions: [road trip, summer]
+  - id: menu-creative-attach
+    menu: creative
+    say: "Make a music video for this song."
+    attach: [{ kind: audio, name: song.mp3 }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [creative.plan]
+  - id: menu-creative-follow
+    menu: creative
+    after: *song
+    say: "Make a music video for it, with a couple dancing on a beach."
+    expect: propose_action
+    action: creative.plan
+    mentions: [7a1e5c20-0000-4000-8000-00000000d001]
+  - id: menu-motion
+    menu: motion
+    say: "Make a title card that says 'Grand Opening'."
+    expect: propose_action
+    action: [motion.make, video_builder.create]
+    mentions: [grand opening]
+  - id: menu-motion-attach
+    menu: motion
+    say: "Make a chart video from this."
+    attach: [{ kind: document, name: sales.csv, text: "month,sales\nJan,10\nFeb,14\nMar,19" }]
+    expect: propose_action
+    action: [motion.make, video_builder.create]
+    mentions: [chart]
+  - id: menu-motion-follow
+    menu: motion
+    after:
+      say: "Make a title card that says 'Grand Opening'."
+      action: motion.make
+      params: { template: title, fields: { title: Grand Opening } }
+      output: { composition_id: 7a1e5c20-0000-4000-8000-00000000a201, title: Grand Opening, template: title, video_id: 7a1e5c20-0000-4000-8000-00000000b201 }
+      text: 'The title video "Grand Opening" was made (4 s) and saved to your videos.'
+    say: "Change the words to 'Now Open'."
+    expect: propose_action
+    action: motion.revise
+    mentions: [now open]
+  - id: menu-model3d
+    menu: model3d
+    say: "Make a 3D model of my teapot picture."
+    expect: [search_creations, propose_action]
+    action: model3d.generate
+    mentions: [teapot]
+  - id: menu-model3d-attach
+    menu: model3d
+    say: "Make a 3D model from this photo."
+    attach: [{ kind: image, name: toy.jpg }]
+    expect: propose_action
+    action: library.keep_attachment
+    kept_for: [model3d.generate]
+  - id: menu-model3d-follow
+    menu: model3d
+    after: *fox
+    say: "Make a 3D model of it."
+    expect: propose_action
+    action: model3d.generate
+    mentions: [7a1e5c20-0000-4000-8000-00000000a001]
+  - id: menu-library
+    menu: library
+    say: "Find my pictures of the beach."
+    expect: [search_creations, propose_action]
+    action: [library.search, library.list]
+    mentions: [beach]
+  - id: menu-library-attach
+    menu: library
+    say: "Save this photo to my library."
+    attach: [{ kind: image, name: keep.jpg }]
+    expect: propose_action
+    action: library.keep_attachment
+  - id: menu-library-follow
+    menu: library
+    after: *song
+    say: "Rename that song to 'Road Trip'."
+    expect: propose_action
+    action: library.rename
+    mentions: [7a1e5c20-0000-4000-8000-00000000d001]
+  - id: menu-train
+    menu: train
+    say: "I want to teach the image model my dog Rex. What do I need to do?"
+    expect: none
+    answer: [photo, picture]
+  - id: menu-train-attach
+    menu: train
+    say: "Teach it my dog Rex from these photos."
+    attach: [{ kind: image, name: rex1.jpg }, { kind: image, name: rex2.jpg }, { kind: image, name: rex3.jpg }]
+    expect: propose_action
+    action: [train.make_set, library.keep_attachment]
+    kept_for: [train.start]
+  - id: menu-train-follow
+    menu: train
+    after:
+      say: "Teach it my dog Rex from these photos."
+      action: train.start
+      params: { dataset_id: 7a1e5c20-0000-4000-8000-00000000a301 }
+      output: { run_id: 7a1e5c20-0000-4000-8000-00000000a302, model_id: 7a1e5c20-0000-4000-8000-00000000a303, name: Rex, magic_word: rexdog }
+      text: 'The look "Rex" was taught (500 steps, 41 min). Its magic word is rexdog.'
+    say: "Now draw Rex on the beach."
+    expect: propose_action
+    action: image.generate
+    mentions: [rexdog]
+  - id: menu-models
+    menu: models
+    say: "Which image models do I have?"
+    expect: propose_action
+    action: models.list
+  - id: menu-models-follow
+    menu: models
+    after:
+      say: "Which video models do I have?"
+      action: models.list
+      params: { task: video }
+      output: { models: [{ id: ltx-video-2b, title: LTX-Video 2B, state: missing }] }
+      text: "LTX-Video 2B (ltx-video-2b) is not on this computer yet."
+    say: "Download it."
+    expect: propose_action
+    action: models.download
+    mentions: [ltx-video-2b]

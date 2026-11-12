@@ -396,8 +396,21 @@ async def _read(ctx: ActionContext, item_id: str) -> bytes | None:
             return None
 
 
+async def _keep(ctx: ActionContext, data: bytes, name: str) -> LibraryItem:
+    from wasifyai_image.keep import add_picture, title_of
+
+    deps = need_deps(ctx)
+    made = await add_picture(deps, image_store(deps.engine), ctx.actor, data, title_of(name))
+    return _item(made)
+
+
 def library_kinds() -> list[LibraryKind]:
-    return [LibraryKind("image", PRODUCT_ID, "picture", _list, _get, _delete, None, _export, _read)]
+    return [
+        LibraryKind(
+            "image", PRODUCT_ID, "picture", _list, _get, _delete, None, _export, _read,
+            takes=("image",), keep=_keep,
+        )
+    ]  # fmt: skip
 
 
 __all__ = ["actions", "library_kinds"]

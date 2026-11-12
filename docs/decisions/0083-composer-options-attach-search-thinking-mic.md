@@ -160,3 +160,22 @@ everyone again). Nothing is sent before a person has allowed it. DuckDuckGo need
 guarded reader (private and internal addresses are refused). `WEB_SEARCH_ENABLED=false` turns the whole feature off for a
 deployment that must send nothing out. Usage is counted as on the desktop (`web.search`, `web.read`). The routes are the assistant's
 `GET/PUT /search`; on a service `PUT` refuses a person who is not an admin when it changes the service or a key.
+
+## Amendment: every attachment is named by its id; pictures for a model that cannot see (2026-11-12, owner's aim)
+
+From `docs/chat-does-everything-plan.md`, stage CE1. The owner's aim is that every menu item can be done from the chat, and a
+picture the person attaches is usually something to **work on** (change it, make it move, make it talk), not only to read.
+So:
+
+- Each attachment is given to the model with its **attachment id** ("The person attached the picture "beach.png" (attachment id
+  …)"). The model keeps it in the library with the assistant's action `library.keep_attachment`, which hands the file to the
+  product that takes that kind (`LibraryKind.takes` and `LibraryKind.keep`: the Images import for a picture), and then works on
+  it by its library id. Keeping is a `make` action, so it asks like any other, and an attached file taints the chat as before.
+- A picture is **taken for every model**. A model without its vision projector is told "You cannot look at it." and is not
+  sent the picture; it can still keep, change or animate it. The picture-reader offer stays; "Attach without it" attaches the
+  pictures as they are and does not offer the reader again in that chat box. The `no_vision` refusal is gone.
+- Small models often skip the keep and propose the action asked for with the attachment in its id field. The chat then
+  keeps it itself (`wasifyai_assistant/keeping.py`): an `…_id` or `…_ids` param that is exactly an attachment of the
+  conversation, by its id or its file name, is kept and replaced by the library id before the action runs or shows its
+  card. That keep is not asked about (it copies the person's own file into their own library and costs nothing); the
+  action still asks as the chat's setting says.

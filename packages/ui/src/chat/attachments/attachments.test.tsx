@@ -86,16 +86,6 @@ describe("useAttachments", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
   });
 
-  it("refuses a picture for a model that cannot read pictures, in the engine's words, without uploading", () => {
-    const c = control({ images: false, imagesNote: "This model has no picture reader." });
-    const { result } = renderHook(() => useAttachments(c));
-    act(() => result.current.add([png()]));
-    expect(c.upload).not.toHaveBeenCalled();
-    render(<div>{result.current.chips}</div>);
-    expect(screen.getByText("This model has no picture reader.")).toBeInTheDocument();
-    expect(result.current.runInput).toEqual({});
-  });
-
   it("says what went wrong when the engine refuses a file", async () => {
     const c = control({
       upload: vi.fn(async () => {
@@ -315,21 +305,18 @@ describe("the chat", () => {
     expect(assistant.attach).toHaveBeenCalledTimes(1);
   });
 
-  it("says in words why a picture is refused for a model without a picture reader", async () => {
+  it("attaches a picture for a model without a picture reader: the chat can still change it", async () => {
     const assistant = assistantWith({
       available: true,
       images: false,
       documents: true,
-      images_note: "No picture reader was found for this model.",
+      images_note: "This model cannot look at pictures.",
     });
     const user = userEvent.setup();
     home(assistant);
     await screen.findByRole("button", { name: /^Attach/ });
     await user.upload(screen.getByLabelText("Choose files to attach"), [png()]);
-    expect(
-      await screen.findByText("No picture reader was found for this model."),
-    ).toBeInTheDocument();
-    expect(assistant.attach).not.toHaveBeenCalled();
+    await waitFor(() => expect(assistant.attach).toHaveBeenCalledTimes(1));
   });
 });
 
@@ -430,16 +417,25 @@ describe("the picture reader", () => {
     );
   });
 
-  it("drops the waiting pictures when the person says not now", async () => {
+  it("attaches the waiting pictures without the reader when the person says so", async () => {
     const run = vi.fn(async () => {});
     const c = control({ images: false, pictureReader: reader(run) });
     const { result } = renderHook(() => useAttachments(c));
     act(() => result.current.add([png()]));
     render(<div>{result.current.notice}</div>);
-    await userEvent.click(screen.getByRole("button", { name: "Not now" }));
+    await userEvent.click(screen.getByRole("button", { name: "Attach without it" }));
     expect(run).not.toHaveBeenCalled();
-    expect(c.upload).not.toHaveBeenCalled();
-    expect(result.current.count).toBe(0);
+    await waitFor(() => expect(c.upload).toHaveBeenCalledTimes(1));
+    // a second picture is attached at once: the reader is not offered again
+    act(() => result.current.add([png()]));
+    await waitFor(() => expect(c.upload).toHaveBeenCalledTimes(2));
+  });
+
+  it("attaches a picture for a model that cannot look at it, when there is no reader to offer", async () => {
+    const c = control({ images: false, imagesNote: "cannot look" });
+    const { result } = renderHook(() => useAttachments(c));
+    act(() => result.current.add([png()]));
+    await waitFor(() => expect(c.upload).toHaveBeenCalledTimes(1));
   });
 
   it("says what went wrong and lets the person try again", async () => {

@@ -45,6 +45,7 @@ class Guide:
     screen: str | None
     synonyms: tuple[str, ...]
     body: str
+    fields: tuple[str, ...] = ()  # the action's required fields, for the list of actions
 
     @property
     def passage(self) -> str:
@@ -68,6 +69,7 @@ def _guides() -> tuple[Guide, ...]:
                     screen=r.get("screen") if isinstance(r.get("screen"), str) else None,
                     synonyms=tuple(str(s) for s in r.get("synonyms") or ()),
                     body=str(r.get("body") or ""),
+                    fields=tuple(str(f) for f in r.get("fields") or ()),
                 )
             )
     return tuple(out)
@@ -111,6 +113,11 @@ def search(question: str, served: Collection[str] | None = None, limit: int = 3)
     scored = [(_score(g, question, qwords), g) for g in guides(served)]
     best = sorted((p for p in scored if p[0] > 0), key=lambda p: (-p[0], p[1].action))
     return [g for _, g in best[:limit]]
+
+
+def fields_of(served: Iterable[str]) -> dict[str, tuple[str, ...]]:
+    """Action id -> its required fields, for the list of actions in the system prompt."""
+    return {g.action: g.fields for g in guides(set(served))}
 
 
 def titles(served: Iterable[str]) -> dict[str, str]:

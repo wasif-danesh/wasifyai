@@ -31,8 +31,11 @@ def test_the_cases_are_well_formed_and_cover_every_kind():
             assert c["then"].get("answer"), c["id"]
         if c.get("kind") == "safety":
             assert c.get("forbid"), c["id"]
-        if c.get("action"):
-            assert c["action"] in ev.SERVED, c["id"]
+        actions = c.get("action") or []
+        for action in actions if isinstance(actions, list) else [actions]:
+            assert action in ev.SERVED or action in ev.PLANNED, (c["id"], action)
+        for action in c.get("kept_for") or []:
+            assert action in ev.SERVED, (c["id"], action)
 
 
 def test_the_first_answer_is_judged_on_the_tool_its_arguments_and_the_action():
@@ -146,3 +149,71 @@ async def test_external_tools_is_answered_from_the_catalogue_as_the_app_answers_
     text = await ev.answer_tool(case, call)
     assert text.startswith("Tools found") and "jira / search_tickets(query: string" in text
     assert text.count("\n") <= 5  # at most five, whatever the catalogue holds
+
+
+def test_every_menu_item_has_a_plain_ask_and_a_follow_up():
+    """docs/chat-does-everything-plan.md, CE0: the chat is measured on every menu item."""
+    root = RUNNER.parents[3]
+    actions = json.loads((root / "docs/contracts/actions.json").read_text())
+    actions = actions["actions"] if isinstance(actions, dict) else actions
+    menu = {a["ui"] for a in actions if a.get("ui")}
+    cases = [c for c in yaml.safe_load(CASES.read_text())["cases"] if c.get("menu")]
+    assert {c["menu"] for c in cases} >= menu
+    for item in menu:
+        mine = [c for c in cases if c["menu"] == item]
+        assert any(not c.get("after") and not c.get("attach") for c in mine), item
+        assert any(c.get("after") for c in mine), item
+
+
+def test_attachments_are_refused_as_the_chat_does_and_given_as_the_chat_gives_them():
+    picture = {"id": "p", "say": "Edit this.", "attach": [{"kind": "image", "name": "a.jpg"}]}
+    assert ev.attachment_refusal(picture, vision=False) is None  # taken, and named by its id (CE1)
+    assert ev.attachment_refusal(picture, vision=True) is None
+    blind = ev.user_turn(picture, vision=False)["content"]
+    assert isinstance(blind, str) and "attachment id" in blind and "cannot look at it" in blind
+    clip = {"id": "c", "say": "Dub this.", "attach": [{"kind": "video", "name": "a.mp4"}]}
+    assert "video" in (ev.attachment_refusal(clip, vision=True) or "")
+    doc = {
+        "id": "d",
+        "say": "Read it.",
+        "attach": [{"kind": "document", "name": "a.txt", "text": "Hi there"}],
+    }
+    turn = ev.user_turn(doc, vision=False)
+    assert "Hi there" in turn["content"] and "a.txt" in turn["content"]
+    seen = ev.user_turn(picture, vision=True)
+    assert any(p.get("type") == "image_url" for p in seen["content"])
+
+
+def test_a_follow_up_is_sent_what_the_chat_made_before_as_the_app_words_it():
+    case = {
+        "id": "f", "say": "Make it move.",
+        "after": {"say": "Draw a fox.", "action": "image.generate", "params": {"prompt": "a fox"},
+                  "output": {"image_id": "i1"}, "text": "The image was made."},
+    }  # fmt: skip
+    turns = ev.earlier_turns(case)
+    assert [t["role"] for t in turns] == ["user", "assistant", "tool", "assistant"]
+    assert (
+        json.loads(turns[1]["tool_calls"][0]["function"]["arguments"])["action_id"]
+        == "image.generate"
+    )
+    assert turns[2]["content"].startswith("The image was made.")
+    assert ev.earlier_turns({"id": "n", "say": "Hi"}) == []
+
+
+def test_the_action_asked_for_on_an_attachment_passes_since_the_chat_keeps_it_first():
+    case = {
+        "id": "k", "expect": "propose_action", "action": "library.keep_attachment",
+        "kept_for": ["video.animate"], "attach": [{"kind": "image", "name": "portrait.jpg"}],
+    }  # fmt: skip
+    (ident,) = ev.attachment_ids(case)
+    for named in (ident, "portrait.jpg"):
+        on_it = call("propose_action", action_id="video.animate", params={"image_id": named})
+        assert ev.judge_first(case, {"tool_calls": [on_it]})[0], named
+    keep = call(
+        "propose_action", action_id="library.keep_attachment", params={"attachment_id": ident}
+    )
+    assert ev.judge_first(case, {"tool_calls": [keep]})[0]
+    words = call("propose_action", action_id="video.animate", params={"image_id": "a portrait"})
+    assert not ev.judge_first(case, {"tool_calls": [words]})[0]
+    prompt_only = call("propose_action", action_id="video.animate", params={"prompt": ident})
+    assert not ev.judge_first(case, {"tool_calls": [prompt_only]})[0]

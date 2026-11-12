@@ -18,6 +18,8 @@ RenameItem = Callable[[Any, str, str], Awaitable[bool]]
 DeleteItem = Callable[[Any, str], Awaitable[bool]]
 ExportItem = Callable[[Any, str, Path], Awaitable[Path | None]]
 ReadItem = Callable[[Any, str], Awaitable[bytes | None]]
+# (context, the file, a name) -> the new item; raises `UploadError` for a file it cannot read
+KeepItem = Callable[[Any, bytes, str], Awaitable["LibraryItem"]]
 
 
 def creation_uri(kind: str, item_id: str) -> str:
@@ -48,3 +50,7 @@ class LibraryKind:
     rename: RenameItem | None = None  # None: this kind has no name to change
     export: ExportItem | None = None  # (context, id, folder) -> the file written, or None
     read: ReadItem | None = None  # (context, id) -> the item's file, for another action to use
+    # a file the person attached in the chat, kept as a new item of this kind (docs/chat-does-
+    # everything-plan.md, CE1): the attachment kinds it takes ("image", "audio", "video") and how
+    takes: tuple[str, ...] = ()
+    keep: KeepItem | None = None

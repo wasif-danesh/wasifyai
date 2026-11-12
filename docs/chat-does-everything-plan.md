@@ -4,7 +4,8 @@ The owner's aim: "allowing user to do all the menu items work through" the chat.
 should be able to make, change, find and teach everything the app can, by talking and attaching files, on the desktop
 and on the web.
 
-Status: a plan, not built. Nothing here changes an Accepted ADR's decision; it adds to ADR-0068 (every feature is an
+Status: under way on branch `chat-everything` (owner, 2026-11-12: every stage CE0 to CE8 without stopping for
+approval, a commit per stage). Progress is in "Progress" below. Nothing here changes an Accepted ADR's decision; it adds to ADR-0068 (every feature is an
 action), ADR-0071 (the assistant runs actions on click), ADR-0082 (the chat on assistant-ui) and ADR-0083 (attachments).
 The amendments are written with the stage that needs them.
 
@@ -75,6 +76,21 @@ Order: CE0, then CE1 and CE3 (they unblock the most), then CE2, CE4, CE5, CE6, C
 4. **New actions and attachment kinds change public shapes** (`library.keep_attachment`, `train.make_set`, the
    `audio` and `video` attachment kinds): the CLAUDE.md "Ask before" rule applies, so each is confirmed before its
    stage starts.
+
+### The owner's answers (2026-11-12)
+
+1. Keep the local model on the desktop, and offer Haiku 5.5 for tool work when a text key is saved.
+2. Audio 50 MB and 10 minutes; video 200 MB and 2 minutes; the same on the desktop and the web.
+3. The ask-before default stays.
+4. The new action and attachment kinds are agreed with the plan. The work spends nothing: the measurements run on the
+   local model only, and no paid media run is made (Haiku 5.5 is measured later, by the owner's choice).
+
+## Progress
+
+| Stage | State | Where |
+|---|---|---|
+| CE0 | done 2026-11-12: 74 menu cases, the local default passes 22 | `docs/spikes/chat-everything-ce0.md` |
+| CE1 | done 2026-11-12: `library.keep_attachment`, ids named, pictures for every model | ADR-0083 amendment of 2026-11-12 |
 
 ## Not in this plan
 

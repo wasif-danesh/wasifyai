@@ -8,7 +8,6 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict
@@ -20,13 +19,12 @@ from wasifyai_platform_sdk import (
     UploadError,
     build_enhance_router,
     parse_ids,
-    process_image,
     write_to_path,
 )
 
 from wasifyai_image import prompts
-from wasifyai_image.images import ImageRecord, ImageStore, image_store, thumbnail_of
-from wasifyai_image.index import index_text
+from wasifyai_image.images import ImageRecord, ImageStore, image_store
+from wasifyai_image.keep import add_picture, title_of
 
 PRODUCT_ID = "wasifyai-image"
 CONTENT_TYPES = {
@@ -130,35 +128,9 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
                 413, f"That file is too large. The limit is {MAX_IMPORT_BYTES // 2**20} MB."
             )
         try:
-            clean = await asyncio.to_thread(process_image, data)
+            made = await add_picture(deps, images(), identity, data, title_of(file.filename))
         except UploadError as e:
             raise HTTPException(e.status, e.message) from None
-        width, height, thumb = await thumbnail_of(clean.png)
-        image_id = str(uuid4())
-        title = re.sub(r"\s+", " ", re.sub(r"[_\-\x00-\x1f]+", " ", Path(file.filename or "").stem))
-        title = title.strip()[:120] or "My picture"
-        image_key, thumb_key = f"{image_id}/image.png", f"{image_id}/thumb.jpg"
-        with deps.acting_as(identity, PRODUCT_ID):
-            await deps.storage.put(image_key, clean.png, "image/png")
-            await deps.storage.put(thumb_key, thumb, "image/jpeg")
-        await images().add(
-            ImageRecord(
-                id=image_id, tenant_id=identity.tenant_id, product_id=PRODUCT_ID,
-                user_id=identity.user_id, thread_id=None, run_id=None, mode="import", prompt=title,
-                width=width, height=height, image_key=image_key, thumb_key=thumb_key,
-            )
-        )  # fmt: skip
-        index = deps.state.creation_index  # found in search at once (ADR-0041)
-        if index is not None:
-            try:
-                await index.index(
-                    identity.tenant_id, PRODUCT_ID, identity.user_id, "image", image_id,
-                    index_text(title),
-                )  # fmt: skip
-            except Exception:
-                log.warning("the added picture could not be put in search", exc_info=True)
-        made = await images().get(identity.tenant_id, identity.user_id, image_id)
-        assert made is not None
         with deps.acting_as(identity, PRODUCT_ID):
             return await summary(made)
 

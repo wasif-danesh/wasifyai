@@ -100,10 +100,18 @@ def build_help() -> list[dict[str, object]]:
         out.append(
             {
                 "action": a.id, "title": title, "screen": h.screen,
-                "synonyms": list(h.synonyms), "body": h.body,
+                "synonyms": list(h.synonyms), "fields": required_fields(a.input), "body": h.body,
             }
         )  # fmt: skip
     return out
+
+
+def required_fields(model: type) -> list[str]:
+    """The fields an action cannot do without, in the schema's order: the model is told them in
+    the list of actions, so it does not guess their names (docs/chat-does-everything-plan.md)."""
+    schema = model.model_json_schema()  # type: ignore[attr-defined]
+    required = set(schema.get("required") or ())
+    return [name for name in schema.get("properties") or {} if name in required]
 
 
 def render_help() -> str:

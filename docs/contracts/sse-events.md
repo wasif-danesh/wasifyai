@@ -149,7 +149,7 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
 - **Attachments (ADR-0083, CO2).** Run input **`attachments`**: `[{id, name}]`, at most 4, the ids of uploads made just before: a picture through `POST /products/wasifyai-assistant/uploads/images`
   (the hardened upload; answers `upload_id`), a document through `POST /products/wasifyai-assistant/attachments` (body = the file, `x-file-name` = its name, percent-encoded; answers `{id, kind, name, chars,
   pages, truncated}`; text, Markdown, CSV and HTML, and PDF and Office when the document reader is installed). The user message is stored with `attachment` parts `{kind, id, key, name, bytes}` and the
-  uploads are consumed; a conversation read adds a short-lived `url` to a picture part. A picture for a model that cannot read pictures ends the run with `refused`, code `no_vision`, and stores nothing.
+  uploads are consumed; a conversation read adds a short-lived `url` to a picture part. A picture for a model that cannot read pictures is taken all the same (since 2026-11-12): the model is told its attachment id and that it cannot look at it, so it can keep it in the library (`library.keep_attachment`) and change or animate it.
   Attachments are untrusted text (see the next point). `GET .../options` also answers `attach: {available, images, documents, images_note, picture_reader}`; `picture_reader`
   `{state: "available" | "downloading", title, licence, from, bytes, download?}` appears when the chosen file model has no vision projector and the app can fetch one (desktop):
   `GET /desktop/vision` answers `{vision: {state: "ready" | "unavailable" | "available" | "downloading", ...}}` and `POST /desktop/vision/download {bytes}` (the size the person was shown; `409` otherwise)

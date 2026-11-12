@@ -60,6 +60,7 @@ export function useAttachments(control: AttachControl | undefined) {
   const [items, setItems] = useState<Item[]>([]);
   // pictures chosen before the model could read them, kept while the person decides about the picture reader
   const [held, setHeld] = useState<File[]>([]);
+  const withoutReader = useRef(false); // the person said "Attach without it" once
   const [reader, setReader] = useState<{
     state: "asking" | "working" | "failed";
     fraction: number | null;
@@ -103,13 +104,13 @@ export function useAttachments(control: AttachControl | undefined) {
         const key = `a${++seq.current}`;
         const failed = (error: string) =>
           next.push({ key, kind, id: key, name: file.name, state: "failed", error });
-        if (kind === "image" && c.images === false && c.pictureReader) {
+        if (kind === "image" && c.images === false && c.pictureReader && !withoutReader.current) {
           keep.push(file); // the model can be given its picture reader: ask, and attach it when it is there
           continue;
         }
+        // a picture is attached even for a model that cannot look at it: the chat can still keep it,
+        // change it or make it move (docs/chat-does-everything-plan.md, CE1)
         if (room <= 0) failed(`At most ${MAX_ATTACHMENTS} files fit in one message.`);
-        else if (kind === "image" && c.images === false)
-          failed(c.imagesNote || "This model does not read pictures.");
         else if (kind === "document" && !c.documents) failed("Files cannot be attached here.");
         else {
           room -= 1;
@@ -192,11 +193,15 @@ export function useAttachments(control: AttachControl | undefined) {
     set([]);
   }, [forget, set]);
 
-  /** The person turned the picture reader down: the pictures that waited for it are dropped. */
+  /** The person turned the picture reader down: the pictures that waited for it are attached as they
+   * are (the chat can still change them, not describe them), and it is not offered again here. */
   const declineReader = useCallback(() => {
+    const wait = held;
     setHeld([]);
     setReader(null);
-  }, []);
+    withoutReader.current = true;
+    if (wait.length) add(wait);
+  }, [held, add]);
 
   const getReader = useCallback(() => {
     const r = live.current?.pictureReader;
@@ -239,7 +244,7 @@ export function useAttachments(control: AttachControl | undefined) {
             Icon: Paperclip,
             hint:
               control.images === false
-                ? "Attach a document: text, Markdown, CSV, HTML, PDF or Word. This model does not read pictures."
+                ? "Attach a picture to change or animate, or a document. This model cannot describe pictures."
                 : "Attach a picture or a document to your next message.",
             disabled: items.length >= MAX_ATTACHMENTS,
             onPress: () => input.current?.click(),
@@ -275,7 +280,7 @@ export function useAttachments(control: AttachControl | undefined) {
                 {reader.state === "failed" ? "Try again" : `Download ${formatBytes(offer.bytes)}`}
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={declineReader}>
-                Not now
+                Attach without it
               </Button>
             </>
           )
@@ -285,7 +290,8 @@ export function useAttachments(control: AttachControl | undefined) {
         <p className="text-muted-foreground">
           To look at pictures this chat model needs its picture reader: {offer.title}
           {offer.from ? `, from ${offer.from}` : ""}, {formatBytes(offer.bytes)} to download once.
-          It runs on this computer, so your pictures are not sent anywhere.
+          It runs on this computer, so your pictures are not sent anywhere. Without it the chat can
+          still change a picture or make it move, but cannot describe it.
         </p>
         {reader.state === "working" ? (
           <div className="grid gap-1">

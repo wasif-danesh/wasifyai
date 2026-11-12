@@ -80,7 +80,10 @@ def test_a_proposals_result_names_its_action_for_the_window_and_speaks_to_the_mo
         status="ok", action_id="image.generate", text="Made.", output={"image_id": "i"}
     )
     out = outcome_of(PROPOSE, ok)
-    assert out.status == "ok" and out.text == "Made. The person can see it in the chat."
+    # the model is told the id of what was made, so "now make it move" can use it (CE3)
+    assert out.status == "ok" and out.text == (
+        "Made. (image_id i; use it to work on the result.) The person can see it in the chat."
+    )
     assert out.output == {"action_id": "image.generate", "message": "Made.", "image_id": "i"}
     assert outcome_of("search_creations", ok).text == "Made."
     refused = ActionResult(status="refused", action_id="speech.speak", text="No.", code="c")
@@ -525,3 +528,19 @@ async def test_docked_a_refused_change_tells_the_model_nothing_changed(tmp_path,
     said = rig.model.chats[1]["messages"][-1]["content"]
     assert said.startswith("Nothing was changed:") and "Do not say it is done" in said
     assert told["changes"] == []
+
+
+def test_the_model_is_told_the_ids_of_what_an_action_made_unless_its_sentence_says_them():
+    from wasifyai_assistant.tools import ids_said
+
+    made = {"video_id": "v1", "product_id": "wasifyai-video", "job_id": "j", "seconds": 5}
+    assert ids_said(made) == " (video_id v1; use it to work on the result.)"
+    assert (
+        ids_said({"kind": "image", "id": "p1"}) == " (image id p1; use it to work on the result.)"
+    )
+    assert ids_said({"seconds": 5}) == ""
+    kept = ActionResult(
+        status="ok", action_id="library.keep_attachment",
+        text='In the library as "Beach" (image id p1).', output={"kind": "image", "id": "p1"},
+    )  # fmt: skip
+    assert outcome_of(PROPOSE, kept).text == kept.text  # said once, not twice

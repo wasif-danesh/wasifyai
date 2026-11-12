@@ -21,7 +21,7 @@ import { useChoicesVersion } from "../models/context";
 import type { TrayJob } from "../shell/job-tray";
 import type { ChatScreenProps } from "./ChatScreen";
 import { HomeStart, type QuickStartId } from "./HomeStart";
-import type { TrackLookup } from "./ToolCard";
+import type { TrackLookup, VideoLookup } from "./ToolCard";
 import type { ComposerOptionsAvailable } from "./composer-options";
 import { startRecording } from "./dictation/recorder";
 import type { MicControl, MicSetup } from "./dictation/use-dictation";
@@ -50,6 +50,7 @@ export type AssistantHomeProps = {
   assistant: AssistantApi;
   images: ImagesApi;
   tracks?: TrackLookup;
+  videos?: VideoLookup;
   /** The saved conversation open; null is a new chat. */
   conversationId: string | null;
   /** A new chat got its first answer and so an id: the app gives it an address. */
@@ -99,6 +100,7 @@ export function AssistantHome({
   assistant,
   images,
   tracks,
+  videos,
   conversationId,
   onAdopt,
   onNewChat,
@@ -384,6 +386,7 @@ export function AssistantHome({
     assistant,
     images,
     tracks,
+    videos,
     conversationId,
     onConversation: (id) => {
       conversationsChanged();

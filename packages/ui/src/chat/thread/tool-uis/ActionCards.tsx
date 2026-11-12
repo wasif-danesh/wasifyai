@@ -22,12 +22,45 @@ const CREATION_KEYS: Record<string, string> = {
   notebook_id: "notebook",
 };
 
-function creationOf(output: Record<string, unknown> | undefined): [string, string] | null {
+/** The creation an action's output names: by its id key (`image_id`), or as the library's own `{kind, id}`
+ * (`library.keep_attachment`). */
+export function creationOf(output: Record<string, unknown> | undefined): [string, string] | null {
   for (const [key, kind] of Object.entries(CREATION_KEYS)) {
     const id = output?.[key];
     if (typeof id === "string" && id) return [kind, id];
   }
+  const kind = output?.kind;
+  const id = output?.id;
+  if (typeof kind === "string" && kind && typeof id === "string" && id) return [kind, id];
   return null;
+}
+
+/** What a person often asks next about a result, by its kind (docs/chat-does-everything-plan.md, CE3). The chat was
+ * told the result's id, so "that picture" is found. */
+export const FOLLOW_UPS: Record<string, { label: string; ask: string }[]> = {
+  image: [
+    { label: "Make it move", ask: "Make that picture move." },
+    { label: "Make a 3D model", ask: "Turn that picture into a 3D model." },
+  ],
+  video: [{ label: "Make it longer", ask: "Make that clip longer." }],
+  track: [{ label: "Split the voice out", ask: "Split that song into voice and music." }],
+  speech: [{ label: "Write it out", ask: "Write out what that recording says." }],
+};
+
+/** The follow-up buttons under a result. */
+export function FollowUps({ kind }: { kind: string }) {
+  const { onAsk } = useThreadEnv();
+  const asks = FOLLOW_UPS[kind];
+  if (!onAsk || !asks?.length) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {asks.map((a) => (
+        <Button key={a.label} type="button" size="sm" variant="ghost" onClick={() => onAsk(a.ask)}>
+          {a.label}
+        </Button>
+      ))}
+    </div>
+  );
 }
 
 /** What a proposed action came to, for an action without a card of its own (speech, video, a notebook ...). */
@@ -98,6 +131,7 @@ export function ActionResultCard({
           </Button>
         ) : null}
       </div>
+      {made ? <FollowUps kind={made[0]} /> : null}
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { images } from "../images";
 import { runningJobs } from "../jobs";
 import { ROUTES } from "../menu";
 import { type Route, newNotebook, openChat, openNotebook } from "../router";
+import { videos } from "../videos";
 
 /** Where each quick start goes in this window. */
 const START: Record<Exclude<QuickStartId, "notebook">, Route> = {
@@ -51,6 +52,7 @@ export function HomePage({
       external={externalApi}
       images={images}
       tracks={(id) => voiceApi.track(id)}
+      videos={(id) => videos.get(id)}
       voice={voiceApi}
       getSpeechModel={(id, onProgress) => getSpeechModel(modelsApi, id, onProgress)}
       conversationId={conversationId}

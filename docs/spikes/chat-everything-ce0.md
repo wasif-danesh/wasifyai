@@ -63,3 +63,28 @@ the action runs or shows its card. The eval counts such a proposal as a pass (`k
 Plain asks went from 13 to 9 in both runs after the actions list gained its fields: for `voice.voices`,
 `music.lyrics`, `notebook.create` and `motion` the model now looks a guide up and then answers in words. At
 temperature 0.2 some of this is noise; CE7 and CE8 look at it again.
+
+## After CE3's ids
+
+The model is now told the ids of what an action made (`(image_id …; use it to work on the result.)`, from
+`tools.ids_said`), and the chat keeps an attachment itself when a proposal names it. 31 of 74 passed: plain asks 9 of 26,
+asks with an attachment 4 of 22 (8 still refused: recordings and clips are CE2), follow-ups 18 of 26 (from 8).
+
+| Menu item | Passed | Menu item | Passed |
+|---|---|---|---|
+| images.create | 2/3 | voice.speak | 0/3 |
+| images.edit | 1/3 | voice.transcribe | 1/3 |
+| images.inpaint | 1/3 | voice.convert | 1/3 |
+| images.reference | 0/3 | voice.voices | 1/3 |
+| video.create | 2/2 | voice.edit | 0/3 |
+| video.animate | 3/3 | voice.dub | 0/3 |
+| video.extend | 1/3 | voice.audiobook | 2/3 |
+| model3d | 3/3 | voice.lipsync | 0/3 |
+| music.create | 2/3 | notebook.create | 1/3 |
+| music.lyrics | 0/2 | notebook.list | 0/2 |
+| music.separate | 1/3 | library | 3/3 |
+| creative | 1/3 | train | 2/3 |
+| motion | 2/3 | models | 1/2 |
+
+What fails now: looking a guide up and answering in words on a plain ask (17), recordings and clips (8, CE2), and a
+few wrong actions (`image.generate` for a reference, `motion.make_file` for a new motion video).

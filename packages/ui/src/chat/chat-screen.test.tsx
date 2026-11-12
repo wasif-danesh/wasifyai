@@ -167,6 +167,82 @@ describe("ChatScreen", () => {
     expect(onOpen).toHaveBeenCalledWith("image", "img-1");
   });
 
+  it("shows the picture of any action that makes one, with follow-ups that ask the chat", async () => {
+    // a picture kept from an attachment names itself as {kind, id}; image.edit by image_id (CE3)
+    const inputs: object[] = [];
+    const runs = runsThat(
+      [
+        ev("tool_call", {
+          id: "t1",
+          name: "propose_action",
+          arguments: { action_id: "library.keep_attachment", params: { attachment_id: "a1" } },
+        }),
+        ev("tool_result", {
+          id: "t1",
+          name: "propose_action",
+          status: "ok",
+          output: {
+            action_id: "library.keep_attachment",
+            kind: "image",
+            id: "img-1",
+            title: "Beach",
+          },
+        }),
+        ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Beach" } }),
+      ],
+      inputs,
+    );
+    const user = userEvent.setup();
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "keep it{Enter}");
+    expect(await screen.findByRole("img", { name: "a red teapot" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Make it move" }));
+    await waitFor(() => expect(inputs).toHaveLength(2));
+    expect(inputs[1]).toMatchObject({ text: "Make that picture move." });
+  });
+
+  it("plays a clip an action made, in the chat, with a way to open it", async () => {
+    const runs = runsThat([
+      ev("tool_call", {
+        id: "t1",
+        name: "propose_action",
+        arguments: {
+          action_id: "video.animate",
+          params: { image_id: "img-1", prompt: "she smiles" },
+        },
+      }),
+      ev("tool_result", {
+        id: "t1",
+        name: "propose_action",
+        status: "ok",
+        output: { action_id: "video.animate", message: "Made.", video_id: "v1" },
+      }),
+      ev("done", { outputs: { status: "done", conversation_id: "c1", title: "Smile" } }),
+    ]);
+    const videos = vi.fn(async () => ({
+      prompt: "she smiles",
+      video_url: "http://x/v1.mp4",
+      poster_url: null,
+    }));
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ChatScreen
+        runs={runs}
+        assistant={assistant}
+        images={images}
+        videos={videos}
+        onOpenCreation={onOpen}
+      />,
+    );
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "animate it{Enter}");
+    expect(await screen.findByLabelText("she smiles")).toHaveAttribute("src", "http://x/v1.mp4");
+    expect(videos).toHaveBeenCalledWith("v1");
+    await user.click(screen.getByRole("button", { name: "Open in the library" }));
+    expect(onOpen).toHaveBeenCalledWith("video", "v1");
+    expect(screen.getByRole("button", { name: "Make it longer" })).toBeInTheDocument();
+  });
+
   it("shows what the assistant found in the notebooks, with a way to open the notebook", async () => {
     const runs = runsThat([
       ev("tool_call", { id: "t1", name: "search_notebooks", arguments: { query: "budget" } }),

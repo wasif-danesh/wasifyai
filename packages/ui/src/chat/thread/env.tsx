@@ -2,13 +2,14 @@
 
 import type { ImagesApi } from "@wasifyai/client";
 import { type ReactNode, createContext, useContext } from "react";
-import type { TrackLookup } from "../ToolCard";
+import type { TrackLookup, VideoLookup } from "../ToolCard";
 
 /** What the parts of a message need from the app: the library to read a picture from, the music lookup, a way to open a
  * creation, and the origins a picture inside an answer may load from. The screen provides it once. */
 export type ThreadEnv = {
   images: ImagesApi;
   tracks?: TrackLookup;
+  videos?: VideoLookup;
   onOpenCreation?: (kind: string, id: string) => void;
   /** Take the person to Settings (a search service that fails: add a key there) */
   onOpenSettings?: () => void;
@@ -20,6 +21,8 @@ export type ThreadEnv = {
   onDecide?: (approved: boolean, params?: Record<string, unknown>) => void;
   /** Open a screen of the app by its menu item id (the assistant's open_screen button, ADR-0071) */
   onOpenScreen?: (screenId: string) => void;
+  /** Send a follow-up as if the person typed it (the buttons under a result: "Make it move") */
+  onAsk?: (text: string) => void;
   /** The person ticked "Don't ask again in this chat" on a card: the chat stops asking before it makes things */
   onAutoRun?: () => void;
   /** A change the assistant made in a screen it is docked in: can it still be undone from its card, and how */

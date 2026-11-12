@@ -10,12 +10,13 @@ import {
   MusicToolCard,
   NotebookSearchCard,
   type ToolCardProps,
+  VideoPlayer,
   WebReadCard,
   WebSearchCard,
 } from "../../ToolCard";
 import type { ToolArtifact, ToolResult } from "../convert";
 import { useThreadEnv } from "../env";
-import { ActionResultCard, GuideCard, OpenScreenCard } from "./ActionCards";
+import { ActionResultCard, FollowUps, GuideCard, OpenScreenCard, creationOf } from "./ActionCards";
 import { ConfirmActionCard } from "./ConfirmActionCard";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
@@ -69,15 +70,54 @@ function Confirm(p: ToolCallMessagePartProps) {
 /** `propose_action` (ADR-0071): the card while the person decides, then the result drawn for the action it ran: a
  * picture or a player for the actions that have one, a plain result card for the rest. */
 function Propose(p: ToolCallMessagePartProps) {
-  const { images, tracks, onOpenCreation, onOpenSettings, onDecide, onOpenScreen, onAutoRun } =
-    useThreadEnv();
+  const {
+    images,
+    tracks,
+    videos,
+    onOpenCreation,
+    onOpenSettings,
+    onDecide,
+    onOpenScreen,
+    onAutoRun,
+  } = useThreadEnv();
   const tool = toolOf(p);
   if (tool.approval && tool.status === "running")
     return <ConfirmActionCard tool={tool} onDecide={onDecide} onAutoRun={onAutoRun} />;
   const actionId = String(tool.arguments.action_id ?? tool.output?.action_id ?? "");
-  const shared = { tool, images, tracks, onOpenCreation, onOpenSettings };
-  if (actionId === "image.generate") return <ImageToolCard {...shared} />;
-  if (actionId === "music.generate") return <MusicToolCard {...shared} />;
+  // every action that makes a picture or a song draws it, not only image.generate and music.generate (CE3)
+  const made = tool.status === "ok" ? creationOf(tool.output) : null;
+  const drawn =
+    made && tool.output
+      ? { ...tool, output: { ...tool.output, [`${made[0]}_id`]: made[1] } }
+      : tool;
+  const shared = { tool: drawn, images, tracks, onOpenCreation, onOpenSettings };
+  if (actionId === "image.generate" || made?.[0] === "image")
+    return (
+      <div className="grid gap-2">
+        <ImageToolCard {...shared} />
+        {made ? <FollowUps kind="image" /> : null}
+      </div>
+    );
+  if (actionId === "music.generate" || made?.[0] === "track")
+    return (
+      <div className="grid gap-2">
+        <MusicToolCard {...shared} />
+        {made ? <FollowUps kind="track" /> : null}
+      </div>
+    );
+  if (made?.[0] === "video" && videos) {
+    const id = made[1];
+    return (
+      <div className="grid gap-2">
+        <VideoPlayer
+          videoId={id}
+          videos={videos}
+          onOpen={onOpenCreation ? () => onOpenCreation("video", id) : undefined}
+        />
+        <FollowUps kind="video" />
+      </div>
+    );
+  }
   return (
     <ActionResultCard tool={tool} onOpenCreation={onOpenCreation} onOpenScreen={onOpenScreen} />
   );

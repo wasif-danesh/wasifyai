@@ -357,13 +357,39 @@ def outcome_of(name: str, result: ActionResult) -> ToolOutcome:
     return ToolOutcome("error", {}, result.text)  # error, needs_setup, needs_approval
 
 
+# output ids that are not of something to work on next
+_NOT_ITEMS = {"product_id", "job_id", "run_id", "approval_id", "action_id"}
+
+
+def ids_said(output: dict[str, Any]) -> str:
+    """The ids an action's output names, in words the model can use for a follow-up ("now make it
+    move"): " (image_id 7a1e…)". Every `make` action names what it made by an `…_id` field; the
+    library's own `{kind, id}` is said as `{kind} id`. Empty when there is none
+    (docs/chat-does-everything-plan.md, CE3)."""
+    said = [
+        f"{k} {v}"
+        for k, v in output.items()
+        if k.endswith("_id") and k not in _NOT_ITEMS and isinstance(v, str) and v
+    ]
+    kind, ident = output.get("kind"), output.get("id")
+    if not said and isinstance(kind, str) and isinstance(ident, str) and kind and ident:
+        said.append(f"{kind} id {ident}")
+    if not said:
+        return ""
+    return f" ({', '.join(said)}; use it to work on the result.)"
+
+
 def _proposal_outcome(result: ActionResult) -> ToolOutcome:
     """What a proposed action came to. The window keys its card on `action_id`; the model gets
     the action's own sentence, and the step that is missing when there is one."""
     base: dict[str, Any] = {"action_id": result.action_id, "message": result.text}
     if result.status == "ok":
         return ToolOutcome(
-            "ok", {**base, **result.output}, result.text + SEEN_IN_CHAT.get(result.action_id, "")
+            "ok",
+            {**base, **result.output},
+            result.text
+            + (ids_said(result.output) if not _names_its_ids(result) else "")
+            + SEEN_IN_CHAT.get(result.action_id, ""),
         )
     if result.status == "needs_setup":
         setup = result.setup
@@ -372,6 +398,16 @@ def _proposal_outcome(result: ActionResult) -> ToolOutcome:
     if result.status == "refused":
         return ToolOutcome("refused", {**base, **(result.output or {})}, result.text)
     return ToolOutcome("error", base, result.text)
+
+
+def _names_its_ids(result: ActionResult) -> bool:
+    """The action's own sentence already gives every id (library.keep_attachment does)."""
+    ids = [
+        v
+        for k, v in result.output.items()
+        if (k.endswith("_id") and k not in _NOT_ITEMS) or k == "id"
+    ]
+    return bool(ids) and all(isinstance(v, str) and v in result.text for v in ids)
 
 
 TAINTED = (

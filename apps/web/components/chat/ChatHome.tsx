@@ -51,6 +51,8 @@ export function ChatHome({ conversationId }: { conversationId: string | null }) 
         runs={webClient}
         assistant={webAssistant}
         images={webImages}
+        tracks={(id) => webVoice.track(id)}
+        videos={(id) => webVideos.get(id)}
         voice={webVoice}
         conversationId={conversationId}
         onAdopt={(id) => window.history.replaceState(null, "", `/chat/${id}`)}

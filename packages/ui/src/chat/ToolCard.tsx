@@ -11,6 +11,10 @@ type Tool = Extract<ChatPart, { type: "tool" }>;
 
 /** A piece of music the assistant made, as the card needs it. */
 export type TrackLookup = (id: string) => Promise<{ title: string; audio_url: string }>;
+/** Reads a clip of the library so it can be played in the chat (CE3). */
+export type VideoLookup = (
+  id: string,
+) => Promise<{ prompt: string; video_url: string | null; poster_url: string | null }>;
 
 export type ToolCardProps = {
   tool: Tool;
@@ -420,4 +424,58 @@ export function ToolCard(props: ToolCardProps) {
     default:
       return null;
   }
+}
+
+/** A clip an action made or kept, played in the chat, with a way to open it (CE3). */
+export function VideoPlayer({
+  videoId,
+  videos,
+  onOpen,
+}: {
+  videoId: string;
+  videos?: VideoLookup;
+  onOpen?: () => void;
+}) {
+  const [clip, setClip] = useState<{
+    prompt: string;
+    video_url: string | null;
+    poster_url: string | null;
+  } | null>(null);
+  const [missing, setMissing] = useState(false);
+  useEffect(() => {
+    if (!videos) return;
+    let gone = false;
+    videos(videoId)
+      .then((v) => !gone && setClip(v))
+      .catch(() => !gone && setMissing(true));
+    return () => {
+      gone = true;
+    };
+  }, [videoId, videos]);
+  if (missing)
+    return <p className="text-muted-foreground text-sm">This video is no longer there.</p>;
+  if (!videos) return null;
+  if (!clip) return <div className="aspect-video w-72 animate-pulse rounded-lg bg-muted" />;
+  if (!clip.video_url)
+    return <p className="text-muted-foreground text-sm">The video is still being made.</p>;
+  return (
+    <figure className="m-0 grid w-full max-w-md gap-2">
+      {/* biome-ignore lint/a11y/useMediaCaption: a clip the person made has no captions to offer */}
+      <video
+        controls
+        preload="metadata"
+        src={clip.video_url}
+        poster={clip.poster_url ?? undefined}
+        aria-label={clip.prompt}
+        className="w-full rounded-lg border"
+      />
+      {onOpen ? (
+        <figcaption>
+          <Button type="button" size="sm" variant="outline" onClick={onOpen}>
+            Open in the library
+          </Button>
+        </figcaption>
+      ) : null}
+    </figure>
+  );
 }

@@ -3,7 +3,7 @@
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import type { AssistantApi, ImagesApi, RunClient } from "@wasifyai/client";
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
-import type { TrackLookup } from "./ToolCard";
+import type { TrackLookup, VideoLookup } from "./ToolCard";
 import { type ComposerOptionsAvailable, useComposerOptions } from "./composer-options";
 import { ReadAloudProvider, useReadAloud } from "./read-aloud/use-read-aloud";
 import { DictationBridge, type DictationTarget } from "./thread/DictationBridge";
@@ -20,6 +20,8 @@ export type ChatScreenProps = {
   images: ImagesApi;
   /** Reads a track the assistant made, to play it in the chat. */
   tracks?: TrackLookup;
+  /** Reads a clip so it can be played in the chat */
+  videos?: VideoLookup;
   /** A saved conversation to open; null starts a new chat. */
   conversationId?: string | null;
   /** The turn finished and the conversation has an id and a title. */
@@ -72,6 +74,7 @@ export function ChatScreen({
   assistant,
   images,
   tracks,
+  videos,
   conversationId,
   onConversation,
   hero,
@@ -133,6 +136,7 @@ export function ChatScreen({
     () => ({
       images,
       tracks,
+      videos,
       onOpenCreation,
       onOpenSettings,
       onOpenScreen,
@@ -140,17 +144,20 @@ export function ChatScreen({
       onDecide: (approved: boolean, params?: Record<string, unknown>) =>
         void chat.answer(approved, false, params),
       onAutoRun: () => options.setApproval("auto"),
+      onAsk: (text: string) => void chat.send(text),
       undoOfTool,
     }),
     [
       images,
       tracks,
+      videos,
       onOpenCreation,
       onOpenSettings,
       onOpenScreen,
       options.thinking,
       options.setApproval,
       chat.answer,
+      chat.send,
       undoOfTool,
     ],
   );

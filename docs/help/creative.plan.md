@@ -33,7 +33,9 @@ them speaking. These shots are made with lip sync on their part of the sound.
 ## Fields
 
 - `brief.skill`: `song` (the default) or `story`.
-- `brief.track_id`: The song in Your music. For a story it is filled in when the reading is made.
+- `brief.track_id`: The song in Your music. For a story it is filled in when the reading is made. A
+  song the person names in words ("my summer road trip song") is found with `search_creations` first,
+  and its track id goes here; ask only when nothing or more than one matches.
 - `brief.story`: A story's text (a story only). Separate paragraphs with a blank line.
 - `brief.narrator`: The saved voice that reads a story (`voice.list`); left out, the model's own voice.
 - `brief.idea`: What the video is about.

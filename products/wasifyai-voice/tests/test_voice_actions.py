@@ -539,3 +539,11 @@ def test_transcribe_says_what_is_missing_when_no_recording_is_named():
     with pytest.raises(ValidationError, match="not both"):
         TranscribeIn(source_id="t1", path="/x.wav")
     assert TranscribeIn(source_id="t1").source_id == "t1"
+
+
+def test_a_dub_takes_a_language_by_its_name_or_its_code():
+    from wasifyai_voice.actions import DubScriptIn
+
+    assert DubScriptIn(source_id="t1", language="Spanish").language == "es"
+    assert DubScriptIn(source_id="t1", language=" french ").language == "fr"
+    assert DubScriptIn(source_id="t1", language="pt-BR").language == "pt-BR"

@@ -2025,7 +2025,7 @@
             "type": "string"
           },
           "language": {
-            "maxLength": 10,
+            "maxLength": 20,
             "minLength": 2,
             "title": "Language",
             "type": "string"
@@ -2223,8 +2223,8 @@
             "type": "string"
           },
           "language": {
-            "description": "The language to dub into (en, fr ...).",
-            "maxLength": 10,
+            "description": "The language to dub into: its code (en, fr ...) or its name (French).",
+            "maxLength": 20,
             "minLength": 2,
             "title": "Language",
             "type": "string"

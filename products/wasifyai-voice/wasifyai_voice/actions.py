@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from wasifyai_platform_sdk import (
     VoiceEngineError,
     VoiceRequestError,
@@ -705,8 +705,15 @@ def _separate_input(p: SeparateIn, ctx: ActionContext) -> dict[str, Any]:
 
 class DubScriptIn(SourceIn):
     language: str = Field(
-        min_length=2, max_length=10, description="The language to dub into (en, fr ...)."
-    )
+        min_length=2, max_length=20,
+        description="The language to dub into: its code (en, fr ...) or its name (French).",
+    )  # fmt: skip
+
+    @field_validator("language")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        return dubbing.language_code(v)
+
     background: bool = Field(
         False, description="Separate the voice from the music behind it first."
     )
@@ -750,7 +757,13 @@ def _dub_script_result(outputs: dict[str, Any], p: DubScriptIn) -> Outcome | Non
 
 
 class DubMakeIn(SourceIn):
-    language: str = Field(min_length=2, max_length=10)
+    language: str = Field(min_length=2, max_length=20)
+
+    @field_validator("language")
+    @classmethod
+    def _code(cls, v: str) -> str:
+        return dubbing.language_code(v)
+
     segments: list[DubLine] = Field(min_length=1, max_length=dubbing.MAX_SEGMENTS)
     voice_from: Literal["builtin", "saved"] = Field(
         "builtin", description="A built-in voice, or a saved voice (saved_voice)."

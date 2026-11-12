@@ -98,4 +98,7 @@ async def kept_in_place(
             out[key] = [await one(v, AS_KIND.get(key, "")) for v in value]
         else:
             out[key] = await one(value, AS_KIND.get(key, ""))
+    # a recording kept for `source_id` is a track, whatever kind the model guessed for it
+    if "source_kind" in out and out.get("source_id") != params.get("source_id"):
+        out["source_kind"] = AS_KIND["source_id"]
     return out

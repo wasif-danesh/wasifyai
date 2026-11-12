@@ -21,7 +21,7 @@ The first step of a dub: write down what is said and translate it line by line, 
 
 - `source_kind`: track or speech.
 - `source_id`: The recording.
-- `language`: For example fr, es, de.
+- `language`: Its code (fr, es, de) or its name (French).
 - `background`: Separate the voice from the music first.
 
 ## Limits

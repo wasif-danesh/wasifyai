@@ -183,6 +183,15 @@ async def test_a_clip_is_kept_as_what_the_field_takes():
     dub = await kept_in_place("dub.script", {"source_id": "talk.mp4"}, names, keep, done)
     extend = await kept_in_place("video.extend", {"video_id": "talk.mp4"}, names, keep, done)
     assert dub == {"source_id": "track-c1"} and extend == {"video_id": "video-c1"}
+    # the kind the model guessed for it is set right: it is a track now
+    guessed = {"source_id": "talk.mp4", "source_kind": "speech", "language": "es"}
+    assert await kept_in_place("dub.script", guessed, names, keep, done) == {
+        "source_id": "track-c1",
+        "source_kind": "track",
+        "language": "es",
+    }
+    library = {"source_id": "lib-7", "source_kind": "speech"}  # not an attachment: left alone
+    assert await kept_in_place("dub.script", library, names, keep, done) == library
     assert asked == [("c1", "track"), ("c1", "video")]
     # a song inside Creative Studio's brief is kept as a song too
     plan = await kept_in_place(

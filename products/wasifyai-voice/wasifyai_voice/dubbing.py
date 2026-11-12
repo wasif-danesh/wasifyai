@@ -43,6 +43,13 @@ def base(code: str) -> str:
     return str(code).lower().replace("_", "-").split("-")[0]
 
 
+def language_code(value: str) -> str:
+    """A language as its code: a name ("Spanish", as a person or a model says it) becomes `es`;
+    anything else is left as it is (the check after says what is wrong with it)."""
+    named = {name.lower(): code for code, name in LANGUAGES.items()}
+    return named.get(str(value).strip().lower(), str(value).strip())
+
+
 def language_name(code: str) -> str:
     return LANGUAGES.get(base(code), str(code))
 

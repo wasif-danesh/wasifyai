@@ -547,3 +547,12 @@ def test_a_dub_takes_a_language_by_its_name_or_its_code():
     assert DubScriptIn(source_id="t1", language="Spanish").language == "es"
     assert DubScriptIn(source_id="t1", language=" french ").language == "fr"
     assert DubScriptIn(source_id="t1", language="pt-BR").language == "pt-BR"
+
+
+def test_a_designed_voice_with_no_name_is_named_from_its_description():
+    from wasifyai_voice.actions import DesignIn
+
+    assert DesignIn(description="calm, older narrator with a deep voice").name == (
+        "Calm older narrator with a"
+    )
+    assert DesignIn(name="Ann", description="warm and bright").name == "Ann"

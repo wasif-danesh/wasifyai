@@ -20,7 +20,7 @@ Save a voice described in words (age, tone, pace) to use again. No recording is 
 
 ## Fields
 
-- `name`: A name.
+- `name`: A name; left out, the start of the description.
 - `description`: The voice in words, up to 300 characters, without brackets.
 
 ## Limits

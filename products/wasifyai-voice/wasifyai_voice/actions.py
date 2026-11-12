@@ -511,11 +511,20 @@ async def _voice_list(p: VoiceListIn, ctx: ActionContext) -> Outcome:
 
 
 class DesignIn(Strict):
-    name: str = Field(min_length=1, max_length=100)
+    name: str = Field(
+        "", max_length=100, description="Its name; the start of the description when left out."
+    )
     description: str = Field(
         min_length=3, max_length=MAX_DESCRIPTION_CHARS,
         description="The voice in words: age, tone, pace. No brackets.",
     )  # fmt: skip
+
+    @model_validator(mode="after")
+    def _named(self) -> "DesignIn":
+        if not self.name.strip():
+            words = self.description.replace(",", " ").split()[:5]
+            self.name = " ".join(words).strip(" .;:").capitalize()[:40] or "My voice"
+        return self
 
 
 class VoiceOut(BaseModel):

@@ -11301,8 +11301,9 @@
         "additionalProperties": false,
         "properties": {
           "name": {
+            "default": "",
+            "description": "Its name; the start of the description when left out.",
             "maxLength": 100,
-            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -11315,7 +11316,6 @@
           }
         },
         "required": [
-          "name",
           "description"
         ],
         "title": "DesignIn",

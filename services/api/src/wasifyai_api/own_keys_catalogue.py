@@ -220,6 +220,14 @@ CATALOGUE: tuple[CloudModel, ...] = (
     # ---- 3D
     _media("model3d", "pixal3d", "Pixal3D", "A textured 3D model from a picture.",
            offer("fal", "fal-ai/pixal3d", 0.06, "model")),
+    # ADR-0100, CP9. Hunyuan3D without PBR ($0.15 more on both); TRELLIS 2 on Runware is billed by
+    # compute time, about a cent a model (CP0)
+    _media("model3d", "hunyuan3d-3.1-pro", "Hunyuan3D 3.1 Pro", "Tencent. Detailed textured models from a picture.",
+           offer("runware", "tencent:hunyuan-3d@3.1-pro", 0.375, "model"),
+           offer("fal", "fal-ai/hunyuan3d-v31/pro/image-to-3d", 0.375, "model")),
+    _media("model3d", "trellis-2", "TRELLIS 2", "Microsoft. Quick textured models from a picture.",
+           offer("runware", "microsoft:trellis-2@4b", 0.01, "model"),
+           offer("wavespeed", "wavespeed-ai/trellis-2/image-to-3d", 0.20, "model")),
 )  # fmt: skip
 
 

@@ -42,7 +42,7 @@ from wasifyai_platform_sdk import (
     VoiceEngineError,
 )
 from wasifyai_platform_sdk.cloud_queues import fetch_file, queue_for
-from wasifyai_platform_sdk.fal import FalError, FalQueue
+from wasifyai_platform_sdk.fal import FalError, FalQueue, data_uri
 from wasifyai_platform_sdk.offers import Priced, cost_event, no_offer, order, run_cheapest
 from wasifyai_platform_sdk.usage import UsageRecorder, record_safely
 from wasifyai_platform_sdk.voice_models import VoiceModel
@@ -94,8 +94,8 @@ from wasifyai_api.own_keys_voice import (
 
 FAL_MATTE = "fal-ai/birefnet"  # the cut-out of a picture, on the same key as the 3D model
 FAL_3D_RESOLUTION = 1024  # what this computer's run uses too (`--res 1024`)
-WITH_KEY = "Runs on fal.ai with your key: the picture is sent there."
-BY_ADMIN = "Runs on fal.ai, chosen by your admin: the picture is sent there."
+WITH_KEY = "Runs on a cloud model with your key: the picture is sent there."
+BY_ADMIN = "Runs on a cloud model, chosen by your admin: the picture is sent there."
 
 
 class Routes(Protocol):
@@ -831,6 +831,36 @@ class KeyedSpeechEngine:
         )  # fmt: skip
 
 
+RUNWARE_3D = "3dInference"  # Runware's task for a model from pictures (CP13: its name)
+GLB = "model/gltf-binary"
+
+
+def model3d_body(
+    model_id: str, provider: str, picture: str, seed: int, detail: str
+) -> tuple[dict[str, Any], str]:
+    """What a 3D model is sent for a picture (an address, an upload id, or a data URI on Runware)
+    and the field of the answer that holds the model (ADR-0100, CP9; CP0 for Runware's and
+    WaveSpeed's fields; the ones marked CP13 are checked in the real run)."""
+    texture = ATLAS.get(detail, 2048)
+    if provider == "runware":
+        task: dict[str, Any] = {
+            "taskType": RUNWARE_3D, "inputs": {"images": [picture]}, "outputFormat": "GLB",
+            "seed": seed, "includeCost": True,
+        }  # fmt: skip
+        if model_id == "trellis-2":
+            task["settings"] = {"resolution": FAL_3D_RESOLUTION}
+        return task, ""
+    if provider == "wavespeed":  # TRELLIS 2: it cuts the picture out itself
+        return {
+            "image": picture, "resolution": FAL_3D_RESOLUTION, "texture_size": texture,
+            "remove_background": True, "seed": seed,
+        }, ""  # fmt: skip
+    if model_id == "hunyuan3d-3.1-pro":  # (CP13)
+        return {"input_image_url": picture, "seed": seed}, "model_glb"
+    body = {"image_url": picture, "seed": seed, "resolution": FAL_3D_RESOLUTION}
+    return {**body, "texture_size": texture}, "model_glb"
+
+
 class KeyedModel3d:
     """The 3D engine, on fal.ai while 3D runs on the person's key (or, on the web, the admin's
     row): nothing to set up, no memory used. Everything else is the engine it stands in front of."""
@@ -866,7 +896,7 @@ class KeyedModel3d:
 
     @property
     def keyed(self) -> bool:
-        return _fal(self._keys, "model3d") is not None
+        return _cloud(self._keys, "model3d") is not None
 
     def state(self) -> dict[str, Any]:
         local = self._local.state()
@@ -892,33 +922,26 @@ class KeyedModel3d:
             "capacity_bytes": None, "estimate": False, "partly_on_cpu": False,
         }  # fmt: skip
 
-    async def _run(
-        self, route: KeyRoute, picture: bytes, body: dict[str, Any], endpoint: str | None,
-        field: str, out: Path, on_progress: Callable[[float], Any] = _no_progress,
-    ) -> RunResult:  # fmt: skip
+    async def _fal_run(
+        self, c: KeyChoice, picture: bytes, body: dict[str, Any], endpoint: str, field: str,
+        on_progress: Callable[[float], Any] = _no_progress,
+    ) -> bytes:  # fmt: skip
         """`body` on fal.ai with `picture` as its `image_url`, uploaded to fal.ai's file store first
-        (a picture inside the request can be refused as too long, as a voice was). `endpoint` None
-        is the route's model, on its cheapest offer (3D on more providers comes in CP9)."""
-        t0 = time.monotonic()
+        (a picture inside the request can be refused as too long, as a voice was)."""
+        async with self._client() as http:
+            fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
+            sent = {"image_url": await fal.upload(picture, "picture.png"), **body}
+            result = await fal.call(endpoint, sent, on_progress)
+            data, _ = await fal.fetch(result.get(field), "application/octet-stream")
+            return data
 
-        async def attempt(c: KeyChoice) -> bytes:
-            async with self._client() as http:
-                fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
-                sent = {"image_url": await fal.upload(picture, "picture.png"), **body}
-                result = await fal.call(endpoint or c.offer.endpoint, sent, on_progress)
-                data, _ = await fal.fetch(result.get(field), "application/octet-stream")
-                return data
-
+    async def _done(self, run: Awaitable[bytes], out: Path, t0: float, title: str) -> RunResult:
         try:
-            if endpoint is None:
-                data, _ = await on_cheapest(route, "model3d", {}, attempt, self._usage, only="fal")
-            else:  # a helper on the same key (the cut-out): not the model, not priced
-                fal = next(c for c in route.offers() if c.provider.id == "fal")
-                data = await attempt(fal)
+            data = await run
         except FalError as e:
             return RunResult(False, "failed", e.message, time.monotonic() - t0)
         except TimeoutError:
-            return RunResult(False, "wall_time", "fal.ai took too long.", time.monotonic() - t0)
+            return RunResult(False, "wall_time", f"{title} took too long.", time.monotonic() - t0)
         await asyncio.to_thread(out.write_bytes, data)
         return RunResult(True, None, "", time.monotonic() - t0, output=out)
 
@@ -929,12 +952,20 @@ class KeyedModel3d:
         on_line: Callable[[str], None] | None = None,
         **again: Any,  # job_key, resume: the web's engine workers pick a job up again
     ) -> RunResult:
-        route = _fal(self._keys, "model3d")
+        route = _cloud(self._keys, "model3d")
         if route is None:
             return await self._local.matte(picture, out_dir, on_line, **again)
+        t0, out = time.monotonic(), out_dir / "keyed_cutout.png"
         data = await asyncio.to_thread(picture.read_bytes)
+        fal = next((c for c in route.offers() if c.provider.id == "fal"), None)
+        if fal is None:  # the cloud models cut the picture out themselves: it goes as it is
+            await asyncio.to_thread(out.write_bytes, data)
+            return RunResult(True, None, "", time.monotonic() - t0, output=out)
+        # a helper on the same key: not the model, not priced
         body = {"output_format": "png"}
-        return await self._run(route, data, body, FAL_MATTE, "image", out_dir / "keyed_cutout.png")
+        return await self._done(
+            self._fal_run(fal, data, body, FAL_MATTE, "image"), out, t0, "fal.ai"
+        )
 
     async def generate(
         self,
@@ -945,21 +976,47 @@ class KeyedModel3d:
         detail: str = "standard",
         on_line: Callable[[str], None] | None = None,
         on_progress: Callable[[float, str], None] | None = None,
-        **again: Any,  # job_key, resume: on fal.ai a run picked up again is made again
+        **again: Any,  # job_key, resume: on a cloud model a run picked up again is made again
     ) -> RunResult:
-        route = _fal(self._keys, "model3d")
+        route = _cloud(self._keys, "model3d")
         if route is None:
             return await self._local.generate(
                 cutout, out_glb, seed=seed, detail=detail, on_line=on_line,
                 on_progress=on_progress, **again,
             )  # fmt: skip
         data = await asyncio.to_thread(cutout.read_bytes)
-        body = {
-            "seed": seed, "resolution": FAL_3D_RESOLUTION, "texture_size": ATLAS.get(detail, 2048),
-        }  # fmt: skip
+        model_id = _model_id("model3d", route)
+        t0 = time.monotonic()
 
-        async def told(p: float) -> None:
-            if on_progress is not None:
-                on_progress(p, "Waiting for fal.ai" if p < 0.1 else "Making it on fal.ai")
+        async def attempt(c: KeyChoice) -> bytes:
+            title = c.provider.title
 
-        return await self._run(route, data, body, None, "model_glb", out_glb, told)
+            async def told(p: float) -> None:
+                if on_progress is not None:
+                    on_progress(p, f"Waiting for {title}" if p < 0.1 else f"Making it on {title}")
+
+            if c.provider.id == "fal":
+                body, field = model3d_body(model_id, "fal", "", seed, detail)
+                if "input_image_url" in body:  # Hunyuan names its picture otherwise
+                    async with self._client() as http:
+                        fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
+                        body["input_image_url"] = await fal.upload(data, "picture.png")
+                        result = await fal.call(c.offer.endpoint, body, told)
+                        got, _ = await fal.fetch(result.get(field), GLB)
+                        return got
+                body.pop("image_url")
+                return await self._fal_run(c, data, body, c.offer.endpoint, field, told)
+            async with self._client() as http:
+                queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+                sent = data_uri(data) if c.provider.id == "runware" else (
+                    await queue.upload(data, "picture.png")
+                )  # fmt: skip
+                body, field = model3d_body(model_id, c.provider.id, sent, seed, detail)
+                got, _, _ = await queue.make(c.offer.endpoint, body, field, GLB, told)
+                return got
+
+        async def run() -> bytes:
+            got, _ = await on_cheapest(route, "model3d", {}, attempt, self._usage)
+            return got
+
+        return await self._done(run(), out_glb, t0, route.provider.title)

@@ -30,7 +30,7 @@ from wasifyai_platform_sdk.fal import (
 WAVESPEED_API = "https://api.wavespeed.ai/api/v3"
 RUNWARE_API = "https://api.runware.ai/v1"
 WAVESPEED_FAILED = ("failed", "cancelled", "timeout", "deleted")
-RUNWARE_URLS = ("imageURL", "videoURL", "audioURL")
+RUNWARE_URLS = ("imageURL", "videoURL", "audioURL", "objectURL")  # objectURL: a 3D model (CP13)
 
 
 def _said(r: httpx.Response) -> str:

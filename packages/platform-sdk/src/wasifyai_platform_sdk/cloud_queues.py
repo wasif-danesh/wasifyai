@@ -65,7 +65,7 @@ def _refused(title: str, r: httpx.Response, before: bool = False) -> FalError:
     )
 
 
-async def _fetch(
+async def fetch_file(
     http: httpx.AsyncClient, title: str, url: Any, fallback_type: str, wait_s: float
 ) -> tuple[bytes, str]:
     """The file at `url`, fetched without the key, and its type."""
@@ -178,7 +178,7 @@ class WaveSpeedQueue:
         result = await self.call(endpoint, body, on_progress)
         outputs = result.get("outputs") or []
         first = outputs[0] if isinstance(outputs, list) and outputs else None
-        data, ctype = await _fetch(self._http, self.title, first, fallback_type, self._timeout)
+        data, ctype = await fetch_file(self._http, self.title, first, fallback_type, self._timeout)
         return data, ctype, result
 
 
@@ -274,7 +274,7 @@ class RunwareTasks:
     ) -> tuple[bytes, str, dict[str, Any]]:  # fmt: skip
         result = await self.call(endpoint, body, on_progress)
         url = next((result[u] for u in RUNWARE_URLS if result.get(u)), None)
-        data, ctype = await _fetch(self._http, self.title, url, fallback_type, self._timeout)
+        data, ctype = await fetch_file(self._http, self.title, url, fallback_type, self._timeout)
         return data, ctype, result
 
 

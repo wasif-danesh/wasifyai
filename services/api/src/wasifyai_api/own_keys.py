@@ -127,6 +127,8 @@ PRODUCTS = (
     Product("voicechange", "Change a voice", "media"),
     Product("music", "Music", "media"),
     Product("sfx", "Sound effects", "media"),
+    Product("split", "Split into parts", "media"),
+    Product("musicedit", "Edit music", "media"),
     Product("lipsync", "Lip sync", "media"),
     Product("model3d", "3D", "media"),
 )

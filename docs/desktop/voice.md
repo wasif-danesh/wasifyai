@@ -97,6 +97,24 @@ Not built: the ComfyUI ACE-Step workflow as a second engine for the same list, m
 others), a watermark decision for generated audio, a song longer than 4 minutes, and a listening check of the
 quality (sung lyrics in order cannot be tested by machine).
 
+### Music on cloud models (ADR-0100, stage CP8)
+
+Four cloud products carry the music tools, each with its own model in use (Settings › Your keys, or the Cloud tab of
+the Music group on the Models page). Each job runs on the cheapest offer with a key; a refusal before running hands it
+to the next. The requests are `services/api/.../own_keys_music.py`; the engine is `KeyedSpeechEngine` (`music`,
+`music_edit`, `separate`).
+
+| Product (engine id) | Models and offers | Notes |
+|---|---|---|
+| Music (`key:music`) | MiniMax Music 2.6 (Runware, WaveSpeed, fal.ai), MiniMax Music 3 (WaveSpeed $0.15 a song, fal.ai $0.002 a second), ElevenLabs Music v2.5 (WaveSpeed, fal.ai), Mureka v9.5 (WaveSpeed, fal.ai) | MiniMax and Mureka pick the length; MiniMax 3 is priced at the length shown (120 s), so WaveSpeed wins. Mureka sings only given lyrics; an instrumental goes to its own endpoint, and on fal.ai it costs $0.50, so WaveSpeed's $0.225 wins |
+| Sound effects (`key:sfx`) | ElevenLabs Sound Effects v3 (WaveSpeed, fal.ai), Mirelo SFX 2.0 (WaveSpeed, fal.ai), Stable Audio 3 small (fal.ai), ElevenLabs Sound Effects v2 (fal.ai) | priced per second except Stable Audio (a clip) |
+| Split into parts (`key:split`) | Demucs (six parts, fal.ai), SAM Audio (the singing and the rest, fal.ai), Mureka stems (the singing and the backing; WaveSpeed, fal.ai) | the recording goes up first; each stem the provider answers is fetched and kept as a track, as with the models on this computer |
+| Edit music (`key:musicedit`) | ACE-Step 1.5 repaint (Runware, fal.ai), Stable Audio 3 inpainting (fal.ai) | one stretch of a clip at a time; it is listed with the music models that can change a clip (Change it) |
+
+Field names not shown on the providers' pages are marked "(CP13)" in `own_keys_music.py` and checked in the real run
+(stage CP13): fal.ai's Mureka, Mirelo, Stable Audio and ACE-Step inpaint names, and what Mureka stems answers. Not
+built: Mureka's own song edit (it edits only Mureka's songs; dropped in FA0), ACE-Step's extend and cover on the cloud.
+
 ### Audio tools (stage V4)
 
 Three tools work on a recording the person already has: a track, a speech, or a file added with **Add a recording**

@@ -37,6 +37,8 @@ const PRODUCT_TITLES: Record<string, string> = {
   voicechange: "Change a voice",
   music: "Music",
   sfx: "Sound effects",
+  split: "Split into parts",
+  musicedit: "Edit music",
   lipsync: "Lip sync",
   model3d: "3D",
 };
@@ -50,6 +52,8 @@ const SENT: Record<string, string> = {
   voicechange: "the recording and the voice it should sound like",
   music: "what you describe and your lyrics",
   sfx: "what you describe",
+  split: "the recording",
+  musicedit: "the clip and what you describe",
   lipsync: "the picture and the voice",
   model3d: "the picture you add",
 };

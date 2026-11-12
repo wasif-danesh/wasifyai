@@ -31,13 +31,17 @@ from wasifyai_platform_sdk import (
     ConvertRequest,
     LipSyncRequest,
     LipSyncResult,
+    MusicEditRequest,
     MusicRequest,
     MusicResult,
+    SeparateRequest,
+    SeparateResult,
     SpeechResult,
+    Stem,
     TranscriptResult,
     VoiceEngineError,
 )
-from wasifyai_platform_sdk.cloud_queues import queue_for
+from wasifyai_platform_sdk.cloud_queues import fetch_file, queue_for
 from wasifyai_platform_sdk.fal import FalError, FalQueue
 from wasifyai_platform_sdk.offers import Priced, cost_event, no_offer, order, run_cheapest
 from wasifyai_platform_sdk.usage import UsageRecorder, record_safely
@@ -50,6 +54,23 @@ from wasifyai_api.lipsync_runtime import _video_size
 from wasifyai_api.logging import product_id as current_product
 from wasifyai_api.logging import tenant_id as current_tenant
 from wasifyai_api.own_keys import KeyChoice, KeyRoute, offer_of
+from wasifyai_api.own_keys_music import (
+    KEYED_MUSIC,
+    KEYED_MUSICEDIT,
+    KEYED_SFX,
+    KEYED_SPLIT,
+    MUSIC_PRODUCTS,
+    SPLIT_MODELS,
+    edit_body,
+    edit_job,
+    model_name,
+    music_body,
+    music_job,
+    music_model,
+    music_verb,
+    split_body,
+    stems_of,
+)
 from wasifyai_api.own_keys_voice import (
     KEYED_CHANGE,
     KEYED_CLONE,
@@ -165,29 +186,7 @@ def keyed_tool_model(product: str, route: KeyRoute, admin: bool = False) -> Voic
 
 # ---- music, sound effects and lip sync on the key ------------------------------------------------
 
-KEYED_MUSIC = "key:music"
-KEYED_SFX = "key:sfx"
 KEYED_LIPSYNC = "key:lipsync"
-# what each cloud model can do, in the shape the music screen and `check_music` read. MiniMax
-# chooses the length itself (it takes no duration), so its one length is only what is shown.
-MINIMAX_MODES = {
-    "song": {"lyrics": "optional", "instrumental": "toggle", "duration": [120, 120, 120]}
-}
-MINIMAX = ("fal-ai/minimax-music/v2.6", "minimax/music-2.6", "minimax:music@2.6")  # its endpoints
-# by the catalogue's id for the model (`own_keys_catalogue.py`); an admin's row on the web names
-# fal.ai's endpoint, so that is found too (`_music_of`)
-MUSIC_MODELS: dict[str, tuple[str, dict[str, Any]]] = {
-    "minimax-music-2.6": ("MiniMax Music 2.6", MINIMAX_MODES),
-    "elevenlabs-music": (
-        "ElevenLabs Music",
-        {"song": {"lyrics": "unused", "instrumental": "toggle", "duration": [3, 30, 600]}},
-    ),
-    "elevenlabs-sfx-v2": (
-        "ElevenLabs Sound Effects",
-        {"sfx": {"duration": [0.5, 5, 22]}},
-    ),
-}  # fmt: skip
-MINIMAX_MIN_PROMPT = 10  # fal.ai's MiniMax refuses a shorter description
 
 
 @dataclass(frozen=True)
@@ -252,19 +251,17 @@ def _title(name: str, route: KeyRoute, admin: bool) -> str:
 
 
 def keyed_music_model(product: str, route: KeyRoute, admin: bool = False) -> VoiceModel:
-    """The music (or sound effects) model offered while that product runs on the key."""
-    name, modes = MUSIC_MODELS.get(_model_id(product, route), (route.model, {}))
-    if not modes:
+    """The music model offered while that product (songs, sound effects, splitting or editing)
+    runs on a cloud model (ADR-0100, CP8)."""
+    model_id = _model_id(product, route)
+    name = model_name(model_id, route.model)
+    try:
+        return music_model(product, model_id, _title(name, route, admin), route.provider.id)
+    except VoiceEngineError:
         raise VoiceEngineError(
             "not_with_key",
             f"{route.model} is not a music model this app can use on {route.provider.title}.",
-        )
-    return VoiceModel(
-        id=KEYED_SFX if product == "sfx" else KEYED_MUSIC, title=_title(name, route, admin),
-        engine="remote", family=route.provider.id, package="", server_task="music",
-        tasks=("music",), recommended=(), languages=("multi",), sample_rate=44100,
-        music={"modes": modes, "request": {"duration": "top", "lyrics_option": "lyrics"}},
-    )  # fmt: skip
+        ) from None
 
 
 def keyed_lipsync_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
@@ -295,43 +292,6 @@ def keyed_lipsync_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
                  "work_per_s": {str(k): v for k, v in m.work.items()},
                  "frame": m.frame, "frame_short": {str(k): v for k, v in m.frame_short.items()}},
     )  # fmt: skip
-
-
-def music_body(endpoint: str, req: MusicRequest) -> dict[str, Any]:
-    """What the model is sent for a checked music request (fal.ai's fields, WaveSpeed's or a
-    Runware task)."""
-    if endpoint in MINIMAX and len(req.description) < MINIMAX_MIN_PROMPT:
-        raise VoiceEngineError(
-            "description_too_short", "Describe the music in at least ten letters for MiniMax."
-        )
-    if endpoint == "minimax:music@2.6":  # Runware: an `audioInference` task
-        settings: dict[str, Any] = {"instrumental": req.instrumental}
-        if req.lyrics:
-            settings["lyrics"] = req.lyrics
-        elif not req.instrumental:
-            settings["lyricsOptimizer"] = True
-        return {
-            "taskType": "audioInference", "positivePrompt": req.description,
-            "outputFormat": "WAV", "settings": settings,
-        }  # fmt: skip
-    if endpoint == "minimax/music-2.6":  # WaveSpeed: no lyrics writes them from the description
-        ws: dict[str, Any] = {"prompt": req.description, "is_instrumental": req.instrumental}
-        if req.lyrics:
-            ws["lyrics"] = req.lyrics
-        return ws
-    if endpoint == "fal-ai/minimax-music/v2.6":
-        body: dict[str, Any] = {"prompt": req.description, "is_instrumental": req.instrumental}
-        if req.lyrics:
-            body["lyrics"] = req.lyrics
-        elif not req.instrumental:
-            body["lyrics_optimizer"] = True  # MiniMax writes the words from the description
-        return body
-    if endpoint == "fal-ai/elevenlabs/music":
-        return {
-            "prompt": req.description, "music_length_ms": round(req.duration * 1000),
-            "force_instrumental": req.instrumental,
-        }  # fmt: skip
-    return {"text": req.description, "duration_seconds": req.duration}
 
 
 def lipsync_body(
@@ -412,7 +372,7 @@ class KeyedSpeechEngine:
         """The models on the key now, by their id (music, sound effects and lip sync are offered
         before this computer's models; speaking replaces them)."""
         out: dict[str, VoiceModel] = {}
-        for product in ("voice", *TOOL_PRODUCTS, "music", "sfx", "lipsync"):
+        for product in ("voice", *TOOL_PRODUCTS, *MUSIC_PRODUCTS.values(), "lipsync"):
             route = self._where(product)
             if route is None:
                 continue
@@ -443,8 +403,7 @@ class KeyedSpeechEngine:
         keyed = self._keyed()
         if not keyed:
             return local
-        product = {**VOICE_PRODUCTS, KEYED_MUSIC: "music", KEYED_SFX: "sfx",
-                   KEYED_LIPSYNC: "lipsync"}  # fmt: skip
+        product = {**VOICE_PRODUCTS, **MUSIC_PRODUCTS, KEYED_LIPSYNC: "lipsync"}
         rows = [
             self._row(m, route)
             for m in keyed.values()
@@ -736,35 +695,90 @@ class KeyedSpeechEngine:
     async def music(self, model: VoiceModel, req: MusicRequest) -> MusicResult:
         if model.id not in (KEYED_MUSIC, KEYED_SFX):
             return await self._local.music(model, req)  # type: ignore[no-any-return]
-        product = "sfx" if model.id == KEYED_SFX else "music"
+        product = MUSIC_PRODUCTS[model.id]
         route = await self._route(product)
+        model_id = _model_id(product, route)
+        verb = music_verb(model_id, req)
         t0 = time.monotonic()
 
         async def attempt(c: KeyChoice) -> tuple[bytes, str, dict[str, Any]]:
-            body = music_body(c.offer.endpoint, req)
+            endpoint = c.offer.endpoint_for(verb)
+            body = music_body(endpoint, req)
             async with self._client() as http:
                 queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
-                return await queue.make(c.offer.endpoint, body, "audio", "audio/mpeg", _no_progress)
+                return await queue.make(endpoint, body, "audio", "audio/mpeg", _no_progress)
 
-        name = route.provider.title
-        try:
-            (data, ctype, result), used = await on_cheapest(
-                route, product, {"seconds": req.duration}, attempt, self._usage
-            )
-            name = used.choice.provider.title
-        except FalError as e:
-            raise VoiceEngineError(e.code, e.message) from None
-        except TimeoutError:
-            raise VoiceEngineError("provider_refused", f"{name} took too long.") from None
-        wav = await to_wav(data, ".wav" if "wav" in ctype else ".mp3")
-        seconds = _wav_seconds(wav)
-        if seconds <= 0:
-            raise VoiceEngineError("engine_failed", f"{name} sent audio this app cannot read.")
+        (data, ctype, result), used = await self._cheapest(route, product, music_job(req), attempt)
+        wav = await self._wav(data, ".wav" if "wav" in ctype else ".mp3", used)
         return MusicResult(
-            wav, _wav_rate(wav) or model.sample_rate, seconds, used.offer.endpoint,
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav),
+            used.offer.endpoint_for(verb),
             result.get("seed") if isinstance(result.get("seed"), int) else None, 0.0,
             time.monotonic() - t0,
         )  # fmt: skip
+
+    async def music_edit(
+        self, model: VoiceModel, req: MusicEditRequest, source: Path
+    ) -> MusicResult:
+        """A stretch of a clip written again on a cloud model (ADR-0100, CP8): the clip goes up the
+        provider's way first."""
+        if model.id != KEYED_MUSICEDIT:
+            return await self._local.music_edit(model, req, source)  # type: ignore[no-any-return]
+        route = await self._route("musicedit")
+        clip = await asyncio.to_thread(source.read_bytes)
+        t0 = time.monotonic()
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            sent = await self._send(c, clip, source.name)
+            body = edit_body(c.offer.endpoint, c.provider.id, sent, req)
+            return await self._audio(c, c.offer.endpoint, body)
+
+        (data, ext), used = await self._cheapest(route, "musicedit", edit_job(req), attempt)
+        wav = await self._wav(data, ext, used)
+        return MusicResult(
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            None, 0.0, time.monotonic() - t0,
+        )  # fmt: skip
+
+    async def separate(
+        self, model: VoiceModel, req: SeparateRequest, source: Path
+    ) -> SeparateResult:
+        """A recording taken apart into stems on a cloud model (ADR-0100, CP8): each stem the
+        provider answers is fetched and read as a WAV."""
+        if model.id != KEYED_SPLIT:
+            return await self._local.separate(model, req, source)  # type: ignore[no-any-return]
+        route = await self._route("split")
+        model_id = _model_id("split", route)
+        if model_id not in SPLIT_MODELS:
+            raise VoiceEngineError("not_with_key", f"{route.model} does not split music here.")
+        recording = await asyncio.to_thread(source.read_bytes)
+        t0 = time.monotonic()
+
+        async def attempt(c: KeyChoice) -> list[tuple[str, bytes, str]]:
+            sent = await self._send(c, recording, source.name)
+            body = split_body(model_id, c.provider.id, sent)
+            async with self._client() as http:
+                queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+                result = await queue.call(c.offer.endpoint, body, _no_progress)
+                files = []
+                for name, where in stems_of(model_id, result):
+                    url = where.get("url") if isinstance(where, dict) else where
+                    data, ctype = await fetch_file(http, c.provider.title, url, "audio/wav",
+                                                   self._timeout)  # fmt: skip
+                    files.append((name, data, ".wav" if "wav" in ctype else ".mp3"))
+                return files
+
+        job = {"seconds": req.source_seconds}
+        files, used = await self._cheapest(route, "split", job, attempt)
+        stems = []
+        for name, data, ext in files:
+            wav = await self._wav(data, ext, used)
+            stems.append(Stem(name, wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav)))
+        if not stems:
+            raise VoiceEngineError(
+                "engine_failed", f"{used.choice.provider.title} sent no parts back."
+            )
+        return SeparateResult(tuple(stems), used.offer.endpoint, 0.0, time.monotonic() - t0)
 
     async def lipsync(
         self, model: VoiceModel, req: LipSyncRequest, picture: Path, voice: Path

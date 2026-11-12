@@ -526,6 +526,38 @@ describe("speech and listening", () => {
     expect(use).toHaveBeenCalledWith("voiceclone", { provider: "fal", model: "qwen3-tts" });
   });
 
+  it("splitting has its own cloud models; choosing one on this computer takes it off the cloud (CP8)", async () => {
+    const { keys, use } = onKey("split", "demucs");
+    const local = voiceModel({ id: "htdemucs", tasks: ["separate"], state: "ready" });
+    const api = voiceChoices(
+      { voice: voice([local]), models, memory: memory(), engines: engines(), keys },
+      "music",
+      "separate",
+    );
+    expect(api.cloud?.product).toBe("Split into parts");
+    const rows = (await api.list()).choices.filter((r) => r.place === "cloud");
+    expect(rows.map((r) => [r.id, r.engineId])).toEqual([["cloud:split:fal:demucs", "key:split"]]);
+    expect(rows[0]?.plain).toContain("the recording");
+    await api.choose("cloud:split:fal:demucs");
+    expect(use).toHaveBeenCalledWith("split", { provider: "fal", model: "demucs" });
+    await api.choose("htdemucs");
+    expect(use).toHaveBeenLastCalledWith("split", null);
+  });
+
+  it("the music group offers cloud models for songs, effects, splitting and editing (CP8)", () => {
+    const api = voiceChoices(
+      {
+        voice: voice([]),
+        models,
+        memory: memory(),
+        engines: engines(),
+        keys: onKey("music", "x").keys,
+      },
+      "music",
+    );
+    expect(api.cloud?.product).toBe("Music or Sound effects or Split into parts or Edit music");
+  });
+
   it("lip sync lists its cloud models and a cloud model of music is chosen for music", async () => {
     const { keys, use } = cloudKeys("lipsync", ["fal-ai/infinitalk", "veed/fabric-1.0/fast"], null);
     const local = voiceModel({ id: "echomimic", tasks: ["lipsync"], state: "ready" });

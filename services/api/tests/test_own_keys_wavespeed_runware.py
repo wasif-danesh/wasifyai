@@ -50,8 +50,8 @@ def a_png() -> bytes:
 class WaveSpeed:
     """A fake WaveSpeed: one prediction, processing once, then done (or failed)."""
 
-    def __init__(self, file: bytes, ctype: str, fail: str | None = None):
-        self.file, self.ctype, self.fail = file, ctype, fail
+    def __init__(self, file: bytes, ctype: str, fail: str | None = None, outputs: int = 1):
+        self.file, self.ctype, self.fail, self.outputs = file, ctype, fail, outputs
         self.requests: list[httpx.Request] = []
         self.uploads: list[dict] = []
         self.polls = 0
@@ -78,8 +78,8 @@ class WaveSpeed:
                 return httpx.Response(200, json={"data": {"status": "processing", "outputs": []}})
             if self.fail:
                 return httpx.Response(200, json={"data": {"status": "failed", "error": self.fail}})
-            out = "https://d1.wavespeed.ai/out/file"
-            return httpx.Response(200, json={"data": {"status": "completed", "outputs": [out]}})
+            outs = [f"https://d1.wavespeed.ai/out/file{i}" for i in range(self.outputs)]
+            return httpx.Response(200, json={"data": {"status": "completed", "outputs": outs}})
         return httpx.Response(200, content=self.file, headers={"content-type": self.ctype})
 
     def client(self) -> httpx.AsyncClient:

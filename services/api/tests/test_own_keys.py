@@ -71,7 +71,7 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     body = c.get("/desktop/keys").json()
     assert list(rows(body)) == [
         "chat", "media", "images", "video", "voice", "voiceclone", "transcribe", "voicechange",
-        "music", "sfx", "lipsync", "model3d",
+        "music", "sfx", "split", "musicedit", "lipsync", "model3d",
     ]  # fmt: skip
     assert all(p["keys"] == [] and p["use"] is None for p in body["products"])
     by = rows(body)
@@ -83,10 +83,10 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     assert by["media"]["providers"] == ["runware", "wavespeed", "fal"]
     for media in ("images", "video", "voice", "voiceclone", "music", "lipsync"):
         assert by[media]["providers"] == ["runware", "wavespeed", "fal"], media
-    for media in ("transcribe", "voicechange"):
+    for media in ("transcribe", "voicechange", "sfx", "split"):
         assert by[media]["providers"] == ["wavespeed", "fal"], media
-    for media in ("sfx", "model3d"):
-        assert by[media]["providers"] == ["fal"], media
+    assert by["musicedit"]["providers"] == ["runware", "fal"]
+    assert by["model3d"]["providers"] == ["fal"]
     assert [p["id"] for p in body["providers"]] == [
         "anthropic", "openai", "gemini", "deepseek", "zai", "openrouter",
         "runware", "wavespeed", "fal",
@@ -202,7 +202,7 @@ def test_choosing_a_cloud_model_routes_the_product_and_clearing_it_keeps_the_key
     [
         ({"model": "minimax-music-2.6"}, 409, "needs a Runware or WaveSpeed or fal.ai key"),
         ({"provider": "openrouter", "model": "anthropic/claude-haiku-5.5"}, 422, "no music model"),
-        ({"provider": "fal", "model": "elevenlabs-music"}, 409, "needs a fal.ai key"),
+        ({"provider": "fal", "model": "elevenlabs-music"}, 409, "needs a WaveSpeed or fal.ai key"),
         ({"provider": "anthropic", "model": "claude-haiku-5-5"}, 422, "no music model"),
     ],
 )
@@ -281,7 +281,7 @@ async def test_keys_of_providers_no_longer_offered_are_deleted_on_first_start():
         "keys.music.wavespeed",
         "keys.images.runware",
         "keys.video.runware",
-        "keys.sfx.wavespeed",
+        "keys.sfx.runware",
     ):  # the last one has no row
         await secrets.put(name, GOOD)
     svc = OwnKeysService(store, secrets, {"text": FakeProviders(), "media": FakeProviders()})

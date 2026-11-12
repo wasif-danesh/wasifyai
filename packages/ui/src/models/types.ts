@@ -82,7 +82,7 @@ export const groupOf = (id: GroupId): Group => GROUPS.find((g) => g.id === id) a
 /** The group a voice task belongs to: the screens name tasks, the picker names groups. */
 export function groupOfTask(task: string): GroupId {
   if (task === "transcribe") return "listening";
-  if (task === "music" || task === "sfx" || task === "separate") return "music";
+  if (["music", "sfx", "separate", "musicedit"].includes(task)) return "music";
   if (task === "lipsync") return "faces";
   return "voice";
 }

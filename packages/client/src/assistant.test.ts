@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type ChatAction,
   type ChatState,
+  attachmentKind,
   chatReducer,
   createAssistantApi,
   fromStored,
@@ -232,6 +233,32 @@ describe("assistant api", () => {
     });
     expect(await api.options()).toEqual({ thinking: true });
     expect(calls).toEqual(["/products/wasifyai-assistant/options"]);
+  });
+
+  it("sends a recording or a clip to the media attachment route with its name", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const api = createAssistantApi({
+      async fetch(path, init) {
+        calls.push({ path, init });
+        return new Response(
+          JSON.stringify({ id: "v1", kind: "video", name: "talk.mov", seconds: 12 }),
+          { status: 201 },
+        );
+      },
+    });
+    const clip = new Blob([new Uint8Array([1])], { type: "video/quicktime" });
+    expect(await api.attach(clip, "talk.mov")).toEqual({
+      id: "v1",
+      kind: "video",
+      name: "talk.mov",
+      seconds: 12,
+    });
+    expect(calls[0]?.path).toBe("/products/wasifyai-assistant/attachments/media");
+    expect(new Headers(calls[0]?.init?.headers).get("x-file-name")).toBe("talk.mov");
+    // a file the browser gives no type to is told by its name
+    expect(attachmentKind({ type: "" }, "memo.M4A")).toBe("audio");
+    expect(attachmentKind({ type: "" }, "notes.pdf")).toBe("document");
+    expect(attachmentKind({ type: "image/png" }, "a.png")).toBe("image");
   });
 
   it("reads and changes the web search settings, sending a key but never asking for one back", async () => {

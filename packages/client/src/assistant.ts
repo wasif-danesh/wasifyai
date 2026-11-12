@@ -22,7 +22,7 @@ export type StoredPart =
   /** a file attached to a message (ADR-0083, CO2); a picture has a short-lived `url` when the engine read the chat */
   | {
       type: "attachment";
-      kind: "image" | "document";
+      kind: "image" | "document" | "audio" | "video";
       id: string;
       key?: string;
       name: string;
@@ -108,7 +108,7 @@ export type ChatOptions = { thinking: boolean; search?: SearchOptions; attach?: 
 /** A file that was sent to the engine and waits to be attached to the next message. */
 export type UploadedAttachment = {
   id: string;
-  kind: "image" | "document";
+  kind: "image" | "document" | "audio" | "video";
   name: string;
   chars?: number;
   pages?: number;
@@ -116,7 +116,20 @@ export type UploadedAttachment = {
   height?: number;
   /** a document longer than the engine keeps */
   truncated?: boolean;
+  /** a recording's or a clip's length */
+  seconds?: number;
 };
+
+const AUDIO_FILE = /\.(wav|mp3|m4a|aac|flac|ogg|oga|opus|aiff?)$/i;
+const VIDEO_FILE = /\.(mp4|mov|m4v|webm|mkv|avi)$/i;
+
+/** What a file is to the chat: a picture, a recording, a clip, or else a document. */
+export function attachmentKind(file: { type: string }, name: string): UploadedAttachment["kind"] {
+  if (/^image\/(png|jpeg|webp)$/.test(file.type)) return "image";
+  if (file.type.startsWith("audio/") || AUDIO_FILE.test(name)) return "audio";
+  if (file.type.startsWith("video/") || VIDEO_FILE.test(name)) return "video";
+  return "document";
+}
 
 export type SearchProvider = {
   id: string;
@@ -148,7 +161,8 @@ export type AssistantApi = {
   options(): Promise<ChatOptions>;
   searchStatus(): Promise<SearchStatus>;
   updateSearch(update: SearchUpdate): Promise<SearchStatus>;
-  /** Send a picture (PNG, JPEG, WebP) or a document to the engine to attach to the next message. Refused in words. */
+  /** Send a picture (PNG, JPEG, WebP), a recording, a clip or a document to the engine to attach to the next message.
+   * Refused in words. */
   attach(file: Blob, name: string): Promise<UploadedAttachment>;
   /** The picture reader of the chosen model (desktop): how it stands, and fetching it (the size the person was shown). */
   pictureReader?: {
@@ -184,8 +198,24 @@ export function createAssistantApi(transport: Transport): AssistantApi {
         body: JSON.stringify(update),
       }),
     async attach(file, name) {
-      const kind = /^image\/(png|jpeg|webp)$/.test(file.type) ? "image" : "document";
+      const kind = attachmentKind(file, name);
       const product = `/products/${ASSISTANT_PRODUCT}`;
+      if (kind === "audio" || kind === "video") {
+        const r = await json<{
+          id: string;
+          kind: "audio" | "video";
+          name: string;
+          seconds: number;
+        }>(`${product}/attachments/media`, {
+          method: "POST",
+          headers: {
+            "content-type": file.type || "application/octet-stream",
+            "x-file-name": encodeURIComponent(name),
+          },
+          body: file,
+        });
+        return { id: r.id, kind: r.kind, name: r.name, seconds: r.seconds };
+      }
       if (kind === "image") {
         const r = await json<{ upload_id: string; width: number; height: number }>(
           `${product}/uploads/images`,
@@ -364,7 +394,7 @@ export function cardDetails(raw: Record<string, unknown>): CardDetails {
 
 /** A file attached to a message, as a message shows it. */
 export type AttachmentInfo = {
-  kind: "image" | "document";
+  kind: "image" | "document" | "audio" | "video";
   id: string;
   name: string;
   /** a picture: where to show it from (a short-lived link, or the picture the person chose) */

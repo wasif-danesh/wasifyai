@@ -13,10 +13,13 @@ from wasifyai_platform_sdk import UploadError
 from wasifyai_platform_sdk.actions import Action, ActionContext, CallBinding, Outcome
 from wasifyai_platform_sdk.actions.library import LibraryKind, creation_uri
 
+from wasifyai_assistant.attachments import STORED
+
 PRODUCT_ID = "wasifyai-assistant"
-# where the chat keeps each kind of attachment (the upload's key under the person's prefix)
-STORED_AS = {"image": "png"}
-NOUNS = {"image": "picture"}
+# where the chat keeps each kind of attachment that can be kept (the upload's key under the person's
+# prefix); a document goes into a notebook instead (CE4)
+STORED_AS = {kind: ext for ext, kind in STORED if kind != "document"}
+NOUNS = {"image": "picture", "audio": "recording", "video": "clip"}
 
 
 class KeepIn(BaseModel):
@@ -27,6 +30,12 @@ class KeepIn(BaseModel):
     title: str = Field(
         "", max_length=120, description="A name for it in the library; its file name if left out."
     )
+    as_kind: str = Field(
+        "", max_length=20,
+        description="What to keep it as when it could be more than one: track (the sound of a "
+        "recording or a clip) or video (a clip). Left out, a picture is kept as an image, a "
+        "recording as a track and a clip as a video.",
+    )  # fmt: skip
 
 
 class KeepOut(BaseModel):
@@ -50,8 +59,18 @@ async def find_attachment(ctx: ActionContext, attachment_id: str) -> tuple[str, 
     return None
 
 
-def keeper(ctx: ActionContext, kind: str) -> LibraryKind | None:
-    return next((k for k in ctx.library.values() if kind in k.takes and k.keep), None)
+# what each kind of attachment is kept as when nothing else is asked
+DEFAULT_AS = {"image": "image", "audio": "track", "video": "video"}
+
+
+def keeper(ctx: ActionContext, kind: str, as_kind: str = "") -> LibraryKind | None:
+    """The library kind that keeps an attachment of `kind`: the one asked for (`as_kind`), else the
+    usual one, else any that takes it."""
+    takers = [k for k in ctx.library.values() if kind in k.takes and k.keep]
+    if as_kind:
+        return next((k for k in takers if k.kind == as_kind), None)
+    usual = next((k for k in takers if k.kind == DEFAULT_AS.get(kind)), None)
+    return usual or next(iter(takers), None)
 
 
 async def _keep(p: KeepIn, ctx: ActionContext) -> Outcome:
@@ -61,10 +80,12 @@ async def _keep(p: KeepIn, ctx: ActionContext) -> Outcome:
             "That attachment is not there any more. Please attach the file again.", "not_found"
         )
     kind, record = found
-    library = keeper(ctx, kind)
+    library = keeper(ctx, kind, p.as_kind.strip())
     if library is None or library.keep is None:
         return Outcome.refused(
-            f"This computer cannot keep an attached {NOUNS.get(kind, kind)}.", "unavailable"
+            f"This computer cannot keep an attached {NOUNS.get(kind, kind)}"
+            + (f" as a {p.as_kind.strip()}." if p.as_kind.strip() else "."),
+            "unavailable",
         )
     with ctx.deps.acting_as(ctx.actor, PRODUCT_ID):
         try:
@@ -97,7 +118,8 @@ def actions() -> list[Action]:
             id="library.keep_attachment", title="Keep an attached file",
             summary="Save a file the person attached in this chat to the library, to work on it.",
             description=(
-                "Save a picture the person attached in this chat to their library and get its id. "
+                "Save a picture, recording or clip the person attached in this chat to their "
+                "library and get its id. "
                 "Do this first whenever the person asks to change, animate, make talk, turn into "
                 "3D or otherwise use an attached file: the other actions only take library items. "
                 "Then propose the action they asked for with the id this returns."

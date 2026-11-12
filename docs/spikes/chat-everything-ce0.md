@@ -88,3 +88,11 @@ asks with an attachment 4 of 22 (8 still refused: recordings and clips are CE2),
 
 What fails now: looking a guide up and answering in words on a plain ask (17), recordings and clips (8, CE2), and a
 few wrong actions (`image.generate` for a reference, `motion.make_file` for a new motion video).
+
+## After CE2
+
+Recordings and clips are taken now. 35 of 74 passed: plain asks 9 of 26, asks with an attachment 8 of 22 (from 1 at the
+baseline), follow-ups 18 of 26. New passes: Extend, Clone a voice, Change a voice and Dub straight from an attached file.
+Still failing with a file: the four picture tools (the model opens the screen or answers in words), Lip sync (it
+proposes `image.edit`), Transcribe, Split, Edit speech, the music video of Creative Studio (`creative.plan` without the
+song) and teaching from photos (CE5).

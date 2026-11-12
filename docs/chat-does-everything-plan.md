@@ -91,6 +91,7 @@ Order: CE0, then CE1 and CE3 (they unblock the most), then CE2, CE4, CE5, CE6, C
 |---|---|---|
 | CE0 | done 2026-11-12: 74 menu cases, the local default passes 22 | `docs/spikes/chat-everything-ce0.md` |
 | CE1 | done 2026-11-12: `library.keep_attachment`, ids named, pictures for every model | ADR-0083 amendment of 2026-11-12 |
+| CE2 | done 2026-11-12: recordings (50 MB, 10 min) and clips (200 MB, 2 min) attach in the chat on both surfaces, cleaned by FFmpeg; kept as a song or a video by `library.keep_attachment`; the Import buttons of Videos and Your music share the same code | `wasifyai_api/attachments.py` (`attach_media`), `wasifyai_video/keep.py`, `wasifyai_voice/keep.py`, ADR-0083 amendment |
 | CE3 | done 2026-11-12: the model is told the ids of what was made; every picture, song and clip result is drawn in the chat with Open and follow-up buttons (Make it move, Make a 3D model, Make it longer, Split the voice out, Write it out); the web chat now plays songs too. 3D and dub results keep the plain card with Open. Follow-ups pass 18 of 26 (from 8) | `tools.ids_said`, `tool-uis/ActionCards.tsx` (`FOLLOW_UPS`), `ToolCard.tsx` (`VideoPlayer`) |
 
 ## Not in this plan

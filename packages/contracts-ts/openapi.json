@@ -234,6 +234,17 @@
             ],
             "title": "Pages"
           },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
           "truncated": {
             "default": false,
             "title": "Truncated",
@@ -7740,6 +7751,28 @@
           }
         },
         "summary": "Attach Document",
+        "tags": [
+          "attachments"
+        ]
+      }
+    },
+    "/products/wasifyai-assistant/attachments/media": {
+      "post": {
+        "description": "A recording or a clip for a chat message: the body is the file, `x-file-name` its name\n(its extension says which). The chat keeps it in the library when the person asks to work on\nit (`library.keep_attachment`).",
+        "operationId": "attach_media_products_wasifyai_assistant_attachments_media_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Attach Media",
         "tags": [
           "attachments"
         ]

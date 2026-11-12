@@ -17,8 +17,13 @@ from wasifyai_assistant.store import Message
 
 KEEP = "library.keep_attachment"
 
-# runs `library.keep_attachment` for one attachment id; the library id, or None when it failed
-Keep = Callable[[str], Awaitable[str | None]]
+# runs `library.keep_attachment` for one attachment id, kept as the library kind given ("" for the
+# usual one); the library id, or None when it failed
+Keep = Callable[[str, str], Awaitable[str | None]]
+
+# what an id field takes, so a clip named as `source_id` (a recording: Dub, Transcribe) is kept as a
+# track and as `video_id` (Extend) as a clip; a field not named here keeps the usual kind
+AS_KIND = {"source_id": "track", "video_id": "video", "image_id": "image", "image_ids": "image"}
 
 
 def attachment_names(history: list[Message]) -> dict[str, str]:
@@ -44,7 +49,11 @@ def attachment_names(history: list[Message]) -> dict[str, str]:
 
 
 async def kept_in_place(
-    action_id: str, params: dict[str, Any], names: dict[str, str], keep: Keep, done: dict[str, str]
+    action_id: str,
+    params: dict[str, Any],
+    names: dict[str, str],
+    keep: Keep,
+    done: dict[tuple[str, str], str],
 ) -> dict[str, Any]:
     """`params` with each attachment it names replaced by its library id. `done` remembers what
     was kept in this run, so one file is kept once. A value that is not an attachment, and the
@@ -52,25 +61,25 @@ async def kept_in_place(
     if action_id == KEEP or not names:
         return params
 
-    async def one(value: Any) -> Any:
+    async def one(value: Any, as_kind: str) -> Any:
         if not isinstance(value, str):
             return value
         ident = names.get(value.strip())
         if ident is None:
             return value
-        if ident not in done:
-            made = await keep(ident)
+        if (ident, as_kind) not in done:
+            made = await keep(ident, as_kind)
             if made is None:
                 return value  # left as it was: the action says what is wrong with it
-            done[ident] = made
-        return done[ident]
+            done[(ident, as_kind)] = made
+        return done[(ident, as_kind)]
 
     out: dict[str, Any] = {}
     for key, value in params.items():
         if not key.endswith(("_id", "_ids")):  # only where a library item belongs, never a prompt
             out[key] = value
         elif isinstance(value, list):  # image.reference takes two pictures
-            out[key] = [await one(v) for v in value]
+            out[key] = [await one(v, AS_KIND.get(key, "")) for v in value]
         else:
-            out[key] = await one(value)
+            out[key] = await one(value, AS_KIND.get(key, ""))
     return out

@@ -2,7 +2,7 @@
 // What is attached to a message, in the box before it is sent and under the person's message after (ADR-0083, CO2). A picture is a
 // thumbnail; a document is a chip with its name and how much of it there is. Plain text only: the name came from a file.
 import type { AttachmentInfo } from "@wasifyai/client";
-import { FileText, X } from "lucide-react";
+import { FileText, Film, Music, X } from "lucide-react";
 import { Spinner } from "../../components/spinner";
 
 export type ChipState = "uploading" | "ready" | "failed";
@@ -17,12 +17,24 @@ export type ChipData = AttachmentInfo & {
   error?: string;
 };
 
+/** A length as people say it: "45 s", "3 min 20 s". */
+function lengthOf(seconds: number): string {
+  const s = Math.round(seconds);
+  if (s < 60) return `${s} s`;
+  return s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`;
+}
+
 export function detailOf(file: {
   kind: string;
   pages?: number;
   chars?: number;
   truncated?: boolean;
+  seconds?: number;
 }): string {
+  if (file.kind === "audio" || file.kind === "video") {
+    const what = file.kind === "audio" ? "Recording" : "Video";
+    return file.seconds ? `${what}, ${lengthOf(file.seconds)}` : what;
+  }
   if (file.kind !== "document") return "";
   if (file.truncated) return "Only the start is used";
   if (file.pages) return file.pages === 1 ? "1 page" : `${file.pages} pages`;
@@ -86,7 +98,15 @@ export function AttachmentChip({
         failed ? "border-destructive" : ""
       }`}
     >
-      {working ? <Spinner /> : <FileText className="size-4 shrink-0" aria-hidden="true" />}
+      {working ? (
+        <Spinner />
+      ) : file.kind === "audio" ? (
+        <Music className="size-4 shrink-0" aria-hidden="true" />
+      ) : file.kind === "video" ? (
+        <Film className="size-4 shrink-0" aria-hidden="true" />
+      ) : (
+        <FileText className="size-4 shrink-0" aria-hidden="true" />
+      )}
       <span className="min-w-0">
         <span dir="auto" className="block truncate">
           {file.name}
@@ -94,7 +114,13 @@ export function AttachmentChip({
         <span
           className={`block truncate text-xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
         >
-          {failed ? file.error : working ? "Reading" : file.detail}
+          {failed
+            ? file.error
+            : working
+              ? file.kind === "document"
+                ? "Reading"
+                : "Getting it ready"
+              : file.detail}
         </span>
         {file.cut && onNotebook && !failed && !working ? (
           <button

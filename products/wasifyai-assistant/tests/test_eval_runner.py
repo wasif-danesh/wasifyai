@@ -172,7 +172,9 @@ def test_attachments_are_refused_as_the_chat_does_and_given_as_the_chat_gives_th
     blind = ev.user_turn(picture, vision=False)["content"]
     assert isinstance(blind, str) and "attachment id" in blind and "cannot look at it" in blind
     clip = {"id": "c", "say": "Dub this.", "attach": [{"kind": "video", "name": "a.mp4"}]}
-    assert "video" in (ev.attachment_refusal(clip, vision=True) or "")
+    assert ev.attachment_refusal(clip, vision=True) is None  # recordings and clips since CE2
+    told = ev.user_turn(clip, vision=False)["content"]
+    assert 'the clip "a.mp4" (attachment id' in told
     doc = {
         "id": "d",
         "say": "Read it.",

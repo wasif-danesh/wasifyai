@@ -397,9 +397,32 @@ async def _export(ctx: ActionContext, item_id: str, folder: Path) -> Path | None
     )
 
 
+async def _keep_clip(ctx: ActionContext, data: bytes, name: str) -> LibraryItem:
+    """A clip attached in the chat, made a clip of the library as the Import button does (CE2)."""
+    import tempfile
+
+    from wasifyai_platform_sdk import UploadError
+
+    from wasifyai_video.keep import add_clip, title_of
+    from wasifyai_video.videos import ClipError
+
+    deps = need_deps(ctx)
+    with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
+        source = Path(tmp) / "attached.mp4"
+        await asyncio.to_thread(source.write_bytes, data)
+        try:
+            made = await add_clip(deps, video_store(deps.engine), ctx.actor, source, title_of(name))
+        except (ClipError, PosterError) as e:
+            raise UploadError(422, str(e)) from None
+    return _item(made)
+
+
 def library_kinds() -> list[LibraryKind]:
     return [
-        LibraryKind("video", PRODUCT_ID, "video", _list, _get, _delete, None, _export, _read),
+        LibraryKind(
+            "video", PRODUCT_ID, "video", _list, _get, _delete, None, _export, _read,
+            takes=("video",), keep=_keep_clip,
+        ),  # fmt: skip
         *builder_library_kinds(),
     ]
 

@@ -335,13 +335,16 @@ def remote_size(case: dict) -> int:
 
 
 def attachment_refusal(case: dict, vision: bool) -> str | None:
-    """Why the app would not take the case's attachments at all, as the chat does today: a
-    recording or a clip (stage CE2). A picture is taken by every model; one that cannot look at it
-    is told so, and is still given its id (CE1)."""
-    kinds = {a["kind"] for a in case.get("attach") or []}
-    if kinds - {"image", "document"}:
-        return f"refused: the chat cannot take {sorted(kinds - {'image', 'document'})}"
-    return None
+    """Why the app would not take the case's attachments at all. Since CE2 it takes every kind the
+    cases use: a picture (named by its id even to a model that cannot look at it), a document, a
+    recording and a clip; kept for a kind it does not know."""
+    unknown = {a["kind"] for a in case.get("attach") or []} - {
+        "image",
+        "document",
+        "audio",
+        "video",
+    }
+    return f"refused: the chat cannot take {sorted(unknown)}" if unknown else None
 
 
 TINY_PICTURE = (

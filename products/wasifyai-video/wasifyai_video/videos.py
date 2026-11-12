@@ -734,6 +734,41 @@ async def import_clip(source: Path, out: Path) -> tuple[int, int, int]:
     return w, h, frames
 
 
+ATTACH_BOX = 1280  # the longer side of a clip attached in the chat, at most
+
+
+async def clean_clip(source: Path, out: Path, max_seconds: float) -> float:
+    """Make a video file attached in the chat into a clean clip with its sound: H.264 and AAC, no
+    tags, subtitles or other streams, the longer side at most ATTACH_BOX. Returns its length in
+    seconds. The file is decoded by ffmpeg, never kept as sent (docs/chat-does-everything-plan.md,
+    CE2). Raises `ClipError` in words."""
+    rc, report = await _run_ffmpeg(["-i", str(source)], FFMPEG_TIMEOUT_S)  # it only reads
+    size, length = _SIZE.search(report), _DURATION.search(report)
+    if not size or not length:
+        log.info("an attached file was not a readable video (exit %s)", rc)
+        raise ClipError("That file is not a video this app can read. Try an MP4 or MOV file.")
+    seconds = int(length[1]) * 3600 + int(length[2]) * 60 + float(length[3])
+    if seconds > max_seconds:
+        raise ClipError(
+            f"That video is longer than {round(max_seconds / 60)} minutes. Try a shorter one."
+        )
+    if seconds < 0.5:
+        raise ClipError("That video is too short. It needs to be at least half a second.")
+    box = ATTACH_BOX
+    fit = f"scale='if(gte(iw,ih),min({box},iw),-2)':'if(gte(iw,ih),-2,min({box},ih))',setsar=1"
+    rc, report = await _run_ffmpeg(
+        ["-y", "-i", str(source), "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn",
+         "-map_metadata", "-1", "-map_chapters", "-1", "-vf", fit, "-c:v", "libx264",
+         "-pix_fmt", "yuv420p", "-crf", "20", "-c:a", "aac", "-b:a", "160k",
+         "-movflags", "+faststart", str(out)],
+        IMPORT_TIMEOUT_S,
+    )  # fmt: skip
+    if rc != 0 or not await asyncio.to_thread(out.exists):
+        log.error("ffmpeg could not clean an attached video (exit %s): %s", rc, report[-300:])
+        raise ClipError("That video could not be read. Try another file.")
+    return seconds
+
+
 OVERLAP_MIN_FRAMES = 9  # what the engine takes of a clip's end: a clip needs at least that
 
 

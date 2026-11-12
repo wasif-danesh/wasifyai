@@ -47,6 +47,13 @@ class Attached:
     cut: bool = False  # only the start of the document is given
 
 
+# where the chat keeps each kind of attachment: the upload's key is `uploads/{id}.{ext}` under the
+# person's prefix (a picture and a document since ADR-0083; a recording and a clip since CE2)
+STORED: tuple[tuple[str, str], ...] = (
+    ("png", "image"), ("txt", "document"), ("wav", "audio"), ("mp4", "video"),
+)  # fmt: skip
+
+
 def attachment_parts(m: Message) -> list[dict[str, Any]]:
     return [p for p in m.parts if p.get("type") == "attachment"]
 

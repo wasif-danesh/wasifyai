@@ -1,7 +1,7 @@
 "use client";
 // Attaching files to the next message (ADR-0083, stage CO2): the picker, drag and drop, paste, the upload of each file, and what
 // the run is told (`attachments`). The engine checks everything again; this keeps the person informed while it happens.
-import type { AttachmentInfo, UploadedAttachment } from "@wasifyai/client";
+import { type AttachmentInfo, type UploadedAttachment, attachmentKind } from "@wasifyai/client";
 import { Paperclip } from "lucide-react";
 import {
   type ClipboardEvent,
@@ -23,10 +23,10 @@ import { AttachmentChip, type ChipData, detailOf } from "./AttachmentChip";
 export const MAX_ATTACHMENTS = 4;
 // how much of one document the model is given (the engine cuts at the same size): longer ones say so
 const DOC_CHARS = 12_000;
-const PICTURE = /^image\/(png|jpeg|webp)$/;
 // what the file picker offers: pictures, and the documents the engine reads (PDF and Office need the document reader)
 export const ATTACH_ACCEPT =
-  "image/png,image/jpeg,image/webp,.txt,.md,.markdown,.csv,.html,.htm,.pdf,.docx,.pptx,.xlsx";
+  "image/png,image/jpeg,image/webp,.txt,.md,.markdown,.csv,.html,.htm,.pdf,.docx,.pptx,.xlsx," +
+  "audio/*,.mp3,.wav,.m4a,.flac,.ogg,video/*,.mp4,.mov,.m4v,.webm";
 
 /** What the box needs to attach: the engine's answer about this model, and the two calls. */
 export type AttachControl = {
@@ -100,7 +100,7 @@ export function useAttachments(control: AttachControl | undefined) {
       const keep: File[] = [];
       const uploads: { key: string; file: File }[] = [];
       for (const file of files) {
-        const kind = PICTURE.test(file.type) ? "image" : "document";
+        const kind = attachmentKind(file, file.name);
         const key = `a${++seq.current}`;
         const failed = (error: string) =>
           next.push({ key, kind, id: key, name: file.name, state: "failed", error });
@@ -111,7 +111,7 @@ export function useAttachments(control: AttachControl | undefined) {
         // a picture is attached even for a model that cannot look at it: the chat can still keep it,
         // change it or make it move (docs/chat-does-everything-plan.md, CE1)
         if (room <= 0) failed(`At most ${MAX_ATTACHMENTS} files fit in one message.`);
-        else if (kind === "document" && !c.documents) failed("Files cannot be attached here.");
+        else if (kind !== "image" && !c.documents) failed("Files cannot be attached here.");
         else {
           room -= 1;
           let url: string | undefined;
@@ -244,8 +244,8 @@ export function useAttachments(control: AttachControl | undefined) {
             Icon: Paperclip,
             hint:
               control.images === false
-                ? "Attach a picture to change or animate, or a document. This model cannot describe pictures."
-                : "Attach a picture or a document to your next message.",
+                ? "Attach a picture, a recording, a video or a document. This model cannot describe pictures."
+                : "Attach a picture, a recording, a video or a document to your next message.",
             disabled: items.length >= MAX_ATTACHMENTS,
             onPress: () => input.current?.click(),
           }

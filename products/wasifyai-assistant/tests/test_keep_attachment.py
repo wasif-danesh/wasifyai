@@ -36,7 +36,7 @@ def png(size=(64, 48)) -> bytes:
 
 
 class Rig:
-    def __init__(self, engine, with_images: bool = True):
+    def __init__(self, engine, with_images: bool = True, kinds: list | None = None, data_dir=None):
         self.indexed: list[tuple[str, str]] = []
         rig = self
 
@@ -46,10 +46,11 @@ class Rig:
 
         self.state: Any = SimpleNamespace(
             engine=engine, storage=ScopedStorage(memory_storage()), uploads=InMemoryUploadStore(),
-            usage=InMemoryUsageRecorder(), creation_index=Index(),
+            usage=InMemoryUsageRecorder(), creation_index=Index(), voice_store=None,
+            desktop_dir=str(data_dir) if data_dir else None,
         )  # fmt: skip
         self.deps = RouteDeps(self.state, lambda: ME)
-        kinds = library_kinds() if with_images else []
+        kinds = [*(library_kinds() if with_images else []), *(kinds or [])]
         self.ex = ActionExecutor(
             ActionRegistry([*builtin_actions(), *image_actions(), *assistant_actions()]),
             FakeActionHost(self.deps),
@@ -123,11 +124,11 @@ async def test_an_attachment_named_in_an_id_field_is_kept_once_and_replaced():
     names = {"a1": "a1", "beach.png": "a1", "b2": "b2"}
     calls: list[str] = []
 
-    async def keep(ident: str) -> str | None:
+    async def keep(ident: str, as_kind: str) -> str | None:
         calls.append(ident)
         return f"lib-{ident}"
 
-    done: dict[str, str] = {}
+    done: dict[tuple[str, str], str] = {}
     out = await kept_in_place(
         "image.reference",
         {"image_ids": ["beach.png", "b2"], "prompt": "beach.png", "seed": 3},
@@ -159,3 +160,78 @@ async def test_a_file_name_two_attachments_share_names_neither():
         "c3": "c3",
         "cat.png": "c3",
     }
+
+
+async def test_a_clip_is_kept_as_what_the_field_takes():
+    from wasifyai_assistant.keeping import kept_in_place
+
+    asked: list[tuple[str, str]] = []
+
+    async def keep(ident: str, as_kind: str) -> str | None:
+        asked.append((ident, as_kind))
+        return f"{as_kind}-{ident}"
+
+    names, done = {"talk.mp4": "c1"}, {}
+    dub = await kept_in_place("dub.script", {"source_id": "talk.mp4"}, names, keep, done)
+    extend = await kept_in_place("video.extend", {"video_id": "talk.mp4"}, names, keep, done)
+    assert dub == {"source_id": "track-c1"} and extend == {"video_id": "video-c1"}
+    assert asked == [("c1", "track"), ("c1", "video")]
+
+
+def clip_with_sound(seconds: float = 2) -> bytes:
+    """A real small clip with a tone, made with the ffmpeg the products use."""
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    from wasifyai_video.videos import ffmpeg_path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "clip.mp4"
+        subprocess.run(
+            [ffmpeg_path(), "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "lavfi", "-i", f"testsrc=size=160x96:rate=24:duration={seconds}",
+             "-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}",
+             "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(out)],
+            check=True,
+        )  # fmt: skip
+        return out.read_bytes()
+
+
+async def test_an_attached_clip_is_kept_as_a_video_or_as_the_sound_of_it(engine, tmp_path):
+    from wasifyai_video.actions import library_kinds as video_kinds
+    from wasifyai_video.videos import video_store
+    from wasifyai_voice.actions import library_kinds as voice_kinds
+
+    rig = Rig(engine, with_images=False, kinds=[*video_kinds(), *voice_kinds()], data_dir=tmp_path)
+    upload = await rig.attach(clip_with_sound(), kind="video")
+    as_video = await rig.keep({"attachment_id": upload, "title": "Talk"})
+    assert as_video.status == "ok", as_video.text
+    assert as_video.output["kind"] == "video"
+    clip = await video_store(engine).get("t1", "u1", as_video.output["id"])
+    assert clip is not None and clip.status == "done" and clip.mode == "import"
+    as_sound = await rig.keep({"attachment_id": upload, "title": "Talk", "as_kind": "track"})
+    assert as_sound.status == "ok", as_sound.text
+    assert as_sound.output["kind"] == "track" and as_sound.output["title"] == "Talk"
+    assert {k for k, _ in rig.indexed} == {"video", "track"}  # both searchable
+
+
+async def test_an_attached_recording_is_kept_as_a_song(engine, tmp_path):
+    import struct
+
+    from wasifyai_voice.actions import library_kinds as voice_kinds
+
+    rate, frames = 44100, 44100
+    pcm = b"".join(struct.pack("<hh", 0, 0) for _ in range(frames))
+    wav = (
+        b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt "
+        + struct.pack("<IHHIIHH", 16, 1, 2, rate, rate * 4, 4, 16) + b"data"
+        + struct.pack("<I", len(pcm)) + pcm
+    )  # fmt: skip
+    rig = Rig(engine, with_images=False, kinds=voice_kinds(), data_dir=tmp_path)
+    upload = await rig.attach(wav, kind="audio")
+    r = await rig.keep({"attachment_id": upload})
+    assert r.status == "ok", r.text
+    assert r.output["kind"] == "track" and "track id" in r.text
+    wrong = await rig.keep({"attachment_id": upload, "as_kind": "video"})
+    assert wrong.status == "refused" and "as a video" in wrong.text

@@ -61,6 +61,19 @@ describe("any other product route", () => {
     expect(upstreamUrl()).toMatch(/\/products\/wasifyai-voice\/clips\/c1$/);
   });
 
+  it("passes a chat attachment's file name through, so the engine reads the right kind", async () => {
+    fetchMock.mockResolvedValue(Response.json({ id: "a1" }, { status: 201 }));
+    await POST(
+      new Request("http://web/x", {
+        method: "POST",
+        headers: { "content-type": "application/pdf", "x-file-name": "plan%20B.pdf" },
+        body: new Uint8Array([1, 2, 3]),
+      }),
+      ctx("wasifyai-assistant", ["attachments"]),
+    );
+    expect(new Headers(upstreamInit().headers).get("x-file-name")).toBe("plan%20B.pdf");
+  });
+
   it("refuses an obviously huge body before calling the API", async () => {
     const res = await POST(
       new Request("http://web/x", {

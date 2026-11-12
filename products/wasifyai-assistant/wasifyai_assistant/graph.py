@@ -40,6 +40,7 @@ from wasifyai_platform_sdk.search import search_text
 from wasifyai_assistant.attachments import (
     ATTACH_PROMPT,
     MAX_ATTACHMENTS,
+    STORED,
     Attached,
     attachments_in,
     clean_name,
@@ -394,7 +395,7 @@ def build_assistant_graph(
         for a in wanted:
             ident = valid_id(a.get("id")) if isinstance(a, dict) else None
             record, kind = None, ""
-            for ext, what in (("png", "image"), ("txt", "document")):
+            for ext, what in STORED:
                 if ident:
                     record = await uploads.find(
                         ctx.tenant_id, PRODUCT_ID, ctx.user_id, f"uploads/{ident}.{ext}"
@@ -579,7 +580,7 @@ def build_assistant_graph(
         # web text in the conversation: only reads run unasked
         sees = await model_sees() if attachments_in(first_history) else True
         named = attachment_names(first_history)  # what the model may call an attachment
-        kept: dict[str, str] = {}  # attachment id -> library id, kept in this run
+        kept: dict[tuple[str, str], str] = {}  # (attachment, kind) -> library id, in this run
         attached = await load_attached(first_history, caps.storage, sees)
         # where outside text came from (the web, an outside server, a file); "" when none
         if resuming:
@@ -674,9 +675,13 @@ def build_assistant_graph(
                 action_id = str(args.get("action_id", ""))
                 who = Identity(tenant_id=ctx.tenant_id, user_id=ctx.user_id)
 
-                async def keep(ident: str) -> str | None:
+                async def keep(ident: str, as_kind: str) -> str | None:
                     r = await executor.run_action(
-                        KEEP, {"attachment_id": ident}, ORIGIN, actor=who, policy=POLICY
+                        KEEP,
+                        {"attachment_id": ident, "as_kind": as_kind},
+                        ORIGIN,
+                        actor=who,
+                        policy=POLICY,
                     )
                     made = r.output.get("id") if r.status == "ok" else None
                     return made if isinstance(made, str) else None

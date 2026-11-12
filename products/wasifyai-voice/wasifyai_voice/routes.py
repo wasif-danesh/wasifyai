@@ -39,13 +39,13 @@ from wasifyai_voice import (
     read_aloud,
     reference,
 )
+from wasifyai_voice.keep import TooLong, add_recording
 from wasifyai_voice.runtime import PRODUCT_ID, NotAvailable, engine_for, store_for
 from wasifyai_voice.store import NotFound, VoiceStore, new_id
 
 log = logging.getLogger(__name__)
 
 TRANSCRIPT_INDEX_CHARS = 2000
-MAX_IMPORT_S = 3600.0
 PICTURE_MAX_SIDE = 1024  # the engine scales it further to what the model takes
 PICTURE_KEEP_S = 24 * 3600  # an added picture that no clip used is removed after a day
 
@@ -272,27 +272,11 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         name = file.filename or "recording"
         data = await file.read(audio_input.MAX_BYTES + 1)
         try:
-            wav, seconds = await audio_input.at_rate(data, name, 44100, 2)
+            t = await add_recording(deps, vstore(), identity, data, name, title or "")
         except audio_input.AudioInputError as e:
             raise HTTPException(422, {"code": e.code, "message": str(e)}) from None
-        if seconds > MAX_IMPORT_S:
-            raise HTTPException(
-                422,
-                {"code": "too_long", "message": "That recording is longer than an hour."},
-            )
-        tid = new_id()
-        key = f"music/{tid}.wav"
-        with deps.acting_as(identity, PRODUCT_ID):
-            await deps.storage.put(key, wav, "audio/wav")
-        label = (title or "").strip()[:120] or name.rsplit(".", 1)[0][:120] or "Recording"
-        t = await asyncio.to_thread(
-            vstore().add_track, identity.tenant_id, identity.user_id, title=label,
-            mode="imported", description=f"Added from the file {name[:100]}", lyrics="",
-            instrumental=False, model_id="", options={}, seed=None, seconds=round(seconds, 2),
-            sample_rate=44100, audio_key=key, load_s=0, elapsed_s=0, track_id=tid,
-            edit={"action": "import", "file": name[:200]},
-        )  # fmt: skip
-        await reindex_track(identity, t)
+        except TooLong as e:
+            raise HTTPException(422, {"code": "too_long", "message": str(e)}) from None
         return await track_out(t, identity)
 
     @router.post("/words")

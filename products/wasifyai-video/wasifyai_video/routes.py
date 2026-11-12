@@ -11,7 +11,6 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel
@@ -27,15 +26,12 @@ from wasifyai_platform_sdk import (
 
 from wasifyai_video import prompts
 from wasifyai_video.builder.routes import build_builder_routes
-from wasifyai_video.index import index_text
-from wasifyai_video.schemas import FPS
+from wasifyai_video.keep import add_clip, title_of
 from wasifyai_video.videos import (
     ClipError,
     PosterError,
     VideoRecord,
     VideoStore,
-    import_clip,
-    poster_of,
     video_store,
 )
 
@@ -161,7 +157,7 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
         if limiter is not None and not await limiter.allow(identity.tenant_id, identity.user_id):
             raise HTTPException(429, "Too many uploads. Please wait a while and try again.")
         with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
-            source, out = Path(tmp) / "added", Path(tmp) / "clip.mp4"
+            source = Path(tmp) / "added"
             size = 0
             with source.open("wb") as f:  # to disk in pieces: a video can be large
                 while chunk := await file.read(1024 * 1024):
@@ -175,40 +171,9 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
             if not size:
                 raise HTTPException(422, "No file was sent.")
             try:
-                width, height, frames = await import_clip(source, out)
-                data = await asyncio.to_thread(out.read_bytes)
-                _, _, poster = await poster_of(data)
+                made = await add_clip(deps, videos(), identity, source, title_of(file.filename))
             except (ClipError, PosterError) as exc:
                 raise HTTPException(422, str(exc)) from None
-        video_id = str(uuid4())
-        title = re.sub(r"\s+", " ", re.sub(r"[_\-\x00-\x1f]+", " ", Path(file.filename or "").stem))
-        title = title.strip()[:120] or "My video"
-        with deps.acting_as(identity, PRODUCT_ID):
-            await deps.storage.put(f"{video_id}/video.mp4", data, "video/mp4")
-            await deps.storage.put(f"{video_id}/poster.jpg", poster, "image/jpeg")
-        await videos().add(
-            VideoRecord(
-                id=video_id, tenant_id=identity.tenant_id, product_id=PRODUCT_ID,
-                user_id=identity.user_id, thread_id=None, run_id=None, mode="import",
-                status="working", prompt=title, seconds=max(1, round(frames / FPS)),
-                frames=frames, fps=FPS,
-            )
-        )  # fmt: skip
-        await videos().finish(
-            identity.tenant_id, video_id, width, height, f"{video_id}/video.mp4",
-            f"{video_id}/poster.jpg",
-        )  # fmt: skip
-        index = deps.state.creation_index  # found in search at once (ADR-0041)
-        if index is not None:
-            try:
-                await index.index(
-                    identity.tenant_id, PRODUCT_ID, identity.user_id, "video", video_id,
-                    index_text(title),
-                )  # fmt: skip
-            except Exception:
-                log.warning("the added video could not be put in search", exc_info=True)
-        made = await videos().get(identity.tenant_id, identity.user_id, video_id)
-        assert made is not None
         with deps.acting_as(identity, PRODUCT_ID):
             return await summary(made)
 

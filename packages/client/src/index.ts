@@ -96,6 +96,7 @@ export {
   type CardDetails,
   type CardField,
   cardDetails,
+  attachmentKind,
 } from "./assistant";
 export {
   type ActivityEntry,

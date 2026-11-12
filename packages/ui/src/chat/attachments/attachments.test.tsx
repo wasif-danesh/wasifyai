@@ -57,6 +57,32 @@ describe("useAttachments", () => {
     expect(result.current.runInput).toEqual({});
   });
 
+  it("attaches a recording and a clip and says how long each is", async () => {
+    const c = control({
+      upload: vi.fn(
+        async (file: Blob, name: string): Promise<UploadedAttachment> =>
+          file.type.startsWith("audio/")
+            ? { id: "r1", kind: "audio", name, seconds: 45 }
+            : { id: "v1", kind: "video", name, seconds: 125 },
+      ),
+    });
+    const { result } = renderHook(() => useAttachments(c));
+    const memo = new File([new Uint8Array([1])], "memo.m4a", { type: "audio/mp4" });
+    const talk = new File([new Uint8Array([1])], "talk.mov", { type: "video/quicktime" });
+    act(() => result.current.add([memo, talk]));
+    await waitFor(() =>
+      expect(result.current.runInput).toEqual({
+        attachments: [
+          { id: "r1", name: "memo.m4a" },
+          { id: "v1", name: "talk.mov" },
+        ],
+      }),
+    );
+    render(<div>{result.current.chips}</div>);
+    expect(screen.getByText("Recording, 45 s")).toBeInTheDocument();
+    expect(screen.getByText("Video, 2 min 5 s")).toBeInTheDocument();
+  });
+
   it("shows a file as uploading, then ready, and names the ready ones in the run input", async () => {
     const c = control();
     const { result } = renderHook(() => useAttachments(c));

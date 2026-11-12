@@ -148,7 +148,10 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   - The model is only ever given the branch the turn is on.
 - **Attachments (ADR-0083, CO2).** Run input **`attachments`**: `[{id, name}]`, at most 4, the ids of uploads made just before: a picture through `POST /products/wasifyai-assistant/uploads/images`
   (the hardened upload; answers `upload_id`), a document through `POST /products/wasifyai-assistant/attachments` (body = the file, `x-file-name` = its name, percent-encoded; answers `{id, kind, name, chars,
-  pages, truncated}`; text, Markdown, CSV and HTML, and PDF and Office when the document reader is installed). The user message is stored with `attachment` parts `{kind, id, key, name, bytes}` and the
+  pages, truncated}`; text, Markdown, CSV and HTML, and PDF and Office when the document reader is installed), and a recording or a clip
+  through `POST /products/wasifyai-assistant/attachments/media` (the same headers; answers `{id, kind: "audio" | "video", name, seconds}`; a
+  recording 50 MB and 10 minutes at most, kept as a WAV; a clip 200 MB and 2 minutes, kept as a clean MP4 with its sound; since
+  2026-11-12, CE2). The user message is stored with `attachment` parts `{kind, id, key, name, bytes}` and the
   uploads are consumed; a conversation read adds a short-lived `url` to a picture part. A picture for a model that cannot read pictures is taken all the same (since 2026-11-12): the model is told its attachment id and that it cannot look at it, so it can keep it in the library (`library.keep_attachment`) and change or animate it.
   Attachments are untrusted text (see the next point). `GET .../options` also answers `attach: {available, images, documents, images_note, picture_reader}`; `picture_reader`
   `{state: "available" | "downloading", title, licence, from, bytes, download?}` appears when the chosen file model has no vision projector and the app can fetch one (desktop):

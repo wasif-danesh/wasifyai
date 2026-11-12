@@ -143,3 +143,98 @@ def test_a_name_sent_percent_encoded_is_read_back(parts):
     with client_for(parts) as c:
         r = attach(c, b"hello", quote("Résumé 2026.md"))
     assert r.status_code == 201 and r.json()["name"] == "Résumé 2026.md"
+
+
+# ---- recordings and clips (docs/chat-does-everything-plan.md, CE2) ----
+
+MEDIA = "/products/wasifyai-assistant/attachments/media"
+
+
+def tone_clip(seconds: float = 1.5) -> bytes:
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    from wasifyai_video.videos import ffmpeg_path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "clip.mov"
+        subprocess.run(
+            [ffmpeg_path(), "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "lavfi", "-i", f"testsrc=size=1920x1080:rate=24:duration={seconds}",
+             "-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}",
+             "-pix_fmt", "yuv420p", "-c:a", "aac", "-metadata", "title=secret", "-shortest",
+             str(out)],
+            check=True,
+        )  # fmt: skip
+        return out.read_bytes()
+
+
+def silent_wav(seconds: float, rate: int = 44100) -> bytes:
+    import struct
+
+    pcm = b"\0\0\0\0" * int(rate * seconds)
+    return (
+        b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt "
+        + struct.pack("<IHHIIHH", 16, 1, 2, rate, rate * 4, 4, 16) + b"data"
+        + struct.pack("<I", len(pcm)) + pcm
+    )  # fmt: skip
+
+
+def stored(parts, record) -> bytes:
+    import asyncio
+
+    return asyncio.run(parts["storage"].get_for(record.owner, record.key))
+
+
+def test_a_clip_is_kept_as_a_clean_mp4_with_its_sound_and_no_tags(parts):
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    from wasifyai_video.videos import ffmpeg_path
+
+    with client_for(parts) as c:
+        r = c.post(MEDIA, content=tone_clip(), headers={"x-file-name": "talk.mov"})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["kind"] == "video" and body["name"] == "talk.mov" and 1 <= body["seconds"] <= 2
+    (record,) = parts["store"].rows.values()
+    assert record.key == f"uploads/{body['id']}.mp4" and record.kind == "video"
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "kept.mp4"
+        path.write_bytes(stored(parts, record))
+        report = subprocess.run(
+            [ffmpeg_path(), "-hide_banner", "-i", str(path)], capture_output=True, text=True
+        ).stderr
+    assert "Video: h264" in report and "Audio: aac" in report
+    assert "1280x720" in report  # made smaller: the longer side at most 1280
+    assert "secret" not in report  # no tags of the file sent
+
+
+def test_a_recording_is_kept_as_a_wav_and_a_long_one_is_refused(parts):
+    with client_for(parts) as c:
+        ok = c.post(MEDIA, content=silent_wav(1), headers={"x-file-name": "memo.wav"})
+        long = c.post(MEDIA, content=silent_wav(601, 8000), headers={"x-file-name": "talk.wav"})
+    assert ok.status_code == 201, ok.text
+    assert ok.json()["kind"] == "audio" and ok.json()["seconds"] == 1
+    assert long.status_code == 422 and "10 minutes" in long.json()["detail"]
+
+
+def test_a_file_that_is_neither_or_not_what_it_says_is_refused_in_words(parts):
+    with client_for(parts) as c:
+        other = c.post(MEDIA, content=b"hello", headers={"x-file-name": "notes.txt"})
+        fake = c.post(MEDIA, content=b"not a video at all", headers={"x-file-name": "clip.mp4"})
+    assert other.status_code == 415 and "recording" in other.json()["detail"]
+    assert fake.status_code == 422 and "not a video" in fake.json()["detail"]
+    assert parts["store"].rows == {}
+
+
+def test_a_clip_over_the_size_limit_is_refused_before_it_is_read(parts):
+    with client_for(parts) as c:
+        r = c.post(
+            MEDIA,
+            content=b"x",
+            headers={"x-file-name": "big.mp4", "content-length": str(201 * 2**20)},
+        )
+    assert r.status_code == 413 and "200 MB" in r.json()["detail"]

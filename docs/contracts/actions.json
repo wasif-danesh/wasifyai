@@ -3763,7 +3763,7 @@
       "id": "library.keep_attachment",
       "title": "Keep an attached file",
       "summary": "Save a file the person attached in this chat to the library, to work on it.",
-      "description": "Save a picture the person attached in this chat to their library and get its id. Do this first whenever the person asks to change, animate, make talk, turn into 3D or otherwise use an attached file: the other actions only take library items. Then propose the action they asked for with the id this returns.",
+      "description": "Save a picture, recording or clip the person attached in this chat to their library and get its id. Do this first whenever the person asks to change, animate, make talk, turn into 3D or otherwise use an attached file: the other actions only take library items. Then propose the action they asked for with the id this returns.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -3779,6 +3779,13 @@
             "description": "A name for it in the library; its file name if left out.",
             "maxLength": 120,
             "title": "Title",
+            "type": "string"
+          },
+          "as_kind": {
+            "default": "",
+            "description": "What to keep it as when it could be more than one: track (the sound of a recording or a clip) or video (a clip). Left out, a picture is kept as an image, a recording as a track and a clip as a video.",
+            "maxLength": 20,
+            "title": "As Kind",
             "type": "string"
           }
         },

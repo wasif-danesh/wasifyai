@@ -179,3 +179,11 @@ So:
   conversation, by its id or its file name, is kept and replaced by the library id before the action runs or shows its
   card. That keep is not asked about (it copies the person's own file into their own library and costs nothing); the
   action still asks as the chat's setting says.
+- **Recordings and clips (CE2, 2026-11-12).** The chat takes a recording or a clip through
+  `POST /products/wasifyai-assistant/attachments/media` (`x-file-name` says which by its extension). The owner's limits:
+  a recording 50 MB and 10 minutes, kept as a 44.1 kHz stereo WAV; a clip 200 MB and 2 minutes, kept as a clean MP4 with
+  its sound (H.264 and AAC, no tags, the longer side at most 1,280 pixels). Both are decoded by FFmpeg, never kept as
+  sent, and the same on the desktop and the web (the web's route lets 210 MB through; the engine enforces the limits).
+  `library.keep_attachment` keeps a recording as a song, and a clip as a video or, with `as_kind: "track"`, as the
+  song of its sound (what Dub, Transcribe and Split take); the chat's own keep chooses by the field it fills
+  (`source_id` a song, `video_id` a video). The model is told the attachment's id and kind, nothing of its content.

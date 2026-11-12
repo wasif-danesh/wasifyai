@@ -94,7 +94,7 @@ def new_upload(
     seconds: float | None = None,
 ) -> UploadRecord:
     upload_id = str(uuid4())
-    ext = {"audio": "wav", "text": "txt"}.get(kind, "png")
+    ext = {"audio": "wav", "text": "txt", "video": "mp4"}.get(kind, "png")
     return UploadRecord(
         upload_id, tenant_id, product_id, user_id, f"uploads/{upload_id}.{ext}", size,
         kind=kind, seconds=seconds,

@@ -1458,6 +1458,22 @@ async def _export_transcript(ctx: ActionContext, item_id: str, folder: Path) -> 
     return await asyncio.to_thread(save_copy, folder, stem, "txt", export.render(t, "txt").encode())
 
 
+async def _keep_track(ctx: ActionContext, data: bytes, name: str) -> LibraryItem:
+    """A recording, or the sound of a clip, attached in the chat, made a track of Your music as the
+    Import button does (CE2). The chat keeps a recording as a WAV and a clip as an MP4."""
+    from wasifyai_platform_sdk import UploadError
+
+    from wasifyai_voice.keep import TooLong, add_recording
+
+    deps = need_deps(ctx)
+    file = "attached.wav" if data[:4] == b"RIFF" else "attached.mp4"
+    try:
+        t = await add_recording(deps, _store(ctx), ctx.actor, data, file, name)
+    except (audio_input.AudioInputError, TooLong) as e:
+        raise UploadError(422, str(e)) from None
+    return _track_item(t)
+
+
 def library_kinds() -> list[LibraryKind]:
     return [
         LibraryKind(
@@ -1470,7 +1486,7 @@ def library_kinds() -> list[LibraryKind]:
             "track", PRODUCT_ID, "song", _lister("list_tracks", _track_item),
             _getter("get_track", _track_item), _deleter("delete_track", ("audio_key",)),
             _rename_track, _exporter("get_track", "audio_key", "wav", "title"),
-            _reader("get_track", "audio_key"),
+            _reader("get_track", "audio_key"), takes=("audio", "video"), keep=_keep_track,
         ),
         LibraryKind(
             "transcript", PRODUCT_ID, "transcript", _lister("list_transcripts", _transcript_item),

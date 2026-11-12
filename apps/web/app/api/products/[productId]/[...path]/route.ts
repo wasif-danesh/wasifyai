@@ -28,9 +28,14 @@ async function forward(req: Request, { params }: Ctx) {
   if (Number.isFinite(declared) && declared > MAX_BYTES) {
     return Response.json({ detail: "That file is too large." }, { status: 413 });
   }
+  // a file's name, percent-encoded by the window: the engine reads its extension (a chat attachment)
+  const name = req.headers.get("x-file-name");
   return proxy(req, target, {
     body: req.body,
-    headers: { "content-type": req.headers.get("content-type") ?? "application/octet-stream" },
+    headers: {
+      "content-type": req.headers.get("content-type") ?? "application/octet-stream",
+      ...(name ? { "x-file-name": name } : {}),
+    },
   });
 }
 

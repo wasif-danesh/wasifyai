@@ -969,6 +969,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-assistant/attachments/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach Media
+         * @description A recording or a clip for a chat message: the body is the file, `x-file-name` its name
+         *     (its extension says which). The chat keeps it in the library when the person asks to work on
+         *     it (`library.keep_attachment`).
+         */
+        post: operations["attach_media_products_wasifyai_assistant_attachments_media_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-assistant/conversations": {
         parameters: {
             query?: never;
@@ -4382,6 +4404,8 @@ export interface components {
             name: string;
             /** Pages */
             pages?: number | null;
+            /** Seconds */
+            seconds?: number | null;
             /**
              * Truncated
              * @default false
@@ -8081,6 +8105,26 @@ export interface operations {
         };
     };
     attach_document_products_wasifyai_assistant_attachments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentResult"];
+                };
+            };
+        };
+    };
+    attach_media_products_wasifyai_assistant_attachments_media_post: {
         parameters: {
             query?: never;
             header?: never;

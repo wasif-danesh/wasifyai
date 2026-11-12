@@ -38,15 +38,24 @@ async def accept(provider: Provider, model: str, key: str, base: str) -> Tried:
 
 
 class Fal:
-    """A fake fal.ai queue; the result names a file on another host."""
+    """A fake fal.ai queue and file store; the result names a file on another host. An input
+    picture gets an upload token from the REST host, then goes to the CDN, which keeps it."""
 
     def __init__(self, result: dict, file: bytes, submit: int = 200):
         self.result, self.file, self.submit = result, file, submit
         self.requests: list[httpx.Request] = []
+        self.uploads: dict[str, bytes] = {}
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.requests.append(req)
         url = str(req.url)
+        if url.startswith("https://rest.fal.ai/storage/auth/token"):
+            return httpx.Response(200, json={"token": "cdn-token", "token_type": "Bearer"})
+        if url == "https://v3.fal.media/files/upload":
+            assert req.headers["authorization"] == "Bearer cdn-token"
+            where = f"https://v3.fal.media/files/in{len(self.uploads)}"
+            self.uploads[where] = req.content
+            return httpx.Response(200, json={"access_url": where})
         if req.method == "POST":
             if self.submit != 200:
                 return httpx.Response(self.submit, json={})
@@ -62,7 +71,11 @@ class Fal:
         return httpx.AsyncClient(transport=httpx.MockTransport(self))
 
     def posts(self) -> list[tuple[str, dict]]:
-        return [(str(r.url), json.loads(r.content)) for r in self.requests if r.method == "POST"]
+        return [
+            (str(r.url), json.loads(r.content))
+            for r in self.requests
+            if r.method == "POST" and r.url.host == "queue.fal.run"
+        ]
 
 
 class LocalSpeech:
@@ -226,7 +239,7 @@ async def test_3d_on_the_key_needs_nothing_set_up_and_runs_on_fal(tmp_path: Path
     assert (tmp_path / "model.glb").read_bytes() == GLB
     ((url, body),) = fal.posts()
     assert url == "https://queue.fal.run/fal-ai/pixal3d"
-    assert body["image_url"].startswith("data:image/png;base64,")
+    assert fal.uploads[body["image_url"]] == PNG  # uploaded first, then named by its address
     assert {k: body[k] for k in ("seed", "resolution", "texture_size")} == {
         "seed": 7, "resolution": 1024, "texture_size": 4096,
     }  # fmt: skip
@@ -244,6 +257,7 @@ async def test_the_cut_out_on_the_key_is_made_by_fal_too(tmp_path: Path):
     assert res.ok and res.output is not None and res.output.read_bytes() == PNG
     ((url, body),) = fal.posts()
     assert url == "https://queue.fal.run/fal-ai/birefnet" and body["output_format"] == "png"
+    assert fal.uploads[body["image_url"]] == PNG
     assert local.ran == []
 
 

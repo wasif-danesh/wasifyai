@@ -66,7 +66,8 @@ export function cloudRow(product: string, m: CloudModel, engineId?: string): Mod
   return {
     id: cloudId(product, m.provider, m.model),
     title: m.title,
-    plain: `${m.about} Runs on ${m.provider_title} with your key: ${what} is sent there.`.trim(),
+    plain:
+      `${m.about} Runs on ${m.provider_title} with your key, which sends ${what} there.`.trim(),
     tier: "also",
     state: "ready",
     chosen: m.chosen,
@@ -81,6 +82,7 @@ export function cloudRow(product: string, m: CloudModel, engineId?: string): Mod
     provider: m.provider,
     providerTitle: m.provider_title,
     price: m.price,
+    ...(m.speed ? { speed: m.speed } : {}),
     works: m.works,
     ...(engineId ? { engineId } : {}),
   };

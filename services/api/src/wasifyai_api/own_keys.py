@@ -332,9 +332,18 @@ class OwnKeysService:
             if key:
                 saved = (row.get("keys") or {}).get(v.id) or {}
                 base = v.url_for(p.kind) or str(saved.get("base_url") or "")
-                found = KeyRoute(v, str(use.get("model") or ""), key, base)
+                model = str(use.get("model") or "")
+                # a model taken off the list (LongCat, 2026-11-12) runs on this computer again
+                if self._offered(p.id, use):
+                    found = KeyRoute(v, model, key, base)
         self._routes[product] = found
         return found
+
+    @staticmethod
+    def _offered(product: str, use: dict[str, Any]) -> bool:
+        """`use` names a model still on the list (an OpenAI-compatible server names its own)."""
+        provider, model = str(use.get("provider") or ""), str(use.get("model") or "")
+        return provider == COMPATIBLE or catalogue.find(product, provider, model) is not None
 
     def known(self, product: str) -> KeyRoute | None:
         """`route` as of the last `warm`: read at start and after every change in Settings."""
@@ -372,6 +381,8 @@ class OwnKeysService:
             use = row.get("use")
             if use and not any(k["provider"] == use.get("provider") for k in keys):
                 use = None
+            if use and not self._offered(p.id, use):  # a model taken off the list: not in use
+                use = None
             if use:
                 title, price = self._model_title(p.id, use["provider"], use["model"])
                 use = {**use, "title": title, "price": price}
@@ -406,7 +417,7 @@ class OwnKeysService:
                 models.append({
                     "provider": v.id, "provider_title": v.title, "host": v.host,
                     "model": m.model, "title": m.title, "about": m.about, "price": m.price,
-                    "works": k["state"] == "ok",
+                    "speed": m.speed, "works": k["state"] == "ok",
                     "chosen": use.get("provider") == v.id and use.get("model") == m.model,
                 })  # fmt: skip
         return {"product": p.id, "models": models, "has_keys": bool(row["keys"])}

@@ -17,6 +17,7 @@ from wasifyai_api.own_keys_engines import (
     KEYED_LIPSYNC,
     KEYED_MUSIC,
     KEYED_SFX,
+    LIPSYNC_PROMPT,
     KeyedSpeechEngine,
 )
 from wasifyai_api.settings_store import InMemorySettingsStore
@@ -32,7 +33,7 @@ from wasifyai_platform_sdk import (
 MINIMAX = "fal-ai/minimax-music/v2.6"
 ELEVEN = "fal-ai/elevenlabs/music"
 SFX = "fal-ai/elevenlabs/sound-effects/v2"
-LONGCAT = "fal-ai/longcat-single-avatar/image-audio-to-video"
+FABRIC = "veed/fabric-1.0/fast"
 INFINITALK = "fal-ai/infinitalk"
 KEY = "fal-key-voice"
 
@@ -58,15 +59,28 @@ def mp4(w: int, h: int) -> bytes:
 
 
 class Fal:
-    """A fake fal.ai queue; the result names a file on another host."""
+    """A fake fal.ai queue and file store; the result names a file on another host. An upload
+    gets a token from the REST host, then goes to the CDN, which keeps the bytes."""
 
     def __init__(self, result: dict, file: bytes, submit: int = 200):
         self.result, self.file, self.submit = result, file, submit
         self.requests: list[httpx.Request] = []
+        self.uploads: dict[str, bytes] = {}
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.requests.append(req)
         url = str(req.url)
+        if url.startswith("https://rest.fal.ai/storage/auth/token"):
+            assert req.headers["authorization"] == f"Key {KEY}"
+            return httpx.Response(200, json={
+                "token": "cdn-token", "token_type": "Bearer", "base_url": "https://v3.fal.media",
+                "expires_at": "2026-11-12T12:00:00+00:00",
+            })  # fmt: skip
+        if url == "https://v3.fal.media/files/upload":
+            assert req.headers["authorization"] == "Bearer cdn-token"
+            where = f"https://v3.fal.media/files/up{len(self.uploads)}"
+            self.uploads[where] = req.content
+            return httpx.Response(200, json={"access_url": where})
         if req.method == "POST":
             if self.submit != 200:
                 return httpx.Response(self.submit, json={})
@@ -82,7 +96,11 @@ class Fal:
         return httpx.AsyncClient(transport=httpx.MockTransport(self))
 
     def posts(self) -> list[tuple[str, dict]]:
-        return [(str(r.url), json.loads(r.content)) for r in self.requests if r.method == "POST"]
+        return [
+            (str(r.url), json.loads(r.content))
+            for r in self.requests
+            if r.method == "POST" and r.url.host == "queue.fal.run"
+        ]
 
 
 async def accept(provider: Provider, model: str, key: str, base: str) -> Tried:
@@ -128,8 +146,9 @@ def a_picture(tmp_path: Path) -> Path:
     return path
 
 
-def sent_picture(body: dict) -> tuple[int, int]:
-    data = base64.b64decode(body["image_url"].split(",", 1)[1])
+def sent_picture(body: dict, fal: "Fal | None" = None) -> tuple[int, int]:
+    url = body["image_url"]
+    data = fal.uploads[url] if fal else base64.b64decode(url.split(",", 1)[1])
     with Image.open(io.BytesIO(data)) as im:
         return im.size
 
@@ -237,12 +256,12 @@ async def test_a_music_failure_on_fal_is_said_in_its_words():
 # ---- lip sync ----------------------------------------------------------------------------------
 
 
-async def test_lip_sync_on_the_key_sends_the_cropped_picture_and_the_voice_to_longcat(
+async def test_lip_sync_on_the_key_sends_the_cropped_picture_and_the_voice_to_fabric(
     tmp_path: Path,
 ):
     fal = Fal({"video": {"url": "https://v3.fal.media/v.mp4"}}, mp4(720, 1280))
     local, keys = LocalVoice(), keys_service()
-    await on_key(keys, "lipsync", LONGCAT)
+    await on_key(keys, "lipsync", FABRIC)
     engine = KeyedSpeechEngine(local, keys, fal.client, poll_s=0)
     assert [m["id"] for m in engine.models("lipsync")] == [KEYED_LIPSYNC, "echomimic"]
     model = engine.resolve("lipsync", None)
@@ -252,11 +271,17 @@ async def test_lip_sync_on_the_key_sends_the_cropped_picture_and_the_voice_to_lo
     voice.write_bytes(a_wav(12.0, 16000))
     res = await engine.lipsync(model, req, a_picture(tmp_path), voice)
     ((url, body),) = fal.posts()
-    assert url == f"https://queue.fal.run/{LONGCAT}"
-    assert body["resolution"] == "720p" and body["num_segments"] == 3  # 5.8 s, then 5 s more each
-    assert body["audio_url"].startswith("data:") and sent_picture(body) == (720, 1280)
+    assert url == f"https://queue.fal.run/{FABRIC}"
+    assert body["resolution"] == "720p" and "num_segments" not in body
+    # both went up to fal.ai's file store first: a voice inside the request is refused as too long
+    assert fal.uploads[body["audio_url"]][:4] == b"RIFF" and sent_picture(body, fal) == (720, 1280)
+    assert all(
+        r.headers.get("authorization") == f"Key {KEY}"
+        for r in fal.requests
+        if r.url.host in ("queue.fal.run", "rest.fal.ai")
+    )
     assert (res.width, res.height, res.fps) == (720, 1280, 25)
-    assert res.model_id == LONGCAT and local.made == []
+    assert res.model_id == FABRIC and local.made == []
 
 
 async def test_infinitetalk_is_asked_for_the_frames_of_the_voice_at_480p(tmp_path: Path):
@@ -270,8 +295,9 @@ async def test_infinitetalk_is_asked_for_the_frames_of_the_voice_at_480p(tmp_pat
     voice.write_bytes(a_wav(4.0, 16000))
     await engine.lipsync(model, req, a_picture(tmp_path), voice)
     body = fal.posts()[0][1]
-    assert body["resolution"] == "480p" and body["num_frames"] == 101  # 4 s at 25, as 4k+1
-    assert sent_picture(body) == (848, 480)
+    assert body["resolution"] == "480p" and body["num_frames"] == 97  # 4k+1, not past the voice
+    assert body["acceleration"] == "high"  # its quickest setting
+    assert sent_picture(body, fal) == (848, 480)
     with pytest.raises(VoiceRequestError):  # longer than one InfiniteTalk request takes
         check_lipsync(model, 40.0, picture=(1024, 924))
 
@@ -279,10 +305,67 @@ async def test_infinitetalk_is_asked_for_the_frames_of_the_voice_at_480p(tmp_pat
 async def test_what_fal_sends_back_must_be_a_video(tmp_path: Path):
     fal = Fal({"video": {"url": "https://v3.fal.media/v.mp4"}}, b"not a video")
     keys = keys_service()
-    await on_key(keys, "lipsync", LONGCAT)
+    await on_key(keys, "lipsync", FABRIC)
     engine = KeyedSpeechEngine(LocalVoice(), keys, fal.client, poll_s=0)
     model = engine.resolve("lipsync", None)
     voice = tmp_path / "v.wav"
     voice.write_bytes(a_wav(2.0, 16000))
     with pytest.raises(VoiceEngineError, match="cannot read"):
         await engine.lipsync(model, LipSyncRequest(25, 2.0, 720, 720), a_picture(tmp_path), voice)
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "size", "sent", "facts"),
+    [
+        # Fabric takes the picture, the voice and the size, nothing else
+        ("veed/fabric-1.0/fast", 480, {"resolution": "480p"},
+         {"price_per_s": {"480": 0.10, "720": 0.20}, "work_per_s": {"480": 25.0},
+          "frame": "square", "frame_short": {"480": 640}}),
+        # Kling takes no size: the picture's own; a prompt only
+        ("fal-ai/kling-video/ai-avatar/v2/standard", 720, {"prompt": LIPSYNC_PROMPT},
+         {"price_per_s": {"720": 0.0562}, "work_per_s": {"720": 40.0},
+          "frame": "shape", "frame_short": {"720": 912}}),
+        # OmniHuman at 720p (its quicker size) and in turbo, its quicker setting
+        ("fal-ai/bytedance/omnihuman/v1.5", 720,
+         {"prompt": LIPSYNC_PROMPT, "resolution": "720p", "turbo_mode": True},
+         {"price_per_s": {"720": 0.16}, "work_per_s": {"720": 43.0},
+          "frame": "square", "frame_short": {"720": 960}}),
+    ],
+)  # fmt: skip
+async def test_each_new_cloud_model_gets_its_own_request_and_says_its_price_and_time(
+    tmp_path: Path, endpoint: str, size: int, sent: dict, facts: dict
+):
+    fal = Fal({"video": {"url": "https://v3.fal.media/v.mp4"}}, mp4(size, size))
+    keys = keys_service()
+    await on_key(keys, "lipsync", endpoint)
+    engine = KeyedSpeechEngine(LocalVoice(), keys, fal.client, poll_s=0)
+    model = engine.resolve("lipsync", None)
+    assert model.lipsync["default_size"] == size and model.lipsync["where"] == "fal.ai"
+    assert {k: model.lipsync[k] for k in facts} == facts
+    req = check_lipsync(model, 3.0, picture=(1024, 924), shape="1:1", size=size)
+    voice = tmp_path / "v.wav"
+    voice.write_bytes(a_wav(3.0, 16000))
+    await engine.lipsync(model, req, a_picture(tmp_path), voice)
+    ((url, body),) = fal.posts()
+    assert url == f"https://queue.fal.run/{endpoint}"
+    assert set(body) == {"image_url", "audio_url", *sent}
+    assert {k: body[k] for k in sent} == sent
+    assert fal.uploads[body["audio_url"]][:4] == b"RIFF"
+
+
+async def test_a_saved_longcat_choice_runs_on_this_computer_again(tmp_path: Path):
+    """LongCat Avatar was taken off the cloud list (owner, 2026-11-12): a person who had chosen it
+    gets this computer's lip sync, and the key stays."""
+    keys = keys_service()
+    await on_key(keys, "lipsync", FABRIC)
+    row = (await keys._all())["lipsync"]
+    longcat = {"provider": "fal", "model": "fal-ai/longcat-single-avatar/image-audio-to-video"}
+    await keys._put("lipsync", {**row, "use": longcat})
+    await keys.warm()
+    assert await keys.route("lipsync") is None
+    local = LocalVoice()
+    engine = KeyedSpeechEngine(local, keys, Fal({}, b"").client, poll_s=0)
+    assert [m["id"] for m in engine.models("lipsync")] == ["echomimic"]
+    (lipsync,) = [p for p in (await keys.view())["products"] if p["id"] == "lipsync"]
+    assert [k["provider"] for k in lipsync["keys"]] == ["fal"]
+    assert lipsync["use"] is None  # Settings does not show it in use either

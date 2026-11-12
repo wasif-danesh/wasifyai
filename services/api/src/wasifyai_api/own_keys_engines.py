@@ -17,6 +17,7 @@ import io
 import math
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -31,7 +32,7 @@ from wasifyai_platform_sdk import (
     VoiceEngineError,
 )
 from wasifyai_platform_sdk.cloud_queues import queue_for
-from wasifyai_platform_sdk.fal import FalError, FalQueue, data_uri
+from wasifyai_platform_sdk.fal import FalError, FalQueue
 from wasifyai_platform_sdk.voice_models import OptionSpec, VoiceInfo, VoiceModel
 
 from wasifyai_api.audio_runtime import _wav_rate, _wav_seconds
@@ -119,17 +120,52 @@ MUSIC_MODELS: dict[str, tuple[str, dict[str, Any]]] = {
     ),
 }  # fmt: skip
 MINIMAX_MIN_PROMPT = 10  # fal.ai's MiniMax refuses a shorter description
-# the lip sync models: the longest voice one request takes, and the frame rate (25 for all)
-LIPSYNC_MODELS: dict[str, tuple[str, float]] = {
-    "fal-ai/longcat-single-avatar/image-audio-to-video": ("LongCat Avatar", 50.0),
-    "fal-ai/infinitalk": ("InfiniteTalk", 28.0),
-    # WaveSpeed bills up to 2 minutes of LongCat but says past a minute is unsteady
-    "wavespeed-ai/longcat-avatar": ("LongCat Avatar", 60.0),
-    "wavespeed-ai/infinitetalk": ("InfiniteTalk", 600.0),
-    "wavespeed-ai/infinitetalk-fast": ("InfiniteTalk Fast", 600.0),
-}
+
+
+@dataclass(frozen=True)
+class CloudLipSync:
+    """A lip sync model on a provider: the longest voice one request takes, the sizes it makes
+    (short side; 480 is 480p), what it costs per video second at each size (dollars, as listed)
+    and how many seconds of work each video second took when measured
+    (`docs/spikes/lipsync-cloud-race.md`; a size not measured is left out), and what else its
+    request carries."""
+
+    name: str
+    longest: float
+    sizes: tuple[int, ...]
+    default_size: int
+    price: dict[int, float] = field(default_factory=dict)
+    work: dict[int, float] = field(default_factory=dict)
+    extra: dict[str, Any] = field(default_factory=dict)
+    sends_size: bool = True  # Kling takes no size: it makes the picture's own
+    # the video's frame as the model makes it, measured: "square" whatever the picture sent, or
+    # "shape" (the picture's own shape at a size the model picks); and its short side by size
+    frame: str = "shape"
+    frame_short: dict[int, int] = field(default_factory=dict)
+
+
+LIPSYNC_MODELS: dict[str, CloudLipSync] = {
+    # Fabric's time: 4.8 s per video second for a 3 s clip in the race, 25 s for a 5.6 s clip from
+    # the app; the slower one is shown so the screen does not promise too little
+    "veed/fabric-1.0/fast": CloudLipSync(
+        "Fabric 1.0 Fast", 60.0, (480, 720), 480, {480: 0.10, 720: 0.20}, {480: 25.0},
+        frame="square", frame_short={480: 640},
+    ),
+    "fal-ai/kling-video/ai-avatar/v2/standard": CloudLipSync(
+        "Kling Avatar v2", 60.0, (720,), 720, {720: 0.0562}, {720: 40.0}, sends_size=False,
+        frame_short={720: 912},
+    ),
+    # 720p: fal.ai says it is quicker and better than 1080p, and takes up to 60 s of voice
+    "fal-ai/bytedance/omnihuman/v1.5": CloudLipSync(
+        "OmniHuman 1.5", 60.0, (720,), 720, {720: 0.16}, {720: 43.0}, {"turbo_mode": True},
+        frame="square", frame_short={720: 960},
+    ),
+    "fal-ai/infinitalk": CloudLipSync(
+        "InfiniteTalk", 28.0, (480, 720), 480, {480: 0.20, 720: 0.40}, {480: 52.0},
+        {"acceleration": "high"}, frame_short={480: 576},
+    ),
+}  # fmt: skip
 LIPSYNC_FPS = 25
-LONGCAT_FIRST_S, LONGCAT_MORE_S, LONGCAT_MAX_SEGMENTS = 5.8, 5.0, 10
 INFINITALK_FRAMES = (41, 721)
 LIPSYNC_PROMPT = "A person talks naturally to the camera, with natural expressions and movements."
 CROP_CENTRE = (0.5, 0.4)  # as the lip sync engine on this computer crops (`lipsync_server`)
@@ -156,21 +192,25 @@ def keyed_music_model(product: str, route: KeyRoute, admin: bool = False) -> Voi
 
 
 def keyed_lipsync_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
-    """The lip sync model offered while Lip sync runs on the key: 480p or 720p, 25 frames each
-    second."""
-    name, longest = LIPSYNC_MODELS.get(route.model, (route.model, 0.0))
-    if not longest:
+    """The lip sync model offered while Lip sync runs on the key: its sizes, 25 frames each second,
+    and, for the screen, its price and measured time per video second at each size and the frame
+    it makes (square, or the picture's shape) with its measured short side."""
+    m = LIPSYNC_MODELS.get(route.model)
+    if m is None:
         raise VoiceEngineError(
             "not_with_key",
             f"{route.model} is not a lip sync model this app can use on {route.provider.title}.",
         )
     return VoiceModel(
-        id=KEYED_LIPSYNC, title=_title(name, route, admin), engine="remote",
+        id=KEYED_LIPSYNC, title=_title(m.name, route, admin), engine="remote",
         family=route.provider.id,
         package="", server_task="lipsync", tasks=("lipsync",), recommended=("lipsync",),
         languages=("multi",), sample_rate=0,
-        lipsync={"max_voice_s": longest, "sizes": [480, 720], "default_size": 720,
-                 "fps": LIPSYNC_FPS},
+        lipsync={"max_voice_s": m.longest, "sizes": list(m.sizes), "default_size": m.default_size,
+                 "fps": LIPSYNC_FPS, "where": route.provider.title,
+                 "price_per_s": {str(k): v for k, v in m.price.items()},
+                 "work_per_s": {str(k): v for k, v in m.work.items()},
+                 "frame": m.frame, "frame_short": {str(k): v for k, v in m.frame_short.items()}},
     )  # fmt: skip
 
 
@@ -213,22 +253,23 @@ def music_body(endpoint: str, req: MusicRequest) -> dict[str, Any]:
 
 def lipsync_body(endpoint: str, image: str, audio: str, req: LipSyncRequest) -> dict[str, Any]:
     """What the model is sent: the picture already cut to the video's shape, the size as the
-    provider names it, and on fal.ai the length (LongCat in segments, InfiniteTalk in frames);
-    WaveSpeed takes the voice's own length."""
-    size = "720p" if min(req.width, req.height) >= 720 else "480p"
-    if endpoint.startswith("wavespeed-ai/"):
-        return {"image": image, "audio": audio, "prompt": LIPSYNC_PROMPT, "resolution": size}
-    body: dict[str, Any] = {
-        "image_url": image, "audio_url": audio, "prompt": LIPSYNC_PROMPT,
-        "resolution": size,
-    }  # fmt: skip
+    provider names it, the model's own speed setting, and on fal.ai the length where the model asks
+    for it (InfiniteTalk, in frames); the others take the voice's own length."""
+    model = LIPSYNC_MODELS.get(endpoint)
+    short = min(req.width, req.height)
+    size = "720p" if short >= 720 else "480p"
+    body: dict[str, Any] = {"image_url": image, "audio_url": audio}
+    if endpoint != "veed/fabric-1.0/fast":  # Fabric takes the picture, the voice and the size only
+        body["prompt"] = LIPSYNC_PROMPT
+    if model is None or model.sends_size:
+        body["resolution"] = size
+    body.update(model.extra if model else {})
     if endpoint == "fal-ai/infinitalk":
         lo, hi = INFINITALK_FRAMES
-        frames = math.ceil(req.voice_seconds * LIPSYNC_FPS / 4) * 4 + 1  # 4k+1, as Wan makes them
+        # 4k+1, as Wan makes them, and never longer than the voice: fal.ai refuses 77 frames for a
+        # 3.00 s voice ("must be at least 3.08 s"; real run of 2026-11-12), so round down
+        frames = math.floor((req.voice_seconds * LIPSYNC_FPS - 1) / 4) * 4 + 1
         body["num_frames"] = max(lo, min(hi, frames))
-    else:
-        more = max(0.0, req.voice_seconds - LONGCAT_FIRST_S)
-        body["num_segments"] = min(LONGCAT_MAX_SEGMENTS, 1 + math.ceil(more / LONGCAT_MORE_S))
     return body
 
 
@@ -412,15 +453,20 @@ class KeyedSpeechEngine:
             cut_picture, await asyncio.to_thread(picture.read_bytes), req.width, req.height
         )
         audio = await asyncio.to_thread(voice.read_bytes)
-        body = lipsync_body(route.model, data_uri(image), data_uri(audio), req)
         t0 = time.monotonic()
         name = route.provider.title
         async with self._client() as http:
-            queue = queue_for(
-                route.provider.id, route.key, http, max(self._timeout, 3600.0), self._poll,
-                route.base_url,
+            # lip sync runs on fal.ai only (owner, 2026-11-12)
+            queue = FalQueue(
+                route.key, http, max(self._timeout, 3600.0), self._poll, route.base_url
             )  # fmt: skip
             try:
+                # fal.ai refuses a voice inside the request ("URL too long"): upload both first
+                face, said = (
+                    await queue.upload(image, "face.png"),
+                    await queue.upload(audio, voice.name),
+                )
+                body = lipsync_body(route.model, face, said, req)
                 mp4, _, _ = await queue.make(route.model, body, "video", "video/mp4", _no_progress)
             except FalError as e:
                 raise VoiceEngineError(e.code, e.message) from None
@@ -495,13 +541,16 @@ class KeyedModel3d:
         }  # fmt: skip
 
     async def _run(
-        self, route: KeyRoute, body: dict[str, Any], endpoint: str, field: str, out: Path,
-        on_progress: Callable[[float], Any] = _no_progress,
+        self, route: KeyRoute, picture: bytes, body: dict[str, Any], endpoint: str, field: str,
+        out: Path, on_progress: Callable[[float], Any] = _no_progress,
     ) -> RunResult:  # fmt: skip
+        """`body` on fal.ai with `picture` as its `image_url`, uploaded to fal.ai's file store first
+        (a picture inside the request can be refused as too long, as a voice was)."""
         t0 = time.monotonic()
         try:
             async with self._client() as http:
                 fal = FalQueue(route.key, http, self._timeout, self._poll, route.base_url)
+                body = {"image_url": await fal.upload(picture, "picture.png"), **body}
                 result = await fal.call(endpoint, body, on_progress)
                 data, _ = await fal.fetch(result.get(field), "application/octet-stream")
         except FalError as e:
@@ -522,8 +571,8 @@ class KeyedModel3d:
         if route is None:
             return await self._local.matte(picture, out_dir, on_line, **again)
         data = await asyncio.to_thread(picture.read_bytes)
-        body = {"image_url": data_uri(data), "output_format": "png"}
-        return await self._run(route, body, FAL_MATTE, "image", out_dir / "keyed_cutout.png")
+        body = {"output_format": "png"}
+        return await self._run(route, data, body, FAL_MATTE, "image", out_dir / "keyed_cutout.png")
 
     async def generate(
         self,
@@ -544,12 +593,11 @@ class KeyedModel3d:
             )  # fmt: skip
         data = await asyncio.to_thread(cutout.read_bytes)
         body = {
-            "image_url": data_uri(data), "seed": seed, "resolution": FAL_3D_RESOLUTION,
-            "texture_size": ATLAS.get(detail, 2048),
+            "seed": seed, "resolution": FAL_3D_RESOLUTION, "texture_size": ATLAS.get(detail, 2048),
         }  # fmt: skip
 
         async def told(p: float) -> None:
             if on_progress is not None:
                 on_progress(p, "Waiting for fal.ai" if p < 0.1 else "Making it on fal.ai")
 
-        return await self._run(route, body, route.model, "model_glb", out_glb, told)
+        return await self._run(route, data, body, route.model, "model_glb", out_glb, told)

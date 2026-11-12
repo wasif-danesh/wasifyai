@@ -266,7 +266,7 @@ describe("choosing a model that is not on the computer", () => {
       choice({ id: "echo", title: "EchoMimic", state: "ready", chosen: true }),
       cloud({
         id: "cloud:fal:a",
-        title: "LongCat Avatar",
+        title: "OmniHuman 1.5",
         provider: "fal",
         providerTitle: "fal.ai",
         price: "$0.15 per s",
@@ -277,6 +277,7 @@ describe("choosing a model that is not on the computer", () => {
         provider: "fal",
         providerTitle: "fal.ai",
         price: "$0.20 per s",
+        speed: "about 50 s per second of video at 480p",
       }),
       cloud({
         id: "cloud:wavespeed:c",
@@ -292,10 +293,13 @@ describe("choosing a model that is not on the computer", () => {
     render(<ModelSelect group="faces" api={api} value="echo" onChanged={changed} />);
     await user.click(await screen.findByRole("button", { name: /EchoMimic/ }));
     // the computer's tab does not list cloud models
-    expect(screen.queryByText("LongCat Avatar")).toBeNull();
+    expect(screen.queryByText("OmniHuman 1.5")).toBeNull();
     await user.click(screen.getByRole("tab", { name: "Cloud" }));
     const fal = screen.getByRole("list", { name: "With your fal.ai key" });
-    expect(within(fal).getByText("$0.20 per s", { exact: false })).toBeTruthy();
+    // each row says its price and, when measured, how long a second of video takes
+    expect(
+      within(fal).getByText("fal.ai · $0.20 per s · about 50 s per second of video at 480p"),
+    ).toBeTruthy();
     const ws = screen.getByRole("list", { name: "With your WaveSpeed key" });
     expect(within(ws).getByText(/Key not working/)).toBeTruthy();
     await user.click(within(fal).getByRole("button", { name: /InfiniteTalk/ }));

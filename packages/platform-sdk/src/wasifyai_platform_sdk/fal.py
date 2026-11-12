@@ -14,6 +14,8 @@ from typing import Any
 import httpx
 
 FAL_QUEUE = "https://queue.fal.run"
+FAL_REST = "https://rest.fal.ai"
+FAL_CDN = "https://v3.fal.media"
 ProgressFn = Callable[[float], Awaitable[None]]
 
 
@@ -26,9 +28,19 @@ class FalError(Exception):
         self.code, self.message = code, message
 
 
+def media_type(data: bytes) -> str:
+    """The type of a picture or a voice from its first bytes (PNG, WAV, MP3, else JPEG)."""
+    if data[:4] == b"\x89PNG":
+        return "image/png"
+    if data[:4] == b"RIFF":
+        return "audio/wav"
+    if data[:3] == b"ID3" or data[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"):
+        return "audio/mpeg"
+    return "image/jpeg"
+
+
 def data_uri(data: bytes) -> str:
-    kind = "image/png" if data[:4] == b"\x89PNG" else "image/jpeg"
-    return f"data:{kind};base64,{base64.b64encode(data).decode()}"
+    return f"data:{media_type(data)};base64,{base64.b64encode(data).decode()}"
 
 
 def fal_said(r: httpx.Response) -> str:
@@ -57,12 +69,54 @@ class FalQueue:
         timeout_s: float,
         poll_s: float = 2.0,
         base_url: str = FAL_QUEUE,
+        rest_url: str = FAL_REST,
+        cdn_url: str = FAL_CDN,
     ):
         self._headers = {"Authorization": f"Key {key}"}
         self._http = http
         self._timeout = timeout_s
         self._poll = poll_s
         self._base = base_url.rstrip("/")
+        self._rest = rest_url.rstrip("/")
+        self._cdn = cdn_url.rstrip("/")
+
+    async def upload(self, data: bytes, name: str) -> str:
+        """Put a picture or a voice in fal.ai's file store and answer its address. fal.ai refuses
+        a voice sent inside the request ("URL too long", the owner's real run of 2026-11-12), so
+        inputs go up first, the way fal.ai's own client does it: a short-lived upload token from
+        `storage/auth/token`, then the bytes to the CDN's `files/upload`, whose `access_url` is
+        the file. The key goes to fal.ai's REST host only; the CDN gets the token."""
+        ctype = media_type(data)
+        try:
+            tok = await self._http.post(
+                f"{self._rest}/storage/auth/token?storage_type=fal-cdn-v3",
+                json={}, headers=self._headers, timeout=30,
+            )  # fmt: skip
+            if tok.status_code >= 400:
+                raise self._refused(tok)
+            t = tok.json()
+            base = str(t.get("base_url") or self._cdn).rstrip("/")
+            up = await self._http.post(
+                f"{base}/files/upload", content=data, timeout=max(60.0, self._timeout),
+                headers={
+                    "Authorization": f"{t.get('token_type', 'Bearer')} {t['token']}",
+                    "Content-Type": ctype, "X-Fal-File-Name": name,
+                },
+            )  # fmt: skip
+        except httpx.HTTPError:
+            raise FalError("connection_lost", "fal.ai could not be reached.") from None
+        except (KeyError, ValueError):
+            raise FalError("provider_refused", "fal.ai did not give a place to upload.") from None
+        if up.status_code >= 400:
+            raise FalError("provider_refused", f"fal.ai did not take the file ({up.status_code}).")
+        url = (
+            up.json().get("access_url")
+            if up.headers.get("content-type", "").startswith("application/json")
+            else None
+        )
+        if not url:
+            raise FalError("provider_refused", "fal.ai did not say where the file went.")
+        return str(url)
 
     def _refused(self, r: httpx.Response) -> FalError:
         if r.status_code in (401, 403):

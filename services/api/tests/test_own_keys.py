@@ -72,7 +72,8 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     assert all(p["keys"] == [] and p["use"] is None for p in body["products"])
     by = rows(body)
     assert by["images"]["providers"] == ["fal", "wavespeed", "runware"]
-    assert by["lipsync"]["providers"] == ["fal", "wavespeed"]
+    assert by["lipsync"]["providers"] == ["fal"]  # lip sync is fal.ai only (owner, 2026-11-12)
+    assert by["music"]["providers"] == ["fal", "wavespeed", "runware"]
     assert by["video"]["providers"] == ["fal"]
     assert by["chat"]["providers"][:3] == ["fal", "wavespeed", "runware"]
     assert by["chat"]["providers"][-1] == "compatible"
@@ -83,16 +84,16 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
 
 def test_a_key_is_tested_saved_per_provider_and_never_answered_back():
     c, secrets, testers = rig()
-    r = c.put("/desktop/keys/lipsync/keys/fal", json={"key": GOOD})
+    r = c.put("/desktop/keys/music/keys/fal", json={"key": GOOD})
     assert r.status_code == 200, r.text
     assert GOOD not in r.text  # the key is never in an answer
-    c.put("/desktop/keys/lipsync/keys/wavespeed", json={"key": GOOD + "-ws"})
-    lipsync = rows(c.get("/desktop/keys").json())["lipsync"]
-    assert [(k["provider"], k["state"]) for k in lipsync["keys"]] == [
+    c.put("/desktop/keys/music/keys/wavespeed", json={"key": GOOD + "-ws"})
+    music = rows(c.get("/desktop/keys").json())["music"]
+    assert [(k["provider"], k["state"]) for k in music["keys"]] == [
         ("fal", "ok"), ("wavespeed", "ok"),
     ]  # fmt: skip
-    assert lipsync["use"] is None  # saving a key chooses no model
-    assert secrets.values == {"keys.lipsync.fal": GOOD, "keys.lipsync.wavespeed": GOOD + "-ws"}
+    assert music["use"] is None  # saving a key chooses no model
+    assert secrets.values == {"keys.music.fal": GOOD, "keys.music.wavespeed": GOOD + "-ws"}
     # media keys are tested against the provider's media API; chat ones against its text route
     assert testers.calls[0][3] == own_keys.PROVIDERS["fal"].media_url
     c.put("/desktop/keys/chat/keys/fal", json={"key": GOOD})
@@ -141,56 +142,56 @@ def test_the_cloud_tab_lists_every_model_of_each_provider_with_a_key():
     empty = c.get("/desktop/keys/lipsync/cloud").json()
     assert empty == {"product": "lipsync", "models": [], "has_keys": False}
     c.put("/desktop/keys/lipsync/keys/fal", json={"key": GOOD})
-    c.put("/desktop/keys/lipsync/keys/wavespeed", json={"key": GOOD})
+    # lip sync is fal.ai only (owner, 2026-11-12): no WaveSpeed key is taken for it
+    refused = c.put("/desktop/keys/lipsync/keys/wavespeed", json={"key": GOOD})
+    assert refused.status_code == 422 and "no lip sync models" in refused.json()["detail"]
     cloud = c.get("/desktop/keys/lipsync/cloud").json()
     assert [(m["provider"], m["title"]) for m in cloud["models"]] == [
-        ("fal", "LongCat Avatar"), ("fal", "InfiniteTalk"),
-        ("wavespeed", "LongCat Avatar"), ("wavespeed", "InfiniteTalk"),
-        ("wavespeed", "InfiniteTalk Fast"),
+        ("fal", "Fabric 1.0 Fast"), ("fal", "Kling Avatar v2"), ("fal", "OmniHuman 1.5"),
+        ("fal", "InfiniteTalk"),
     ]  # fmt: skip
-    first = cloud["models"][1]
-    assert first["price"] == "$0.20 per second" and first["provider_title"] == "fal.ai"
-    assert first["works"] and not first["chosen"]
+    first = cloud["models"][0]
+    assert first["price"] == "$0.10 per second at 480p, $0.20 at 720p"
+    assert first["speed"] == "5 to 25 s per second of video at 480p (two runs)"
+    assert first["provider_title"] == "fal.ai" and first["works"] and not first["chosen"]
 
 
 def test_choosing_a_cloud_model_routes_the_product_and_clearing_it_keeps_the_keys():
     c, secrets, _ = rig()
     svc = c.app.state.services.own_keys  # type: ignore[attr-defined]
-    c.put("/desktop/keys/lipsync/keys/wavespeed", json={"key": GOOD})
+    c.put("/desktop/keys/music/keys/wavespeed", json={"key": GOOD})
     chosen = c.put(
-        "/desktop/keys/lipsync/use",
-        json={"provider": "wavespeed", "model": "wavespeed-ai/infinitetalk"},
+        "/desktop/keys/music/use",
+        json={"provider": "wavespeed", "model": "minimax/music-2.6"},
     )
     assert chosen.status_code == 200, chosen.text
-    assert [m["model"] for m in chosen.json()["models"] if m["chosen"]] == [
-        "wavespeed-ai/infinitetalk"
-    ]
-    route = svc.known("lipsync")
+    assert [m["model"] for m in chosen.json()["models"] if m["chosen"]] == ["minimax/music-2.6"]
+    route = svc.known("music")
     assert (route.provider.id, route.model, route.key) == (
         "wavespeed",
-        "wavespeed-ai/infinitetalk",
+        "minimax/music-2.6",
         GOOD,
     )
     assert route.base_url == own_keys.PROVIDERS["wavespeed"].media_url
-    use = rows(c.get("/desktop/keys").json())["lipsync"]["use"]
-    assert use["title"] == "InfiniteTalk" and use["price"].startswith("$0.03")
-    off = c.put("/desktop/keys/lipsync/use", json={"provider": None})
-    assert off.status_code == 200 and svc.known("lipsync") is None
-    assert secrets.values == {"keys.lipsync.wavespeed": GOOD}
+    use = rows(c.get("/desktop/keys").json())["music"]["use"]
+    assert use["title"] == "MiniMax Music 2.6" and use["price"] == "$0.15 per song"
+    off = c.put("/desktop/keys/music/use", json={"provider": None})
+    assert off.status_code == 200 and svc.known("music") is None
+    assert secrets.values == {"keys.music.wavespeed": GOOD}
 
 
 @pytest.mark.parametrize(
     ("body", "status", "words"),
     [
-        ({"provider": "fal", "model": "fal-ai/infinitalk"}, 409, "Save a fal.ai key"),
-        ({"provider": "wavespeed", "model": "fal-ai/infinitalk"}, 422, "no lip sync model"),
-        ({"provider": "openai", "model": "gpt-4o-mini"}, 422, "no lip sync models"),
+        ({"provider": "fal", "model": "fal-ai/minimax-music/v2.6"}, 409, "Save a fal.ai key"),
+        ({"provider": "wavespeed", "model": "fal-ai/infinitalk"}, 422, "no music model"),
+        ({"provider": "openai", "model": "gpt-4o-mini"}, 422, "no music models"),
     ],
 )
 def test_a_cloud_model_needs_its_key_and_must_be_in_the_list(body, status, words):
     c, _, _ = rig()
-    c.put("/desktop/keys/lipsync/keys/wavespeed", json={"key": GOOD})
-    r = c.put("/desktop/keys/lipsync/use", json=body)
+    c.put("/desktop/keys/music/keys/wavespeed", json={"key": GOOD})
+    r = c.put("/desktop/keys/music/use", json=body)
     assert r.status_code == status and words in r.json()["detail"]
 
 

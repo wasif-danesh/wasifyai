@@ -73,7 +73,7 @@ web job's test step fail without one. The desktop's actions are held to the same
 | `video.extend` | live | shared VideoWorkspace, mode extend; needs ffmpeg in the API image |  |
 | `voice.speak` | live | shared voice page, hosted models |  |
 | `voice.transcribe` | live | shared voice page, hosted models |  |
-| `voice.lipsync` | live | shown when a ready model can do it (a GPU host) |  |
+| `voice.lipsync` | live | shown when a ready model can do it: a GPU host, or fal.ai set by an admin in Admin › Media (row speech.lipsync) |  |
 | `voice.voices` | live | shown when a ready model can do it |  |
 | `voice.convert` | live | shown when a ready model can do it |  |
 | `voice.edit` | live | shown when a ready model can do it |  |

@@ -1,9 +1,9 @@
-"""Speech and 3D models on the provider the admin chose (ADR-0095, stage K5).
+"""Speech, lip sync and 3D models on the provider the admin chose (ADR-0095, stage K5).
 
 On the web people bring no keys: the admin sets each product's media in Admin › Media. Pictures and
 clips are jobs, so the media worker reads their row per job. Speaking and 3D models are run by the
 API, through `KeyedSpeechEngine` and `KeyedModel3d`; this is where they ask whether the admin put
-"Voice · Speak" or "3D · Make a model" on fal.ai, and with which model and key.
+"Voice · Speak", "Voice · Lip sync" or "3D · Make a model" on fal.ai, and with which model and key.
 
 The products ask synchronously, so the answer for each tenant is kept here: read at start, again
 when the admin saves a row (on this replica at once) and every `refresh_s` (on the others)."""
@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 ROWS = {
     "voice": ("wasifyai-voice", "speech.speak"),
     "model3d": ("wasifyai-model3d", "model3d.generate"),
+    "lipsync": ("wasifyai-voice", "speech.lipsync"),
 }
 
 

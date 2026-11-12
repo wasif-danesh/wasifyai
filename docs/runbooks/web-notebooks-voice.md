@@ -117,6 +117,14 @@ reach Redis (`REDIS_URL`) or storage (`STORAGE_*`).
 **Not here yet:** a worker on a Linux GPU host and its Helm values (stage P7), and the lip sync engine's own environment, which is
 set up in the desktop app for now.
 
+**Lip sync on fal.ai, without a GPU worker (2026-11-12).** In Admin › Media, edit the row `wasifyai-voice` / `speech.lipsync`,
+choose fal.ai, and give one of `veed/fabric-1.0/fast` (quickest), `fal-ai/kling-video/ai-avatar/v2/standard`,
+`fal-ai/bytedance/omnihuman/v1.5` or `fal-ai/infinitalk` (another name is refused), with a key or "Use the key saved for …".
+The API runs it (`KeyedSpeechEngine` over `AdminProviders`), so Lip sync appears in the menu for everyone at once, with the
+model named "Fabric 1.0 Fast · fal.ai", its price on the picker and its time and cost on the screen. The picture and the voice
+go to fal.ai's file store first. Reset sends it back to the engine workers. A run the API was making when it restarted is not
+picked up again.
+
 
 ### Images and video on a Mac: the media worker (the same pattern)
 

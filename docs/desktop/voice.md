@@ -127,7 +127,17 @@ dark plate in the bottom-left corner of every frame, drawn by the server, and a 
 must say `mark: required` or it does not load, and there is no switch. The system safeguards of ADR-0047 (classifier,
 moderation, daily limit) are not part of the desktop; consent and the mark are.
 
-Not built: other lip sync models (InfiniteTalk, LivePortrait, the CUDA `liveavatar`), video as the input,
+**In the cloud (2026-11-12).** With a fal.ai key saved for Lip sync, the picker's Cloud tab offers VEED Fabric 1.0
+Fast, Kling Avatar v2, OmniHuman 1.5 and InfiniteTalk. Lip sync is fal.ai only (owner, 2026-11-12); LongCat and WaveSpeed's models were taken off. Each row says
+its price and, where measured, its time per video second (`docs/spikes/lipsync-cloud-race.md`: Fabric 5 to 25 s (25 s used for the estimate),
+Kling about 40 s, OmniHuman about 45 s, InfiniteTalk about 50 s at 480p). Before Make the screen says the time and
+the cost of this voice at the chosen size; no length is forced. The picture and the voice go up to fal.ai's file
+store first, then the model is asked (`own_keys_engines.py`, `lipsync_body`). Fabric and OmniHuman make a square whatever they are
+sent, so the screen hides the shape and sends a square picture; Kling and InfiniteTalk keep the shape at a size they
+pick, and the screen says their measured size as "about" (`frame`, `frame_short`). On the web the admin puts
+the same four on fal.ai in Admin › Media (row `speech.lipsync`, `docs/runbooks/web-notebooks-voice.md`).
+
+Not built on this computer: other lip sync models (InfiniteTalk, LivePortrait, the CUDA `liveavatar`), video as the input,
 faster settings that keep the face (at 720p a clip costs about 2.5 minutes of work per second of video on a 64 GB M5 Pro, 6.7 minutes in portrait; 448 px is ten times faster but changes the face), choosing where the crop is, several faces, a CUDA lock for Windows and Linux, and
 languages: nothing was tested beyond English.
 

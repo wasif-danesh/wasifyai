@@ -154,6 +154,23 @@ const CROP_POSITION = "50% 40%";
  * (`docs/spikes/lipsync-echomimic-v3-s1.md`, "Shape and size"). */
 const WORK_GROWTH = 1.8;
 
+type CloudEstimate = { where: string; size: number; price?: number; work?: number };
+
+/** "About 3 minutes on fal.ai and about $1.20 for 0:12 of video at 480p." Either part may be
+ * unknown: a size not timed, or a price the provider does not list. */
+export function cloudCost(c: CloudEstimate, voiceSeconds: number): string {
+  const length = `${clock(voiceSeconds)} of video at ${c.size}p`;
+  const dollars = c.price !== undefined ? `$${(c.price * voiceSeconds).toFixed(2)}` : null;
+  if (c.work !== undefined) {
+    const work = voiceSeconds * c.work; // Fabric makes a short clip in seconds, not minutes
+    const time = work < 60 ? `${Math.max(5, Math.round(work / 5) * 5)} seconds` : minutesText(work);
+    return `About ${time} on ${c.where}${dollars ? ` and about ${dollars}` : ""} for ${length}.`;
+  }
+  return dollars
+    ? `About ${dollars} on ${c.where} for ${length}. Its time is not measured.`
+    : `On ${c.where}. Its time and price for ${length} are not known here.`;
+}
+
 /**
  * Talking videos on the one make screen (ADR-0093, stage U6): a picture and a voice make a video of the face
  * saying it. The steps are in the ask column: the picture, then the voice; the stage shows the face before
@@ -197,7 +214,27 @@ export function LipSyncWorkspace({
   const sizes = chosen?.lipsync?.sizes ?? [];
   const sizeNow =
     size !== null && sizes.includes(size) ? size : (chosen?.lipsync?.default_size ?? null);
-  const frame = picture && sizeNow ? clipFrame(picture, shape, sizeNow) : null;
+  // a cloud model that makes its own frame: a square one gets a square picture whatever was chosen,
+  // and the size said is the one it made when measured, not this app's rule
+  const ownFrame = chosen?.engine === "remote" ? chosen.lipsync?.frame : undefined;
+  const squareOnly = ownFrame === "square";
+  const shapeNow: ClipShape = squareOnly ? "1:1" : shape;
+  const madeShort =
+    ownFrame && sizeNow ? chosen?.lipsync?.frame_short?.[String(sizeNow)] : undefined;
+  const frame = picture && sizeNow ? clipFrame(picture, shapeNow, sizeNow) : null;
+  const madeFrame = picture && madeShort ? clipFrame(picture, shapeNow, madeShort) : null;
+  const modelName = chosen?.title.split(" · ")[0] ?? "This model";
+  const frameLine = !ownFrame
+    ? frame
+      ? `The video will be ${frame.width}×${frame.height} pixels.`
+      : null
+    : squareOnly
+      ? madeShort
+        ? `The video will be about ${madeShort}×${madeShort} pixels.`
+        : "The video will be square."
+      : madeFrame
+        ? `The video will be about ${madeFrame.width}×${madeFrame.height} pixels; ${modelName} picks the exact size.`
+        : `${modelName} picks the size, keeping this shape.`;
   const maxWords = 1000;
 
   const loadEngine = useCallback(
@@ -273,7 +310,7 @@ export function LipSyncWorkspace({
         {
           picture: picture.id,
           model: chosen.id,
-          shape,
+          shape: shapeNow,
           ...(sizeNow ? { size: sizeNow } : {}),
           ...(voiceFrom === "words" ? { text: words } : { source: source ?? undefined }),
         },
@@ -355,6 +392,16 @@ export function LipSyncWorkspace({
         : library.speeches.find((s) => s.id === source.id)?.seconds
       : Math.max(2, words.trim().split(/\s+/).length / 2.5);
   const shown = (clips ?? []).find((c) => c.id === shownId) ?? null;
+  // a cloud model: what this voice costs and how long it should take there, so the person decides
+  const cloud =
+    chosen?.engine === "remote" && chosen.lipsync?.where && sizeNow
+      ? {
+          where: chosen.lipsync.where,
+          size: sizeNow,
+          price: chosen.lipsync.price_per_s?.[String(sizeNow)],
+          work: chosen.lipsync.work_per_s?.[String(sizeNow)],
+        }
+      : null;
 
   const actions: Action[] = shown
     ? [
@@ -420,7 +467,7 @@ export function LipSyncWorkspace({
           ? {
               kind: "result",
               children:
-                shape === "picture" || !frame ? (
+                shapeNow === "picture" || !frame ? (
                   <img
                     src={picture.url}
                     alt="The face to bring to life"
@@ -473,7 +520,15 @@ export function LipSyncWorkspace({
       <MakeScreen
         panel={panel}
         title={title}
-        lead={lead}
+        lead={
+          // the page says "It runs on this computer"; a cloud model runs on its provider instead
+          chosen?.engine === "remote" && lead
+            ? lead.replace(
+                / It runs on this computer\.$/,
+                ` It runs on ${chosen.lipsync?.where ?? "the cloud"} with your key.`,
+              )
+            : lead
+        }
         ask={
           <>
             {/* a model on the person's key needs nothing set up on this computer */}
@@ -523,24 +578,34 @@ export function LipSyncWorkspace({
               </p>
             </section>
 
-            <fieldset className="m-0 grid gap-2 border-0 p-0">
-              <legend className="mb-1 font-semibold text-ui-lg">Shape</legend>
-              <div className="flex flex-wrap gap-2">
-                {CLIP_SHAPES.map((s) => (
-                  <Chip
-                    key={s.id}
-                    aria-pressed={shape === s.id}
-                    disabled={working}
-                    onClick={() => setShape(s.id)}
-                  >
-                    {s.label} {s.hint ? <span className="opacity-85">{s.hint}</span> : null}
-                  </Chip>
-                ))}
-              </div>
-              <p className="m-0 text-muted-foreground text-xs">
-                Another shape crops the picture, keeping its upper part, where a face usually is.
-              </p>
-            </fieldset>
+            {squareOnly ? (
+              <section className="grid gap-2" aria-label="Shape">
+                <h2 className="m-0 font-semibold text-ui-lg">Shape</h2>
+                <p className="m-0 text-muted-foreground text-xs">
+                  {modelName} always makes a square video, so the picture is cut to a square,
+                  keeping its upper part.
+                </p>
+              </section>
+            ) : (
+              <fieldset className="m-0 grid gap-2 border-0 p-0">
+                <legend className="mb-1 font-semibold text-ui-lg">Shape</legend>
+                <div className="flex flex-wrap gap-2">
+                  {CLIP_SHAPES.map((s) => (
+                    <Chip
+                      key={s.id}
+                      aria-pressed={shape === s.id}
+                      disabled={working}
+                      onClick={() => setShape(s.id)}
+                    >
+                      {s.label} {s.hint ? <span className="opacity-85">{s.hint}</span> : null}
+                    </Chip>
+                  ))}
+                </div>
+                <p className="m-0 text-muted-foreground text-xs">
+                  Another shape crops the picture, keeping its upper part, where a face usually is.
+                </p>
+              </fieldset>
+            )}
 
             {sizes.length > 1 ? (
               <fieldset className="m-0 grid gap-2 border-0 p-0">
@@ -560,12 +625,12 @@ export function LipSyncWorkspace({
                     </Chip>
                   ))}
                 </div>
-                {frame ? (
-                  <p className="m-0 text-muted-foreground text-xs">
-                    The video will be {frame.width}×{frame.height} pixels.
-                  </p>
+                {frameLine ? (
+                  <p className="m-0 text-muted-foreground text-xs">{frameLine}</p>
                 ) : null}
               </fieldset>
+            ) : ownFrame && frameLine && picture ? (
+              <p className="m-0 text-muted-foreground text-xs">{frameLine}</p>
             ) : null}
 
             <section className="grid gap-3" aria-label="The voice">
@@ -622,6 +687,8 @@ export function LipSyncWorkspace({
               <p className="mt-2 text-muted-foreground text-xs">
                 Set lip sync up and get the model first (see above).
               </p>
+            ) : cloud && voiceSeconds && !working ? (
+              <p className="mt-2 text-muted-foreground text-xs">{cloudCost(cloud, voiceSeconds)}</p>
             ) : speed && voiceSeconds && !working ? (
               <p className="mt-2 text-muted-foreground text-xs">
                 About {minutesText(voiceSeconds / speed)} of work on this computer for{" "}

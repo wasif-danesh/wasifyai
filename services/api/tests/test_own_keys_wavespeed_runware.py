@@ -1,25 +1,24 @@
-"""Music, lip sync and pictures on WaveSpeed and Runware with the person's key
+"""Music and pictures on WaveSpeed and Runware with the person's key
 (`docs/own-keys-cloud-tab-plan.md`, CT3), against fakes of both: what each is sent, how the answer
-is followed, and that the key goes to the provider only, never to the file's host."""
+is followed, and that the key goes to the provider only, never to the file's host. Lip sync is
+fal.ai only (owner, 2026-11-12)."""
 
 import io
 import json
 import wave
-from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 import pytest
 from PIL import Image
 from wasifyai_api.own_keys import OwnKeysService, Provider, Tried
-from wasifyai_api.own_keys_engines import KEYED_LIPSYNC, KEYED_MUSIC, KeyedSpeechEngine
+from wasifyai_api.own_keys_engines import KEYED_MUSIC, KeyedSpeechEngine
 from wasifyai_api.own_keys_media import KeyedMediaRouter
 from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_platform_sdk import (
     InMemorySecretStore,
     JobRequest,
     VoiceEngineError,
-    check_lipsync,
     check_music,
 )
 
@@ -157,27 +156,6 @@ async def test_a_song_on_wavespeed_goes_to_its_minimax_and_is_followed_to_the_en
         {"prompt": "Warm city pop at night", "is_instrumental": False, "lyrics": "La la la"},
     )]  # fmt: skip
     assert ws.polls == 2 and res.seconds == pytest.approx(3.0)
-    key_only_to_provider(ws.requests, "api.wavespeed.ai")
-
-
-async def test_lip_sync_on_wavespeed_sends_the_picture_and_voice_and_keeps_the_video(
-    tmp_path: Path,
-):
-    ws = WaveSpeed(mp4(720, 1280), "video/mp4")
-    keys = await on("lipsync", "wavespeed", "wavespeed-ai/infinitetalk")
-    engine = KeyedSpeechEngine(LocalVoice(), keys, ws.client, poll_s=0)
-    model = engine.resolve("lipsync", None)
-    assert model.id == KEYED_LIPSYNC and model.lipsync["max_voice_s"] == 600.0
-    req = check_lipsync(model, 90.0, picture=(1024, 924), shape="9:16", size=720)
-    picture, voice = tmp_path / "f.png", tmp_path / "v.wav"
-    Image.new("RGB", (1024, 924)).save(picture)
-    voice.write_bytes(a_wav(2.0, 16000))
-    res = await engine.lipsync(model, req, picture, voice)
-    ((url, body),) = ws.posts()
-    assert url == "https://api.wavespeed.ai/api/v3/wavespeed-ai/infinitetalk"
-    assert set(body) == {"image", "audio", "prompt", "resolution"} and body["resolution"] == "720p"
-    assert body["image"].startswith("data:image/png") and body["audio"].startswith("data:")
-    assert (res.width, res.height) == (720, 1280)
     key_only_to_provider(ws.requests, "api.wavespeed.ai")
 
 

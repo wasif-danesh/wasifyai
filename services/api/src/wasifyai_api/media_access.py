@@ -32,8 +32,27 @@ log = logging.getLogger(__name__)
 
 DEFAULT_BACKEND = "comfyui-local"
 CHECKS = "media_checks"  # the last test of each saved row: "Key not working" comes from here
-# the rows the API runs itself (ADR-0095, K5): speaking and 3D models, engine workers or fal.ai
-API_ROWS = (("wasifyai-voice", "speech.speak"), ("wasifyai-model3d", "model3d.generate"))
+# the rows the API runs itself (ADR-0095, K5): speaking, lip sync and 3D models, engine workers or
+# fal.ai
+API_ROWS = (
+    ("wasifyai-voice", "speech.speak"),
+    ("wasifyai-voice", "speech.lipsync"),
+    ("wasifyai-model3d", "model3d.generate"),
+)
+
+
+def _check_model(backend: str, capability: str, config: dict[str, Any]) -> None:
+    """Lip sync on fal.ai takes only the models this app knows how to ask (their size, length
+    and speed settings differ); another name would never be offered to anyone."""
+    from wasifyai_api.own_keys_engines import LIPSYNC_MODELS
+
+    if backend == "fal" and capability == "speech.lipsync":
+        model = str(config.get("model") or "")
+        if model not in LIPSYNC_MODELS:
+            raise MediaAccessError(
+                f"{model or 'That'} is not a lip sync model this service can use on fal.ai. "
+                f"Use one of: {', '.join(LIPSYNC_MODELS)}."
+            )
 
 
 class MediaAccessError(Exception):
@@ -269,6 +288,7 @@ class MediaAccess:
             config = validate_config(new.backend, capability, new.config, api_key, keep)
         except InvalidBackendConfig as exc:
             raise MediaAccessError(str(exc)) from exc
+        _check_model(new.backend, capability, config)
         if borrowed is not None:
             secret: str | None = borrowed
         elif api_key:
@@ -319,6 +339,7 @@ class MediaAccess:
                 )
             except InvalidBackendConfig as exc:
                 raise MediaAccessError(str(exc)) from exc
+            _check_model(proposed.backend, capability, config)
             backend, key = proposed.backend, api_key or (self._saved_key(saved) if same else None)
         url = self._video_local_url if capability.startswith("video.") else ""
         out = await check_backend(backend, config, key, url or self._local_url, self._http)

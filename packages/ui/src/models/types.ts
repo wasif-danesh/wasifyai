@@ -133,6 +133,8 @@ export type ModelChoice = {
   providerTitle?: string;
   /** a cloud model's price as the provider lists it, in words */
   price?: string;
+  /** how long a cloud model took when measured, in words ("about 5 s per second of video") */
+  speed?: string;
   /** a cloud model's key worked when last tested */
   works?: boolean;
   /** the id the screen's engine knows a cloud model by while it is in use (`key:lipsync`), when not this row's id */

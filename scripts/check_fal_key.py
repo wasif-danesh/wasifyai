@@ -36,6 +36,7 @@ from wasifyai_platform_sdk.fal import FalError, FalQueue, data_uri
 
 PRODUCTS = ("text", "images", "video", "speech", "music", "song", "sfx", "model3d", "lipsync")
 TEXT_MODEL = "google/gemini-2.5-flash"
+LIPSYNC_MODEL = "veed/fabric-1.0/fast"
 KEYCHAIN = "Wasify AI"
 KEY_NAMES = ("voice", "music", "sfx", "lipsync", "images", "video", "model3d", "chat")
 
@@ -77,6 +78,10 @@ class FakeFal:
                              "message": {"role": "assistant", "content": "Blue."}}],
                 "usage": {"prompt_tokens": 9, "completion_tokens": 1, "total_tokens": 10},
             })  # fmt: skip
+        if "/storage/auth/token" in url:
+            return httpx.Response(200, json={"token": "t", "token_type": "Bearer"})
+        if url.endswith("/files/upload"):
+            return httpx.Response(200, json={"access_url": "https://v3.fal.media/files/in"})
         if req.method == "POST":
             endpoint = url.split("queue.fal.run/", 1)[1]
             self.asked.append(endpoint)
@@ -104,7 +109,7 @@ class FakeFal:
                 "images": [{"url": f"{f}.png", "content_type": "image/png"}],
                 "image": {"url": f"{f}.png", "content_type": "image/png"},
             }
-        if "ltx" in endpoint or "longcat" in endpoint or "infinitalk" in endpoint:
+        if "ltx" in endpoint or "fabric" in endpoint or "infinitalk" in endpoint:
             return {"video": {"url": f"{f}.mp4", "content_type": "video/mp4"}}
         if "pixal3d" in endpoint:
             return {"model_glb": {"url": f"{f}.glb"}, "model_mesh": {"url": f"{f}.glb"}}
@@ -151,6 +156,7 @@ async def main() -> int:
     ap.add_argument("--picture", type=Path, help="a face for lip sync (a plain square otherwise)")
     ap.add_argument("--voice", type=Path, help="a WAV voice for lip sync (silence otherwise)")
     ap.add_argument("--only", nargs="+", choices=PRODUCTS)
+    ap.add_argument("--lipsync-model", default=LIPSYNC_MODEL, help="the fal.ai lip sync endpoint")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     key = the_key(a.real)
@@ -213,7 +219,7 @@ async def main() -> int:
 
     async def lipsync() -> tuple[str, bytes]:
         await keys.save_key("lipsync", "fal", key)
-        await keys.use("lipsync", "fal", "fal-ai/longcat-single-avatar/image-audio-to-video")
+        await keys.use("lipsync", "fal", a.lipsync_model)
         model = engine.resolve("lipsync", None)
         with Image.open(io.BytesIO(picture)) as im:
             size = im.size

@@ -78,6 +78,15 @@ export type VoiceModelInfo = {
     speed_pixels?: number;
     fps?: number;
     mark?: string;
+    /** a cloud model: its provider ("fal.ai"), its listed dollars per video second and the seconds of
+     * work each video second took when measured, both by size ("480"); a size not measured is missing */
+    where?: string;
+    price_per_s?: Record<string, number>;
+    work_per_s?: Record<string, number>;
+    /** a cloud model's own frame, measured: "square" whatever picture it is sent, or "shape" (the
+     * picture's shape at a size it picks); and its short side in pixels by size ("480") */
+    frame?: "square" | "shape";
+    frame_short?: Record<string, number>;
   };
   state: ModelState;
   files_ready: boolean;

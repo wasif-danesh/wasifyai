@@ -505,7 +505,7 @@ describe("speech and listening", () => {
   it("lip sync lists its cloud models and a cloud model of music is chosen for music", async () => {
     const { keys, use } = cloudKeys(
       "lipsync",
-      ["fal-ai/infinitalk", "fal-ai/longcat-single-avatar/image-audio-to-video"],
+      ["fal-ai/infinitalk", "veed/fabric-1.0/fast"],
       null,
     );
     const local = voiceModel({ id: "echomimic", tasks: ["lipsync"], state: "ready" });
@@ -518,7 +518,7 @@ describe("speech and listening", () => {
     const rows = (await api.list()).choices;
     expect(rows.filter((r) => r.place === "cloud").map((r) => [r.id, r.engineId])).toEqual([
       ["cloud:lipsync:fal:fal-ai/infinitalk", "key:lipsync"],
-      ["cloud:lipsync:fal:fal-ai/longcat-single-avatar/image-audio-to-video", "key:lipsync"],
+      ["cloud:lipsync:fal:veed/fabric-1.0/fast", "key:lipsync"],
     ]);
     await api.choose("cloud:lipsync:fal:fal-ai/infinitalk");
     expect(use).toHaveBeenCalledWith("lipsync", { provider: "fal", model: "fal-ai/infinitalk" });

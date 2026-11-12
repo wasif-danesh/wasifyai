@@ -47,6 +47,18 @@ export function defaultOf(models: VoiceModelInfo[], task: string, last: string |
 
 type Engine = WorkerInfo["lipsync_engine"];
 
+/** A model an admin put on a provider (Admin › Media): where it runs, and for lip sync its price at the
+ * smallest size, so people know what a video costs the service. */
+export function remotePlain(m: VoiceModelInfo): string | undefined {
+  if (m.engine !== "remote") return undefined;
+  const where = m.lipsync?.where ?? "a cloud provider";
+  const size = m.lipsync?.sizes?.[0];
+  const price = size ? m.lipsync?.price_per_s?.[String(size)] : undefined;
+  const cost =
+    price !== undefined ? ` About $${price.toFixed(2)} per second of video at ${size}p.` : "";
+  return `Runs on ${where}, chosen by your admin; what you add is sent there.${cost}`;
+}
+
 export function webRow(
   m: VoiceModelInfo,
   tasks: string[],
@@ -71,7 +83,7 @@ export function webRow(
   return {
     id: m.id,
     title: m.title,
-    plain: plainFor(m.id, m.title),
+    plain: plainFor(m.id, m.title, remotePlain(m)),
     tier,
     state,
     chosen: m.id === chosenId,

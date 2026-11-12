@@ -18,12 +18,20 @@ from wasifyai_api.media_access import (
     media_capabilities_from,
 )
 from wasifyai_api.models_in_use import in_use
-from wasifyai_api.own_keys_engines import KEYED_VOICE, KeyedModel3d, KeyedSpeechEngine
+from wasifyai_api.own_keys_engines import (
+    KEYED_LIPSYNC,
+    KEYED_VOICE,
+    KeyedModel3d,
+    KeyedSpeechEngine,
+)
 from wasifyai_api.services import ApiServices
 from wasifyai_api.settings_store import InMemorySettingsStore
-from wasifyai_platform_sdk import InMemoryMediaBindingStore, SecretBox
+from wasifyai_platform_sdk import InMemoryMediaBindingStore, SecretBox, check_lipsync
 
 from tests.test_own_keys_engines import WAV, Fal, Local3d, LocalSpeech
+from tests.test_own_keys_music_lipsync import KEY as FILES_KEY
+from tests.test_own_keys_music_lipsync import Fal as FalFiles
+from tests.test_own_keys_music_lipsync import LocalVoice, a_picture, a_wav, mp4
 
 KEY = "fal-admin-key-123"
 T = "t1"
@@ -84,7 +92,9 @@ async def test_speaking_and_3d_are_rows_that_start_on_the_engine_workers():
 def test_the_api_rows_appear_only_for_products_that_are_there(tmp_path):
     registry = SimpleNamespace(products=lambda: ["wasifyai-voice"])
     found = media_capabilities_from(registry, tmp_path, "dev")
-    assert [(c.product_id, c.capability) for c in found] == [("wasifyai-voice", "speech.speak")]
+    assert [(c.product_id, c.capability) for c in found] == [
+        ("wasifyai-voice", "speech.speak"), ("wasifyai-voice", "speech.lipsync"),
+    ]  # fmt: skip
 
 
 async def test_a_row_may_use_the_key_saved_for_another_fal_row():
@@ -152,6 +162,41 @@ async def test_speech_runs_on_fal_with_the_admins_key():
     res = await speech.speak(speech.resolve("speak", None), "Hello.", "af_heart", {})
     assert res.wav == WAV
     assert queue.requests[0].headers["authorization"] == f"Key {KEY}"
+
+
+async def test_lip_sync_runs_on_the_admins_fal_model_beside_the_workers_models(tmp_path):
+    media, providers, _ = rig()
+    row = fal("veed/fabric-1.0/fast", key=FILES_KEY)  # the fake file store checks this key
+    await media.set(T, "wasifyai-voice", "speech.lipsync", row, "admin")
+    queue = FalFiles({"video": {"url": "https://v3.fal.media/v.mp4"}}, mp4(640, 640))
+    engine = KeyedSpeechEngine(LocalVoice(), providers, queue.client, poll_s=0, admin=True)
+    rows = engine.models("lipsync")
+    assert [m["id"] for m in rows] == [KEYED_LIPSYNC, "echomimic"]  # the workers' model stays
+    assert rows[0]["title"] == "Fabric 1.0 Fast · fal.ai" and rows[0]["state"] == "ready"
+    assert rows[0]["lipsync"]["where"] == "fal.ai" and rows[0]["lipsync"]["frame"] == "square"
+    model = engine.resolve("lipsync", None)
+    req = check_lipsync(model, 2.0, picture=(1024, 924), shape="1:1", size=480)
+    voice = tmp_path / "v.wav"
+    voice.write_bytes(a_wav(2.0, 16000))
+    res = await engine.lipsync(model, req, a_picture(tmp_path), voice)
+    assert res.model_id == "veed/fabric-1.0/fast" and (res.width, res.height) == (640, 640)
+    assert all(
+        r.headers.get("authorization") == f"Key {FILES_KEY}"
+        for r in queue.requests
+        if r.url.host in ("queue.fal.run", "rest.fal.ai")
+    )
+    # reset: back on the engine workers only
+    await media.reset(T, "wasifyai-voice", "speech.lipsync")
+    assert [m["id"] for m in engine.models("lipsync")] == ["echomimic"]
+
+
+async def test_lip_sync_on_fal_takes_only_the_models_this_service_can_ask():
+    media, _, _ = rig()
+    with pytest.raises(MediaAccessError, match="not a lip sync model"):
+        await media.set(T, "wasifyai-voice", "speech.lipsync", fal("fal-ai/kokoro"), "admin")
+    with pytest.raises(MediaAccessError, match="not a lip sync model"):
+        await media.test(T, "wasifyai-voice", "speech.lipsync", fal("fal-ai/longcat"))
+    assert (await media.get(T, "wasifyai-voice", "speech.lipsync")).backend == "engine-workers"
 
 
 async def test_3d_on_fal_says_the_admin_chose_it_and_keeps_the_workers_job_words(tmp_path):

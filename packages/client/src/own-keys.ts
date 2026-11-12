@@ -63,6 +63,8 @@ export type CloudModel = {
   about: string;
   /** as the provider lists it, in words: "$0.20 per second" */
   price: string;
+  /** how long it took when measured, in words ("about 5 s per second of video"); empty when unknown */
+  speed?: string;
   /** the key worked when last tested */
   works: boolean;
   chosen: boolean;

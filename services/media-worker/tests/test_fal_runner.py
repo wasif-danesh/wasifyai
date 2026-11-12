@@ -2,7 +2,6 @@
 the queue is followed to the end, the key goes to the queue only, a refusal is in fal.ai's words."""
 
 import asyncio
-import base64
 import json
 
 import httpx
@@ -33,10 +32,20 @@ class Fal:
         self.said = said
         self.polls = 0
         self.waiting = asyncio.Event()  # set once the job has been asked about twice
+        self.uploads: dict[str, bytes] = {}
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
         self.requests.append(req)
         url = str(req.url)
+        # an input picture: an upload token from the REST host (with the key), then the CDN
+        if url.startswith("https://rest.fal.ai/storage/auth/token"):
+            assert req.headers["authorization"] == f"Key {KEY}"
+            return httpx.Response(200, json={"token": "cdn-token", "token_type": "Bearer"})
+        if url == "https://v3.fal.media/files/upload":
+            assert req.headers["authorization"] == "Bearer cdn-token"
+            where = f"https://v3.fal.media/files/in{len(self.uploads)}"
+            self.uploads[where] = req.content
+            return httpx.Response(200, json={"access_url": where})
         if req.method == "POST":
             if self.submit != 200:
                 return httpx.Response(self.submit, json={"detail": self.said} if self.said else {})
@@ -64,9 +73,11 @@ class Fal:
             return httpx.Response(200, json={"images": [picture]})
         return httpx.Response(200, content=MP4 if self.video else PNG)
 
+    def queued(self) -> list[httpx.Request]:
+        return [r for r in self.requests if r.method == "POST" and r.url.host == "queue.fal.run"]
+
     def body(self, n=0) -> dict:
-        posts = [r for r in self.requests if r.method == "POST"]
-        return json.loads(posts[n].content)
+        return json.loads(self.queued()[n].content)
 
 
 def runner(fal: Fal, model="fal-ai/flux-2") -> FalRunner:
@@ -93,14 +104,20 @@ async def test_a_picture_is_made_with_the_size_and_seed_asked_and_the_key_stays_
         ) is on_queue  # never to the file host
 
 
-async def test_a_change_to_a_picture_sends_it_inline_to_the_edit_endpoint():
+async def test_a_change_to_a_picture_uploads_it_then_names_it_to_the_edit_endpoint():
     fal = Fal()
     await runner(fal).run(
         job("image.edit", image_key="uploads/a.png"), progress, files={"image": PNG}
     )
-    assert str(fal.requests[0].url) == "https://queue.fal.run/fal-ai/flux-2/edit"
-    (uri,) = fal.body()["image_urls"]
-    assert uri == "data:image/png;base64," + base64.b64encode(PNG).decode()
+    assert str(fal.queued()[0].url) == "https://queue.fal.run/fal-ai/flux-2/edit"
+    (url,) = fal.body()["image_urls"]
+    assert fal.uploads[url] == PNG  # the address of the uploaded picture, not the picture
+    upload = next(r for r in fal.requests if r.url.host == "v3.fal.media")
+    assert upload.headers["content-type"] == "image/png"
+    for r in fal.requests:  # the key goes to fal.ai's queue and REST host, never to the CDN
+        assert (r.headers.get("authorization") == f"Key {KEY}") is (
+            r.url.host in ("queue.fal.run", "rest.fal.ai")
+        )
 
 
 async def test_two_pictures_combine_through_the_edit_endpoint():
@@ -110,7 +127,9 @@ async def test_two_pictures_combine_through_the_edit_endpoint():
         files={"image": PNG, "image2": b"\xff\xd8\xffJPEG"},
     )  # fmt: skip
     urls = fal.body()["image_urls"]
-    assert len(urls) == 2 and urls[1].startswith("data:image/jpeg;base64,")
+    assert [fal.uploads[u] for u in urls] == [PNG, b"\xff\xd8\xffJPEG"]
+    jpeg = [r for r in fal.requests if r.url.host == "v3.fal.media"][1]
+    assert jpeg.headers["content-type"] == "image/jpeg"
 
 
 @pytest.mark.parametrize(("frames", "seconds"), [(121, 6), (193, 8), (None, 6)])
@@ -134,8 +153,8 @@ async def test_a_picture_is_animated_through_the_image_to_video_endpoint():
         job("video.animate", kind="video", length=121, image_key="uploads/a.png"), progress,
         files={"image": PNG},
     )  # fmt: skip
-    assert str(fal.requests[0].url) == "https://queue.fal.run/fal-ai/ltx-2/image-to-video/fast"
-    assert fal.body()["image_url"].startswith("data:image/png;base64,")
+    assert str(fal.queued()[0].url) == "https://queue.fal.run/fal-ai/ltx-2/image-to-video/fast"
+    assert fal.uploads[fal.body()["image_url"]] == PNG
 
 
 @pytest.mark.parametrize(
@@ -200,4 +219,4 @@ async def test_an_admins_row_may_name_the_edit_endpoint_itself():
     await runner(fal, "fal-ai/flux-2/edit").run(
         job("image.edit", image_key="uploads/a.png"), progress, files={"image": PNG}
     )
-    assert str(fal.requests[0].url) == "https://queue.fal.run/fal-ai/flux-2/edit"
+    assert str(fal.queued()[0].url) == "https://queue.fal.run/fal-ai/flux-2/edit"

@@ -137,6 +137,23 @@ describe("the picker on the web", () => {
     expect(list.choices[0]?.plain).toMatch(/voice/i);
   });
 
+  it("shows lip sync an admin put on fal.ai as ready to anyone, with where it runs and its price", () => {
+    const cloud = model({
+      id: "key:lipsync",
+      title: "Fabric 1.0 Fast · fal.ai",
+      engine: "remote",
+      state: "ready",
+      tasks: ["lipsync"],
+      lipsync: { sizes: [480, 720], where: "fal.ai", price_per_s: { "480": 0.1 } },
+    });
+    const row = webRow(cloud, ["lipsync"], "key:lipsync", false, null);
+    expect(row.state).toBe("ready");
+    expect(row.chosen).toBe(true);
+    expect(row.plain).toBe(
+      "Runs on fal.ai, chosen by your admin; what you add is sent there. About $0.10 per second of video at 480p.",
+    );
+  });
+
   it("offers a missing model to an admin with its size, and asks anyone else to ask an admin", () => {
     const missing = model({ id: "voxcpm2", state: "can_install", bytes_missing: 4e9 });
     const admin = webRow(missing, ["speak"], null, true, null);

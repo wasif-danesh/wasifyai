@@ -157,7 +157,7 @@ const finished = ev("done", {
 async function addFace() {
   const input = await screen.findByLabelText("Choose a picture");
   await userEvent.upload(input, new File(["x"], "face.png", { type: "image/png" }));
-  await screen.findByAltText("The face to bring to life");
+  await screen.findByAltText(/^The face to bring to life/);
 }
 
 const makeButton = () =>
@@ -304,7 +304,7 @@ describe("the lip sync engine and the videos", () => {
     const a = api({ lipsyncEngine: vi.fn(async () => engine({ installed: false })) }, [
       model({
         id: "key:lipsync",
-        title: "LongCat Avatar · with your key",
+        title: "Kling Avatar v2 · with your key",
         engine: "remote",
         family: "fal",
         measured: { platform: "", speed_x: null, memory_gb: null, load_s: null },
@@ -314,6 +314,61 @@ describe("the lip sync engine and the videos", () => {
     await addFace();
     expect(screen.queryByRole("button", { name: /Set up lip sync \(/ })).toBeNull();
     expect(screen.queryByText(/Needs the lip sync engine/)).toBeNull();
+  });
+
+  it("says what a cloud model costs and how long it takes for this voice, and leaves it to the person", async () => {
+    const runs = runsThat([finished]);
+    const a = api({}, [
+      model({
+        id: "key:lipsync",
+        title: "Fabric 1.0 Fast · with your key",
+        engine: "remote",
+        family: "fal",
+        measured: { platform: "", speed_x: null, memory_gb: null, load_s: null },
+        lipsync: {
+          max_voice_s: 60,
+          sizes: [480, 720],
+          default_size: 480,
+          fps: 25,
+          where: "fal.ai",
+          price_per_s: { "480": 0.1, "720": 0.2 },
+          work_per_s: { "480": 25 },
+          frame: "square",
+          frame_short: { "480": 640 },
+        },
+      }),
+    ]);
+    render(
+      <LipSyncWorkspace
+        api={a}
+        runs={runs}
+        lead="Make the face in a picture say your words or a recording. It runs on this computer."
+      />,
+    );
+    expect(await screen.findByText(/It runs on fal\.ai with your key\.$/)).toBeTruthy();
+    await addFace();
+    // Fabric makes a square whatever the picture: no shape to choose, and the size it made
+    expect(screen.queryByRole("button", { name: /Portrait/ })).toBeNull();
+    expect(screen.getByText(/Fabric 1\.0 Fast always makes a square video/)).toBeTruthy();
+    expect(screen.getByText("The video will be about 640×640 pixels.")).toBeTruthy();
+    // three words are about two seconds of speech: 50 s of work and 20 cents at 480p
+    await userEvent.type(screen.getByLabelText("What should it say?"), "Good evening, everyone.");
+    expect(
+      screen.getByText(/^About 50 seconds on fal\.ai and about \$0\.20 for .* of video at 480p\.$/),
+    ).toBeTruthy();
+    expect(screen.queryByText(/of work on this computer/)).toBeNull();
+    // 720p was not timed: the price is said, and that the time is not known
+    await userEvent.click(screen.getByRole("button", { name: /720p/ }));
+    expect(
+      screen.getByText(/^About \$0\.40 on fal\.ai for .* at 720p\. Its time is not measured\.$/),
+    );
+    // its size at 720p was not measured: only that it is square
+    expect(screen.getByText("The video will be square.")).toBeTruthy();
+    // nothing stops a long or a short voice: the person decides and makes it
+    expect(makeButton().disabled).toBe(false);
+    await userEvent.click(makeButton());
+    await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({ shape: "1:1", size: 720 });
   });
 
   it("says when there is no engine for this computer or the installer is missing", async () => {

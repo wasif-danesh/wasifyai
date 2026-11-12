@@ -116,8 +116,10 @@ BACKENDS: dict[str, BackendSpec] = {
                     required=True,
                     placeholder="fal-ai/flux-2",
                     help="The fal.ai model: fal-ai/flux-2 (and fal-ai/flux-2/edit), "
-                    "fal-ai/ltx-2/text-to-video/fast (and .../image-to-video/fast), fal-ai/kokoro "
-                    "or fal-ai/pixal3d.",
+                    "fal-ai/ltx-2/text-to-video/fast (and .../image-to-video/fast), fal-ai/kokoro, "
+                    "fal-ai/pixal3d, or for lip sync veed/fabric-1.0/fast (quickest), "
+                    "fal-ai/kling-video/ai-avatar/v2/standard, fal-ai/bytedance/omnihuman/v1.5 "
+                    "or fal-ai/infinitalk.",
                 ),
                 Field_("api_key", "API key", required=True, secret=True),
             ),

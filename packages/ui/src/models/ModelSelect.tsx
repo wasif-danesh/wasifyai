@@ -52,7 +52,7 @@ export function timeText(bytes: number): string {
 
 function stateLine(c: ModelChoice): string {
   if (c.place === "cloud") {
-    const where = [c.providerTitle, c.price].filter(Boolean).join(" · ");
+    const where = [c.providerTitle, c.price, c.speed].filter(Boolean).join(" · ");
     if (c.works === false) return `Key not working · ${c.providerTitle ?? ""}`;
     return c.chosen ? `In use · ${where}` : where;
   }

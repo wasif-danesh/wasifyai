@@ -22,7 +22,7 @@ from wasifyai_platform_sdk import (
     input_image_name,
 )
 from wasifyai_platform_sdk.cloud_queues import RunwareTasks, WaveSpeedQueue
-from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue, data_uri
+from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue
 
 from wasifyai_media_worker.comfy import ComfyClient, ComfyError, ProgressFn, use_picture
 from wasifyai_media_worker.settings import WorkerSettings
@@ -300,8 +300,12 @@ class FalRunner:
         self._headers = self._queue._headers
         self._model = model
 
-    def _request(self, job: JobRequest, files: InputFiles | None) -> tuple[str, dict[str, Any]]:
-        """The endpoint and the body for this job, from what was asked (`job.inputs`)."""
+    async def _request(
+        self, job: JobRequest, files: InputFiles | None
+    ) -> tuple[str, dict[str, Any]]:
+        """The endpoint and the body for this job, from what was asked (`job.inputs`). A picture
+        goes up to fal.ai's file store first and the body names its address: one sent inside the
+        request can be refused as too long (a voice was, in the owner's real run of 2026-11-12)."""
         what = NOT_WITH_KEY.get(job.capability)
         if what:
             raise ComfyError(
@@ -331,8 +335,11 @@ class FalRunner:
             pictures = [files[n] for n in ("image", "image2") if files and n in files]
             if not pictures:
                 raise ComfyError("invalid_input", "The picture for this job is missing.")
-            body["image_urls"] = [data_uri(p) for p in pictures]
-            return self._endpoint(FAL_EDIT, "Changing a picture"), body
+            endpoint = self._endpoint(FAL_EDIT, "Changing a picture")  # nothing goes up if not
+            body["image_urls"] = [
+                await self._queue.upload(p, f"picture{i}.png") for i, p in enumerate(pictures)
+            ]
+            return endpoint, body
         if cap in ("video.generate", "video.animate"):
             frames = job.inputs.get("length")
             want = round(frames / 24) if isinstance(frames, int) else 6
@@ -342,8 +349,9 @@ class FalRunner:
                 return self._model, body
             if not files or "image" not in files:
                 raise ComfyError("invalid_input", "The picture for this job is missing.")
-            body["image_url"] = data_uri(files["image"])
-            return self._endpoint(FAL_ANIMATE, "Animating a picture"), body
+            endpoint = self._endpoint(FAL_ANIMATE, "Animating a picture")
+            body["image_url"] = await self._queue.upload(files["image"], "picture.png")
+            return endpoint, body
         raise ComfyError("not_with_key", "This is not done with your key.")
 
     def _endpoint(self, table: dict[str, str], what: str) -> str:
@@ -363,8 +371,8 @@ class FalRunner:
         name, kind = next(
             ((n, s.get("type", "image")) for n, s in job.outputs.items()), ("output", "image")
         )
-        endpoint, body = self._request(job, files)
         try:
+            endpoint, body = await self._request(job, files)
             result = await self._queue.call(endpoint, body, on_progress)
             item = (
                 (result.get("images") or [{}])[0] if kind == "image" else result.get("video") or {}

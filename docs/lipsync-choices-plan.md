@@ -20,10 +20,16 @@ Status: **accepted by the owner 2026-11-11** with every recommended answer (see 
 |---|---|---|---|
 | EchoMimic v3 flash (default) | yes, any length: ~2.5 min per s at 720p, 29-41 GB | PyTorch CUDA, same code | no provider found; local only for now |
 | MuseTalk 1.5 | yes, any length: ~6 s per s, 11.8 GB (ADR-0044) | PyTorch CUDA, same code | **no** (fal.ai's MuseTalk needs a video, not a picture; owner: local only) |
-| InfiniteTalk | **test only, up to 3 s**: one 81-frame window at 320 px, ~4 min per s, ~30 GB (ADR-0044 spike) | PyTorch CUDA, the kijai ComfyUI wrapper or the official code; full length on a big GPU | fal.ai `fal-ai/infinitalk` (picture + voice), listed $0.20 per video second |
-| LongCat Avatar 1.5 | **test only, up to 3 s**: MLX port, ~20 min per s, up to 58 GB at 480x832 (spike, 2026-11-11) | official PyTorch CUDA code | fal.ai `fal-ai/longcat-single-avatar/image-audio-to-video`, $0.15 (480p) or $0.30 (720p) per video second, up to ~50 s |
+| InfiniteTalk | ~~test only, up to 3 s~~ (no forced length since 2026-11-12): one 81-frame window at 320 px, ~4 min per s, ~30 GB (ADR-0044 spike) | PyTorch CUDA, the kijai ComfyUI wrapper or the official code; full length on a big GPU | fal.ai `fal-ai/infinitalk` (picture + voice), listed $0.20 per video second |
+| LongCat Avatar 1.5 | ~~test only, up to 3 s~~ (no forced length since 2026-11-12): MLX port, ~20 min per s, up to 58 GB at 480x832 (spike, 2026-11-11) | official PyTorch CUDA code | fal.ai `fal-ai/longcat-single-avatar/image-audio-to-video`, $0.15 (480p) or $0.30 (720p) per video second, up to ~50 s |
 
-WaveSpeed hosts both InfiniteTalk and LongCat too. ADR-0095 says fal.ai first and other providers later, so WaveSpeed
+**Cloud models added 2026-11-12 (owner):** on fal.ai, VEED Fabric 1.0 Fast, Kling Avatar v2 Standard, OmniHuman 1.5
+(turbo, 720p) and InfiniteTalk (acceleration high, 480p by default), timed in `docs/spikes/lipsync-cloud-race.md`.
+Each says its price and measured time per video second in the picker and on the screen. LongCat was taken off the
+cloud list (fal.ai and WaveSpeed) the same day: a black video on fal.ai. This computer's models are
+unchanged.
+
+**Lip sync is fal.ai only (owner, 2026-11-12): no WaveSpeed or other provider.** (Kept for the record:) WaveSpeed hosts both InfiniteTalk and LongCat too. ADR-0095 says fal.ai first and other providers later, so WaveSpeed
 is a later step with its own runner.
 
 ## How it works
@@ -42,6 +48,12 @@ is a later step with its own runner.
   can still be used with a key without setting anything up.
 
 ### 2. The short test on this computer
+
+**Replaced 2026-11-12 (owner): "Don't force 3 seconds testing only. Indicate time per second and leave it to user to
+decide."** No length is forced on any model, here or in the cloud. The screen says, before Make, how long the voice
+should take and (in the cloud) what it should cost, from each model's measured time per video second and its listed
+price; the person decides. The text below is the old plan, kept for the record.
+
 
 - New catalogue field `lipsync.local_test_s` (3 for InfiniteTalk and LongCat; absent for EchoMimic and MuseTalk).
 - With a heavy model on this computer, the screen says "On this computer this model makes a 3-second test from the

@@ -16,10 +16,13 @@ class CloudModel:
     title: str
     about: str
     price: str
+    speed: str = ""  # how long it took when measured, in words ("time not measured" for a lip sync model not timed)
 
 
-def _m(product: str, provider: str, model: str, title: str, about: str, price: str) -> CloudModel:
-    return CloudModel(product, provider, model, title, about, price)
+def _m(
+    product: str, provider: str, model: str, title: str, about: str, price: str, speed: str = ""
+) -> CloudModel:
+    return CloudModel(product, provider, model, title, about, price, speed)
 
 
 PER_WORD = "per word used"
@@ -56,12 +59,12 @@ CATALOGUE: tuple[CloudModel, ...] = (
     _m("music", "wavespeed", "minimax/music-2.6", "MiniMax Music 2.6", "Songs with your lyrics, or it writes them.", "$0.15 per song"),
     _m("music", "runware", "minimax:music@2.6", "MiniMax Music 2.6", "Songs with your lyrics, or it writes them.", "$0.15 per song"),
     _m("sfx", "fal", "fal-ai/elevenlabs/sound-effects/v2", "ElevenLabs Sound Effects", "0.5 to 22 s, can loop.", "$0.002 per second"),
-    # ---- lip sync
-    _m("lipsync", "fal", "fal-ai/longcat-single-avatar/image-audio-to-video", "LongCat Avatar", "Head, body and hands; keeps moving in pauses. Up to 50 s.", "$0.15 to $0.30 per second"),
-    _m("lipsync", "fal", "fal-ai/infinitalk", "InfiniteTalk", "Head and body. Up to 28 s.", "$0.20 per second"),
-    _m("lipsync", "wavespeed", "wavespeed-ai/longcat-avatar", "LongCat Avatar", "Head, body and hands. Best under a minute.", "$0.04 to $0.08 per second"),
-    _m("lipsync", "wavespeed", "wavespeed-ai/infinitetalk", "InfiniteTalk", "Head and body. Up to 10 min.", "$0.03 to $0.06 per second"),
-    _m("lipsync", "wavespeed", "wavespeed-ai/infinitetalk-fast", "InfiniteTalk Fast", "Quicker, a little less detail. Up to 10 min.", "price on WaveSpeed"),
+    # lip sync is fal.ai only (owner, 2026-11-12); LongCat Avatar was taken off the same day (a black video)
+    # ---- lip sync (speed: seconds of work per second of video, fal.ai, 2026-11-12, docs/spikes/lipsync-cloud-race.md)
+    _m("lipsync", "fal", "veed/fabric-1.0/fast", "Fabric 1.0 Fast", "VEED. Quickest; crops to a square. Up to 1 min.", "$0.10 per second at 480p, $0.20 at 720p", "5 to 25 s per second of video at 480p (two runs)"),
+    _m("lipsync", "fal", "fal-ai/kling-video/ai-avatar/v2/standard", "Kling Avatar v2", "Keeps the picture's shape; moves the head most. Up to 1 min.", "$0.06 per second", "about 40 s per second of video"),
+    _m("lipsync", "fal", "fal-ai/bytedance/omnihuman/v1.5", "OmniHuman 1.5", "ByteDance, turbo. Natural blinks and movement. 720p, up to 1 min.", "$0.16 per second", "about 45 s per second of video"),
+    _m("lipsync", "fal", "fal-ai/infinitalk", "InfiniteTalk", "Head and body, speed set to high. Up to 28 s.", "$0.20 per second at 480p, $0.40 at 720p", "about 50 s per second of video at 480p"),
     # ---- 3D
     _m("model3d", "fal", "fal-ai/pixal3d", "Pixal3D", "A textured 3D model from a picture.", "under $1 per model"),
 )  # fmt: skip

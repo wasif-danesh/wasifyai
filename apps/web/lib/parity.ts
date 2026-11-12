@@ -59,7 +59,10 @@ export const PARITY: Record<string, Parity> = {
 
   "voice.speak": { status: "live", note: "shared voice page, hosted models" },
   "voice.transcribe": { status: "live", note: "shared voice page, hosted models" },
-  "voice.lipsync": { status: "live", note: "shown when a ready model can do it (a GPU host)" },
+  "voice.lipsync": {
+    status: "live",
+    note: "shown when a ready model can do it: a GPU host, or fal.ai set by an admin in Admin › Media (row speech.lipsync)",
+  },
   "voice.voices": { status: "live", note: "shown when a ready model can do it" },
   "voice.convert": { status: "live", note: "shown when a ready model can do it" },
   "voice.edit": { status: "live", note: "shown when a ready model can do it" },

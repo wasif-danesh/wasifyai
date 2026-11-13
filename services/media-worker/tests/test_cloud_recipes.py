@@ -92,7 +92,9 @@ def test_the_openai_mask_is_clear_where_the_change_goes():
     half.save(buf, "PNG")
     out = Image.open(io.BytesIO(mask_as_alpha(buf.getvalue(), png(size=(8, 4)))))
     assert out.mode == "RGBA" and out.size == (8, 4)  # the picture's size
-    assert out.getpixel((0, 0))[3] == 0 and out.getpixel((7, 3))[3] == 255
+    clear, kept = out.getpixel((0, 0)), out.getpixel((7, 3))
+    assert isinstance(clear, tuple) and isinstance(kept, tuple)
+    assert clear[3] == 0 and kept[3] == 255
 
 
 async def test_z_image_paints_on_runware_with_the_files_in_the_task_and_on_fal_by_address():

@@ -20,9 +20,7 @@ docs/decisions/ have the details and the sources):
     imageio-ffmpeg               BSD-2-Clause; its bundled ffmpeg build is GPL
 
   Models (weights are downloaded by the operator, not shipped in this repository)
-    EchoMimic v3 flash           Apache-2.0
-    Wan2.1-Fun 1.3B (VAE, CLIP)  Apache-2.0
-    chinese-wav2vec2-base        MIT
+    MuseTalk 1.5                 MIT
     IndicConformer 600M          MIT
     bge-m3                       MIT
     Wan 2.2                      Apache-2.0

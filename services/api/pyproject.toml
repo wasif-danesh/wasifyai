@@ -37,5 +37,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wasifyai_api"]
-# git ignores *.safetensors; this one is EchoMimic's two prompts, encoded (lipsync_server/make_prompts.py)
-artifacts = ["src/wasifyai_api/lipsync_server/echomimic_prompts.safetensors"]

@@ -485,7 +485,7 @@ describe("lip sync", () => {
       {
         picture: "p1",
         source: { kind: "track", id: "t1" },
-        model: "echomimic-v3-flash",
+        model: "musetalk-v15",
         title: " Hi ",
       },
       new AbortController().signal,
@@ -495,7 +495,7 @@ describe("lip sync", () => {
       task: "lipsync",
       picture: "p1",
       source_track: "t1",
-      model: "echomimic-v3-flash",
+      model: "musetalk-v15",
       title: " Hi ",
     });
     expect(steps).toEqual(["Making the video"]);

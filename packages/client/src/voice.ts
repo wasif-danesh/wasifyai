@@ -123,7 +123,7 @@ export type AudioRuntime = {
   install: RuntimeInstall;
 };
 
-/** The lip sync engine (EchoMimic v3): an optional component, set up on a click after its size is shown. */
+/** The lip sync engine (MuseTalk): an optional component, set up on a click after its size is shown. */
 export type LipSyncEngine = {
   installed: boolean;
   source: "managed" | "env" | null;

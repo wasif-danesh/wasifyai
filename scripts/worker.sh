@@ -11,7 +11,7 @@
 #   scripts/worker.sh run       # the engine worker in this terminal
 #   scripts/worker.sh logs      # follow both logs
 #   scripts/worker.sh models [id ...]   # list the speech models, or fetch some onto this machine
-#                                       # (also: lipsync-engine, EchoMimic's environment)
+#                                       # (also: lipsync-engine, MuseTalk's environment)
 #
 # WORKER_DATA_DIR picks another data folder. Quit the desktop app while a worker runs a job: both would use the same
 # memory and the same files.

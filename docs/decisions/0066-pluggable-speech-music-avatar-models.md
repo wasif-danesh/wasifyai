@@ -125,8 +125,7 @@ deployment-level choice.
 
 1. **Reuse level:** reference only for VoiceStudio and Unsloth's audio code; audio.cpp is the engine.
 2. **Now:** V1 (speak and transcribe), then V2 (design, clone, voices for the notebook overview). Start with the V0 spike.
-3. **Lip sync:** MuseTalk stays, as an optional download (a `sidecar` component). *Replaced on 2026-11-10 by
-   EchoMimic v3 flash, see the amendment "Lip sync model".*
+3. **Lip sync:** MuseTalk stays, as an optional download (a `sidecar` component).
 
 ## Amendments
 
@@ -197,7 +196,7 @@ deployment-level choice.
   (ADR-0047); (b) a product is retired by `PRODUCTS_RETIRED`, which keeps its routes and saved results and makes nothing
   new; (c) the older results are read where they are, not migrated, until there is data to move; (d) the older packages are
   deleted only after that and after the web runs music on a GPU host through the voice product.
-- **Lip sync model (owner, 2026-11-10; `docs/spikes/lipsync-echomimic-v3.md`, `-s0.md`, `-s1.md`):** answer 3 is
+- **Lip sync model (owner, 2026-11-10; replaced on 2026-11-13, below; `docs/spikes/lipsync-echomimic-v3.md`, `-s0.md`, `-s1.md`):** answer 3 is
   replaced. **The lip sync model is EchoMimic v3 flash** (`antgroup/echomimic_v3`, on Wan2.1-Fun-V1.1-1.3B-InP);
   MuseTalk is removed from the catalogue, the component and the code. (a) It moves the whole head, the eyes and the
   mouth, and works on drawings, where MuseTalk only redrew the mouth; (b) it is about three times slower: on a 64 GB
@@ -218,3 +217,15 @@ deployment-level choice.
   works out the width and height (`lipsync_frame`); the sidecar crops the picture to them, centred across and 40%
   down, so any lip sync model takes the same request. (d) 720x1280 measured 403 seconds of work per second of video
   and 41 GB, so `approx_ram_gb` is 41 and the wait is 800 seconds per second of voice.
+- **Lip sync model back to MuseTalk (owner, 2026-11-13):** "The current one is too heavy for 16GB/24GB Mac."
+  **The lip sync model on this computer is MuseTalk 1.5 again, the recommended and only one on every platform**;
+  EchoMimic v3 flash is removed from the catalogue, the model picker, the component, the code and the disk. (a)
+  MuseTalk needs about 12 GB of memory and about 5 seconds of work per second of video, where EchoMimic needed 29 GB
+  (41 GB in portrait) and 150 seconds or more; (b) it redraws the mouth and keeps the head still; (c) it takes the
+  shape and size of 2026-11-11 the same way: `lipsync.sizes` 480 and 720 (default 720), the picture cut to the
+  shape centred across and 40% down, then MuseTalk redraws the mouth at its own 256 px; (d) the longest voice is 5
+  minutes again. Whole-head motion stays available from the cloud lip sync models (ADR-0100). The EchoMimic
+  spike reports stay as a record. (e) Measured on 2026-11-13 through the app's own setup on a 64 GB Mac: the engine
+  installed in 60 seconds (2.1 GB), the weights came in 275 seconds (4.2 GB), loading took 30 seconds, and a 5-second
+  voice took 3.7 seconds of work per second of video at 720p and 5.5 at 9:16 480p; the server's footprint was 9.9 GB
+  at rest and 16 GB at its peak (graphics memory included). A 16 GB Mac is not tried yet.

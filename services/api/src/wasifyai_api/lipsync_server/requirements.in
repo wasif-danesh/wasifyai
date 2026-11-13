@@ -1,23 +1,22 @@
-# The lip sync server's own environment: EchoMimic v3 flash (echomimic.lock.txt is made from this:
-# MACOSX_DEPLOYMENT_TARGET=14.0 uv pip compile --python-version 3.12 --python-platform aarch64-apple-darwin --generate-hashes).
-# The versions are the ones measured on an Apple-silicon Mac (docs/spikes/lipsync-echomimic-v3-s1.md).
-torch==2.15.0
+# The lip sync server's own environment (musetalk.lock.txt is made from this: uv pip compile --python-version 3.12 --python-platform aarch64-apple-darwin --generate-hashes).
+torch
 torchvision
-diffusers==0.35.2
-transformers==4.57.1
+torchaudio
+numpy<2
+diffusers==0.30.2
+transformers==4.44.2
 huggingface_hub<1.0
 accelerate
-einops
 omegaconf
-safetensors
-scipy
+einops
 librosa
 soundfile
-pyloudnorm
 opencv-python-headless
-imageio
+ffmpeg-python
 imageio-ffmpeg
-pillow
+tqdm
+scipy
+face-alignment
 fastapi
 uvicorn
 python-multipart

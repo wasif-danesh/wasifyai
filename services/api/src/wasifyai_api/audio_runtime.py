@@ -521,7 +521,7 @@ class AudioEngine:
         self.installer = installer
         self.server = server
         self.comfy = comfy  # ComfyMusic: the music models the image engine runs (V3b)
-        self.lipsync_sidecar = lipsync  # LipSyncSidecar: EchoMimic v3, an optional component (V5)
+        self.lipsync_sidecar = lipsync  # LipSyncSidecar: MuseTalk, an optional component (V5)
         self.slot: Any = None  # the SlotManager; set when the worker is built
 
     @property
@@ -902,7 +902,7 @@ class AudioEngine:
         entry = next(e for e in self._entries() if e.id == model.id)
         files = {f.name: self._models.locate(f) for f in entry.files}
         hold = self.slot.hold("lipsync") if self.slot is not None else contextlib.nullcontext()
-        async with hold:  # EchoMimic takes about 29 GB: one big model at a time
+        async with hold:  # MuseTalk takes about 12 GB: one big model at a time
             return await sidecar.generate(  # type: ignore[no-any-return]
                 model, req, picture, voice, {k: v for k, v in files.items() if v is not None}
             )

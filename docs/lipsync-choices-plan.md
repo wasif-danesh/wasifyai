@@ -1,5 +1,9 @@
 # Lip sync choices: a model dropdown, on this computer or with a key (plan, 2026-11-11)
 
+> **2026-11-13 (owner):** EchoMimic v3 was removed; MuseTalk 1.5 is again the lip sync model on this computer
+> (too heavy for 16 and 24 GB Macs; ADR-0066 amendment "Lip sync model back to MuseTalk"). Where this plan names
+> EchoMimic as today's or the default model, read MuseTalk.
+
 Status: **accepted by the owner 2026-11-11** with every recommended answer (see "Decisions for the owner"). LC0 in progress.
 
 ## What the owner asked (2026-11-11)

@@ -195,7 +195,7 @@ disabled with the **Soon** pill, so the menu keeps its final shape (as above).
 | **Notebook** | Create, View notebooks | `wasifyai-notebooks` (ADR-0065) | stage E |
 | **Images** | Create, Edit, Inpaint, Reference, 3D model, Your images (Transform, Extend and Upscale were taken out of the menu 2026-10-21; `docs/spikes/unsloth-image-workflows.md`) | ComfyUI | Create, Edit, Inpaint, Reference (2026-10-21) |
 | **Video** | Create, Animate an image, Extend video, Your videos | `wasifyai-video` on ComfyUI (`video.generate`, `video.animate`, `video.extend`); LTX-Video 2B (V8) | Create, Animate an image, Extend video (2026-10-21), Your videos |
-| **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync is EchoMimic v3 flash, an optional sidecar | all built (V1 to V5) |
+| **Voice** | Text to speech, Speech to text, Lip sync, Voices | `wasifyai-voice` on audio.cpp (ADR-0066); lip sync is MuseTalk, an optional sidecar | all built (V1 to V5) |
 | **Music** | Create, Your music, Lyrics | `wasifyai-voice` on audio.cpp (ADR-0066, V3); the ComfyUI ACE-Step workflow and `text.lyrics` later | Create and Your music built; Lyrics Soon |
 | *Library* | (single item) all creations, searchable (ADR-0041) | | yes |
 | *Train models*, *Model hub* | single items, in this order; the hub is last (owner, 2026-10-25: *Models* was renamed *Model hub*, the page where models are got and managed) | | both built |

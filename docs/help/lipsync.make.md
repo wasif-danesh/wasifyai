@@ -14,7 +14,7 @@ Make a picture talk: a video of the face saying words or a recording.
 ## Steps in the app
 
 1. Open **Video › Lip sync**.
-2. Choose the model with the model button: **On this computer** (EchoMimic v3) or, once a Runware, WaveSpeed or fal.ai
+2. Choose the model with the model button: **On this computer** (MuseTalk 1.5) or, once a Runware, WaveSpeed or fal.ai
    key is saved for Lip sync under Your keys in Settings, **Cloud**: Fabric 1.0 Fast, Kling Avatar v2, OmniHuman 1.5
    or InfiniteTalk. Each cloud row says its price and how long a second of video takes. On the web, until an admin
    chooses one, lip sync runs on the cheapest model the saved keys can run at 480p (Kling Avatar v2 with a Runware or
@@ -53,12 +53,11 @@ is refused for its length below the model's limit:
 
 The picture and the voice go to the provider with your key; its terms and prices apply.
 
-On this computer:
+On this computer (MuseTalk 1.5, about 12 GB of memory):
 
-- Voices of up to 60 seconds; the screen shows the limits.
-- It is slow at 720p: about 2.5 minutes of work for each second of video on a 64 GB Mac from a near-square
-  picture (a 10 second voice takes about 25 minutes), and about 6.7 minutes in portrait (720x1280). 480p is about
-  four times quicker (estimated). The screen shows the time for the shape and size chosen.
+- Voices of up to 5 minutes; the screen shows the limits.
+- About 5 seconds of work for each second of video. MuseTalk redraws the mouth and keeps the head still; a cloud
+  model moves the whole head.
 
 ## Needs
 

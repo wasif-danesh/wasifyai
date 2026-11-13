@@ -17,10 +17,10 @@ const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
   ({ event, data: { run_id: "r1", seq: 1, ...data } }) as unknown as ParsedEvent;
 
 const model = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo => ({
-  id: "echomimic-v3-flash",
-  title: "EchoMimic v3 flash",
+  id: "musetalk-v15",
+  title: "MuseTalk 1.5",
   engine: "sidecar",
-  family: "echomimic",
+  family: "musetalk",
   tasks: ["lipsync"],
   recommended: ["lipsync"],
   languages: ["multi"],
@@ -90,7 +90,7 @@ const speech = (): Speech =>
 const clip = (over: Partial<Clip> = {}): Clip => ({
   id: "c1",
   title: "Mona says hello",
-  model_id: "echomimic-v3-flash",
+  model_id: "musetalk-v15",
   script: "Hello",
   voice: { kind: "speech", id: "s1" },
   seconds: 5.4,
@@ -120,7 +120,7 @@ function api(over: Record<string, unknown> = {}, models = [model()]): VoiceApi {
         install: {
           state: "installing",
           step: "source",
-          message: "Getting EchoMimic",
+          message: "Getting MuseTalk",
           done_bytes: 1,
           total_bytes: 2,
         },
@@ -200,7 +200,7 @@ describe("making a talking video", () => {
       task: "lipsync",
       picture: "p1",
       text: "Good evening, everyone.",
-      model: "echomimic-v3-flash",
+      model: "musetalk-v15",
       size: 720,
     });
     // the new video plays on the stage
@@ -241,7 +241,7 @@ describe("making a talking video", () => {
       task: "lipsync",
       picture: "p1",
       source_speech: "s1",
-      model: "echomimic-v3-flash",
+      model: "musetalk-v15",
       size: 720,
     });
   });

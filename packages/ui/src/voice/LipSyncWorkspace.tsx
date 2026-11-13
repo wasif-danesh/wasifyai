@@ -89,7 +89,7 @@ function EngineCard({
       ) : (
         <>
           <p className="text-muted-foreground">
-            Lip sync runs here, with no account and nothing sent away. It needs EchoMimic's program
+            Lip sync runs here, with no account and nothing sent away. It needs MuseTalk's program
             and its environment ({formatBytes(plan.bytes)}); the model's files are fetched in the
             Model hub afterwards. Setting up takes a few minutes.
           </p>
@@ -150,8 +150,9 @@ export const CLIP_SHAPES: { id: ClipShape; label: string; hint: string }[] = [
 /** where a crop is centred, across and down, as the engine does it (`CROP_CENTRE`) */
 const CROP_POSITION = "50% 40%";
 
-/** The work grows faster than the pixels: measured on EchoMimic at 672x592, 800x720 and 720x1280
- * (`docs/spikes/lipsync-echomimic-v3-s1.md`, "Shape and size"). */
+/** For a model that says the pixels its speed was measured at (`lipsync.speed_pixels`), the work grows
+ * faster than the pixels (measured on a whole-picture model, `docs/spikes/lipsync-echomimic-v3-s1.md`).
+ * MuseTalk redraws only the mouth, so it gives none and its speed is used as it is. */
 const WORK_GROWTH = 1.8;
 
 type CloudEstimate = { where: string; size: number; price?: number; work?: number };

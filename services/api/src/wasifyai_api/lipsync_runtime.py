@@ -1,15 +1,14 @@
-"""The lip sync engine of the desktop (ADR-0066, stage V5 and its amendment of 2026-11-10):
-EchoMimic v3 as an optional sidecar.
+"""The lip sync engine of the desktop (ADR-0066, stage V5): MuseTalk as an optional sidecar.
 
-    LipSyncInstaller    the pinned source and a hashed package lock, set up with the app's own `uv`
+    MuseTalkInstaller   the pinned source and a hashed package lock, set up with the app's own `uv`
                         in an environment of its own (torch must not touch the engine's packages)
     LipSyncSidecar      one `uvicorn` process running the lip sync server (`lipsync_server/`), on
                         loopback, started on demand and stopped to give the memory back
 
-The weights are catalogue entries (`echomimic-v3-flash` in the voice product's `models.yaml`),
-fetched in Models after the person has seen their size; the sidecar lays them out the way the server
-reads them (`<root>/weights`, see `WEIGHTS`) when it starts. A copy set up by hand
-(`WASIFYAI_LIPSYNC_HOME`, with `src/`, `venv/` and `weights/`) is used as it is, for development."""
+The weights are catalogue entries (`musetalk-v15` in the voice product's `models.yaml`), fetched in
+Models after the person has seen their size; the sidecar lays them out the way MuseTalk reads them
+when it starts. A copy set up by hand (`WASIFYAI_MUSETALK_HOME`, with `src/` and `venv/`) is used as
+it is, for development."""
 
 import asyncio
 import contextlib
@@ -40,7 +39,6 @@ from wasifyai_api.components.manifest import PACKAGE_DIR, part_pins
 
 log = logging.getLogger(__name__)
 
-PART = "lipsync"  # the component and its part in the manifests
 STEP_WORDS = {
     "environment": "Creating the environment",
     "packages": "Installing the packages (a few minutes)",
@@ -49,21 +47,24 @@ SERVER_DIR = Path(__file__).with_name("lipsync_server")
 STATE_FILE = "state.json"
 START_TIMEOUT_S = 120.0
 MIN_FREE_BYTES = 2_000_000_000
-# the longest wait per second of voice (measured on an M5 Pro: about 162 at 720p from a near-square
-# picture, 403 at 720p portrait, 720x1280)
-SECONDS_PER_SECOND = 800
-# a file of EchoMimic's code that must be there: the pipeline the server runs
-MARKER = Path("src") / "pipeline_wan_fun_inpaint_audio_2512.py"
 
-# where the server reads each catalogue file from, under `weights/`
+# where MuseTalk reads each catalogue file from, under its `models/` folder
 WEIGHTS = {
-    "echomimic-v3-flash-pro.safetensors": "transformer/diffusion_pytorch_model.safetensors",
-    "echomimic-v3-flash-pro.json": "transformer/config.json",
-    "wan21-vae.pth": "Wan2.1_VAE.pth",
-    "wan21-clip-vit-h14.pth": "clip.pth",
-    "chinese-wav2vec2-base.bin": "wav2vec2/pytorch_model.bin",
-    "chinese-wav2vec2-base.json": "wav2vec2/config.json",
-    "chinese-wav2vec2-base-preprocessor.json": "wav2vec2/preprocessor_config.json",
+    "musetalk-v15-unet.pth": "musetalkV15/unet.pth",
+    "musetalk-v15.json": "musetalkV15/musetalk.json",
+    "sd-vae-ft-mse.bin": "sd-vae/diffusion_pytorch_model.bin",
+    "sd-vae-ft-mse.json": "sd-vae/config.json",
+    "whisper-tiny.bin": "whisper/pytorch_model.bin",
+    "whisper-tiny.json": "whisper/config.json",
+    "whisper-tiny-preprocessor.json": "whisper/preprocessor_config.json",
+    "face-parsing-bisenet.pth": "face-parse-bisent/79999_iter.pth",
+    "resnet18-5c106cde.pth": "face-parse-bisent/resnet18-5c106cde.pth",
+}
+# the face detector and landmark model, which the `face-alignment` package looks for in the
+# torch cache
+TORCH_WEIGHTS = {
+    "s3fd-619a316812.pth": "hub/checkpoints/s3fd-619a316812.pth",
+    "2DFAN4-11f355bf06.pth.tar": "hub/checkpoints/2DFAN4-11f355bf06.pth.tar",
 }
 
 
@@ -82,7 +83,7 @@ class Pins:
 
 def load_pins(path: Path | None = None) -> Pins:
     """Lip sync's pins: its part in this platform's component manifest (stage F2), or a file."""
-    raw = json.loads(path.read_text()) if path is not None else part_pins(PART)
+    raw = json.loads(path.read_text()) if path is not None else part_pins("musetalk")
     base = path.parent if path is not None else PACKAGE_DIR
     src = raw["source"]
     if not str(src["url"]).startswith("https://") or len(str(src["sha256"])) != 64:
@@ -97,23 +98,23 @@ def load_pins(path: Path | None = None) -> Pins:
 
 
 @dataclass(frozen=True)
-class LipSyncInstall:
-    src: Path  # EchoMimic's code
+class MuseTalkInstall:
+    src: Path  # MuseTalk's code; the server changes into it
     python: Path  # the interpreter of its environment
-    weights: Path  # where the weights are laid out for the server
+    torch_home: Path | None  # where the face detector weights are laid out (managed installs)
     source: str  # managed | env
-    in_place: bool  # the weights are already in weights/ (a copy set up by hand)
+    in_place: bool  # the weights are already in src/models (a copy set up by hand)
 
 
 def _venv_python(venv: Path) -> Path:
     return venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
 
-def find_install(data_dir: Path, pins: Pins | None = None) -> LipSyncInstall | None:
+def find_install(data_dir: Path, pins: Pins | None = None) -> MuseTalkInstall | None:
     """The engine to use: the one this app installed (and still matches the pins), else the copy
-    named by `WASIFYAI_LIPSYNC_HOME`. None when there is none."""
+    named by `WASIFYAI_MUSETALK_HOME`. None when there is none."""
     pins = pins or load_pins()
-    root = data_dir / "engine" / PART
+    root = data_dir / "engine" / "musetalk"
     try:
         state = json.loads((root / STATE_FILE).read_text())
         py = _venv_python(root / "venv")
@@ -122,17 +123,17 @@ def find_install(data_dir: Path, pins: Pins | None = None) -> LipSyncInstall | N
             and state.get("commit") == pins.commit
             and state.get("lock_sha256") == pins.lock_sha256
             and py.is_file()
-            and (root / "src" / MARKER).is_file()
+            and (root / "src" / "musetalk").is_dir()
         ):
-            return LipSyncInstall(root / "src", py, root / "weights", "managed", False)
+            return MuseTalkInstall(root / "src", py, root / "torch", "managed", False)
     except (OSError, ValueError):
         pass
-    env = os.environ.get("WASIFYAI_LIPSYNC_HOME")
+    env = os.environ.get("WASIFYAI_MUSETALK_HOME")
     if env:
         home = Path(env).expanduser()
         py = _venv_python(home / "venv")
-        if py.is_file() and (home / "src" / MARKER).is_file():
-            return LipSyncInstall(home / "src", py, home / "weights", "env", True)
+        if py.is_file() and (home / "src" / "musetalk").is_dir():
+            return MuseTalkInstall(home / "src", py, None, "env", True)
     return None
 
 
@@ -173,13 +174,13 @@ async def _run(
     return proc.returncode == 0, out.decode(errors="replace")
 
 
-class LipSyncInstaller:
-    """Sets up EchoMimic's code and environment. Nothing is fetched before the person has seen the
+class MuseTalkInstaller:
+    """Sets up MuseTalk's code and environment. Nothing is fetched before the person has seen the
     size and confirmed it; the weights are separate (Models)."""
 
     def __init__(self, data_dir: Path, pins: Pins | None = None, client_factory: Any = None):
         self._data_dir = data_dir
-        self._root = data_dir / "engine" / PART
+        self._root = data_dir / "engine" / "musetalk"
         self.pins = pins or load_pins()
         self._client_factory = client_factory or (
             lambda: httpx.AsyncClient(follow_redirects=True, timeout=httpx.Timeout(60, read=120))
@@ -197,7 +198,7 @@ class LipSyncInstaller:
         return self.pins.size + self.pins.packages_bytes
 
     def plan(self) -> dict[str, Any]:
-        env = os.environ.get("WASIFYAI_LIPSYNC_HOME")
+        env = os.environ.get("WASIFYAI_MUSETALK_HOME")
         found = find_install(self._data_dir, self.pins)
         return {
             "supported": self.supported, "platform": platform_key(),
@@ -266,12 +267,12 @@ class LipSyncInstaller:
         if _sha256_file(pins.lock) != pins.lock_sha256:
             raise InstallError("The package list shipped with the app does not match its pin.")
 
-        archive = stage / "echomimic.tar.gz"
-        self._say("source", "Getting EchoMimic", 0)
+        archive = stage / "musetalk.tar.gz"
+        self._say("source", "Getting MuseTalk", 0)
         # through the one installer (stage F2): size and SHA-256 checked, nothing kept otherwise
         await installer.download(
             installer.Archive(pins.url, pins.size, pins.sha256, "tar.gz"), archive, "source",
-            lambda done, _: self._say("source", "Getting EchoMimic", done),
+            lambda done, _: self._say("source", "Getting MuseTalk", done),
             client=self._client_factory,
         )  # fmt: skip
 
@@ -279,8 +280,8 @@ class LipSyncInstaller:
         unpacked = stage / "unpacked"
         await asyncio.to_thread(installer.unpack, archive, "tar.gz", 0, unpacked, "unpack")
         tops = [p for p in unpacked.iterdir() if p.is_dir()]
-        if len(tops) != 1 or not (tops[0] / MARKER).is_file():
-            raise InstallError("The download did not contain EchoMimic.")
+        if len(tops) != 1 or not (tops[0] / "musetalk").is_dir():
+            raise InstallError("The download did not contain MuseTalk.")
 
         env = self._uv_env()
         final = self._root
@@ -309,7 +310,7 @@ class LipSyncInstaller:
         self._say("verify", "Checking that it starts", pins.size + pins.packages_bytes - 1)
         ok, text = await self.run(
             [str(py), "-c",
-             "import torch,cv2,transformers,diffusers,librosa,pyloudnorm,imageio_ffmpeg;"
+             "import torch,cv2,face_alignment,transformers,diffusers;"
              "print('accelerator', 'mps' if torch.backends.mps.is_available() else "
              "'cuda' if torch.cuda.is_available() else 'cpu')"],
             final, env, 300,
@@ -330,13 +331,15 @@ class LipSyncInstaller:
 # ---- the process ---------------------------------------------------------------------------------
 
 
-def _lay_out(install: LipSyncInstall, files: dict[str, Path]) -> None:
-    """Put the weights where the server reads them: links to the files Models downloaded (a copy
-    where links are not allowed)."""
-    for name, rel in WEIGHTS.items():
-        source, dest = files.get(name), install.weights / rel
+def _lay_out(install: MuseTalkInstall, files: dict[str, Path]) -> None:
+    """Put the weights where MuseTalk and the face-alignment package read them: links to the files
+    Models downloaded (a copy where links are not allowed)."""
+    pairs = [(files.get(name), install.src / "models" / rel) for name, rel in WEIGHTS.items()]
+    if install.torch_home is not None:
+        pairs += [(files.get(n), install.torch_home / rel) for n, rel in TORCH_WEIGHTS.items()]
+    for source, dest in pairs:
         if source is None:
-            raise VoiceEngineError("model_missing", "EchoMimic is not on this computer yet.")
+            raise VoiceEngineError("model_missing", "MuseTalk is not on this computer yet.")
         dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.is_symlink() or dest.exists():
             if dest.is_symlink() and dest.resolve() == source.resolve():
@@ -352,7 +355,7 @@ class LipSyncSidecar:
     def __init__(self, data_dir: Path, pins: Pins | None = None):
         self._data_dir = data_dir
         self.pins = pins or load_pins()
-        self.installer = LipSyncInstaller(data_dir, self.pins)
+        self.installer = MuseTalkInstaller(data_dir, self.pins)
         self._proc: asyncio.subprocess.Process | None = None
         self._url: str | None = None
         self._lock = asyncio.Lock()
@@ -360,7 +363,7 @@ class LipSyncSidecar:
         self.slot: Any = None
 
     @property
-    def install(self) -> LipSyncInstall | None:
+    def install(self) -> MuseTalkInstall | None:
         return find_install(self._data_dir, self.pins)
 
     @property
@@ -400,7 +403,7 @@ class LipSyncSidecar:
                 await asyncio.to_thread(_lay_out, install, files)
             return await self._start(install)
 
-    async def _start(self, install: LipSyncInstall) -> str:
+    async def _start(self, install: MuseTalkInstall) -> str:
         with socket.socket() as s:  # a free port on loopback
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
@@ -409,13 +412,14 @@ class LipSyncSidecar:
         logs.mkdir(parents=True, exist_ok=True)
         out = (logs / "lipsync.log").open("ab")
         env = {
-            **os.environ,
-            "ECHOMIMIC_DIR": str(install.src), "LIPSYNC_WEIGHTS": str(install.weights),
-            "PYTORCH_ENABLE_MPS_FALLBACK": "1", "PYTHONNOUSERSITE": "1", "PYTHONUNBUFFERED": "1",
-            # torch's compiler builds C++ with a folder path it does not quote, and macOS's
-            # "Application Support" has a space; nothing here needs it
+            **os.environ, "MUSETALK_DIR": str(install.src), "PYTORCH_ENABLE_MPS_FALLBACK": "1",
+            "PYTHONNOUSERSITE": "1", "PYTHONUNBUFFERED": "1",
+            # torch compiles the face finder with a C++ build that does not quote a folder with a
+            # space in its name (macOS "Application Support"); the eager model is as fast here
             "TORCHDYNAMO_DISABLE": "1",
         }  # fmt: skip
+        if install.torch_home is not None:
+            env["TORCH_HOME"] = str(install.torch_home)
         try:
             self._proc = await asyncio.create_subprocess_exec(
                 str(install.python), "-m", "uvicorn", "server:app", "--host", "127.0.0.1",
@@ -472,7 +476,7 @@ class LipSyncSidecar:
         url = await self.ensure_running(files)
         health = await self._health(url) or {}
         warm = bool(health.get("loaded"))
-        wait = max(900.0, req.voice_seconds * SECONDS_PER_SECOND)
+        wait = max(600.0, req.voice_seconds * 40)
         pic, wav = await asyncio.gather(
             asyncio.to_thread(picture.read_bytes), asyncio.to_thread(voice.read_bytes)
         )
@@ -494,7 +498,9 @@ class LipSyncSidecar:
                 "engine_stopped", "The lip sync engine stopped. Try again."
             ) from e
         if r.status_code == 422:
-            raise VoiceEngineError("no_face", "The picture could not be read. Try another one.")
+            raise VoiceEngineError(
+                "no_face", "No clear face was found in the picture. Try a front-facing one."
+            )
         if r.status_code >= 300:
             log.warning("lip sync server answered %s: %s", r.status_code, r.text[:300])
             raise VoiceEngineError("engine_failed", "The lip sync could not be made. Try again.")

@@ -3,6 +3,7 @@
 - **Status:** Accepted for P0 and P1 (2026-10-21, by the owner: "yes, start" to "P0, P1, P2 first, on the Mac"). The later stages
   (P2 onward) and the hosting questions (cloud GPU choice, shared or personal workers) stay open until
   the owner answers; the plan lists them.
+- **Changed by:** ADR-0099 (2026-11-12): OpenRouter runs text models and fal.ai media models in v1 (the only cloud providers), and the web runs only cloud models.
 - **Date:** 2026-10-21
 - **Depends on:** ADR-0056 (one engine, two shells), ADR-0021 (event log and queue), ADR-0032 (media backends), ADR-0058
   (a runner on a person's desktop), ADR-0066 (speech, music and avatar models; decision 11: what a deployment lists),

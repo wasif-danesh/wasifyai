@@ -96,7 +96,7 @@ async def rig(monkeypatch, answer=None):
 
 async def with_key(keys: OwnKeysService) -> None:
     await keys.save_key("chat", "openrouter", KEY)
-    await keys.use("chat", "openrouter", "openai/gpt-4o-mini")
+    await keys.use("chat", "openrouter", "openai/gpt-6-luna")
 
 
 async def text(it) -> str:
@@ -122,7 +122,7 @@ async def test_with_a_key_a_text_product_goes_to_the_provider_and_its_tokens_are
     assert str(req.url) == "https://openrouter.ai/api/v1/chat/completions"
     assert req.headers["authorization"] == f"Bearer {KEY}"
     body = json.loads(req.content)
-    assert body["model"] == "openai/gpt-4o-mini" and body["stream"] is True
+    assert body["model"] == "openai/gpt-6-luna" and body["stream"] is True
     assert body["messages"][0] == {"role": "system", "content": "Be brief."}
     assert body["response_format"]["json_schema"]["schema"] == schema
     tokens = {(e.kind, e.quantity, e.meta["provider"]) for e in usage.events}
@@ -148,7 +148,7 @@ async def test_embeddings_stay_on_this_computer(monkeypatch, ctx):
 
 @pytest.mark.parametrize(
     ("status", "words"),
-    [(401, "OpenRouter did not accept the key."), (404, "no model called openai/gpt-4o-mini"),
+    [(401, "OpenRouter did not accept the key."), (404, "no model called openai/gpt-6-luna"),
      (429, "too many requests"), (500, "OpenRouter answered 500.")],
 )  # fmt: skip
 async def test_a_refusal_is_said_in_the_providers_name(monkeypatch, ctx, status, words):

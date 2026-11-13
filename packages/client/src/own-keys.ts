@@ -14,9 +14,6 @@ export type SavedKey = {
   /** why the key did not work, in words */
   said: string | null;
   tested_at: number | null;
-  /** another OpenAI-compatible server only: its address and the model it runs */
-  base_url: string | null;
-  model: string | null;
 };
 
 /** The cloud model a product runs on now (null: this computer). */
@@ -35,20 +32,16 @@ export type KeyProduct = {
 export type KeyProvider = {
   id: string;
   title: string;
-  /** where what is made goes: "fal.ai" */
+  /** where what is sent goes: "api.anthropic.com", "runware.ai" */
   host: string;
-  /** an OpenAI-compatible server: the person gives its address and model */
-  needs_base: boolean;
 };
 
 export type OwnKeys = { products: KeyProduct[]; providers: KeyProvider[]; can_save: boolean };
 
-/** What goes with a key; `base_url` and `model` only for another OpenAI-compatible server. */
+/** What goes with a key. */
 export type KeyBody = {
   /** write-only: left out to use the key already saved */
   key?: string;
-  base_url?: string;
-  model?: string;
 };
 
 export type KeyTest = { ok: boolean; ms: number; said: string | null };

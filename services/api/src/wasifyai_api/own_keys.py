@@ -1,13 +1,18 @@
 """The person's own provider keys, by product (ADR-0095; amendment of 2026-11-11: keys hold no
-model, the model picker's Cloud tab chooses one).
+model, the model picker's Cloud tab chooses one; ADR-0100: text vendors and three media providers).
 
-Settings › Your keys keeps, for each product, any number of provider keys (fal.ai, WaveSpeed,
-Runware and, for chat, the text providers), each tested before it is saved. The picker's Cloud tab
-lists the models of every provider with a key for that product (`own_keys_catalogue.py`); choosing
-one sets the product's `use`, choosing a model on this computer clears it. A key lives in the
-secret store as `keys.<product>.<provider>` (the keychain on the desktop, ADR-0092) and is never
-answered back, logged or sent anywhere but its provider: the window learns only whether one is saved
-and whether it worked.
+Settings › Your keys keeps, for each product, a key for each provider the person uses there. Chat
+and writing run on a text vendor: Anthropic (Claude Haiku 5.5, the default), OpenAI, Google Gemini,
+DeepSeek, Z.ai or OpenRouter. The media products run on Runware, WaveSpeed and fal.ai. Each key is
+tested before it is saved. Keys of providers the app no longer offers (Groq, another
+OpenAI-compatible server, and fal.ai, WaveSpeed or Runware for chat) are deleted on the first start
+(`_prune`).
+
+The picker's Cloud tab lists the models of every provider with a key for that product
+(`own_keys_catalogue.py`); choosing one sets the product's `use`, choosing a model on this computer
+clears it. A key lives in the secret store as `keys.<product>.<provider>` (the keychain on the
+desktop, ADR-0092) and is never answered back, logged or sent anywhere but its provider: the window
+learns only whether one is saved and whether it worked.
 
     OwnKeysService   keys (test, save, check, remove), `use`, the Cloud tab's rows, `route`
     router           `/desktop/keys`, what Settings › Your keys and the pickers call
@@ -16,6 +21,7 @@ Chat and every text product follow `route("chat")` (`own_keys_text.py`); images 
 the media worker (`own_keys_media.py`); speaking, music, lip sync and 3D through `known`
 (`own_keys_engines.py`)."""
 
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -41,14 +47,13 @@ from wasifyai_api.identity import get_identity
 from wasifyai_api.services import services_of
 from wasifyai_api.settings_store import SettingsStore
 
+log = logging.getLogger(__name__)
+
 SETTINGS = "own_keys"
 FAL_QUEUE = "https://queue.fal.run"
-# fal.ai's OpenAI-compatible route to OpenRouter's models (its key goes as `Key …`, not `Bearer`)
-FAL_TEXT = "https://fal.run/openrouter/router/openai/v1"
-WAVESPEED_TEXT = "https://llm.wavespeed.ai/v1"
-RUNWARE_TEXT = "https://api.runware.ai/v1"
+OPENROUTER_TEXT = "https://openrouter.ai/api/v1"
+ANTHROPIC_API = "https://api.anthropic.com"
 TEST_TIMEOUT_S = 20.0
-COMPATIBLE = "compatible"
 
 Kind = Literal["text", "media"]
 
@@ -58,11 +63,8 @@ class Provider:
     id: str
     title: str
     host: str = ""  # said on the screens: "what you make is sent to <host>"
-    text_url: str = ""  # its OpenAI-compatible address, for chat ("" for no chat, or the person's)
+    text_url: str = ""  # its OpenAI-compatible address, for chat ("" for no chat)
     media_url: str = ""  # its media API, for everything else ("" for none)
-    auth: Literal["bearer", "key"] = (
-        "bearer"  # how a text key is sent: `Bearer …` or fal.ai's `Key …`
-    )
 
     @property
     def base_url(self) -> str:
@@ -82,20 +84,22 @@ class Product:
 PROVIDERS: dict[str, Provider] = {
     p.id: p
     for p in (
-        Provider("fal", "fal.ai", "fal.ai", FAL_TEXT, FAL_QUEUE, "key"),
-        Provider("wavespeed", "WaveSpeed", "wavespeed.ai", WAVESPEED_TEXT, WAVESPEED_API),
-        Provider("runware", "Runware", "runware.ai", RUNWARE_TEXT, RUNWARE_API),
-        Provider("openrouter", "OpenRouter", "openrouter.ai", "https://openrouter.ai/api/v1"),
-        Provider("openai", "OpenAI", "api.openai.com", "https://api.openai.com/v1"),
-        Provider("anthropic", "Anthropic", "api.anthropic.com", "https://api.anthropic.com/v1/"),
+        # ADR-0100: text on the vendors (Anthropic first: Claude Haiku 5.5 is the default), media
+        # on Runware, WaveSpeed and fal.ai; no provider runs the other kind
+        Provider("anthropic", "Anthropic", "api.anthropic.com", text_url=f"{ANTHROPIC_API}/v1/"),
+        Provider("openai", "OpenAI", "api.openai.com", text_url="https://api.openai.com/v1"),
         Provider(
             "gemini",
             "Google Gemini",
             "generativelanguage.googleapis.com",
-            "https://generativelanguage.googleapis.com/v1beta/openai/",
-        ),  # fmt: skip
-        Provider("groq", "Groq", "api.groq.com", "https://api.groq.com/openai/v1"),
-        Provider(COMPATIBLE, "Another OpenAI-compatible server"),
+            text_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        ),
+        Provider("deepseek", "DeepSeek", "api.deepseek.com", text_url="https://api.deepseek.com"),
+        Provider("zai", "Z.ai", "api.z.ai", text_url="https://api.z.ai/api/paas/v4"),
+        Provider("openrouter", "OpenRouter", "openrouter.ai", text_url=OPENROUTER_TEXT),
+        Provider("runware", "Runware", "runware.ai", media_url=RUNWARE_API),
+        Provider("wavespeed", "WaveSpeed", "wavespeed.ai", media_url=WAVESPEED_API),
+        Provider("fal", "fal.ai", "fal.ai", media_url=FAL_QUEUE),
     )
 }
 LEGACY_IDS = {"fal_text": "fal"}  # rows saved before 2026-11-11
@@ -114,9 +118,12 @@ BY_ID = {p.id: p for p in PRODUCTS}
 
 
 def providers_for(product: Product) -> list[str]:
-    """The providers a key can be saved for under `product`: those with models for it."""
-    found = catalogue.providers_of(product.id)
-    return [*found, COMPATIBLE] if product.kind == "text" else found
+    """The providers a key can be saved for under `product`: those with models for it, of the
+    product's kind (text on the vendors, media on Runware, WaveSpeed and fal.ai)."""
+    return [
+        v for v in catalogue.providers_of(product.id)
+        if v in PROVIDERS and PROVIDERS[v].url_for(product.kind)
+    ]  # fmt: skip
 
 
 def secret_name(product: str, provider: str) -> str:
@@ -162,13 +169,8 @@ def said_of(provider: Provider, model: str, e: Exception) -> str | None:
 def text_client(
     provider: Provider, base_url: str, key: str, factory: Any = None, **kw: Any
 ) -> AsyncOpenAI:
-    """The OpenAI-compatible client for a text provider, its key sent the way the provider asks."""
+    """The OpenAI-compatible client for a text vendor, its key sent as `Bearer`."""
     make = factory or AsyncOpenAI
-    if provider.auth == "key":  # fal.ai: `Authorization: Key …` in place of the client's `Bearer`
-        return make(  # type: ignore[no-any-return]
-            base_url=base_url, api_key="unused", default_headers={"Authorization": f"Key {key}"},
-            **kw,
-        )  # fmt: skip
     return make(base_url=base_url, api_key=key, **kw)  # type: ignore[no-any-return]
 
 
@@ -188,6 +190,29 @@ async def try_text(provider: Provider, model: str, key: str, base_url: str) -> T
     finally:
         await client.close()
     return Tried(True, _ms(t0))
+
+
+async def try_anthropic(provider: Provider, model: str, key: str, base_url: str) -> Tried:
+    """Anthropic's model list: answered for a good key, refused for a bad one; nothing is charged.
+    (It does not show whether the account has credits: only a real answer does.)"""
+    t0 = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=TEST_TIMEOUT_S) as http:
+            r = await http.get(
+                f"{ANTHROPIC_API}/v1/models",
+                headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+            )
+    except httpx.HTTPError:
+        return Tried(False, _ms(t0), f"{provider.title} could not be reached.")
+    return _answer(provider, t0, r)
+
+
+TEXT_TESTERS: dict[str, Tester] = {"anthropic": try_anthropic}
+
+
+async def try_vendor(provider: Provider, model: str, key: str, base_url: str) -> Tried:
+    """Anthropic's own free check; every other vendor a one-token chat (`try_text`)."""
+    return await TEXT_TESTERS.get(provider.id, try_text)(provider, model, key, base_url)
 
 
 def _answer(provider: Provider, t0: float, r: httpx.Response) -> Tried:
@@ -274,7 +299,7 @@ class OwnKeysService:
     ) -> None:
         self._store = store
         self._secrets = secrets
-        self._testers: dict[Kind, Tester] = testers or {"text": try_text, "media": try_media}
+        self._testers: dict[Kind, Tester] = testers or {"text": try_vendor, "media": try_media}
         # each request asks where to go: the answer is kept until a key or a setting changes
         self._routes: dict[str, KeyRoute | None] = {}
         # the same answers for code that cannot wait (the speech and 3D engines' lists, K4)
@@ -287,10 +312,40 @@ class OwnKeysService:
         saved = await self._store.get(SETTINGS)
         rows = {k: dict(v) for k, v in saved.items()} if isinstance(saved, dict) else {}
         if not self._migrated and self._secrets.ready:
-            if await self._migrate(rows):
+            migrated = await self._migrate(rows)
+            if await self._prune(rows) or migrated:
                 await self._store.put(SETTINGS, rows, "desktop")
             self._migrated = True
         return rows
+
+    async def _prune(self, rows: dict[str, dict[str, Any]]) -> bool:
+        """Keys of providers no longer offered for a product (ADR-0100: Groq, another
+        OpenAI-compatible server, and fal.ai, WaveSpeed or Runware for chat) are deleted from the
+        secret store, and a product that ran on one runs on this computer again."""
+        changed = False
+        for pid, row in rows.items():
+            p = BY_ID.get(pid)
+            offered = providers_for(p) if p is not None else []
+            keys = dict(row.get("keys") or {})
+            for prov in [k for k in keys if k not in offered]:
+                await self._secrets.delete(secret_name(pid, prov))
+                del keys[prov]
+                changed = True
+                log.info("deleted the saved %s key for %s: no longer offered", prov, pid)
+            use = row.get("use") or {}
+            if use and use.get("provider") not in keys:
+                row.pop("use", None)
+                changed = True
+            row["keys"] = keys
+        # a key in the secret store with no row (saved by an older build) goes too
+        for name in await self._secrets.names():
+            parts = name.split(".")
+            if len(parts) == 3 and parts[0] == "keys":
+                p = BY_ID.get(parts[1])
+                if p is not None and parts[2] not in providers_for(p):
+                    await self._secrets.delete(name)
+                    changed = True
+        return changed
 
     async def _migrate(self, rows: dict[str, dict[str, Any]]) -> bool:
         """Rows saved before 2026-11-11 (one key, one provider and one model per product) become a
@@ -308,8 +363,7 @@ class OwnKeysService:
                 model = str(row.get("model") or "")
                 new["keys"][prov] = {
                     "ok": bool(row.get("ok")), "said": row.get("said") or "",
-                    "tested_at": row.get("tested_at"), "base_url": row.get("base_url") or "",
-                    "model": model if prov == COMPATIBLE else "",
+                    "tested_at": row.get("tested_at"),
                 }  # fmt: skip
                 if row.get("mode") == "key" and model:
                     new["use"] = {"provider": prov, "model": model}
@@ -330,20 +384,19 @@ class OwnKeysService:
         if p is not None and v is not None and self._secrets.ready:
             key = await self._secrets.get(secret_name(product, v.id))
             if key:
-                saved = (row.get("keys") or {}).get(v.id) or {}
-                base = v.url_for(p.kind) or str(saved.get("base_url") or "")
+                base = v.url_for(p.kind)
                 model = str(use.get("model") or "")
                 # a model taken off the list (LongCat, 2026-11-12) runs on this computer again
-                if self._offered(p.id, use):
+                if base and self._offered(p.id, use):
                     found = KeyRoute(v, model, key, base)
         self._routes[product] = found
         return found
 
     @staticmethod
     def _offered(product: str, use: dict[str, Any]) -> bool:
-        """`use` names a model still on the list (an OpenAI-compatible server names its own)."""
+        """`use` names a model still on the list."""
         provider, model = str(use.get("provider") or ""), str(use.get("model") or "")
-        return provider == COMPATIBLE or catalogue.find(product, provider, model) is not None
+        return catalogue.find(product, provider, model) is not None
 
     def known(self, product: str) -> KeyRoute | None:
         """`route` as of the last `warm`: read at start and after every change in Settings."""
@@ -376,7 +429,6 @@ class OwnKeysService:
                 keys.append({
                     "provider": prov, "state": "ok" if saved.get("ok") else "bad",
                     "said": saved.get("said") or None, "tested_at": saved.get("tested_at"),
-                    "base_url": saved.get("base_url") or None, "model": saved.get("model") or None,
                 })  # fmt: skip
             use = row.get("use")
             if use and not any(k["provider"] == use.get("provider") for k in keys):
@@ -393,9 +445,8 @@ class OwnKeysService:
         return {
             "products": products,
             "providers": [
-                {"id": v.id, "title": v.title, "host": v.host, "needs_base": v.id == COMPATIBLE}
-                for v in PROVIDERS.values()
-            ],  # fmt: skip
+                {"id": v.id, "title": v.title, "host": v.host} for v in PROVIDERS.values()
+            ],
             "can_save": self._secrets.ready,
         }
 
@@ -408,12 +459,7 @@ class OwnKeysService:
         models = []
         for k in row["keys"]:
             v = PROVIDERS[k["provider"]]
-            listed = (
-                [catalogue.CloudModel(p.id, v.id, k["model"], k["model"], k["base_url"] or "", "")]
-                if v.id == COMPATIBLE and k["model"]
-                else catalogue.models_of(p.id, v.id)
-            )
-            for m in listed:
+            for m in catalogue.models_of(p.id, v.id):
                 models.append({
                     "provider": v.id, "provider_title": v.title, "host": v.host,
                     "model": m.model, "title": m.title, "about": m.about, "price": m.price,
@@ -439,21 +485,7 @@ class OwnKeysService:
         return PROVIDERS[pid]
 
     @staticmethod
-    def _base(p: Product, v: Provider, base_url: str | None) -> str:
-        if v.url_for(p.kind):
-            return v.url_for(p.kind)
-        base = (base_url or "").strip()
-        if not base.startswith(("https://", "http://")):
-            raise OwnKeyRefused("Give the server's address, starting with https://.")
-        return base.rstrip("/")
-
-    @staticmethod
-    def _test_model(p: Product, v: Provider, model: str | None) -> str:
-        if v.id == COMPATIBLE:
-            name = (model or "").strip()
-            if not name:
-                raise OwnKeyRefused("Name the model the server runs.")
-            return name
+    def _test_model(p: Product, v: Provider) -> str:
         listed = catalogue.models_of(p.id, v.id)
         return listed[0].model if listed else ""
 
@@ -468,40 +500,30 @@ class OwnKeysService:
 
     # ---- what the window asks ---------------------------------------------------------------
 
-    async def test(
-        self, product: str, provider: str | None, key: str | None, base_url: str | None = None,
-        model: str | None = None,
-    ) -> Tried:  # fmt: skip
+    async def test(self, product: str, provider: str | None, key: str | None) -> Tried:
         """One small request with the key given (or the one saved). Nothing is saved, nothing is
-        charged but a one-token chat for a text provider."""
+        charged but a one-token chat for a text vendor other than Anthropic."""
         p = self._product(product)
         v = self._provider(p, provider)
-        saved = ((await self._all()).get(product, {}).get("keys") or {}).get(v.id) or {}
-        base = self._base(p, v, base_url or saved.get("base_url"))
-        name = self._test_model(p, v, model or saved.get("model"))
+        await self._all()  # old keys pruned first
+        base = v.url_for(p.kind)
+        name = self._test_model(p, v)
         return await self._testers[p.kind](v, name, await self._key_for(product, v.id, key), base)
 
-    async def save_key(
-        self, product: str, provider: str | None, key: str | None, base_url: str | None = None,
-        model: str | None = None,
-    ) -> dict[str, Any]:  # fmt: skip
+    async def save_key(self, product: str, provider: str | None, key: str | None) -> dict[str, Any]:
         """Tested first, and saved only when the provider accepted it."""
         p = self._product(product)
         if not self._secrets.ready:
             raise OwnKeyRefused("This computer has nowhere safe to keep a key.", 409)
         v = self._provider(p, provider)
-        tried = await self.test(product, v.id, key, base_url, model)
+        tried = await self.test(product, v.id, key)
         if not tried.ok:
             raise OwnKeyRefused(tried.said)
         if key and key.strip():
             await self._secrets.put(secret_name(product, v.id), key.strip())
         row = (await self._all()).get(product, {"keys": {}})
         keys = dict(row.get("keys") or {})
-        keys[v.id] = {
-            "ok": True, "said": "", "tested_at": time.time(),
-            "base_url": "" if v.url_for(p.kind) else self._base(p, v, base_url),
-            "model": (model or "").strip() if v.id == COMPATIBLE else "",
-        }  # fmt: skip
+        keys[v.id] = {"ok": True, "said": "", "tested_at": time.time()}
         await self._put(product, {**row, "keys": keys})
         return await self.view()
 
@@ -547,11 +569,7 @@ class OwnKeysService:
         if saved is None or secret_name(p.id, v.id) not in names:
             raise OwnKeyRefused(f"Save a {v.title} key for {p.title.lower()} first.", 409)
         name = (model or "").strip()
-        known = (
-            name == saved.get("model") if v.id == COMPATIBLE
-            else catalogue.find(p.id, v.id, name) is not None
-        )  # fmt: skip
-        if not name or not known:
+        if not name or catalogue.find(p.id, v.id, name) is None:
             raise OwnKeyRefused(f"{v.title} has no {p.title.lower()} model called {name} here.")
         await self._put(product, {**row, "use": {"provider": v.id, "model": name}})
         return await self.cloud(product)
@@ -564,8 +582,6 @@ router = APIRouter(prefix="/desktop/keys", tags=["desktop"])
 
 class KeyBody(BaseModel):
     key: str | None = Field(None, max_length=500)  # write-only: never answered back
-    base_url: str | None = Field(None, max_length=500)  # another OpenAI-compatible server only
-    model: str | None = Field(None, max_length=200)  # another OpenAI-compatible server only
 
 
 class UseBody(BaseModel):
@@ -611,7 +627,7 @@ async def keys_test(
     product: str, provider: str, body: KeyBody, request: Request,
     _: Identity = Depends(get_identity),
 ) -> dict[str, Any]:  # fmt: skip
-    t = await _do(_service(request).test(product, provider, body.key, body.base_url, body.model))
+    t = await _do(_service(request).test(product, provider, body.key))
     return {"ok": t.ok, "ms": t.ms, "said": t.said or None}
 
 
@@ -621,7 +637,7 @@ async def keys_save(
     _: Identity = Depends(get_identity),
 ) -> dict[str, Any]:  # fmt: skip
     svc = _service(request)
-    return await _do(svc.save_key(product, provider, body.key, body.base_url, body.model))  # type: ignore[no-any-return]
+    return await _do(svc.save_key(product, provider, body.key))  # type: ignore[no-any-return]
 
 
 @router.post("/{product}/keys/{provider}/check")

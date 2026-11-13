@@ -1,5 +1,7 @@
-"""The cloud models of each product, by provider (ADR-0095, amendment of 2026-11-11): what the
-model picker's Cloud tab lists once a key for that provider is saved under that product. Only models
+"""The cloud models of each product, by provider (ADR-0095, amendment of 2026-11-11; ADR-0100: text
+models on the vendors, Claude Haiku 5.5 first; media models on Runware, WaveSpeed and fal.ai): what the
+model picker's Cloud tab
+lists once a key for that provider is saved under that product. Only models
 whose requests this app builds are here; another model is another line (and, for a new kind of
 request, its body in the runner). Prices are as each provider lists them, said in words."""
 
@@ -27,23 +29,20 @@ def _m(
 
 PER_WORD = "per word used"
 CATALOGUE: tuple[CloudModel, ...] = (
-    # ---- chat and writing (any OpenAI-compatible route)
-    _m("chat", "fal", "google/gemini-2.5-flash", "Gemini 2.5 Flash", "Google, through fal.ai.", PER_WORD),
-    _m("chat", "fal", "openai/gpt-4o-mini", "GPT-4o mini", "OpenAI, through fal.ai.", PER_WORD),
-    _m("chat", "fal", "anthropic/claude-sonnet-4.5", "Claude Sonnet", "Anthropic, through fal.ai.", PER_WORD),
-    _m("chat", "wavespeed", "deepseek/deepseek-v4-flash", "DeepSeek V4 Flash", "DeepSeek, through WaveSpeed.", PER_WORD),
-    _m("chat", "runware", "minimax:m2.7@0", "MiniMax M2.7", "MiniMax, through Runware.", PER_WORD),
-    _m("chat", "openrouter", "google/gemini-2.5-flash", "Gemini 2.5 Flash", "Google.", PER_WORD),
-    _m("chat", "openrouter", "openai/gpt-4o-mini", "GPT-4o mini", "OpenAI.", PER_WORD),
-    _m("chat", "openrouter", "anthropic/claude-sonnet-4.5", "Claude Sonnet", "Anthropic.", PER_WORD),
-    _m("chat", "openrouter", "deepseek/deepseek-chat", "DeepSeek V3", "DeepSeek.", PER_WORD),
-    _m("chat", "openai", "gpt-4o-mini", "GPT-4o mini", "Quick and cheap.", PER_WORD),
-    _m("chat", "openai", "gpt-4.1", "GPT-4.1", "Stronger, slower.", PER_WORD),
-    _m("chat", "anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5", "Careful writing.", PER_WORD),
-    _m("chat", "anthropic", "claude-haiku-5-5", "Claude Haiku 5.5", "Quick.", PER_WORD),
-    _m("chat", "gemini", "gemini-2.5-flash", "Gemini 2.5 Flash", "Quick.", PER_WORD),
-    _m("chat", "gemini", "gemini-2.5-pro", "Gemini 2.5 Pro", "Stronger, slower.", PER_WORD),
-    _m("chat", "groq", "llama-3.3-70b-versatile", "Llama 3.3 70B", "Very quick.", PER_WORD),
+    # ---- chat and writing (ADR-0100: the vendors directly, Haiku 5.5 the default; prices per
+    # million tokens in / out, checked 2026-11-12, docs/spikes/cloud-v1-cp0.md)
+    _m("chat", "anthropic", "claude-haiku-5-5", "Claude Haiku 5.5", "Anthropic. Quick and cheap; the default.", "$0.10 in / $0.50 out per million tokens"),
+    _m("chat", "anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5", "Anthropic. For harder work.", "$2 in / $10 out per million tokens"),
+    _m("chat", "openai", "gpt-6-luna", "GPT-6 Luna", "OpenAI.", "$0.10 in / $0.50 out per million tokens"),
+    _m("chat", "gemini", "gemini-3.8-flash", "Gemini 3.8 Flash", "Google.", "$0.75 in / $3.75 out per million tokens"),
+    _m("chat", "deepseek", "deepseek-flash", "DeepSeek V4.1 Flash", "DeepSeek, in China.", "$0.30 in / $1.20 out per million tokens"),
+    _m("chat", "zai", "glm-5.3-flash", "GLM-5.3 Flash", "Z.ai, in China.", "$0.15 in / $0.50 out per million tokens"),
+    _m("chat", "openrouter", "anthropic/claude-haiku-5.5", "Claude Haiku 5.5", "Anthropic, through OpenRouter.", PER_WORD),
+    _m("chat", "openrouter", "anthropic/claude-sonnet-5.5", "Claude Sonnet 5.5", "Anthropic, through OpenRouter.", PER_WORD),
+    _m("chat", "openrouter", "openai/gpt-6-luna", "GPT-6 Luna", "OpenAI, through OpenRouter.", PER_WORD),
+    _m("chat", "openrouter", "google/gemini-3.8-flash", "Gemini 3.8 Flash", "Google, through OpenRouter.", PER_WORD),
+    _m("chat", "openrouter", "deepseek/deepseek-v4.1-flash", "DeepSeek V4.1 Flash", "DeepSeek, through OpenRouter.", PER_WORD),
+    _m("chat", "openrouter", "z-ai/glm-5.3-flash", "GLM-5.3 Flash", "Z.ai, through OpenRouter.", PER_WORD),
     # ---- images
     _m("images", "fal", "fal-ai/flux-2", "FLUX.2", "Makes, changes and combines pictures.", "about $0.012 per picture"),
     _m("images", "wavespeed", "wavespeed-ai/z-image/turbo", "Z-Image Turbo", "Makes pictures quickly.", "$0.005 per picture"),
@@ -55,9 +54,9 @@ CATALOGUE: tuple[CloudModel, ...] = (
     _m("voice", "fal", "fal-ai/kokoro", "Kokoro", "Speaks text in American voices.", "$0.02 per 1,000 characters"),
     # ---- music and sound effects
     _m("music", "fal", "fal-ai/minimax-music/v2.6", "MiniMax Music 2.6", "Songs with your lyrics, or it writes them.", "$0.15 per song"),
-    _m("music", "fal", "fal-ai/elevenlabs/music", "ElevenLabs Music", "Instrumentals or vocals, 3 s to 10 min.", "$0.60 per minute"),
     _m("music", "wavespeed", "minimax/music-2.6", "MiniMax Music 2.6", "Songs with your lyrics, or it writes them.", "$0.15 per song"),
     _m("music", "runware", "minimax:music@2.6", "MiniMax Music 2.6", "Songs with your lyrics, or it writes them.", "$0.15 per song"),
+    _m("music", "fal", "fal-ai/elevenlabs/music", "ElevenLabs Music", "Instrumentals or vocals, 3 s to 10 min.", "$0.60 per minute"),
     _m("sfx", "fal", "fal-ai/elevenlabs/sound-effects/v2", "ElevenLabs Sound Effects", "0.5 to 22 s, can loop.", "$0.002 per second"),
     # lip sync is fal.ai only (owner, 2026-11-12); LongCat Avatar was taken off the same day (a black video)
     # ---- lip sync (speed: seconds of work per second of video, fal.ai, 2026-11-12, docs/spikes/lipsync-cloud-race.md)

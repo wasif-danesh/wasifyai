@@ -3,6 +3,7 @@
 - **Status:** Proposed (2026-10-29). The owner set the requirement: "Person's own key must be supported in v1. Even
   better, separate keys for each product." The mockup was approved by the owner on 2026-10-29. The real-key run of spike K0 is done at release time
   (owner, 2026-10-29); the stages are built against fakes until then.
+- **Changed by:** ADR-0099 (2026-11-12): OpenRouter runs text models and fal.ai media models in v1 (the only cloud providers), and the web runs only cloud models.
 - **Date:** 2026-10-29
 - **Depends on:** ADR-0092 (the secret store: keychain on the desktop, the `secrets` table on the web), ADR-0005 and
   ADR-0025 (capabilities bound to providers; LiteLLM's OpenAI-compatible API), ADR-0086 (the model button and its

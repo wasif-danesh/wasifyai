@@ -28,7 +28,7 @@ class Installer:
     def start(self, confirm_bytes: int) -> None:
         assert confirm_bytes == 100  # the size the plan shows
         # as the real ones: installing from the moment it is asked, then the work as a task
-        self.now = {"state": "installing", "step": "source", "message": "Getting EchoMimic",
+        self.now = {"state": "installing", "step": "source", "message": "Getting MuseTalk",
                     "done_bytes": 50, "total_bytes": 100}  # fmt: skip
         self._task = asyncio.create_task(self._run())
 
@@ -64,7 +64,7 @@ async def test_the_lip_sync_engine_is_set_up_and_its_progress_is_told():
     inst = Installer()
     done = await admin(inst).fetch_engine("lipsync-engine", report)
     assert done == {"name": "lipsync-engine", "already": False} and inst.installed
-    assert told and told[0][1] == "Getting EchoMimic" and 0 < told[0][0] < 1
+    assert told and told[0][1] == "Getting MuseTalk" and 0 < told[0][0] < 1
     again = await admin(inst).fetch_engine("lipsync-engine", report)
     assert again["already"] is True
 

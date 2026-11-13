@@ -166,7 +166,7 @@ async def main(only: set[str]) -> int:
         req = check_lipsync(m, secs, "drawn", "generated")
         return await engine.lipsync(m, req, tmp / "p.png", tmp / "v.wav")
 
-    video = await step("lipsync", "echomimic-v3-flash", lipsync)
+    video = await step("lipsync", "musetalk-v15", lipsync)
     if video:
         results[-1] = (
             *results[-1][:2],

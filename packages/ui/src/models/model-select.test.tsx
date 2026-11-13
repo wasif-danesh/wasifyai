@@ -263,7 +263,7 @@ describe("choosing a model that is not on the computer", () => {
         ...over,
       });
     const rows = [
-      choice({ id: "echo", title: "EchoMimic", state: "ready", chosen: true }),
+      choice({ id: "musetalk", title: "MuseTalk", state: "ready", chosen: true }),
       cloud({
         id: "cloud:fal:a",
         title: "OmniHuman 1.5",
@@ -290,8 +290,8 @@ describe("choosing a model that is not on the computer", () => {
     const api = fake(rows, { cloud: { product: "Lip sync" } });
     const changed = vi.fn();
     const user = userEvent.setup();
-    render(<ModelSelect group="faces" api={api} value="echo" onChanged={changed} />);
-    await user.click(await screen.findByRole("button", { name: /EchoMimic/ }));
+    render(<ModelSelect group="faces" api={api} value="musetalk" onChanged={changed} />);
+    await user.click(await screen.findByRole("button", { name: /MuseTalk/ }));
     // the computer's tab does not list cloud models
     expect(screen.queryByText("OmniHuman 1.5")).toBeNull();
     await user.click(screen.getByRole("tab", { name: "Cloud" }));
@@ -309,7 +309,7 @@ describe("choosing a model that is not on the computer", () => {
 
   it("names the provider on the button and opens on Cloud while a cloud model is in use", async () => {
     const rows = [
-      choice({ id: "echo", title: "EchoMimic", state: "ready" }),
+      choice({ id: "musetalk", title: "MuseTalk", state: "ready" }),
       choice({
         id: "cloud:fal:b",
         title: "InfiniteTalk",

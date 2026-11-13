@@ -65,9 +65,7 @@ export const COPY: Record<string, Copy> = {
     tier: "also",
   },
   // faces
-  "echomimic-v3-flash": {
-    plain: "Makes a picture talk: the head, eyes and lips move with a recording.",
-  },
+  "musetalk-v15": { plain: "Makes a picture talk, with lips that follow a recording." },
   // documents
   "bge-small-en-v1.5": {
     plain: "Lets notebooks search your documents by meaning. Small and quick.",

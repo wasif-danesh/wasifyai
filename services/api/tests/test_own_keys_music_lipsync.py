@@ -125,7 +125,7 @@ class LocalVoice:
         self.made: list[str] = []
 
     def models(self, task=None):
-        rows = [{"id": "ace-step", "tasks": ["music"]}, {"id": "echomimic", "tasks": ["lipsync"]}]
+        rows = [{"id": "ace-step", "tasks": ["music"]}, {"id": "musetalk-v15", "tasks": ["lipsync"]}]
         return [r for r in rows if task is None or task in r["tasks"]]
 
     def resolve(self, task, model_id):
@@ -165,7 +165,7 @@ async def test_on_the_key_music_and_sound_effects_come_first_and_this_computers_
     assert ids == [KEYED_MUSIC, KEYED_SFX, "ace-step"]
     assert engine.resolve("music", None).id == KEYED_MUSIC  # the default runs on the key
     assert engine.resolve("music", "ace-step").id == "ace-step"  # this computer's, when chosen
-    assert [m["id"] for m in engine.models("lipsync")] == ["echomimic"]  # lip sync not on a key
+    assert [m["id"] for m in engine.models("lipsync")] == ["musetalk-v15"]  # lip sync not on a key
 
 
 async def test_a_song_with_lyrics_goes_to_minimax_with_the_key(tmp_path: Path):
@@ -263,7 +263,7 @@ async def test_lip_sync_on_the_key_sends_the_cropped_picture_and_the_voice_to_fa
     local, keys = LocalVoice(), keys_service()
     await on_key(keys, "lipsync", FABRIC)
     engine = KeyedSpeechEngine(local, keys, fal.client, poll_s=0)
-    assert [m["id"] for m in engine.models("lipsync")] == [KEYED_LIPSYNC, "echomimic"]
+    assert [m["id"] for m in engine.models("lipsync")] == [KEYED_LIPSYNC, "musetalk-v15"]
     model = engine.resolve("lipsync", None)
     req = check_lipsync(model, 12.0, picture=(1024, 924), shape="9:16", size=720)
     assert (req.width, req.height) == (720, 1280)
@@ -365,7 +365,7 @@ async def test_a_saved_longcat_choice_runs_on_this_computer_again(tmp_path: Path
     assert await keys.route("lipsync") is None
     local = LocalVoice()
     engine = KeyedSpeechEngine(local, keys, Fal({}, b"").client, poll_s=0)
-    assert [m["id"] for m in engine.models("lipsync")] == ["echomimic"]
+    assert [m["id"] for m in engine.models("lipsync")] == ["musetalk-v15"]
     (lipsync,) = [p for p in (await keys.view())["products"] if p["id"] == "lipsync"]
     assert [k["provider"] for k in lipsync["keys"]] == ["fal"]
     assert lipsync["use"] is None  # Settings does not show it in use either

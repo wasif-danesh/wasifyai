@@ -111,7 +111,7 @@ volume between pieces.
 | HTDemucs vs Mel-Band RoFormer | which separator is the default for Split into parts and for dubbing |
 | Dub endings cut or lines hurried | lower the speed-up limit (1.3) and warn earlier about long translations |
 | Clipping audible | add a limiter to what the music and effect models return (dubbing's mix already has one) |
-| Lip sync timing off | look at the audio window of each frame (`_audio` in `lipsync_server/engine.py`) and the audio guidance |
+| Lip sync timing off | look at the padding MuseTalk puts around the audio features in the lip sync engine |
 
 ## Not covered here
 

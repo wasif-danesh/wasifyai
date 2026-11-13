@@ -28,8 +28,6 @@ coverage/
 # Models and generated media (never commit weights or outputs)
 .lipsync/
 *.safetensors
-# not weights: EchoMimic's two fixed prompts, encoded once (450 KB; lipsync_server/make_prompts.py)
-!services/api/src/wasifyai_api/lipsync_server/echomimic_prompts.safetensors
 *.gguf
 *.ckpt
 outputs/

@@ -652,7 +652,7 @@ async def test_a_picture_and_a_recording_make_a_clip(tmp_path, ctx):
     )  # fmt: skip
     assert final["status"] == "done" and final["title"] == "Hello" and final["seconds"] == 3.0
     model_id, req, voice_facts, _ = rig.engine.lipsynced[0]
-    assert model_id == "echomimic-v3-flash" and voice_facts == (16000, 1)
+    assert model_id == "musetalk-v15" and voice_facts == (16000, 1)
     assert req.fps == 25 and not hasattr(req, "mark")
     assert (req.width, req.height) == (960, 720)  # 64x48 (4:3): the picture's shape at 720p
     store = store_for(rig.state)

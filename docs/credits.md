@@ -113,7 +113,7 @@ These are the places where a licence asks for more than "keep the notice". Items
 | ComfyUI | `Comfy-Org/ComfyUI` | GPL-3.0 | The image and video engine, as a sidecar process (section 1) |
 | llama.cpp | `ggml-org/llama.cpp` | MIT | The local language engine (a pinned prebuilt release, run as a managed process) |
 | audio.cpp | `0xShug0/audio.cpp` | Apache-2.0 per ADR-0066 (GitHub shows "Other") | Speech, music and audio tools runtime |
-| EchoMimic v3 | `antgroup/echomimic_v3` | Apache-2.0 | Lip sync, an optional component |
+| MuseTalk | `TMElyralab/MuseTalk` | MIT (GitHub shows "Other") | Lip sync, an optional component |
 
 ## 7. Models in the catalogue (Built) and their projects
 
@@ -133,7 +133,7 @@ Weights have their own licences, recorded per model in `products/*/models.yaml` 
 | Tone Color VC | `myshell-ai/OpenVoice` | MIT | Change a voice |
 | MeanVC2 | `ASLP-lab/MeanVC2` | Apache-2.0 | Change a voice |
 | dots.tts Edit | `dots-studio/dots.tts.edit` | Apache-2.0 project, the weights card says "other" | Edit speech; conditional |
-| EchoMimic v3 flash, with the Wan2.1-Fun 1.3B VAE and CLIP and chinese-wav2vec2-base | `BadToBest/EchoMimicV3`, `alibaba-pai/Wan2.1-Fun-V1.1-1.3B-InP`, `TencentGameMate/chinese-wav2vec2-base` | Apache-2.0 (chinese-wav2vec2-base: MIT) | Lip sync |
+| MuseTalk 1.5 | `TMElyralab/MuseTalk` | MIT | Lip sync |
 | bge-small-en-v1.5 (ONNX) | `FlagOpen/FlagEmbedding` | MIT | Notebook and help search |
 
 ## 8. Adapted, or the model for our own build

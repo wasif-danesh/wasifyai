@@ -37,11 +37,7 @@
                 "type": "string"
               },
               "state": {
-                "enum": [
-                  "ready",
-                  "needs_setup",
-                  "unavailable"
-                ],
+                "enum": ["ready", "needs_setup", "unavailable"],
                 "title": "State",
                 "type": "string"
               },
@@ -56,10 +52,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "id",
-              "state"
-            ],
+            "required": ["id", "state"],
             "title": "ActionState",
             "type": "object"
           }
@@ -78,9 +71,7 @@
             "type": "object"
           }
         },
-        "required": [
-          "actions"
-        ],
+        "required": ["actions"],
         "title": "StatusOut",
         "type": "object"
       },
@@ -97,10 +88,7 @@
       "product": "platform",
       "ui": null,
       "ui_exempt": "It answers a question and is not a screen: screens show their own state.",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/app.status.md"
     },
@@ -177,9 +165,7 @@
             "title": "Model"
           }
         },
-        "required": [
-          "text"
-        ],
+        "required": ["text"],
         "title": "BookMakeIn",
         "type": "object"
       },
@@ -216,12 +202,7 @@
                 "title": "Stem"
               }
             },
-            "required": [
-              "track_id",
-              "title",
-              "seconds",
-              "uri"
-            ],
+            "required": ["track_id", "title", "seconds", "uri"],
             "title": "TrackRef",
             "type": "object"
           }
@@ -239,10 +220,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "track_id",
-          "tracks"
-        ],
+        "required": ["track_id", "tracks"],
         "title": "TracksOut",
         "type": "object"
       },
@@ -253,9 +231,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "costly"
-      ],
+      "flags": ["costly"],
       "requires": [
         {
           "kind": "product",
@@ -270,10 +246,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.audiobook",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/audiobook.make.md"
     },
@@ -299,9 +272,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "text"
-        ],
+        "required": ["text"],
         "title": "BookPlanIn",
         "type": "object"
       },
@@ -322,11 +293,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "title",
-              "chars",
-              "estimated_seconds"
-            ],
+            "required": ["title", "chars", "estimated_seconds"],
             "title": "ChapterRow",
             "type": "object"
           }
@@ -348,11 +315,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "chapters",
-          "chars",
-          "estimated_seconds"
-        ],
+        "required": ["chapters", "chars", "estimated_seconds"],
         "title": "BookPlanOut",
         "type": "object"
       },
@@ -373,10 +336,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.audiobook",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/audiobook.plan.md"
     },
@@ -414,11 +374,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "start",
-              "end",
-              "text"
-            ],
+            "required": ["start", "end", "text"],
             "title": "DubLine",
             "type": "object"
           }
@@ -428,10 +384,7 @@
           "source_kind": {
             "default": "track",
             "description": "Whether the recording is a track or a speech.",
-            "enum": [
-              "track",
-              "speech"
-            ],
+            "enum": ["track", "speech"],
             "title": "Source Kind",
             "type": "string"
           },
@@ -460,10 +413,7 @@
           "voice_from": {
             "default": "builtin",
             "description": "A built-in voice, or a saved voice (saved_voice).",
-            "enum": [
-              "builtin",
-              "saved"
-            ],
+            "enum": ["builtin", "saved"],
             "title": "Voice From",
             "type": "string"
           },
@@ -535,11 +485,7 @@
             "title": "Title"
           }
         },
-        "required": [
-          "source_id",
-          "language",
-          "segments"
-        ],
+        "required": ["source_id", "language", "segments"],
         "title": "DubMakeIn",
         "type": "object"
       },
@@ -566,13 +512,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "track_id",
-          "product_id",
-          "title",
-          "seconds",
-          "uri"
-        ],
+        "required": ["track_id", "product_id", "title", "seconds", "uri"],
         "title": "TrackOut",
         "type": "object"
       },
@@ -591,9 +531,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -608,10 +546,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.dub",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/dub.make.md"
     },
@@ -626,10 +561,7 @@
           "source_kind": {
             "default": "track",
             "description": "Whether the recording is a track or a speech.",
-            "enum": [
-              "track",
-              "speech"
-            ],
+            "enum": ["track", "speech"],
             "title": "Source Kind",
             "type": "string"
           },
@@ -654,10 +586,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "source_id",
-          "language"
-        ],
+        "required": ["source_id", "language"],
         "title": "DubScriptIn",
         "type": "object"
       },
@@ -690,11 +619,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "start",
-              "end",
-              "text"
-            ],
+            "required": ["start", "end", "text"],
             "title": "DubLine",
             "type": "object"
           }
@@ -736,10 +661,7 @@
             "title": "Background Track"
           }
         },
-        "required": [
-          "language",
-          "segments"
-        ],
+        "required": ["language", "segments"],
         "title": "DubScriptOut",
         "type": "object"
       },
@@ -751,9 +673,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -772,10 +692,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.dub",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/dub.script.md"
     },
@@ -802,10 +719,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "image_id",
-          "prompt"
-        ],
+        "required": ["image_id", "prompt"],
         "title": "EditIn",
         "type": "object"
       },
@@ -836,14 +750,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "image_id",
-          "product_id",
-          "uri",
-          "prompt",
-          "width",
-          "height"
-        ],
+        "required": ["image_id", "product_id", "uri", "prompt", "width", "height"],
         "title": "ImageOut",
         "type": "object"
       },
@@ -865,10 +772,7 @@
       "product": "wasifyai-image",
       "ui": "images.edit",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/image.edit.md"
     },
@@ -890,20 +794,12 @@
           "size": {
             "default": "square",
             "description": "The shape of the picture.",
-            "enum": [
-              "square",
-              "landscape",
-              "portrait",
-              "wide",
-              "tall"
-            ],
+            "enum": ["square", "landscape", "portrait", "wide", "tall"],
             "title": "Size",
             "type": "string"
           }
         },
-        "required": [
-          "prompt"
-        ],
+        "required": ["prompt"],
         "title": "GenerateIn",
         "type": "object"
       },
@@ -934,14 +830,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "image_id",
-          "product_id",
-          "uri",
-          "prompt",
-          "width",
-          "height"
-        ],
+        "required": ["image_id", "product_id", "uri", "prompt", "width", "height"],
         "title": "ImageOut",
         "type": "object"
       },
@@ -966,10 +855,7 @@
       "product": "wasifyai-image",
       "ui": "images.create",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/image.generate.md"
     },
@@ -988,9 +874,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "job_id"
-        ],
+        "required": ["job_id"],
         "title": "JobIn",
         "type": "object"
       },
@@ -1005,14 +889,7 @@
             "type": "string"
           },
           "status": {
-            "enum": [
-              "running",
-              "ok",
-              "refused",
-              "error",
-              "cancelled",
-              "unknown"
-            ],
+            "enum": ["running", "ok", "refused", "error", "cancelled", "unknown"],
             "title": "Status",
             "type": "string"
           },
@@ -1055,11 +932,7 @@
             "title": "Result"
           }
         },
-        "required": [
-          "job_id",
-          "action",
-          "status"
-        ],
+        "required": ["job_id", "action", "status"],
         "title": "JobOut",
         "type": "object"
       },
@@ -1075,10 +948,7 @@
       "product": "platform",
       "ui": null,
       "ui_exempt": "A job is shown where it was started: on its card or its screen.",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/job.cancel.md"
     },
@@ -1097,9 +967,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "job_id"
-        ],
+        "required": ["job_id"],
         "title": "JobIn",
         "type": "object"
       },
@@ -1114,14 +982,7 @@
             "type": "string"
           },
           "status": {
-            "enum": [
-              "running",
-              "ok",
-              "refused",
-              "error",
-              "cancelled",
-              "unknown"
-            ],
+            "enum": ["running", "ok", "refused", "error", "cancelled", "unknown"],
             "title": "Status",
             "type": "string"
           },
@@ -1164,11 +1025,7 @@
             "title": "Result"
           }
         },
-        "required": [
-          "job_id",
-          "action",
-          "status"
-        ],
+        "required": ["job_id", "action", "status"],
         "title": "JobOut",
         "type": "object"
       },
@@ -1184,10 +1041,7 @@
       "product": "platform",
       "ui": null,
       "ui_exempt": "A job is shown where it was started: on its card or its screen.",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/job.status.md"
     },
@@ -1214,9 +1068,7 @@
             "type": "number"
           }
         },
-        "required": [
-          "job_id"
-        ],
+        "required": ["job_id"],
         "title": "JobWaitIn",
         "type": "object"
       },
@@ -1231,14 +1083,7 @@
             "type": "string"
           },
           "status": {
-            "enum": [
-              "running",
-              "ok",
-              "refused",
-              "error",
-              "cancelled",
-              "unknown"
-            ],
+            "enum": ["running", "ok", "refused", "error", "cancelled", "unknown"],
             "title": "Status",
             "type": "string"
           },
@@ -1281,11 +1126,7 @@
             "title": "Result"
           }
         },
-        "required": [
-          "job_id",
-          "action",
-          "status"
-        ],
+        "required": ["job_id", "action", "status"],
         "title": "JobOut",
         "type": "object"
       },
@@ -1302,10 +1143,7 @@
       "product": "platform",
       "ui": null,
       "ui_exempt": "A job is shown where it was started: on its card or its screen.",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/job.wait.md"
     },
@@ -1339,10 +1177,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "kind",
-          "id"
-        ],
+        "required": ["kind", "id"],
         "title": "RefIn",
         "type": "object"
       },
@@ -1361,11 +1196,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "deleted",
-          "kind",
-          "id"
-        ],
+        "required": ["deleted", "kind", "id"],
         "title": "DeleteOut",
         "type": "object"
       },
@@ -1376,18 +1207,13 @@
         }
       ],
       "effect": "destroy",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [],
       "long": false,
       "product": "platform",
       "ui": "library",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/library.delete.md"
     },
@@ -1421,10 +1247,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "kind",
-          "id"
-        ],
+        "required": ["kind", "id"],
         "title": "RefIn",
         "type": "object"
       },
@@ -1439,10 +1262,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "name",
-          "path"
-        ],
+        "required": ["name", "path"],
         "title": "ExportOut",
         "type": "object"
       },
@@ -1453,18 +1273,13 @@
         }
       ],
       "effect": "change",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [],
       "long": false,
       "product": "platform",
       "ui": "library",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/library.export.md"
     },
@@ -1498,10 +1313,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "kind",
-          "id"
-        ],
+        "required": ["kind", "id"],
         "title": "RefIn",
         "type": "object"
       },
@@ -1543,12 +1355,7 @@
                 "type": "object"
               }
             },
-            "required": [
-              "kind",
-              "id",
-              "uri",
-              "title"
-            ],
+            "required": ["kind", "id", "uri", "title"],
             "title": "ItemOut",
             "type": "object"
           }
@@ -1558,9 +1365,7 @@
             "$ref": "#/$defs/ItemOut"
           }
         },
-        "required": [
-          "item"
-        ],
+        "required": ["item"],
         "title": "GetOut",
         "type": "object"
       },
@@ -1571,18 +1376,13 @@
         }
       ],
       "effect": "read",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [],
       "long": false,
       "product": "platform",
       "ui": "library",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/library.get.md"
     },
@@ -1617,9 +1417,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "kind"
-        ],
+        "required": ["kind"],
         "title": "ListIn",
         "type": "object"
       },
@@ -1661,12 +1459,7 @@
                 "type": "object"
               }
             },
-            "required": [
-              "kind",
-              "id",
-              "uri",
-              "title"
-            ],
+            "required": ["kind", "id", "uri", "title"],
             "title": "ItemOut",
             "type": "object"
           }
@@ -1680,9 +1473,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "items"
-        ],
+        "required": ["items"],
         "title": "ListOut",
         "type": "object"
       },
@@ -1693,18 +1484,13 @@
         }
       ],
       "effect": "read",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [],
       "long": false,
       "product": "platform",
       "ui": "library",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/library.list.md"
     },
@@ -1745,11 +1531,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "kind",
-          "id",
-          "title"
-        ],
+        "required": ["kind", "id", "title"],
         "title": "RenameIn",
         "type": "object"
       },
@@ -1791,12 +1573,7 @@
                 "type": "object"
               }
             },
-            "required": [
-              "kind",
-              "id",
-              "uri",
-              "title"
-            ],
+            "required": ["kind", "id", "uri", "title"],
             "title": "ItemOut",
             "type": "object"
           }
@@ -1806,9 +1583,7 @@
             "$ref": "#/$defs/ItemOut"
           }
         },
-        "required": [
-          "item"
-        ],
+        "required": ["item"],
         "title": "GetOut",
         "type": "object"
       },
@@ -1820,18 +1595,13 @@
         }
       ],
       "effect": "change",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [],
       "long": false,
       "product": "platform",
       "ui": "library",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/library.rename.md"
     },
@@ -1859,9 +1629,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "query"
-        ],
+        "required": ["query"],
         "title": "SearchIn",
         "type": "object"
       },
@@ -1898,12 +1666,7 @@
                 "title": "Text"
               }
             },
-            "required": [
-              "kind",
-              "product_id",
-              "id",
-              "uri"
-            ],
+            "required": ["kind", "product_id", "id", "uri"],
             "title": "Hit",
             "type": "object"
           }
@@ -1917,9 +1680,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "title": "SearchOut",
         "type": "object"
       },
@@ -1929,18 +1690,13 @@
         }
       ],
       "effect": "read",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [],
       "long": false,
       "product": "platform",
       "ui": "library",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/library.search.md"
     },
@@ -1976,10 +1732,7 @@
           "source_kind": {
             "anyOf": [
               {
-                "enum": [
-                  "track",
-                  "speech"
-                ],
+                "enum": ["track", "speech"],
                 "type": "string"
               },
               {
@@ -2019,22 +1772,14 @@
           },
           "picture_is": {
             "description": "What the picture is: 'drawn' (artwork), 'own' (the person) or 'permission' (someone who agreed).",
-            "enum": [
-              "drawn",
-              "own",
-              "permission"
-            ],
+            "enum": ["drawn", "own", "permission"],
             "title": "Picture Is",
             "type": "string"
           },
           "voice_is": {
             "anyOf": [
               {
-                "enum": [
-                  "generated",
-                  "own",
-                  "permission"
-                ],
+                "enum": ["generated", "own", "permission"],
                 "type": "string"
               },
               {
@@ -2072,10 +1817,7 @@
             "title": "Model"
           }
         },
-        "required": [
-          "image_id",
-          "picture_is"
-        ],
+        "required": ["image_id", "picture_is"],
         "title": "LipSyncIn",
         "type": "object"
       },
@@ -2098,12 +1840,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "clip_id",
-          "title",
-          "seconds",
-          "uri"
-        ],
+        "required": ["clip_id", "title", "seconds", "uri"],
         "title": "ClipOut",
         "type": "object"
       },
@@ -2115,11 +1852,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "needs_consent",
-        "costly",
-        "private"
-      ],
+      "flags": ["needs_consent", "costly", "private"],
       "requires": [
         {
           "kind": "product",
@@ -2134,10 +1867,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.lipsync",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "I confirm I may use this picture and this voice: the picture is artwork, a picture of me, or of someone who agreed; the voice is made here from words, my own, or one I have permission to use. The video is marked as AI-generated.",
       "help": "docs/help/lipsync.make.md"
     },
@@ -2157,9 +1887,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "model_id"
-        ],
+        "required": ["model_id"],
         "title": "DownloadIn",
         "type": "object"
       },
@@ -2178,11 +1906,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "download_id",
-          "model_id",
-          "bytes_total"
-        ],
+        "required": ["download_id", "model_id", "bytes_total"],
         "title": "DownloadOut",
         "type": "object"
       },
@@ -2192,10 +1916,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "needs_consent",
-        "costly"
-      ],
+      "flags": ["needs_consent", "costly"],
       "requires": [
         {
           "kind": "runtime",
@@ -2206,10 +1927,7 @@
       "product": "platform",
       "ui": "models",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "I agree to download this model to this computer. The files and their size are shown in the window before I approve.",
       "help": "docs/help/models.download.md"
     },
@@ -2277,12 +1995,7 @@
                 "title": "Memory Warning"
               }
             },
-            "required": [
-              "model_id",
-              "title",
-              "status",
-              "product_id"
-            ],
+            "required": ["model_id", "title", "status", "product_id"],
             "title": "ModelRow",
             "type": "object"
           }
@@ -2296,9 +2009,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "models"
-        ],
+        "required": ["models"],
         "title": "ListOut",
         "type": "object"
       },
@@ -2320,10 +2031,7 @@
       "product": "platform",
       "ui": "models",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/models.list.md"
     },
@@ -2378,13 +2086,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "download_id",
-              "model_id",
-              "status",
-              "bytes_done",
-              "bytes_total"
-            ],
+            "required": ["download_id", "model_id", "status", "bytes_done", "bytes_total"],
             "title": "DownloadRow",
             "type": "object"
           },
@@ -2424,12 +2126,7 @@
                 "title": "Memory Warning"
               }
             },
-            "required": [
-              "model_id",
-              "title",
-              "status",
-              "product_id"
-            ],
+            "required": ["model_id", "title", "status", "product_id"],
             "title": "ModelRow",
             "type": "object"
           }
@@ -2462,9 +2159,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "disk_free_bytes"
-        ],
+        "required": ["disk_free_bytes"],
         "title": "StatusOut",
         "type": "object"
       },
@@ -2486,10 +2181,7 @@
       "product": "platform",
       "ui": "models",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/models.status.md"
     },
@@ -2539,10 +2231,7 @@
           "mode": {
             "default": "song",
             "description": "A song, or a sound effect.",
-            "enum": [
-              "song",
-              "sfx"
-            ],
+            "enum": ["song", "sfx"],
             "title": "Mode",
             "type": "string"
           },
@@ -2586,9 +2275,7 @@
             "title": "Model"
           }
         },
-        "required": [
-          "description"
-        ],
+        "required": ["description"],
         "title": "MusicIn",
         "type": "object"
       },
@@ -2615,13 +2302,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "track_id",
-          "product_id",
-          "title",
-          "seconds",
-          "uri"
-        ],
+        "required": ["track_id", "product_id", "title", "seconds", "uri"],
         "title": "TrackOut",
         "type": "object"
       },
@@ -2636,9 +2317,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "costly"
-      ],
+      "flags": ["costly"],
       "requires": [
         {
           "kind": "product",
@@ -2653,10 +2332,7 @@
       "product": "wasifyai-voice",
       "ui": "music.create",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/music.generate.md"
     },
@@ -2719,9 +2395,7 @@
             "title": "Seconds"
           }
         },
-        "required": [
-          "idea"
-        ],
+        "required": ["idea"],
         "title": "LyricsIn",
         "type": "object"
       },
@@ -2732,9 +2406,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "lyrics"
-        ],
+        "required": ["lyrics"],
         "title": "LyricsOut",
         "type": "object"
       },
@@ -2760,10 +2432,7 @@
       "product": "wasifyai-voice",
       "ui": "music.lyrics",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/music.lyrics.md"
     },
@@ -2778,10 +2447,7 @@
           "source_kind": {
             "default": "track",
             "description": "Whether the recording is a track or a speech.",
-            "enum": [
-              "track",
-              "speech"
-            ],
+            "enum": ["track", "speech"],
             "title": "Source Kind",
             "type": "string"
           },
@@ -2823,9 +2489,7 @@
             "title": "Model"
           }
         },
-        "required": [
-          "source_id"
-        ],
+        "required": ["source_id"],
         "title": "SeparateIn",
         "type": "object"
       },
@@ -2862,12 +2526,7 @@
                 "title": "Stem"
               }
             },
-            "required": [
-              "track_id",
-              "title",
-              "seconds",
-              "uri"
-            ],
+            "required": ["track_id", "title", "seconds", "uri"],
             "title": "TrackRef",
             "type": "object"
           }
@@ -2885,10 +2544,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "track_id",
-          "tracks"
-        ],
+        "required": ["track_id", "tracks"],
         "title": "TracksOut",
         "type": "object"
       },
@@ -2896,15 +2552,11 @@
         {
           "source_kind": "track",
           "source_id": "0b7c1f9e-0000-4000-8000-000000000000",
-          "stems": [
-            "vocals"
-          ]
+          "stems": ["vocals"]
         }
       ],
       "effect": "make",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -2919,10 +2571,7 @@
       "product": "wasifyai-voice",
       "ui": "music.separate",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/music.separate.md"
     },
@@ -2955,11 +2604,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "notebook_id",
-          "title",
-          "content"
-        ],
+        "required": ["notebook_id", "title", "content"],
         "title": "AddSourceIn",
         "type": "object"
       },
@@ -2978,11 +2623,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "notebook_id",
-          "document_id",
-          "title"
-        ],
+        "required": ["notebook_id", "document_id", "title"],
         "title": "SourceOut",
         "type": "object"
       },
@@ -2994,9 +2635,7 @@
         }
       ],
       "effect": "change",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -3011,10 +2650,7 @@
       "product": "wasifyai-notebooks",
       "ui": "notebook.list",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/notebook.add_source.md"
     },
@@ -3070,10 +2706,7 @@
             "title": "Conversation Id"
           }
         },
-        "required": [
-          "notebook_id",
-          "question"
-        ],
+        "required": ["notebook_id", "question"],
         "title": "AskIn",
         "type": "object"
       },
@@ -3104,9 +2737,7 @@
             "title": "Conversation Id"
           }
         },
-        "required": [
-          "reply"
-        ],
+        "required": ["reply"],
         "title": "AskOut",
         "type": "object"
       },
@@ -3117,9 +2748,7 @@
         }
       ],
       "effect": "read",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -3138,10 +2767,7 @@
       "product": "wasifyai-notebooks",
       "ui": "notebook.list",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/notebook.ask.md"
     },
@@ -3179,11 +2805,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "notebook_id",
-          "title",
-          "uri"
-        ],
+        "required": ["notebook_id", "title", "uri"],
         "title": "NotebookOut",
         "type": "object"
       },
@@ -3193,9 +2815,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -3210,10 +2830,7 @@
       "product": "wasifyai-notebooks",
       "ui": "notebook.create",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/notebook.create.md"
     },
@@ -3253,13 +2870,7 @@
                 "type": "integer"
               }
             },
-            "required": [
-              "notebook_id",
-              "title",
-              "uri",
-              "sources",
-              "ready"
-            ],
+            "required": ["notebook_id", "title", "uri", "sources", "ready"],
             "title": "NotebookRow",
             "type": "object"
           }
@@ -3273,19 +2884,13 @@
             "type": "array"
           }
         },
-        "required": [
-          "notebooks"
-        ],
+        "required": ["notebooks"],
         "title": "ListOut",
         "type": "object"
       },
-      "examples": [
-        {}
-      ],
+      "examples": [{}],
       "effect": "read",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -3300,10 +2905,7 @@
       "product": "wasifyai-notebooks",
       "ui": "notebook.list",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/notebook.list.md"
     },
@@ -3323,9 +2925,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "query"
-        ],
+        "required": ["query"],
         "title": "SearchIn",
         "type": "object"
       },
@@ -3354,13 +2954,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "notebook_id",
-              "notebook",
-              "document_id",
-              "title",
-              "snippet"
-            ],
+            "required": ["notebook_id", "notebook", "document_id", "title", "snippet"],
             "title": "Passage",
             "type": "object"
           }
@@ -3374,9 +2968,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "results"
-        ],
+        "required": ["results"],
         "title": "SearchOut",
         "type": "object"
       },
@@ -3386,9 +2978,7 @@
         }
       ],
       "effect": "read",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -3403,10 +2993,7 @@
       "product": "wasifyai-notebooks",
       "ui": "notebook.list",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/notebook.search.md"
     },
@@ -3466,10 +3053,7 @@
             "title": "Document Ids"
           }
         },
-        "required": [
-          "notebook_id",
-          "format"
-        ],
+        "required": ["notebook_id", "format"],
         "title": "StudioIn",
         "type": "object"
       },
@@ -3488,11 +3072,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "notebook_id",
-          "artifact_id",
-          "format"
-        ],
+        "required": ["notebook_id", "artifact_id", "format"],
         "title": "StudioOut",
         "type": "object"
       },
@@ -3503,9 +3083,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -3524,10 +3102,7 @@
       "product": "wasifyai-notebooks",
       "ui": "notebook.list",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/notebook.studio_output.md"
     },
@@ -3603,9 +3178,7 @@
             "title": "Options"
           }
         },
-        "required": [
-          "text"
-        ],
+        "required": ["text"],
         "title": "SpeakIn",
         "type": "object"
       },
@@ -3624,11 +3197,7 @@
             "type": "number"
           }
         },
-        "required": [
-          "speech_id",
-          "uri",
-          "seconds"
-        ],
+        "required": ["speech_id", "uri", "seconds"],
         "title": "SpeechOut",
         "type": "object"
       },
@@ -3657,10 +3226,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.speak",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/speech.speak.md"
     },
@@ -3675,10 +3241,7 @@
           "source_kind": {
             "default": "track",
             "description": "Whether the recording is a track or a speech.",
-            "enum": [
-              "track",
-              "speech"
-            ],
+            "enum": ["track", "speech"],
             "title": "Source Kind",
             "type": "string"
           },
@@ -3716,9 +3279,7 @@
             "title": "Title"
           }
         },
-        "required": [
-          "source_id"
-        ],
+        "required": ["source_id"],
         "title": "TranscribeIn",
         "type": "object"
       },
@@ -3750,13 +3311,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "transcript_id",
-          "uri",
-          "title",
-          "seconds",
-          "text"
-        ],
+        "required": ["transcript_id", "uri", "title", "seconds", "text"],
         "title": "TranscriptOut",
         "type": "object"
       },
@@ -3767,9 +3322,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -3784,10 +3337,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.transcribe",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/speech.transcribe.md"
     },
@@ -3816,18 +3366,12 @@
           "seconds": {
             "default": 2,
             "description": "How long the clip is.",
-            "enum": [
-              2,
-              5
-            ],
+            "enum": [2, 5],
             "title": "Seconds",
             "type": "integer"
           }
         },
-        "required": [
-          "image_id",
-          "prompt"
-        ],
+        "required": ["image_id", "prompt"],
         "title": "AnimateIn",
         "type": "object"
       },
@@ -3862,15 +3406,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "video_id",
-          "product_id",
-          "uri",
-          "prompt",
-          "seconds",
-          "width",
-          "height"
-        ],
+        "required": ["video_id", "product_id", "uri", "prompt", "seconds", "width", "height"],
         "title": "VideoOut",
         "type": "object"
       },
@@ -3881,9 +3417,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "costly"
-      ],
+      "flags": ["costly"],
       "requires": [
         {
           "kind": "product",
@@ -3894,10 +3428,7 @@
       "product": "wasifyai-video",
       "ui": "video.animate",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/video.animate.md"
     },
@@ -3919,28 +3450,19 @@
           "shape": {
             "default": "landscape",
             "description": "The shape of the picture.",
-            "enum": [
-              "landscape",
-              "portrait",
-              "square"
-            ],
+            "enum": ["landscape", "portrait", "square"],
             "title": "Shape",
             "type": "string"
           },
           "seconds": {
             "default": 2,
             "description": "How long the clip is.",
-            "enum": [
-              2,
-              5
-            ],
+            "enum": [2, 5],
             "title": "Seconds",
             "type": "integer"
           }
         },
-        "required": [
-          "prompt"
-        ],
+        "required": ["prompt"],
         "title": "GenerateIn",
         "type": "object"
       },
@@ -3975,15 +3497,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "video_id",
-          "product_id",
-          "uri",
-          "prompt",
-          "seconds",
-          "width",
-          "height"
-        ],
+        "required": ["video_id", "product_id", "uri", "prompt", "seconds", "width", "height"],
         "title": "VideoOut",
         "type": "object"
       },
@@ -3998,9 +3512,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "costly"
-      ],
+      "flags": ["costly"],
       "requires": [
         {
           "kind": "product",
@@ -4011,10 +3523,7 @@
       "product": "wasifyai-video",
       "ui": "video.create",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/video.generate.md"
     },
@@ -4029,10 +3538,7 @@
           "source_kind": {
             "default": "track",
             "description": "Whether the recording is a track or a speech.",
-            "enum": [
-              "track",
-              "speech"
-            ],
+            "enum": ["track", "speech"],
             "title": "Source Kind",
             "type": "string"
           },
@@ -4051,10 +3557,7 @@
           },
           "voice_is": {
             "description": "Whose voice it is: 'own' (the person's own voice) or 'permission' (someone who agreed).",
-            "enum": [
-              "own",
-              "permission"
-            ],
+            "enum": ["own", "permission"],
             "title": "Voice Is",
             "type": "string"
           },
@@ -4066,11 +3569,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "source_id",
-          "name",
-          "voice_is"
-        ],
+        "required": ["source_id", "name", "voice_is"],
         "title": "CloneIn",
         "type": "object"
       },
@@ -4093,12 +3592,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "voice_id",
-          "name",
-          "kind",
-          "uri"
-        ],
+        "required": ["voice_id", "name", "kind", "uri"],
         "title": "VoiceOut",
         "type": "object"
       },
@@ -4111,10 +3605,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "needs_consent",
-        "private"
-      ],
+      "flags": ["needs_consent", "private"],
       "requires": [
         {
           "kind": "product",
@@ -4125,10 +3616,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.voices",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "I confirm this is my own voice, or that I have the permission of the person whose voice it is.",
       "help": "docs/help/voice.clone.md"
     },
@@ -4143,10 +3631,7 @@
           "source_kind": {
             "default": "track",
             "description": "Whether the recording is a track or a speech.",
-            "enum": [
-              "track",
-              "speech"
-            ],
+            "enum": ["track", "speech"],
             "title": "Source Kind",
             "type": "string"
           },
@@ -4204,10 +3689,7 @@
             "title": "Seed"
           }
         },
-        "required": [
-          "source_id",
-          "saved_voice"
-        ],
+        "required": ["source_id", "saved_voice"],
         "title": "ConvertIn",
         "type": "object"
       },
@@ -4234,13 +3716,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "track_id",
-          "product_id",
-          "title",
-          "seconds",
-          "uri"
-        ],
+        "required": ["track_id", "product_id", "title", "seconds", "uri"],
         "title": "TrackOut",
         "type": "object"
       },
@@ -4252,9 +3728,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -4269,10 +3743,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.convert",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/voice.convert.md"
     },
@@ -4298,10 +3769,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "name",
-          "description"
-        ],
+        "required": ["name", "description"],
         "title": "DesignIn",
         "type": "object"
       },
@@ -4324,12 +3792,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "voice_id",
-          "name",
-          "kind",
-          "uri"
-        ],
+        "required": ["voice_id", "name", "kind", "uri"],
         "title": "VoiceOut",
         "type": "object"
       },
@@ -4351,10 +3814,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.voices",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/voice.design.md"
     },
@@ -4369,10 +3829,7 @@
           "source_kind": {
             "default": "track",
             "description": "Whether the recording is a track or a speech.",
-            "enum": [
-              "track",
-              "speech"
-            ],
+            "enum": ["track", "speech"],
             "title": "Source Kind",
             "type": "string"
           },
@@ -4437,11 +3894,7 @@
             "title": "Seed"
           }
         },
-        "required": [
-          "source_id",
-          "old_text",
-          "text"
-        ],
+        "required": ["source_id", "old_text", "text"],
         "title": "EditSpeechIn",
         "type": "object"
       },
@@ -4468,13 +3921,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "track_id",
-          "product_id",
-          "title",
-          "seconds",
-          "uri"
-        ],
+        "required": ["track_id", "product_id", "title", "seconds", "uri"],
         "title": "TrackOut",
         "type": "object"
       },
@@ -4487,9 +3934,7 @@
         }
       ],
       "effect": "make",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -4504,10 +3949,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.edit",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/voice.edit_speech.md"
     },
@@ -4522,10 +3964,7 @@
           "kind": {
             "anyOf": [
               {
-                "enum": [
-                  "design",
-                  "clone"
-                ],
+                "enum": ["design", "clone"],
                 "type": "string"
               },
               {
@@ -4566,12 +4005,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "voice_id",
-              "name",
-              "kind",
-              "uri"
-            ],
+            "required": ["voice_id", "name", "kind", "uri"],
             "title": "VoiceRow",
             "type": "object"
           }
@@ -4585,9 +4019,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "voices"
-        ],
+        "required": ["voices"],
         "title": "VoiceListOut",
         "type": "object"
       },
@@ -4598,9 +4030,7 @@
         }
       ],
       "effect": "read",
-      "flags": [
-        "private"
-      ],
+      "flags": ["private"],
       "requires": [
         {
           "kind": "product",
@@ -4611,10 +4041,7 @@
       "product": "wasifyai-voice",
       "ui": "voice.voices",
       "ui_exempt": "",
-      "surfaces": [
-        "assistant",
-        "mcp"
-      ],
+      "surfaces": ["assistant", "mcp"],
       "consent": "",
       "help": "docs/help/voice.list.md"
     },
@@ -4634,9 +4061,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "url"
-        ],
+        "required": ["url"],
         "title": "WebReadIn",
         "type": "object"
       },
@@ -4677,14 +4102,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "url",
-          "final_url",
-          "title",
-          "site",
-          "read_at",
-          "chars"
-        ],
+        "required": ["url", "final_url", "title", "site", "read_at", "chars"],
         "title": "WebReadOut",
         "type": "object"
       },
@@ -4694,9 +4112,7 @@
         }
       ],
       "effect": "read",
-      "flags": [
-        "leaves_device"
-      ],
+      "flags": ["leaves_device"],
       "requires": [
         {
           "kind": "web",
@@ -4707,9 +4123,7 @@
       "product": "platform",
       "ui": null,
       "ui_exempt": "Reading a page is part of Search in the chat box, not a screen.",
-      "surfaces": [
-        "assistant"
-      ],
+      "surfaces": ["assistant"],
       "consent": "",
       "help": "docs/help/web.read.md"
     },
@@ -4737,9 +4151,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "query"
-        ],
+        "required": ["query"],
         "title": "WebSearchIn",
         "type": "object"
       },
@@ -4765,11 +4177,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "title",
-              "url",
-              "site"
-            ],
+            "required": ["title", "url", "site"],
             "title": "WebResultOut",
             "type": "object"
           }
@@ -4791,11 +4199,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "provider",
-          "provider_title",
-          "results"
-        ],
+        "required": ["provider", "provider_title", "results"],
         "title": "WebSearchOut",
         "type": "object"
       },
@@ -4805,9 +4209,7 @@
         }
       ],
       "effect": "read",
-      "flags": [
-        "leaves_device"
-      ],
+      "flags": ["leaves_device"],
       "requires": [
         {
           "kind": "web",
@@ -4818,9 +4220,7 @@
       "product": "platform",
       "ui": null,
       "ui_exempt": "Searching the web is the Search switch of the chat box, not a screen.",
-      "surfaces": [
-        "assistant"
-      ],
+      "surfaces": ["assistant"],
       "consent": "",
       "help": "docs/help/web.search.md"
     }

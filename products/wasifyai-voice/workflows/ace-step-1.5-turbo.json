@@ -8,20 +8,14 @@
   "2": {
     "class_type": "ModelSamplingAuraFlow",
     "inputs": {
-      "model": [
-        "1",
-        0
-      ],
+      "model": ["1", 0],
       "shift": 3
     }
   },
   "3": {
     "class_type": "TextEncodeAceStepAudio1.5",
     "inputs": {
-      "clip": [
-        "1",
-        1
-      ],
+      "clip": ["1", 1],
       "tags": "pop, upbeat",
       "lyrics": "[verse]\nla la la",
       "seed": 0,
@@ -41,10 +35,7 @@
   "4": {
     "class_type": "ConditioningZeroOut",
     "inputs": {
-      "conditioning": [
-        "3",
-        0
-      ]
+      "conditioning": ["3", 0]
     }
   },
   "5": {
@@ -57,50 +48,29 @@
   "6": {
     "class_type": "KSampler",
     "inputs": {
-      "model": [
-        "2",
-        0
-      ],
+      "model": ["2", 0],
       "seed": 0,
       "steps": 8,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
-      "positive": [
-        "3",
-        0
-      ],
-      "negative": [
-        "4",
-        0
-      ],
-      "latent_image": [
-        "5",
-        0
-      ],
+      "positive": ["3", 0],
+      "negative": ["4", 0],
+      "latent_image": ["5", 0],
       "denoise": 1
     }
   },
   "7": {
     "class_type": "VAEDecodeAudio",
     "inputs": {
-      "samples": [
-        "6",
-        0
-      ],
-      "vae": [
-        "1",
-        2
-      ]
+      "samples": ["6", 0],
+      "vae": ["1", 2]
     }
   },
   "8": {
     "class_type": "PreviewAudio",
     "inputs": {
-      "audio": [
-        "7",
-        0
-      ]
+      "audio": ["7", 0]
     }
   }
 }

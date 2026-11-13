@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 // The bundle check for the new chat (ADR-0082, stage CU1). It builds the first screen of the new chat on its own (a production build,
 // packages/ui/bundle) and fails when:
 //   - any file of the build, lazy chunks included, contains a host the library could call out to: assistant-api.com (assistant-cloud)
@@ -6,9 +9,6 @@
 //   - the JavaScript the first screen loads (the entry and everything it imports statically) is over the gzip budget of ADR-0082.
 // `--json` prints the numbers. No dependencies of its own (harness.mjs uses the vite that apps/desktop builds with).
 import { gzipSync } from "node:zlib";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { buildHarness } from "./harness.mjs";
 
 /** The owner's budget for the first chat screen's JavaScript, in kilobytes of gzip (ADR-0082, 2026-10-20). */
@@ -32,7 +32,8 @@ try {
   const problems = [];
   for (const f of files.filter((p) => /\.(js|css|html)$/.test(p))) {
     const text = readFileSync(f, "utf8");
-    for (const bad of FORBIDDEN) if (text.includes(bad)) problems.push(`${rel(f)} contains "${bad}"`);
+    for (const bad of FORBIDDEN)
+      if (text.includes(bad)) problems.push(`${rel(f)} contains "${bad}"`);
   }
 
   const manifest = JSON.parse(readFileSync(join(out, ".vite/manifest.json"), "utf8"));
@@ -68,8 +69,13 @@ try {
     for (const f of more) extraGz += gzipSync(readFileSync(join(out, f))).length;
   }
   const kb = (n) => Math.round(n / 1024);
-  const lazy = Object.values(manifest).filter((m) => !seen.has(m.file) && m.file.endsWith(".js")).length;
-  if (gz / 1024 > BUDGET_GZIP_KB) problems.push(`the first chat screen is ${kb(gz)} KB gzip, over the budget of ${BUDGET_GZIP_KB} KB`);
+  const lazy = Object.values(manifest).filter(
+    (m) => !seen.has(m.file) && m.file.endsWith(".js"),
+  ).length;
+  if (gz / 1024 > BUDGET_GZIP_KB)
+    problems.push(
+      `the first chat screen is ${kb(gz)} KB gzip, over the budget of ${BUDGET_GZIP_KB} KB`,
+    );
 
   const summary = {
     firstScreen: { files: seen.size, rawKB: kb(raw), gzipKB: kb(gz), budgetKB: BUDGET_GZIP_KB },

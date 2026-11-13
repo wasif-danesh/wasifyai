@@ -8,10 +8,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const run = (cmd) => execSync(cmd, { cwd: root, stdio: "inherit", env: { ...process.env, CI: "1" } });
+const run = (cmd) =>
+  execSync(cmd, { cwd: root, stdio: "inherit", env: { ...process.env, CI: "1" } });
 const original = readFileSync(join(root, "design/DESIGN.md"), "utf8");
-const themes = readdirSync(join(root, "design/themes")).filter((f) => f.endsWith(".md")).map((f) => f.replace(/\.md$/, ""));
-let failed = [];
+const themes = readdirSync(join(root, "design/themes"))
+  .filter((f) => f.endsWith(".md"))
+  .map((f) => f.replace(/\.md$/, ""));
+const failed = [];
 try {
   for (const t of themes) {
     console.log(`\n=== template ${t} ===`);

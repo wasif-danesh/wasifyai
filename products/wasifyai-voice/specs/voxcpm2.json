@@ -4,15 +4,8 @@
   "description": "OpenBMB tokenizer-free TTS model supporting 30 languages and 9 Chinese dialects, with 48 kHz output, natural-language voice design, controllable short-reference voice cloning, and expressive style guidance.",
   "category": "tts",
   "status": "supported",
-  "tasks": [
-    "tts",
-    "clone",
-    "design"
-  ],
-  "modes": [
-    "offline",
-    "streaming"
-  ],
+  "tasks": ["tts", "clone", "design"],
+  "modes": ["offline", "streaming"],
   "languages": [
     "ar",
     "my",
@@ -47,32 +40,16 @@
     "vi"
   ],
   "capabilities": {
-    "clone": [
-      "speaker_reference"
-    ],
-    "design": [
-      "voice_design"
-    ]
+    "clone": ["speaker_reference"],
+    "design": ["voice_design"]
   },
   "runtime": {
-    "tags": [
-      "gguf",
-      "stream"
-    ]
+    "tags": ["gguf", "stream"]
   },
   "ui": {
     "recommended_package": "voxcpm2_q8_0",
-    "tags": [
-      "TTS",
-      "Clone",
-      "Design",
-      "GGUF",
-      "Stream"
-    ],
-    "docs": [
-      "docs/tts.md",
-      "docs/gguf.md"
-    ]
+    "tags": ["TTS", "Clone", "Design", "GGUF", "Stream"],
+    "docs": ["docs/tts.md", "docs/gguf.md"]
   },
   "package_defaults": {
     "download": {
@@ -90,9 +67,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "VoxCPM2-GGUF",
-      "files": [
-        "VoxCPM2-GGUF/voxcpm2-q8_0.gguf"
-      ],
+      "files": ["VoxCPM2-GGUF/voxcpm2-q8_0.gguf"],
       "strip_prefix": "VoxCPM2-GGUF"
     },
     {
@@ -101,9 +76,7 @@
       "format": "gguf",
       "precision": "bf16",
       "target_directory": "VoxCPM2-GGUF",
-      "files": [
-        "VoxCPM2-GGUF/voxcpm2-bf16.gguf"
-      ],
+      "files": ["VoxCPM2-GGUF/voxcpm2-bf16.gguf"],
       "strip_prefix": "VoxCPM2-GGUF"
     },
     {
@@ -112,9 +85,7 @@
       "format": "gguf",
       "precision": "orig",
       "target_directory": "VoxCPM2-GGUF",
-      "files": [
-        "VoxCPM2-GGUF/voxcpm2-orig.gguf"
-      ],
+      "files": ["VoxCPM2-GGUF/voxcpm2-orig.gguf"],
       "strip_prefix": "VoxCPM2-GGUF"
     },
     {
@@ -123,12 +94,7 @@
       "format": "safetensors",
       "precision": "native",
       "target_directory": "VoxCPM2",
-      "files": [
-        "config.json",
-        "model.safetensors",
-        "tokenizer.json",
-        "tokenizer_config.json"
-      ],
+      "files": ["config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"],
       "download": {
         "kind": "huggingface_snapshot",
         "repo": "OpenBMB/VoxCPM2"

@@ -5,34 +5,15 @@
   "description": "DotTTS is a multilingual zero-shot TTS, voice-cloning, and speech-editing model family packaged for audio.cpp with SOAR and MeanFlow generation, prompt-audio plus prompt-text prefill, speaker-reference conditioning, language tags, multiple synthesis templates, long-form text chunking, and true streaming audio output.",
   "category": "tts",
   "status": "supported",
-  "tasks": [
-    "tts",
-    "clone"
-  ],
-  "modes": [
-    "offline",
-    "streaming"
-  ],
-  "languages": [
-    "multilingual"
-  ],
+  "tasks": ["tts", "clone"],
+  "modes": ["offline", "streaming"],
+  "languages": ["multilingual"],
   "runtime": {
-    "tags": [
-      "gguf",
-      "stream"
-    ]
+    "tags": ["gguf", "stream"]
   },
   "capabilities": {
-    "tts": [
-      "speaker_reference",
-      "style_control",
-      "long_form"
-    ],
-    "clone": [
-      "speaker_reference",
-      "style_control",
-      "long_form"
-    ]
+    "tts": ["speaker_reference", "style_control", "long_form"],
+    "clone": ["speaker_reference", "style_control", "long_form"]
   },
   "options": {
     "request": [
@@ -53,13 +34,7 @@
         "name": "template_name",
         "type": "enum",
         "description": "DotTTS synthesis template. tts is normal text-to-speech; instruction_tts adds instruction conditioning; text_to_audio uses a sound-description template; tts_interleave uses the streaming interleave schedule; edit uses the DotTTS Edit source-audio editing schedule.",
-        "values": [
-          "tts",
-          "instruction_tts",
-          "text_to_audio",
-          "tts_interleave",
-          "edit"
-        ],
+        "values": ["tts", "instruction_tts", "text_to_audio", "tts_interleave", "edit"],
         "required": false,
         "default": "tts"
       },
@@ -97,11 +72,7 @@
         "name": "use_xvector",
         "type": "enum",
         "description": "DotTTS Edit speaker conditioning mode. auto follows the upstream tag-based behavior; on/off force or disable source-audio speaker conditioning.",
-        "values": [
-          "auto",
-          "on",
-          "off"
-        ],
+        "values": ["auto", "on", "off"],
         "required": false,
         "default": "auto"
       },
@@ -140,11 +111,7 @@
         "name": "sampler_mode",
         "type": "enum",
         "description": "SOAR ODE solver method for flow matching. Fixed-step euler is the default and parity baseline.",
-        "values": [
-          "euler",
-          "midpoint",
-          "rk4"
-        ],
+        "values": ["euler", "midpoint", "rk4"],
         "required": false,
         "default": "euler"
       },
@@ -168,12 +135,7 @@
         "name": "text_chunk_mode",
         "type": "enum",
         "description": "Framework text chunking mode; default tag_aware preserves leading style/control tags across long-form chunks.",
-        "values": [
-          "default",
-          "tag_aware",
-          "japanese",
-          "endline"
-        ],
+        "values": ["default", "tag_aware", "japanese", "endline"],
         "required": false,
         "default": "tag_aware"
       },
@@ -280,9 +242,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "DotTTS-SOAR-GGUF",
-      "files": [
-        "DotTTS-SOAR-GGUF/dots-tts-soar-q8_0.gguf"
-      ],
+      "files": ["DotTTS-SOAR-GGUF/dots-tts-soar-q8_0.gguf"],
       "strip_prefix": "DotTTS-SOAR-GGUF"
     },
     {
@@ -292,9 +252,7 @@
       "format": "gguf",
       "precision": "bf16",
       "target_directory": "DotTTS-SOAR-GGUF",
-      "files": [
-        "DotTTS-SOAR-GGUF/dots-tts-soar-bf16.gguf"
-      ],
+      "files": ["DotTTS-SOAR-GGUF/dots-tts-soar-bf16.gguf"],
       "strip_prefix": "DotTTS-SOAR-GGUF"
     },
     {
@@ -304,9 +262,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "DotTTS-MF-GGUF",
-      "files": [
-        "DotTTS-MF-GGUF/dots-tts-mf-q8_0.gguf"
-      ],
+      "files": ["DotTTS-MF-GGUF/dots-tts-mf-q8_0.gguf"],
       "strip_prefix": "DotTTS-MF-GGUF"
     },
     {
@@ -316,9 +272,7 @@
       "format": "gguf",
       "precision": "bf16",
       "target_directory": "DotTTS-MF-GGUF",
-      "files": [
-        "DotTTS-MF-GGUF/dots-tts-mf-bf16.gguf"
-      ],
+      "files": ["DotTTS-MF-GGUF/dots-tts-mf-bf16.gguf"],
       "strip_prefix": "DotTTS-MF-GGUF"
     },
     {
@@ -328,9 +282,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "DotTTS-Edit-GGUF",
-      "files": [
-        "DotTTS-Edit-GGUF/dots-tts-edit-q8_0.gguf"
-      ],
+      "files": ["DotTTS-Edit-GGUF/dots-tts-edit-q8_0.gguf"],
       "strip_prefix": "DotTTS-Edit-GGUF"
     },
     {
@@ -340,25 +292,15 @@
       "format": "gguf",
       "precision": "bf16",
       "target_directory": "DotTTS-Edit-GGUF",
-      "files": [
-        "DotTTS-Edit-GGUF/dots-tts-edit-bf16.gguf"
-      ],
+      "files": ["DotTTS-Edit-GGUF/dots-tts-edit-bf16.gguf"],
       "strip_prefix": "DotTTS-Edit-GGUF"
     }
   ],
   "dependencies": [],
   "ui": {
     "recommended_package": "dots_tts_soar_q8_0",
-    "tags": [
-      "TTS",
-      "Clone",
-      "Stream",
-      "GGUF"
-    ],
-    "docs": [
-      "docs/tts.md",
-      "docs/gguf.md"
-    ]
+    "tags": ["TTS", "Clone", "Stream", "GGUF"],
+    "docs": ["docs/tts.md", "docs/gguf.md"]
   },
   "sources": [
     {

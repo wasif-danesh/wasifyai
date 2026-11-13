@@ -31,6 +31,7 @@ from wasifyai_platform_sdk import (
     languages,
     require_context,
 )
+from wasifyai_platform_sdk.voice_models import check_language
 
 from wasifyai_voice import audio_input, dubbing
 from wasifyai_voice.runtime import store_for
@@ -117,8 +118,23 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
             )
         try:
             source = await kit.load_source(state)
-            transcriber = eng.resolve("transcribe", state.get("transcribe_model") or None)
-            check_transcribe(transcriber, None)
+            spoken_in = str(state.get("source_language") or "")
+            if spoken_in and dubbing.base(spoken_in) not in languages.LANGUAGES:
+                return refuse_with("unknown_language", "Choose the language the recording is in.")
+            wanted = state.get("transcribe_model") or None
+            if spoken_in and not wanted:  # a ready model that writes the original's language
+                able = ready_models("transcribe", spoken_in)
+                if not able:
+                    name = dubbing.language_name(spoken_in)
+                    return refuse_with(
+                        "no_model_for_language",
+                        f"No model here writes down {name} yet. Get one in the Model hub.",
+                    )
+                wanted = str(able[0]["id"])
+            transcriber = eng.resolve("transcribe", wanted)
+            heard_options = check_transcribe(transcriber, None)
+            if spoken_in:  # told, not found: Bengali is otherwise taken for Hindi
+                heard_options["language"] = check_language(transcriber, spoken_in)
         except VoiceEngineError as e:
             raise kit.failed(e) from None
         except SourceMissing as e:
@@ -145,7 +161,7 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
                 )
             say("Writing down what is said", "transcribe")
             wav, seconds = await audio_input.at_rate(heard.wav, "voice.wav", 16000, 1)
-            result = await eng.transcribe(transcriber, wav, {})
+            result = await eng.transcribe(transcriber, wav, heard_options)
             raw = [s for s in result.segments if s.text.strip() and s.end > s.start]
             if not raw:
                 return refuse_with("no_speech", "No speech was found in that recording.")

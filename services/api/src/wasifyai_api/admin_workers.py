@@ -43,6 +43,7 @@ class WorkerRow(BaseModel):
     can_fetch: bool
     models: list[ModelRow]
     lipsync_engine: dict[str, Any] | None
+    indic_engine: dict[str, Any] | None = None  # the Indian-language speech engine (L5)
     components: dict[str, Any]
 
 
@@ -99,6 +100,7 @@ async def list_workers(request: Request, who: Identity = Depends(require_admin))
             can_fetch=admin_wire.FETCH_MODEL in w.kinds,
             models=[_model(m) for m in w.models],
             lipsync_engine=w.components.get(admin_wire.LIPSYNC_COMPONENT),
+            indic_engine=w.components.get(admin_wire.INDIC_COMPONENT),
             components={
                 k: {"ready": v.get("ready"), "problem": v.get("problem"), "setup": v.get("setup")}
                 for k, v in w.components.items()

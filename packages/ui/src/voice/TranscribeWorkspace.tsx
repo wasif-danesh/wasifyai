@@ -12,10 +12,13 @@ import { type RecentItem, RecentStrip } from "../components/recent-strip";
 import { Spinner } from "../components/spinner";
 import { Stage, type StageState } from "../components/stage";
 import { usePictureEvents } from "../hooks/use-picture-events";
+import type { ModelSelectHandle } from "../models";
 import { fileNameFor, savedText, useSaveCopy } from "../save";
+import { DETECT, LanguageField, NoModelSpeaks, TELL_THE_MODEL, modelsFor } from "./LanguageField";
 import { LoadingModels, ModelPicker, NotReadyText } from "./ModelPicker";
 import { RuntimeCard } from "./RuntimeCard";
 import { clock, pickModel } from "./format";
+import { languageName } from "./languages";
 import { useVoiceModels } from "./use-voice-models";
 
 export const AUDIO_ACCEPT = "audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.caf,.aiff";
@@ -25,6 +28,9 @@ export type TranscribeWorkspaceProps = {
   onGetModel?: (id: string) => void;
   initialModel?: string | null;
   onModelChosen?: (id: string) => void;
+  /** the language last used on a voice screen, and where a chosen one is kept (both optional) */
+  initialLanguage?: string | null;
+  onLanguageChosen?: (code: string) => void;
   title?: string;
   lead?: string;
 };
@@ -38,6 +44,8 @@ export function TranscribeWorkspace({
   onGetModel,
   initialModel,
   onModelChosen,
+  initialLanguage,
+  onLanguageChosen,
   title = "Speech to text",
   lead,
 }: TranscribeWorkspaceProps) {
@@ -52,7 +60,14 @@ export function TranscribeWorkspace({
   const [note, setNote] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Transcript | null>(null);
   const input = useRef<HTMLInputElement>(null);
-  const chosen = models.find((m) => m.id === modelId) ?? pickModel(models, "transcribe", modelId);
+  // what the recording is in (voice languages plan, stage L4): it filters the models; "Find it by
+  // itself" leaves it to the model, which is unsafe for Bengali and Hindi, so those are always sent
+  const [language, setLanguage] = useState(initialLanguage || DETECT);
+  const picker = useRef<ModelSelectHandle>(null);
+  const detecting = language === DETECT;
+  const usable = detecting ? models : modelsFor(models, language);
+  const chosen = usable.find((m) => m.id === modelId) ?? pickModel(usable, "transcribe", modelId);
+  const noneReady = !detecting && !usable.some((m) => m.state === "ready");
   const ready = chosen?.state === "ready";
 
   const load = useCallback(
@@ -80,7 +95,7 @@ export function TranscribeWorkspace({
     setNote(null);
     setBusy(true);
     try {
-      const t = await api.transcribe(file, chosen.id);
+      const t = await api.transcribe(file, chosen.id, undefined, detecting ? undefined : language);
       setOpen(t);
       setFile(null);
       await load();
@@ -235,8 +250,40 @@ export function TranscribeWorkspace({
         ask={
           <>
             {runtime ? <RuntimeCard runtime={runtime} api={api} onChanged={reload} /> : null}
-            <ModelPicker
+            <LanguageField
               models={models}
+              value={language}
+              ready="Ready to write down"
+              detect
+              onChange={(code) => {
+                setLanguage(code);
+                if (code !== DETECT) onLanguageChosen?.(code);
+              }}
+              disabled={busy}
+            />
+            {detecting ? (
+              <p className="-mt-2 m-0 text-muted-foreground text-xs">
+                In {TELL_THE_MODEL.map(languageName).join(" or ")}? Choose it: a model finding the
+                language by itself mixes them up.
+              </p>
+            ) : null}
+            {noneReady ? (
+              <NoModelSpeaks
+                language={language}
+                verb="writes down"
+                task="transcribe"
+                models={usable}
+                onUse={(id) => {
+                  setModelId(id);
+                  onModelChosen?.(id);
+                }}
+                onGetModel={onGetModel}
+                onOpenModels={() => picker.current?.open()}
+              />
+            ) : null}
+            <ModelPicker
+              handleRef={picker}
+              models={usable}
               task="transcribe"
               value={chosen?.id ?? null}
               onChange={(id) => {
@@ -314,7 +361,7 @@ export function TranscribeWorkspace({
               {busy ? <Spinner /> : null}
               Transcribe
             </Button>
-            {!ready && chosen ? (
+            {!ready && chosen && !noneReady ? (
               <p className="mt-2 text-muted-foreground text-xs">
                 <NotReadyText task="transcribe" seeAbove />
               </p>

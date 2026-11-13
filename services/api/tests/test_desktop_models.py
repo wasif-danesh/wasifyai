@@ -8,6 +8,7 @@ import threading
 import time
 from pathlib import Path
 
+import httpx
 import pytest
 import yaml
 from fastapi import FastAPI
@@ -545,3 +546,26 @@ async def test_the_read_aloud_voice_stays_beside_the_chat_model_only_when_the_tw
     )
     svc = service(tmp_path, origin)
     assert await svc.fits_beside(1 * gb, int(6.9 * gb)) is fits
+
+
+async def test_a_model_its_makers_keep_back_says_what_to_accept_and_where(tmp_path):
+    """Hugging Face answers 401 for a repository whose makers ask each person to accept their
+    conditions first (the Indic models, voice languages plan L5)."""
+    url = "https://huggingface.co/ai4bharat/indic-parler-tts/resolve/abc/config.json"
+    f = ModelFile("indic", "indic-parler-tts--config.json", url, 10, sha(b"0123456789"))
+    e = ModelEntry("m", "wasifyai-voice", "M", "https://huggingface.co/ai4bharat", "", 0, (f,))
+    seen: list[str | None] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("Authorization"))
+        return httpx.Response(401)
+
+    for token in (None, "hf_" + "x" * 30):
+        mgr = dm.DownloadManager(
+            lambda: httpx.AsyncClient(transport=httpx.MockTransport(answer)), token=token
+        )
+        d = await finished(mgr.start(e, [f], tmp_path))
+        assert d.status == "failed"
+        assert "https://huggingface.co/ai4bharat/indic-parler-tts" in d.error
+        assert ("Hugging Face token" in d.error) is (token is None)
+    assert seen[0] is None and seen[1] == f"Bearer hf_{'x' * 30}"

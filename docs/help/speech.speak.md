@@ -14,11 +14,14 @@ Read a text aloud in a voice and keep the recording in your library.
 ## Steps in the app
 
 1. Open **Voice › Text to speech**.
-2. Type or paste the text.
-3. Choose a voice in the list: your own voices first, then the ones that come with the model. **Hear it**
+2. Choose the **Language** of the text. The languages a model here speaks come first; for Bengali, Hindi,
+   Marathi, Telugu, Tamil or Gujarati the screen offers **Indic Parler-TTS** (Models) when nothing here speaks
+   it yet, or a cloud model.
+3. Type or paste the text.
+4. Choose a voice in the list: your own voices first, then the ones that come with the model. **Hear it**
    speaks a short line in a voice you have not heard yet; a voice heard before plays at once. **Make a voice**
    at the end of the list describes or copies a new one without leaving the screen.
-4. Choose **Make the speech**. It plays where it appears, with its waveform, and joins Recent speech under it.
+5. Choose **Make the speech**. It plays where it appears, with its waveform, and joins Recent speech under it.
    Speed and seed are under **For experts**.
 
 ## Fields
@@ -27,6 +30,8 @@ Read a text aloud in a voice and keep the recording in your library.
 - `voice`: A built-in voice of the model.
 - `saved_voice`: One of your saved voices (see `voice.list`).
 - `model`: Optional: a model id.
+- `language`: Optional: the language of the text (`bn`, `hi`, `en` ...). A ready model and a voice that speak
+  it are chosen.
 
 ## Limits
 
@@ -46,3 +51,5 @@ Read a text aloud in a voice and keep the recording in your library.
 
 - **It says a model is missing** Open **Model hub**, get a speech model, then try again.
 - **The text is too long** Split it, or use the Audiobook screen.
+- **No model here speaks Bengali yet** Get **Indic Parler-TTS** in Models (it sets up the Indian-language speech
+  engine first), or choose a cloud model that speaks it.

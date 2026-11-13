@@ -44,6 +44,8 @@ const CLOUD_PRODUCT: Record<string, string> = {
 type Context = {
   runtime: AudioRuntime | null;
   lipsync: LipSyncEngine | null;
+  /** the Indian-language speech engine (voice languages plan, L5) */
+  indic: LipSyncEngine | null;
   image: { installed: boolean; bytes: number };
   entries: Map<string, ModelEntry>;
 };
@@ -86,6 +88,10 @@ export function voiceRow(
     } else if (m.engine === "sidecar") {
       if (ctx.lipsync && !ctx.lipsync.installed) {
         [engineBytes, engineName] = [ctx.lipsync.plan.bytes, "The lip sync engine"];
+      }
+    } else if (m.engine === "indic") {
+      if (ctx.indic && !ctx.indic.installed) {
+        [engineBytes, engineName] = [ctx.indic.plan.bytes, "The Indian-language speech engine"];
       }
     } else if (ctx.runtime && !ctx.runtime.installed) {
       [engineBytes, engineName] = [ctx.runtime.plan.bytes, "The speech engine"];
@@ -130,9 +136,12 @@ async function read(deps: VoiceChoicesDeps, tasks: string[]) {
   const models = [...new Map(lists.flat().map((m) => [m.id, m])).values()];
   const needsLipsync = models.some((m) => m.engine === "sidecar" && m.state !== "ready");
   const lipsync = needsLipsync ? await deps.voice.lipsyncEngine().catch(() => null) : null;
+  const needsIndic = models.some((m) => m.engine === "indic" && m.state !== "ready");
+  const indic = needsIndic ? await deps.voice.indicEngine().catch(() => null) : null;
   const ctx: Context = {
     runtime,
     lipsync,
+    indic,
     image,
     entries: new Map((overview?.models ?? []).map((e) => [e.id, e])),
   };
@@ -219,6 +228,18 @@ export function voiceChoices(deps: VoiceChoicesDeps, group: GroupId, task?: stri
               run: async (report, signal2) => {
                 await deps.voice.installLipsyncEngine(eng.plan.bytes);
                 await pollInstall(() => deps.voice.lipsyncEngine(), report, signal2);
+              },
+            });
+          }
+        } else if (m.engine === "indic") {
+          const eng = ctx.indic;
+          if (eng && !eng.installed) {
+            steps.push({
+              label: "Setting up the Indian-language speech engine",
+              bytes: eng.plan.bytes,
+              run: async (report, signal2) => {
+                await deps.voice.installIndicEngine(eng.plan.bytes);
+                await pollInstall(() => deps.voice.indicEngine(), report, signal2);
               },
             });
           }

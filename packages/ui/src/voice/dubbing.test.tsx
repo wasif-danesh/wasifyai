@@ -164,6 +164,39 @@ describe("dubbing a recording", () => {
     expect(screen.getByRole("list", { name: "Steps" }).textContent).toContain("Script");
   });
 
+  it("tells the model the language of a Bengali recording", async () => {
+    const conformer = {
+      ...base,
+      engine: "indic",
+      id: "indic-conformer-600m",
+      title: "IndicConformer 600M",
+      tasks: ["transcribe"],
+      recommended: [],
+      languages: ["bn", "hi"],
+      voices: [],
+    } as unknown as VoiceModelInfo;
+    const runs = runsFor([scripted]);
+    const voiceApi = api({
+      models: vi.fn(async (task?: string) =>
+        task === "speak"
+          ? [kokoro]
+          : task === "clone"
+            ? [qwen]
+            : task === "transcribe"
+              ? [conformer]
+              : [kokoro, qwen],
+      ),
+    });
+    render(<DubbingWorkspace api={voiceApi} runs={runs} />);
+    await choose("It is spoken in", "Bengali (বাংলা)");
+    await writeScript();
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({
+      task: "dub_script",
+      language: "es",
+      source_language: "bn",
+    });
+  });
+
   it("copies the speaker only with their word, and sends the script as it was changed", async () => {
     const runs = runsFor([scripted], [dubbed]);
     render(<DubbingWorkspace api={api()} runs={runs} />);

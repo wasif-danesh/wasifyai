@@ -7,7 +7,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from wasifyai_api.components.desktop import lipsync_part, trainer_part
+from wasifyai_api.components.desktop import indic_part, lipsync_part, trainer_part
 from wasifyai_platform_sdk.installer import InstallError, install_and_wait
 
 from wasifyai_engine_worker.handlers import Failed
@@ -63,6 +63,11 @@ class AdminComponent:
         """The component an `admin.fetch_engine` names, as the desktop engine lists it."""
         if name in self._setups:
             return trainer_part(TRAINERS[name], self._setups[name])
+        if name == "indic-engine":
+            indic = getattr(self._speech, "indic_sidecar", None)
+            if indic is None:
+                raise Failed("not_here", "This worker has no Indian-language speech engine.")
+            return indic_part(indic)
         if name != "lipsync-engine":
             raise Failed("unknown_engine", "That is not something this worker can set up.")
         sidecar = self._speech.lipsync_sidecar

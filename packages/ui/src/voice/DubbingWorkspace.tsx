@@ -29,6 +29,7 @@ import { Spinner } from "../components/spinner";
 import { Stage, type StageState } from "../components/stage";
 import { Stepper } from "../components/stepper";
 import { Textarea } from "../components/textarea";
+import { DETECT, LanguageField } from "./LanguageField";
 import { LoadingModels, ModelPicker, NotReadyText } from "./ModelPicker";
 import { type Library, SourcePicker } from "./SourcePicker";
 import { clock, pickModel, stepProgress } from "./format";
@@ -74,6 +75,8 @@ export function DubbingWorkspace({
   const [library, setLibrary] = useState<Library | null>(null);
   const [source, setSource] = useState<AudioSource | null>(initialSource ?? null);
   const [language, setLanguage] = useState("");
+  // the language of the recording: found by the model, or told (Bengali must be, L7)
+  const [spokenIn, setSpokenIn] = useState(DETECT);
   const [keepBackground, setKeepBackground] = useState(true);
   const [voiceFrom, setVoiceFrom] = useState<VoiceFrom>("speaker");
   const [saved, setSaved] = useState<SavedVoice[]>([]);
@@ -96,6 +99,7 @@ export function DubbingWorkspace({
   const task = voiceFrom === "builtin" ? "speak" : "clone"; // copying a voice, saved or not, is "clone"
   const voices = useVoiceModels(api, task);
   const speakers = useVoiceModels(api, "speak");
+  const writers = useVoiceModels(api, "transcribe");
   const clones = useVoiceModels(api, "clone");
 
   const loadLibrary = () =>
@@ -159,7 +163,12 @@ export function DubbingWorkspace({
       // copying the speaker's voice needs the voice on its own, so the background is separated then
       const r = await dubScript(
         runs,
-        { source, language, background: keepBackground || voiceFrom === "speaker" },
+        {
+          source,
+          language,
+          background: keepBackground || voiceFrom === "speaker",
+          ...(spokenIn !== DETECT ? { sourceLanguage: spokenIn } : {}),
+        },
         signal,
         setStep,
       );
@@ -452,6 +461,18 @@ export function DubbingWorkspace({
                   }}
                 />
               </div>
+              <LanguageField
+                label="It is spoken in"
+                models={writers.models}
+                value={spokenIn}
+                detect
+                ready="Ready to write down"
+                disabled={working}
+                onChange={(c) => {
+                  setSpokenIn(c);
+                  restart();
+                }}
+              />
               <Checkbox
                 label="Keep the music and sounds behind the voice"
                 checked={keepBackground}

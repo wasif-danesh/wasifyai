@@ -182,7 +182,7 @@ def keyed_tool_model(product: str, route: KeyRoute, admin: bool = False) -> Voic
             raise VoiceEngineError("not_with_key", f"{name} can do nothing with these keys.")
         return clone_model(tasks, title, route.provider.id, _model_id(product, route))
     if product == "transcribe":
-        return transcribe_model(title, route.provider.id)
+        return transcribe_model(title, route.provider.id, _model_id(product, route))
     return change_model(title, route.provider.id)
 
 

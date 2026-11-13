@@ -127,6 +127,20 @@ def test_a_wav_is_transcribed_kept_and_findable(api):
     assert c.get(f"transcripts/{t['id']}").status_code == 404
 
 
+def test_the_language_of_a_recording_goes_to_the_model_that_writes_it(api):
+    # voice languages plan, stage L4: Parakeet writes 25 European languages, not Bengali
+    c, engine, _ = api
+    assert upload(c, language="de-DE").status_code == 201
+    assert engine.transcribed[-1][2] == {"language": "de"}
+    assert upload(c).status_code == 201
+    assert "language" not in engine.transcribed[-1][2]  # found by the model itself
+    r = upload(c, language="bn")
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "wrong_language"
+    assert "Bengali" in r.json()["detail"]["message"]
+    r = upload(c, language="xx")
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "unknown_language"
+
+
 def test_a_transcript_is_exported_as_text_subrip_or_webvtt(api):
     c, *_ = api
     t = upload(c, "a.wav", title="My talk").json()

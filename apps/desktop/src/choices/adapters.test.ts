@@ -424,6 +424,39 @@ describe("speech and listening", () => {
     });
   });
 
+  it("sets up the Indian-language speech engine before Indic Parler-TTS", async () => {
+    const installs: number[] = [];
+    let installed = false;
+    const v = {
+      models: async () => [
+        voiceModel({ id: "indic-parler-tts", engine: "indic", tasks: ["speak"], recommended: [] }),
+      ],
+      runtime: async () => ({ installed: true, plan: { bytes: 0 } }),
+      indicEngine: async () => ({
+        installed,
+        plan: { bytes: 1.3e9 },
+        install: { state: installed ? "ready" : "idle", done_bytes: 0, total_bytes: 1.3e9 },
+      }),
+      installIndicEngine: async (bytes: number) => {
+        installs.push(bytes);
+        installed = true;
+      },
+    } as unknown as VoiceApi;
+    const api = voiceChoices(
+      { voice: v, models, memory: memory(), engines: engines() },
+      "voice",
+      "speak",
+    );
+    const [row] = (await api.list()).choices;
+    expect(row).toMatchObject({
+      engineBytes: 1.3e9,
+      engineName: "The Indian-language speech engine",
+    });
+    const steps = await api.get("indic-parler-tts", () => {}, new AbortController().signal);
+    expect(steps).toBeUndefined();
+    expect(installs).toEqual([1.3e9]);
+  });
+
   it("uses the model the person chose last time", async () => {
     const ready = [
       voiceModel({ id: "a", state: "ready", recommended: [] }),

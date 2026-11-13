@@ -1,0 +1,6 @@
+# descript-audiotools (through parler-tts) asks for protobuf below 5, but the Indic Parler-TTS
+# tokenizer needs 5.29 or newer; measured in docs/spikes/voice-languages-l0.md. The lock is
+# installed with --no-deps, so this override is the whole story.
+protobuf>=5.29
+# parler-tts names audiotools by a git commit, which cannot carry a hash; the same commit's archive can.
+descript-audiotools @ https://github.com/descriptinc/audiotools/archive/348ebf2034ce24e2a91a553e3171cb00c0c71678.tar.gz

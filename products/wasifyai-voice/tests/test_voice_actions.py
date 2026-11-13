@@ -134,6 +134,32 @@ async def test_a_speech_the_model_cannot_say_is_refused_before_anything_runs(tmp
     assert (long.status, long.code) == ("refused", "invalid_input")
 
 
+async def test_bengali_is_spoken_and_written_down_by_models_that_know_it(tmp_path, ctx):  # noqa: F811
+    """Voice languages plan, L7: the chat names the language; a model and a voice that know it are
+    chosen, and the language reaches the model that writes it down."""
+    h = Harness(tmp_path)
+    r = await h.go("speech.speak", {"text": "আজ আবহাওয়া খুব সুন্দর।", "language": "bn"})
+    assert r.ok, r.text
+    assert h.engine.spoken[-1][0] == "indic-parler-tts" and h.engine.spoken[-1][2] == "Aditi"
+    hi = await h.go("speech.speak", {"text": "नमस्ते", "language": "hi-IN"})
+    assert hi.ok and h.engine.spoken[-1][2] in {"hf_alpha", "hf_beta", "hm_omega", "hm_psi"}
+    t = await h.go(
+        "speech.transcribe",
+        {"source_kind": "speech", "source_id": r.output["speech_id"], "language": "bn"},
+    )
+    assert t.ok, t.text
+    assert h.engine.transcribed[-1][0] == "indic-conformer-600m"
+    assert h.engine.transcribed[-1][2]["language"] == "bn"
+    wrong = await h.go("speech.speak", {"text": "Hi", "language": "bn", "model": "kokoro-82m"})
+    assert (wrong.status, wrong.code) == ("refused", "wrong_language")
+    unknown = await h.go("speech.speak", {"text": "Hi", "language": "xx"})
+    assert (unknown.status, unknown.code) == ("refused", "unknown_language")
+    h.engine.ready -= {"indic-parler-tts"}
+    none = await h.go("speech.speak", {"text": "Hi", "language": "bn"})
+    assert (none.status, none.code) == ("refused", "no_model_for_language")
+    assert "Bengali" in none.text and "Indic Parler-TTS" in none.text
+
+
 async def test_a_recording_is_written_down_and_kept_as_a_transcript(tmp_path, ctx):  # noqa: F811
     h = Harness(tmp_path)
     sid = await a_speech(h)

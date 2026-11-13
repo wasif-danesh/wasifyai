@@ -14,6 +14,8 @@ from wasifyai_engine_worker.admin import AdminComponent
 from wasifyai_engine_worker.handlers import Failed
 
 LIPSYNC_ENGINE = "lipsync-engine"
+INDIC_ENGINE = "indic-engine"
+ENGINES = {LIPSYNC_ENGINE: "lip sync engine", INDIC_ENGINE: "Indian-language speech engine"}
 
 
 def _gb(n: int) -> str:
@@ -28,9 +30,9 @@ async def get(ids: list[str]) -> int:
     api = get_settings()
     engine = build_local_engine(api, Path(api.products_dir))
     admin = AdminComponent(engine)
-    wants_engine = LIPSYNC_ENGINE in ids
-    ids = [i for i in ids if i != LIPSYNC_ENGINE]
-    if not ids and not wants_engine:
+    engines = [i for i in ids if i in ENGINES]
+    ids = [i for i in ids if i not in ENGINES]
+    if not ids and not engines:
         print("Models this worker can fetch (state on this machine):")
         for m in engine.models(None):
             size = _gb(int(m["bytes_missing"])) if m["bytes_missing"] else ""
@@ -46,12 +48,12 @@ async def get(ids: list[str]) -> int:
             status = 1
             continue
         print(f"\n{model_id}: " + ("already here" if done["already"] else "done"))
-    if wants_engine:
+    for name in engines:
         try:
-            await admin.fetch_engine(LIPSYNC_ENGINE, _show)
-            print("\nlip sync engine: ready")
+            await admin.fetch_engine(name, _show)
+            print(f"\n{ENGINES[name]}: ready")
         except Failed as e:
-            print(f"\nlip sync engine: {e.message}")
+            print(f"\n{ENGINES[name]}: {e.message}")
             status = 1
     if engine.install is None:
         print(

@@ -1,0 +1,14 @@
+# The Indian-language speech server's own environment; scripts/lock-indic.sh makes indic.lock.txt
+# from it. Indic Parler-TTS speaks; IndicConformer writes down (docs/voice-languages-plan.md, L5, L6).
+torch
+torchaudio
+numpy
+transformers==4.46.1
+parler-tts @ https://github.com/huggingface/parler-tts/archive/d108732cd57788ec86bc857d99a6cabd66663d68.tar.gz
+sentencepiece
+onnxruntime
+soundfile
+huggingface_hub<1.0
+fastapi
+uvicorn
+python-multipart

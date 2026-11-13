@@ -18,6 +18,7 @@ from wasifyai_platform_sdk import (
     VoiceRequestError,
     check_speak,
     check_transcribe,
+    languages,
     process_image,
     search_text,
 )
@@ -39,7 +40,11 @@ from wasifyai_platform_sdk.actions.helpers import need_deps, save_copy
 from wasifyai_platform_sdk.folders import PathRefused
 from wasifyai_platform_sdk.media_upload import process_audio
 from wasifyai_platform_sdk.uploads import UploadError
-from wasifyai_platform_sdk.voice_models import MAX_DESCRIPTION_CHARS, MAX_SPEAK_CHARS
+from wasifyai_platform_sdk.voice_models import (
+    MAX_DESCRIPTION_CHARS,
+    MAX_SPEAK_CHARS,
+    check_language,
+)
 
 from wasifyai_voice import audio_input, audiobook, dubbing, export, lyric_timing, reference
 from wasifyai_voice.runtime import PRODUCT_ID, NotAvailable, engine_for, store_for
@@ -76,6 +81,25 @@ def _engine(ctx: ActionContext) -> Any:
         return engine_for(_state(ctx))
     except NotAvailable as e:
         raise ActionRefused("unavailable", str(e)) from None
+
+
+def _model_for_language(eng: Any, task: str, language: str) -> dict[str, Any]:
+    """The ready model for a task that knows a language (voice languages plan, L7): the
+    recommended one first. Refuses in words when none does, naming what to get."""
+    code = languages.base(language)
+    if code not in languages.LANGUAGES:
+        raise ActionRefused(
+            "unknown_language", f"This app does not know the language “{language}”."
+        )
+    rows = [m for m in eng.models(task) if languages.supports(m.get("languages", ()), code)]
+    ready = [m for m in rows if m.get("state") == "ready"]
+    ready.sort(key=lambda m: task not in m.get("recommended", ()))
+    if ready:
+        return ready[0]
+    name = languages.language_name(code)
+    verb = "writes down" if task == "transcribe" else "speaks"
+    hint = f" Get {rows[0]['title']} in Models, or choose a cloud model." if rows else ""
+    raise ActionRefused("no_model_for_language", f"No model here {verb} {name} yet.{hint}")
 
 
 def _uri(kind: str, item_id: str) -> str:
@@ -179,6 +203,10 @@ class SpeakIn(Strict):
         None, max_length=64, description="The id of a saved voice (voice.list), instead of voice."
     )
     model: str | None = Field(None, max_length=100, description="A model id; the best ready one.")
+    language: str | None = Field(
+        None, max_length=20,
+        description="The language of the text (bn, hi, en ...): a model and a voice that speak it.",
+    )  # fmt: skip
     options: dict[str, Any] | None = Field(None, description="The model's own options.")
 
     @model_validator(mode="after")
@@ -199,12 +227,36 @@ async def _check_speak(p: SpeakIn, ctx: ActionContext) -> None:
         except NotFound:
             raise ActionRefused("unknown_voice", "That saved voice is no longer there.") from None
         return
-    check_speak(eng.resolve("speak", p.model), p.text, p.voice, p.options)
+    model_id, voice = _speaker(p, eng)
+    check_speak(eng.resolve("speak", model_id), p.text, voice, p.options)
+
+
+def _speaker(p: "SpeakIn | BookMakeIn", eng: Any) -> tuple[str | None, str | None]:
+    """The model and voice to speak with: as given, or, for a language, a ready model that speaks
+    it and its first voice of that language."""
+    if not p.language:
+        return p.model, p.voice
+    if p.model:
+        model = eng.resolve("speak", p.model)
+        check_language(model, p.language)
+        row = model.public()
+    else:
+        row = _model_for_language(eng, "speak", p.language)
+    voice = p.voice
+    if not voice and not p.saved_voice:
+        code, every = languages.base(p.language), languages.spoken(row.get("languages", ()))
+        found = [
+            str(v["id"]) for v in row.get("voices", ())
+            if (languages.base(v["language"]) == code if v.get("language") else code in every)
+        ]  # fmt: skip
+        voice = found[0] if found else None
+    return str(row["id"]), voice
 
 
 def _speak_input(p: SpeakIn, ctx: ActionContext) -> dict[str, Any]:
+    model, voice = _speaker(p, _engine(ctx)) if p.language else (p.model, p.voice)
     return _clean(
-        {"text": p.text, "voice": p.voice, "saved_voice": p.saved_voice, "model": p.model,
+        {"text": p.text, "voice": voice, "saved_voice": p.saved_voice, "model": model,
          "options": p.options}
     )  # fmt: skip
 
@@ -250,6 +302,13 @@ class TranscribeIn(Strict):
     )
     model: str | None = Field(None, max_length=100)
     title: str | None = Field(None, max_length=200)
+    language: str | None = Field(
+        None, max_length=20,
+        description=(
+            "The language of the recording (bn, hi, de ...). Give it for Bengali and Hindi: "
+            "found by itself, one is taken for the other."
+        ),
+    )  # fmt: skip
 
     @model_validator(mode="after")
     def _one_source(self) -> "TranscribeIn":
@@ -347,8 +406,13 @@ async def _transcribe(p: TranscribeIn, ctx: ActionContext) -> Outcome:
         data, row = await _file_recording(ctx, p.path)
     else:
         data, row = await _recording(ctx, p.source_kind, str(p.source_id))
-    chosen = eng.resolve("transcribe", p.model)
+    model_id = p.model
+    if p.language and not model_id:
+        model_id = str(_model_for_language(eng, "transcribe", p.language)["id"])
+    chosen = eng.resolve("transcribe", model_id)
     options = check_transcribe(chosen, None)
+    if p.language:
+        options["language"] = check_language(chosen, p.language)
     try:
         wav, _ = await audio_input.at_rate(data, "audio.wav", 16000, 1)
     except audio_input.AudioInputError as e:
@@ -705,6 +769,13 @@ class DubScriptIn(SourceIn):
     background: bool = Field(
         False, description="Separate the voice from the music behind it first."
     )
+    source_language: str | None = Field(
+        None, max_length=20,
+        description=(
+            "The language the recording is in (bn, hi ...). Give it for Bengali and Hindi; "
+            "otherwise the model finds it."
+        ),
+    )  # fmt: skip
 
 
 class DubLine(BaseModel):
@@ -724,8 +795,10 @@ class DubScriptOut(BaseModel):
 
 
 def _dub_script_input(p: DubScriptIn, ctx: ActionContext) -> dict[str, Any]:
-    return {"task": "dub_script", **_source(p.source_kind, p.source_id), "language": p.language,
-            "background": p.background}  # fmt: skip
+    return _clean(
+        {"task": "dub_script", **_source(p.source_kind, p.source_id), "language": p.language,
+         "background": p.background, "source_language": p.source_language}
+    )  # fmt: skip
 
 
 def _dub_script_result(outputs: dict[str, Any], p: DubScriptIn) -> Outcome | None:
@@ -831,6 +904,10 @@ class BookMakeIn(Strict):
     voice: str | None = Field(None, max_length=100)
     saved_voice: str | None = Field(None, max_length=64)
     model: str | None = Field(None, max_length=100)
+    language: str | None = Field(
+        None, max_length=20,
+        description="The language of the book (bn, hi, en ...): a model and a voice that read it.",
+    )  # fmt: skip
 
 
 async def _book_input(p: BookMakeIn, ctx: ActionContext) -> dict[str, Any]:
@@ -838,10 +915,16 @@ async def _book_input(p: BookMakeIn, ctx: ActionContext) -> dict[str, Any]:
         chapters = audiobook.plan_chapters(p.text)
     except audiobook.BookError as e:
         raise ActionRefused(e.code, str(e)) from None
+    model, voice = p.model, p.voice
+    if p.language:
+        try:
+            model, voice = _speaker(p, _engine(ctx))
+        except (VoiceRequestError, VoiceEngineError) as e:
+            raise ActionRefused(e.code, e.message) from None
     return _clean(
         {"task": "audiobook", "chapters": [{"title": c.title, "text": c.text} for c in chapters],
-         "title": p.title, "whole": p.whole, "read_titles": p.read_titles, "voice": p.voice,
-         "saved_voice": p.saved_voice, "model": p.model}
+         "title": p.title, "whole": p.whole, "read_titles": p.read_titles, "voice": voice,
+         "saved_voice": p.saved_voice, "model": model}
     )  # fmt: skip
 
 

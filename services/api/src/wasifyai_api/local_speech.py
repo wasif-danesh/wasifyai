@@ -24,6 +24,7 @@ from wasifyai_platform_sdk import (
 from wasifyai_api.audio_runtime import AudioEngine, AudioInstaller, AudioServer
 from wasifyai_api.config import Settings
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
+from wasifyai_api.indic_runtime import IndicSidecar
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
 from wasifyai_api.settings_store import InMemorySettingsStore
 
@@ -46,6 +47,7 @@ def build_local_engine(settings: Settings, products: Path) -> AudioEngine:
         AudioServer(settings.desktop_dir),
         None,
         LipSyncSidecar(settings.desktop_dir),
+        IndicSidecar(settings.desktop_dir),
     )
     models.audio = audio
     return audio
@@ -89,6 +91,10 @@ class CombinedSpeechEngine:
     def lipsync_sidecar(self) -> Any:
         return self.local.lipsync_sidecar
 
+    @property
+    def indic_sidecar(self) -> Any:
+        return getattr(self.local, "indic_sidecar", None)
+
     async def stop(self) -> bool:
         """Give the local models' memory back (the hosted ones hold none)."""
         return await self.local.stop()
@@ -102,6 +108,8 @@ class CombinedSpeechEngine:
         await self.local.server.close()
         if self.local.lipsync_sidecar is not None:
             await self.local.lipsync_sidecar.close()
+        if self.indic_sidecar is not None:
+            await self.indic_sidecar.close()
 
     # ---- the work ----------------------------------------------------------------------------
 

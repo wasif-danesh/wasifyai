@@ -143,11 +143,26 @@ From the L0 results:
 - Every speech and transcription model in the cloud catalogue gets a `languages` list, drawn from the
   provider's own list plus L0.
 
+**Built 2026-11-13.**
+- **Kokoro:** 7 language codes and the 40 voices this build carries (English, Spanish, French, Hindi, Italian,
+  Brazilian Portuguese), each voice with its language.
+- **Cloud models** (`own_keys_voice.py`): Chatterbox and its clone get Resemble AI's 23 languages, MiniMax the 25
+  `language_boost` values fal.ai accepts, Whisper every language but Bengali (L0 measured it writing Bengali badly).
+  Transcription models now carry their catalogue id, so their languages are known.
+- **VoxCPM2** gains Spanish and Hindi, which passed L0.
+
 ### L4: Transcribe asks for the language
 
 - A language choice. "Detect it" stays as an option, except for languages where L0 shows detection is unsafe
   (Bengali, Hindi), for which the language is always passed.
 - A language the loaded model cannot write leads to the model that can.
+
+**Built 2026-11-13.**
+- **Speech to text** has the language field, with "Find it by itself" first. With it chosen, the screen says to
+  choose Bengali or Hindi, because a model finding the language by itself mixes them up. A chosen language
+  filters the models and is sent; none ready shows the same note as Speak.
+- **The action** `speech.transcribe` takes `language`, checked against the shared list.
+- **The Indic model** (L6) must be told the language; without one the engine refuses with `language_needed`.
 
 ### L5: Bengali speech
 
@@ -157,9 +172,34 @@ From the L0 results:
 - **Cloud:** the cloud voices that passed L0 also show under Bengali in the picker's Cloud tab, as a second
   choice.
 
+**Built 2026-11-13.**
+- **The Indian-language speech engine:** an optional part (`indic`) in every platform's manifest, installed from
+  one universal hashed lock (`services/api/src/wasifyai_api/indic_server/indic.lock.txt`, made by
+  `scripts/lock-indic.sh`; parler-tts's protobuf<5 is overridden and the lock is installed without
+  dependencies). It runs as a sidecar on loopback like MuseTalk (`indic_runtime.py`, `indic_server/`), offline,
+  and holds the `indic` slot while it works. Settings › Optional parts and the model rows' setup step install it;
+  `/desktop/indic` reports it.
+- **Indic Parler-TTS** in `models.yaml`: Bengali, Hindi, Marathi, Telugu, Tamil and Gujarati, two voices each
+  (Tamil one): Aditi and Arjun, Divya and Rohit, Sunita and Sanjay, Lalitha and Prakash, Jaya, Neha and Yash.
+  3.8 GB with its flan-t5 tokenizer. Long text is spoken sentence by sentence (the danda ends one).
+- **The web:** the engine workers run the same engine (`indic-engine` in Admin › Workers, `RemoteIndic`); see the
+  ADR-0099 amendment.
+- **Measured on this Mac (M-series, 64 GB):** the engine installs in 45 s, 1.2 GB. The first speech with the load
+  takes 13 to 18 s; after that about 4 s for 5 s of speech (speed about 0.9x real time, peak 2.9 GB).
+- **Gated:** both AI4Bharat repositories need a Hugging Face token and the person's acceptance on the model page;
+  without one the download says so and points to Settings › Hugging Face token.
+- **Not done:** the cloud voices as a second choice under Bengali (no cloud voice passed L0 for Bengali).
+- **Left out:** Intel Macs (torch 2.15 ships no build for them). Linux and Windows are in the lock and the
+  manifests (sizes estimated) but were not run.
+
 ### L6: Bengali transcription
 
 IndicConformer on the desktop if L0 shows it fits, and Scribe v2 in the cloud if it passed.
+
+**Built 2026-11-13.**
+- **IndicConformer 600M** in `models.yaml` (2.6 GB, ONNX on the CPU, CTC, 20 s windows), the same six languages,
+  in the same engine. Speed about 45x real time.
+- **Not done:** Scribe v2 in the cloud (it was not added to the catalogue in this plan).
 
 ### L7: Bengali through the rest of the voice product
 
@@ -170,11 +210,35 @@ IndicConformer on the desktop if L0 shows it fits, and Scribe v2 in the cloud if
 - **Search:** the bge-m3 index already handles Bengali, so add one Bengali row to
   `services/api/evals/search/corpus.yaml`.
 
+**Built 2026-11-13.**
+- **Dub:** `dub.script` takes `source_language`, and the Dub screen asks "It is spoken in" (find it, or a
+  language). A language with no ready writer is refused with `no_model_for_language`. Reading speed per language
+  for the fit: bn 13, hi 12, mr 13, te 13, ta 15, gu 12 characters a second. Dubbing into Bengali uses Parler's
+  built-in voices.
+- **Speak, Audiobook:** `speech.speak` and `audiobook.make` take `language` and pick a model and its first voice
+  in it. Audiobook splits sentences at the danda.
+- **Read aloud** (chat and notebooks) finds the script of the text (`languages.script_language`: Bengali,
+  Devanagari as Hindi, Telugu, Tamil, Gujarati) and reads it with a ready model and voice of that language.
+- **Help pages** for the four actions name the language argument; `make contracts` regenerated.
+- **Search:** a Bengali speech and a Bengali query in `services/api/evals/search/corpus.yaml`.
+- **Not done:** Lyrics in Bengali (the song models were not part of this plan).
+
 ### L8: Checks that stay
 
 - A round-trip test per claimed language (speak, then transcribe, then compare) that runs on a fake in CI and
   for real by hand.
 - One Bengali walk in the real window and on the web, graded by the listener.
+
+**Built 2026-11-13.**
+- **In CI:** `services/api/tests/test_indic_runtime.py` (20 tests on a fake server: the pins, the catalogue,
+  the layout, the installer, the sidecar through the engine, a check per language).
+- **By hand:** `scripts/indic_round_trip.py DATA_DIR MODELS_DIR [OUT]` speaks a sentence per voice, writes it down
+  and reports the word error (limit 35%). The real run: 11 of 11 voices passed; word errors 0 except Hindi Divya
+  0.09, Telugu Lalitha 0.2 (a doubled letter) and Tamil Jaya 0.1. The WAVs are for the listener to grade.
+- **The window:** a Bengali walk in the real window on a fresh data folder, with the real engine: Bengali chosen,
+  Aditi spoke 4 s of Bengali in 16 s with the load, Speech to text with Bengali wrote a real recording back word
+  for word, and the Models page shows both Indic models on this computer.
+- **Not done:** the web walk; the listener's grading of the five other languages.
 
 ## Decisions (owner, 2026-11-13)
 

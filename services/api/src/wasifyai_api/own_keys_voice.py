@@ -17,6 +17,7 @@ from typing import Any
 
 from wasifyai_platform_sdk import TranscriptSegment, VoiceEngineError
 from wasifyai_platform_sdk.fal import FalError
+from wasifyai_platform_sdk.languages import LANGUAGES
 from wasifyai_platform_sdk.voice_models import OptionSpec, VoiceInfo, VoiceModel
 
 KEYED_VOICE = "key:voice"
@@ -33,6 +34,20 @@ VOICE_PRODUCTS = {
 
 MULTI = ("multi",)
 QWEN_LANGUAGES = ("zh", "en", "ja", "ko", "de", "fr", "ru", "pt", "es", "it")
+# What a cloud model speaks or writes, where it is not every language the app names
+# (docs/spikes/voice-languages-l0.md). Chatterbox: Resemble AI's published 23; it read Bengali as
+# English even when told the language. MiniMax: the `language_boost` values fal.ai accepts, as far
+# as its refusal of Bengali listed them. Whisper: every language but Bengali, which it wrote badly
+# even when told the language (and ADR-0043 measured it calling Bengali Hindi).
+CHATTERBOX_LANGUAGES = (
+    "ar", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "it", "ja", "ko", "ms", "nl",
+    "no", "pl", "pt", "ru", "sv", "sw", "tr", "zh",
+)  # fmt: skip
+MINIMAX_LANGUAGES = (
+    "zh", "en", "ar", "ru", "es", "fr", "pt", "de", "tr", "nl", "uk", "vi", "id", "ja", "it",
+    "ko", "th", "pl", "ro", "el", "cs", "fi", "hi", "bg", "da",
+)  # fmt: skip
+WHISPER_LANGUAGES = tuple(c for c in LANGUAGES if c != "bn")
 SPEED = OptionSpec("speed", "float", "Speed", "How fast it speaks.", 1.0, 0.5, 2.0)
 
 FAL_KOKORO = (  # Kokoro's American voices on fal.ai
@@ -97,9 +112,13 @@ SPEAKERS: dict[str, Speaker] = {  # by the catalogue's id
     "kokoro": Speaker("Kokoro", _kokoro(), "af_heart", ("en-us",), speed=True),
     "elevenlabs-v4": Speaker("ElevenLabs v4", _named(ELEVEN), "Aria"),
     "gemini-3.8-flash-tts": Speaker("Gemini 3.8 Flash TTS", _named(GEMINI), "Kore"),
-    "chatterbox": Speaker("Chatterbox", (), None),
+    "chatterbox": Speaker("Chatterbox", (), None, CHATTERBOX_LANGUAGES),
     "minimax-speech-2.8-hd": Speaker(
-        "MiniMax Speech 2.8 HD", _named(MINIMAX_VOICES), "English_expressive_narrator", speed=True
+        "MiniMax Speech 2.8 HD",
+        _named(MINIMAX_VOICES),
+        "English_expressive_narrator",
+        MINIMAX_LANGUAGES,
+        speed=True,
     ),
 }
 
@@ -326,7 +345,10 @@ DESIGN_RULES = {"via": "cloud", "max_chars": 300}
 
 
 def clone_model(tasks: tuple[str, ...], title: str, family: str, model_id: str) -> VoiceModel:
-    languages = QWEN_LANGUAGES if model_id == "qwen3-tts" else MULTI
+    languages = {
+        "qwen3-tts": QWEN_LANGUAGES, "chatterbox-clone": CHATTERBOX_LANGUAGES,
+        "minimax-voice": MINIMAX_LANGUAGES,
+    }.get(model_id, MULTI)  # fmt: skip
     return _model(
         KEYED_CLONE, title, family, tasks, languages=languages,
         clone=dict(CLONE_RULES) if "clone" in tasks else {},
@@ -334,8 +356,11 @@ def clone_model(tasks: tuple[str, ...], title: str, family: str, model_id: str) 
     )  # fmt: skip
 
 
-def transcribe_model(title: str, family: str) -> VoiceModel:
-    return _model(KEYED_TRANSCRIBE, title, family, ("transcribe",), sample_rate=16000)
+def transcribe_model(title: str, family: str, model_id: str = "") -> VoiceModel:
+    languages = WHISPER_LANGUAGES if model_id == "whisper" else MULTI
+    return _model(
+        KEYED_TRANSCRIBE, title, family, ("transcribe",), sample_rate=16000, languages=languages
+    )
 
 
 CONVERT_RULES = {

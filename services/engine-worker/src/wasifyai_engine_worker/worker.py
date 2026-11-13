@@ -78,17 +78,21 @@ class Worker:
         if isinstance(self._engines, dict) and "admin" in self._engines:
             kinds += admin_wire.KINDS
         components: dict[str, Any] = {}
-        sidecar = getattr(self._speech, "lipsync_sidecar", None)
-        if sidecar is not None:  # the lip sync engine is set up from the web like a model
+        # the lip sync and Indian-language speech engines are set up from the web like a model
+        for attr, key in (("lipsync_sidecar", admin_wire.LIPSYNC_COMPONENT),
+                          ("indic_sidecar", admin_wire.INDIC_COMPONENT)):  # fmt: skip
+            sidecar = getattr(self._speech, attr, None)
+            if sidecar is None:
+                continue
             try:
                 plan = sidecar.installer.plan()
-                components[admin_wire.LIPSYNC_COMPONENT] = {
+                components[key] = {
                     "installed": bool(sidecar.installed),
                     "supported": bool(plan["supported"]),
                     "bytes": int(plan["bytes"]),
                 }
             except Exception:
-                log.exception("the lip sync engine could not report its state")
+                log.exception("the %s could not report its state", attr)
         if (service := self._model3d) is not None:
             kinds += model3d_wire.KINDS
             try:

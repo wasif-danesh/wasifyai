@@ -68,6 +68,19 @@ def lipsync_part(sidecar: Any) -> ServiceComponent:
     )  # fmt: skip
 
 
+def indic_part(sidecar: Any) -> ServiceComponent:
+    """The Indian-language speech engine's component (Indic Parler-TTS and IndicConformer), here
+    and on an engine worker (voice languages plan, L5)."""
+    inst = sidecar.installer
+    return ServiceComponent(
+        "indic", "Indian-language speech engine",
+        (Step("environment", "Creating its environment"),
+         Step("packages", "Installing its packages"), Step("verify", "Checking that it starts")),
+        sidecar.state, inst.start, progress_key="install", stop=_cancel(inst),
+        finish=_waiter(inst),
+    )  # fmt: skip
+
+
 def service_components(services: Any, desktop: Any) -> list[ServiceComponent]:
     """The parts the desktop's own services set up, as components."""
     found: list[ServiceComponent] = []
@@ -83,6 +96,8 @@ def service_components(services: Any, desktop: Any) -> list[ServiceComponent]:
         ))  # fmt: skip
         if audio.lipsync_sidecar is not None:
             found.append(lipsync_part(audio.lipsync_sidecar))
+        if getattr(audio, "indic_sidecar", None) is not None:
+            found.append(indic_part(audio.indic_sidecar))
     model3d = desktop.model3d
     if model3d is not None:
         inst = model3d.installer

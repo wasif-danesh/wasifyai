@@ -220,15 +220,21 @@ async def engine(tmp_path, monkeypatch):
 def test_models_by_task_with_their_state(tmp_path, monkeypatch):
     eng, _ = make_engine(tmp_path, monkeypatch, present={"kokoro-82m-q8_0.gguf"})
     speak = {m["id"]: m for m in eng.models("speak")}
-    assert set(speak) == {"kokoro-82m", "voxcpm2"}
+    assert set(speak) == {"kokoro-82m", "voxcpm2", "indic-parler-tts"}
+    # no Indian-language speech engine in this deployment: its models cannot be had here
+    assert speak["indic-parler-tts"]["state"] == "not_available"
     assert {m["id"] for m in eng.models("clone")} == {"qwen3-tts-0.6b-base", "voxcpm2"}
     assert {m["id"] for m in eng.models("design")} == {"qwen3-tts-1.7b-voicedesign", "voxcpm2"}
     assert speak["kokoro-82m"]["state"] == "ready" and speak["kokoro-82m"]["bytes_missing"] == 0
     assert speak["voxcpm2"]["state"] == "can_install" and speak["voxcpm2"]["bytes_missing"] > 2e9
-    assert [m["id"] for m in eng.models("transcribe")] == ["parakeet-tdt-0.6b-v3"]
+    assert [m["id"] for m in eng.models("transcribe")] == [
+        "parakeet-tdt-0.6b-v3", "indic-conformer-600m",
+    ]  # fmt: skip
     assert "commercial_use" not in speak["kokoro-82m"]
     eng2, _ = make_engine(tmp_path, monkeypatch, present={"kokoro-82m-q8_0.gguf"}, install=False)
-    assert {m["state"] for m in eng2.models("speak")} == {"needs_runtime", "can_install"}
+    assert {m["state"] for m in eng2.models("speak")} == {
+        "needs_runtime", "can_install", "not_available",
+    }  # fmt: skip
 
 
 def test_resolve_names_what_to_do(tmp_path, monkeypatch):

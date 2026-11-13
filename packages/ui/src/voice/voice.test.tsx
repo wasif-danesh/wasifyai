@@ -487,6 +487,45 @@ describe("speech to text", () => {
     expect(within(article).getByText("Second sentence.")).toBeInTheDocument();
   });
 
+  it("lets the model find the language, or sends the one chosen, and says when none writes it", async () => {
+    const transcribe = vi.fn(async () => transcript());
+    const onLanguageChosen = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <TranscribeWorkspace
+        api={api({
+          models: vi.fn(async () => [{ ...asr(), languages: ["en", "de", "fr"] }]),
+          transcribe,
+        })}
+        onLanguageChosen={onLanguageChosen}
+      />,
+    );
+    const pick = await screen.findByRole("combobox", { name: "Language" });
+    expect(pick).toHaveTextContent("Find it by itself");
+    expect(screen.getByText(/In Bengali or Hindi\? Choose it/)).toBeInTheDocument();
+    const input = screen.getByLabelText("Choose a recording") as HTMLInputElement;
+    await user.upload(input, new File(["x"], "talk.wav", { type: "audio/wav" }));
+    await user.click(screen.getByRole("button", { name: "Transcribe" }));
+    await waitFor(() => expect(transcribe).toHaveBeenCalledTimes(1));
+    expect((transcribe.mock.calls[0] as unknown[])[3]).toBeUndefined();
+
+    await user.click(screen.getByRole("combobox", { name: "Language" }));
+    await user.click(await screen.findByRole("option", { name: "German (Deutsch)" }));
+    expect(onLanguageChosen).toHaveBeenCalledWith("de");
+    await user.upload(
+      screen.getByLabelText("Choose a recording") as HTMLInputElement,
+      new File(["x"], "rede.wav", { type: "audio/wav" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Transcribe" }));
+    await waitFor(() => expect(transcribe).toHaveBeenCalledTimes(2));
+    expect((transcribe.mock.calls[1] as unknown[])[3]).toBe("de");
+
+    await user.click(screen.getByRole("combobox", { name: "Language" }));
+    await user.click(await screen.findByRole("option", { name: "Bengali (বাংলা)" }));
+    expect(await screen.findByText("No model here writes down Bengali yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Transcribe" })).toBeDisabled();
+  });
+
   it("saves a transcript as subtitles", async () => {
     const exportTranscript = vi.fn(async () => new Blob(["1\n00:00"]));
     URL.createObjectURL = vi.fn(() => "blob:x");

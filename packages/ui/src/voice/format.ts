@@ -18,6 +18,8 @@ export const STATE_TEXT: Record<ModelState, string> = {
 export function stateText(m: VoiceModelInfo): string {
   if (m.state === "needs_runtime" && m.engine === "comfyui") return "Needs the image engine";
   if (m.state === "needs_runtime" && m.engine === "sidecar") return "Needs the lip sync engine";
+  if (m.state === "needs_runtime" && m.engine === "indic")
+    return "Needs the Indian-language speech engine";
   return STATE_TEXT[m.state];
 }
 

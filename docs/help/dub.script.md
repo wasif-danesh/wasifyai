@@ -14,7 +14,9 @@ The first step of a dub: write down what is said and translate it line by line, 
 ## Steps in the app
 
 1. Open **Voice › Dub a recording**.
-2. Choose the recording and the language to dub into.
+2. Choose the recording and the language to dub into. Under **It is spoken in**, leave **Find it by itself** or
+   choose the language of the recording; choose it for Bengali and Hindi, which are otherwise taken for each
+   other. Bengali and the other Indian languages are written down by **IndicConformer 600M** (Models).
 3. Choose **Write the script**. The lines appear on the right with their times, to read and change.
 
 ## Fields
@@ -23,6 +25,7 @@ The first step of a dub: write down what is said and translate it line by line, 
 - `source_id`: The recording.
 - `language`: For example fr, es, de.
 - `background`: Separate the voice from the music first.
+- `source_language`: Optional: the language the recording is in (`bn`, `hi` ...).
 
 ## Limits
 

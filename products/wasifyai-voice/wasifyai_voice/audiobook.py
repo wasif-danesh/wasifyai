@@ -154,7 +154,7 @@ def check_chapters(raw: list[dict[str, object]] | None) -> list[Chapter]:
 
 # ---- pieces ---------------------------------------------------------------------------------
 
-_SENTENCE = re.compile(r"(?<=[.!?…。！？])[\"'”’)\]]*\s+|(?<=[。！？])")
+_SENTENCE = re.compile(r"(?<=[.!?…。！？।॥])[\"'”’)\]]*\s+|(?<=[。！？])")
 
 
 @dataclass(frozen=True)

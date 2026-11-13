@@ -52,7 +52,7 @@ ALLOWED_FOLDERS = frozenset(
     {
         "checkpoints", "diffusion_models", "unet", "text_encoders", "clip", "vae", "loras",
         "controlnet", "upscale_models", "latent_upscale_models", "embeddings", "audio",
-        "lipsync",
+        "lipsync", "indic",
     }
 )  # fmt: skip
 
@@ -292,6 +292,8 @@ class DownloadManager:
         async with client.stream("GET", f.url, headers=headers) as r:
             if r.status_code == 416 and have == f.size:
                 pass  # the whole file is already here
+            elif r.status_code in (401, 403) and urlparse(f.url).hostname == "huggingface.co":
+                raise DownloadError(_gated_words(f.url, has_token=bool(self._token)))
             elif r.status_code not in (200, 206):
                 raise DownloadError(f"The download server answered {r.status_code}.")
             elif r.status_code == 200 and have:
@@ -316,6 +318,22 @@ class DownloadManager:
                 f"{f.name} did not match its published checksum, so it was not kept. Try again."
             )
         os.replace(part, final)
+
+
+def _gated_words(url: str, has_token: bool) -> str:
+    """What to do when Hugging Face keeps a model's files back: its makers ask each person to
+    accept their conditions on its page (the Indic models, voice languages plan L5)."""
+    owner, repo = (urlparse(url).path.strip("/").split("/") + ["", ""])[:2]
+    page = f"https://huggingface.co/{owner}/{repo}"
+    if has_token:
+        return (
+            f"Hugging Face did not let your account fetch this model. Open {page}, accept what "
+            "its makers ask, then try again."
+        )
+    return (
+        f"The makers of this model ask each person to accept their conditions first. Open {page}, "
+        "accept them, add your Hugging Face token in Settings › Hugging Face token, then try again."
+    )
 
 
 def _part_size(models_dir: Path, f: ModelFile) -> int:

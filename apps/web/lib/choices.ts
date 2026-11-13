@@ -32,6 +32,15 @@ export const GROUP_TASKS: Partial<Record<GroupId, string[]>> = {
 
 export const choiceKey = (task: string) => `wasifyai.voice.model.${task}`;
 const LIPSYNC_ENGINE = "lipsync-engine";
+const INDIC_ENGINE = "indic-engine";
+/** The engines a worker sets up before some models (the lip sync and Indian-language speech ones):
+ *  their id for `fetchEngine` and their name. */
+const ENGINES = {
+  sidecar: { id: LIPSYNC_ENGINE, name: "the lip sync engine" },
+  indic: { id: INDIC_ENGINE, name: "the Indian-language speech engine" },
+} as const;
+const engineOf = (m: { engine: string }) =>
+  m.engine in ENGINES ? ENGINES[m.engine as keyof typeof ENGINES] : null;
 const ASK_AN_ADMIN = "Not set up on this service yet. Ask an admin to add it.";
 const POLL_MS = 1500;
 
@@ -66,7 +75,7 @@ export function webRow(
   isAdmin: boolean,
   lipsync: Engine,
 ): ModelChoice {
-  const needsEngine = m.engine === "sidecar" && !m.runtime_ready && m.state !== "ready";
+  const needsEngine = engineOf(m) !== null && !m.runtime_ready && m.state !== "ready";
   let state: ModelChoice["state"] = "needs_download";
   let unavailableReason: string | null = null;
   if (m.state === "ready") state = "ready";
@@ -75,7 +84,12 @@ export function webRow(
   else if (!m.runtime_ready && !needsEngine) {
     [state, unavailableReason] = ["unavailable", "The worker's speech engine is not set up yet."];
   } else if (needsEngine && lipsync && !lipsync.supported) {
-    [state, unavailableReason] = ["unavailable", "This worker cannot run lip sync."];
+    [state, unavailableReason] = [
+      "unavailable",
+      m.engine === "indic"
+        ? "This worker cannot run Indian-language speech."
+        : "This worker cannot run lip sync.",
+    ];
   } else if (!isAdmin) [state, unavailableReason] = ["unavailable", ASK_AN_ADMIN];
   const isRecommended = tasks.some((t) => m.recommended.includes(t as never));
   const tier = COPY[m.id]?.tier ?? (isRecommended ? "recommended" : "also");
@@ -89,7 +103,11 @@ export function webRow(
     chosen: m.id === chosenId,
     downloadBytes: m.state === "ready" ? 0 : m.bytes_missing,
     engineBytes: engineMissing ? lipsync.bytes : 0,
-    engineName: engineMissing ? "The lip sync engine" : null,
+    engineName: engineMissing
+      ? m.engine === "indic"
+        ? "The Indian-language speech engine"
+        : "The lip sync engine"
+      : null,
     fit: null,
     fitReason: null,
     source: "app",
@@ -134,21 +152,23 @@ export function webChoicesFor(deps: WebChoicesDeps, group: GroupId, task?: strin
   async function read() {
     const lists = await Promise.all(tasks.map((t) => deps.voice.models(t as never)));
     const models = [...new Map(lists.flat().map((m) => [m.id, m])).values()];
-    const needsLipsync = models.some((m) => m.engine === "sidecar" && m.state !== "ready");
-    const workers = deps.isAdmin && needsLipsync ? await deps.workers.list().catch(() => []) : [];
+    const needsEngine = models.some((m) => engineOf(m) && m.state !== "ready");
+    const workers = deps.isAdmin && needsEngine ? await deps.workers.list().catch(() => []) : [];
     const lipsync = workers.find((w) => w.lipsync_engine)?.lipsync_engine ?? null;
-    return { models, lipsync };
+    const indic = workers.find((w) => w.indic_engine)?.indic_engine ?? null;
+    const engineFor = (m: { engine: string }): Engine => (m.engine === "indic" ? indic : lipsync);
+    return { models, lipsync, engineFor };
   }
 
   return {
     async list(): Promise<ChoiceList> {
-      const { models, lipsync } = await read();
+      const { models, engineFor } = await read();
       // one task has a model in use; the whole group shows none as in use
       const chosen = task
         ? (defaultOf(models, task, deps.memory.get(choiceKey(task)))?.id ?? null)
         : null;
       return {
-        choices: models.map((m) => webRow(m, tasks, chosen, deps.isAdmin, lipsync)),
+        choices: models.map((m) => webRow(m, tasks, chosen, deps.isAdmin, engineFor(m))),
         diskFreeBytes: null,
         memoryBytes: null,
       };
@@ -163,14 +183,16 @@ export function webChoicesFor(deps: WebChoicesDeps, group: GroupId, task?: strin
 
     async get(id, on, signal) {
       if (!deps.isAdmin) throw new Error(ASK_AN_ADMIN);
-      const { models, lipsync } = await read();
+      const { models, engineFor } = await read();
       const m = models.find((x) => x.id === id);
       if (!m) throw new Error("That model is not in the list any more.");
+      const engine = engineOf(m);
+      const worker = engineFor(m);
       const steps: { label: string; start: () => Promise<string> }[] = [];
-      if (m.engine === "sidecar" && !m.runtime_ready && lipsync && !lipsync.installed) {
+      if (engine && !m.runtime_ready && worker && !worker.installed) {
         steps.push({
-          label: "Setting up the lip sync engine",
-          start: () => deps.workers.fetchEngine(LIPSYNC_ENGINE),
+          label: `Setting up ${engine.name}`,
+          start: () => deps.workers.fetchEngine(engine.id),
         });
       }
       if (m.state !== "ready") {

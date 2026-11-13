@@ -27,7 +27,13 @@ TAIL_S = 2.0  # time after the last line before the end
 
 # how many characters a language speaks in a second, roughly: how long a line may be, for the
 # translator
-CHARS_PER_SECOND = {"zh": 5.0, "ja": 7.0, "ko": 7.0, "de": 14.0, "ru": 13.0, "fi": 13.0}
+CHARS_PER_SECOND = {
+    "zh": 5.0, "ja": 7.0, "ko": 7.0, "de": 14.0, "ru": 13.0, "fi": 13.0,
+    # Indic Parler-TTS, measured in docs/spikes/voice-languages-l0.md (Unicode characters, vowel
+    # signs included): Bengali 13.1 over 18 lines; Hindi, Marathi, Telugu and Tamil from two lines
+    # each; Gujarati's two lines had long pauses (7.4), so it takes Hindi's figure
+    "bn": 13.0, "hi": 12.0, "mr": 13.0, "te": 13.0, "ta": 15.0, "gu": 12.0,
+}  # fmt: skip
 DEFAULT_CPS = 15.0
 
 

@@ -160,6 +160,8 @@ export function TranscribePage(p: VoicePageProps) {
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
+        initialLanguage={p.remembered.get(LANGUAGE_KEY)}
+        onLanguageChosen={(code) => p.remembered.set(LANGUAGE_KEY, code)}
       />
     </MakeFrame>
   );

@@ -54,6 +54,22 @@ parts:
       packages_bytes: 2100000000
       platforms:
       - darwin-arm64
+  indic:
+    pins:
+      comment: 'The Indian-language speech engine (docs/voice-languages-plan.md, L5 and L6): Indic Parler-TTS
+        and IndicConformer in an environment of their own, from one hashed universal lock (indic_server/requirements.in
+        and overrides.txt). The weights are catalogue entries in products/wasifyai-voice/models.yaml. Measured on an
+        Apple-silicon Mac; Linux (CUDA wheels) and Windows (CPU) install from the same lock, not yet run there. Intel
+        Macs are left out: the pinned torch has no build for them.'
+      python: '3.12'
+      lock: indic_server/indic.lock.txt
+      lock_sha256: bc772ddc0d84b50cb890381a7f5f7c3ad3864e8b91e13cd4f8e279ff3e4de6a7
+      packages_bytes: 6000000000
+      platforms:
+      - darwin-arm64
+      - linux-x64
+      - linux-arm64
+      - windows-x64
   model3d:
     pins:
       comment: 'The 3D component (ADR-0080, TD1): the pinned pixal3d.cpp Metal release (trellis-cli),

@@ -25,11 +25,16 @@ from wasifyai_platform_sdk import (
     VoiceRequestError,
     check_speak,
     check_transcribe,
+    languages,
     process_image,
     search_text,
 )
 from wasifyai_platform_sdk.uploads import UploadError
-from wasifyai_platform_sdk.voice_models import MAX_DESCRIPTION_CHARS, MAX_REFERENCE_TEXT_CHARS
+from wasifyai_platform_sdk.voice_models import (
+    MAX_DESCRIPTION_CHARS,
+    MAX_REFERENCE_TEXT_CHARS,
+    check_language,
+)
 
 from wasifyai_voice import (
     audio_input,
@@ -99,6 +104,30 @@ class VoicePatch(BaseModel):
     reference_text: str | None = Field(default=None, max_length=MAX_REFERENCE_TEXT_CHARS)
 
 
+def _reader(engine: Any, text: str) -> tuple[Any, str | None]:
+    """The model and voice that read a chat reply aloud: the usual one, unless the reply is in a
+    script only one language uses (Bengali, Tamil ...), when a ready model and a voice of that
+    language read it (voice languages plan, L7). Nothing that speaks it: say what to get."""
+    chosen = engine.resolve("speak", None)
+    code = languages.script_language(text)
+    if code is None:
+        return chosen, None
+    if not languages.supports(chosen.languages, code):
+        rows = [
+            m for m in engine.models("speak")
+            if m.get("state") == "ready" and languages.supports(m.get("languages", ()), code)
+        ]  # fmt: skip
+        if not rows:
+            raise VoiceEngineError(
+                "no_model_for_language",
+                f"No model here speaks {languages.language_name(code)} yet. Get one in Models "
+                "to hear this read aloud.",
+            )
+        chosen = engine.resolve("speak", rows[0]["id"])
+    voices = languages.voices_for(chosen, code)
+    return chosen, (voices[0] if voices else None)
+
+
 def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
     router = APIRouter(tags=[PRODUCT_ID])
 
@@ -155,6 +184,19 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         sidecar = getattr(engine, "lipsync_sidecar", None)
         if sidecar is None:
             raise HTTPException(404, "Lip sync is not available in this deployment.")
+        return sidecar.state()  # type: ignore[no-any-return]
+
+    @router.get("/indic-engine")
+    async def indic_engine(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """The Indian-language speech engine's state (voice languages plan, L5), when this service
+        has it."""
+        try:
+            engine = engine_for(deps.state)
+        except NotAvailable as e:
+            raise HTTPException(503, str(e)) from None
+        sidecar = getattr(engine, "indic_sidecar", None)
+        if sidecar is None:
+            raise HTTPException(404, "Indian-language speech is not available in this deployment.")
         return sidecar.state()  # type: ignore[no-any-return]
 
     # ---- speeches --------------------------------------------------------------------------
@@ -401,8 +443,8 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
             found = await asyncio.to_thread(read_aloud.passages, body.text)
             if body.part >= len(found.items):
                 raise read_aloud.ReadAloudError("no_such_part", "There is no more to read.")
-            chosen = engine.resolve("speak", None)
-            text, voice, options = check_speak(chosen, found.items[body.part], None, None)
+            chosen, voice = _reader(engine, body.text)
+            text, voice, options = check_speak(chosen, found.items[body.part], voice, None)
             result = await engine.speak(chosen, text, voice, options, beside=True)
         except read_aloud.ReadAloudError as e:
             status = 404 if e.code == "no_such_part" else 422
@@ -410,7 +452,8 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         except VoiceRequestError as e:
             raise HTTPException(422, {"code": e.code, "message": e.message}) from None
         except VoiceEngineError as e:
-            status = 409 if e.code in ("runtime_missing", "model_missing", "no_model") else 502
+            missing = ("runtime_missing", "model_missing", "no_model", "no_model_for_language")
+            status = 409 if e.code in missing else 502
             raise HTTPException(status, {"code": e.code, "message": e.message}) from None
         return {
             "audio": base64.b64encode(result.wav).decode("ascii"),
@@ -796,6 +839,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         file: UploadFile = File(...),  # noqa: B008
         model: str | None = Form(None),
         title: str | None = Form(None),
+        language: str | None = Form(None, max_length=20),
         identity: Identity = Depends(deps.identity),
     ) -> dict[str, Any]:
         try:
@@ -807,6 +851,8 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         try:
             chosen = engine.resolve("transcribe", model or None)
             options = check_transcribe(chosen, None)
+            if language:  # what the recording is in (voice languages plan, stage L4)
+                options["language"] = check_language(chosen, language)
             wav = await audio_input.to_wav(data, name)
             result = await engine.transcribe(chosen, wav, options)
         except audio_input.AudioInputError as e:

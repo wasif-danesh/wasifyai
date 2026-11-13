@@ -31,13 +31,14 @@ def test_every_model_has_a_descriptor_and_a_pinned_file():
             "meanvc2",
             "dots-tts-edit",
             "musetalk-v15",
+            "indic-parler-tts",
+            "indic-conformer-600m",
         }
     )
     for m in RAW.values():
         for f in m["files"]:
-            assert f["folder"] == {"comfyui": "checkpoints", "sidecar": "lipsync"}.get(
-                m["voice"]["engine"], "audio"
-            )
+            folders = {"comfyui": "checkpoints", "sidecar": "lipsync", "indic": "indic"}
+            assert f["folder"] == folders.get(m["voice"]["engine"], "audio")
             assert f["url"].startswith("https://")
             if f["url"].startswith("https://huggingface.co/"):
                 assert "/resolve/" in f["url"] and "/main/" not in f["url"]  # pinned to a commit
@@ -90,8 +91,18 @@ def test_recommendations_are_unique_per_task():
         assert len(recommended) == 1
 
 
-def test_the_english_voices_are_the_twenty_eight_kokoro_ones():
+def test_kokoro_lists_only_the_voices_that_passed_their_language_check():
+    # docs/spikes/voice-languages-l0.md: 28 English voices, and the other languages' voices that a
+    # transcription model wrote back word for word; Japanese (the GGUF lacks its dictionary),
+    # Chinese (not scored) and pf_dora (a stray word) are not listed
+    from wasifyai_platform_sdk import languages
+
     kokoro = catalogue()["kokoro-82m"]
-    assert len(kokoro.voices) == 28
-    assert {v.language for v in kokoro.voices} == {"en-us", "en-gb"}
+    english = [v for v in kokoro.voices if v.language in {"en-us", "en-gb"}]
+    assert len(english) == 28 and len(kokoro.voices) == 40
+    by_language = {languages.base(v.language) for v in kokoro.voices}
+    assert by_language == {"en", "es", "fr", "hi", "it", "pt"}
+    assert by_language == languages.spoken(kokoro.languages)
+    assert not {"pf_dora", "jf_alpha", "zf_xiaobei"} & {v.id for v in kokoro.voices}
     assert {v.gender for v in kokoro.voices} == {"female", "male"}
+    assert languages.voices_for(kokoro, "hi") == ["hf_alpha", "hf_beta", "hm_omega", "hm_psi"]

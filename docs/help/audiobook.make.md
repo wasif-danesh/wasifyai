@@ -16,7 +16,7 @@ Read a long text aloud, one track per chapter, optionally one track of the whole
 1. Open **Voice › Audiobook**.
 2. **Text**: give the book a title, paste or open the text, and choose **Find the chapters**.
 3. **Chapters**: read them on the right; rename, join or remove them, then choose **Next: the voice**.
-4. **Voice**: choose a voice in the list (Hear it plays a short line), then **Make the audiobook**. It can take
+4. **Voice**: choose the language of the book and a voice in the list (Hear it plays a short line), then **Make the audiobook**. It can take
    a long time; the screen says which chapter it is on, and each chapter is kept in the Library as it is done.
 
 ## Fields
@@ -26,6 +26,8 @@ Read a long text aloud, one track per chapter, optionally one track of the whole
 - `whole`: Also one track of everything.
 - `voice`: A built-in voice.
 - `saved_voice`: A saved voice.
+- `language`: Optional: the language of the book (`bn`, `hi`, `en` ...); a ready model and a voice that read it
+  are chosen.
 
 ## Limits
 

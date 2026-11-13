@@ -175,6 +175,20 @@
             ],
             "default": null,
             "title": "Model"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The language of the book (bn, hi, en ...): a model and a voice that read it.",
+            "title": "Language"
           }
         },
         "required": [
@@ -2234,6 +2248,20 @@
             "description": "Separate the voice from the music behind it first.",
             "title": "Background",
             "type": "boolean"
+          },
+          "source_language": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The language the recording is in (bn, hi ...). Give it for Bengali and Hindi; otherwise the model finds it.",
+            "title": "Source Language"
           }
         },
         "required": [
@@ -9012,6 +9040,20 @@
             "description": "A model id; the best ready one.",
             "title": "Model"
           },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The language of the text (bn, hi, en ...): a model and a voice that speak it.",
+            "title": "Language"
+          },
           "options": {
             "anyOf": [
               {
@@ -9161,6 +9203,20 @@
             ],
             "default": null,
             "title": "Title"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The language of the recording (bn, hi, de ...). Give it for Bengali and Hindi: found by itself, one is taken for the other.",
+            "title": "Language"
           }
         },
         "title": "TranscribeIn",

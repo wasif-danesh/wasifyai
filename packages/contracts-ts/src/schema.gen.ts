@@ -3733,6 +3733,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-voice/indic-engine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Indic Engine
+         * @description The Indian-language speech engine's state (voice languages plan, L5), when this service
+         *     has it.
+         */
+        get: operations["indic_engine_products_wasifyai_voice_indic_engine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-voice/lipsync-engine": {
         parameters: {
             query?: never;
@@ -4465,6 +4486,8 @@ export interface components {
         Body_create_transcript_products_wasifyai_voice_transcripts_post: {
             /** File */
             file: string;
+            /** Language */
+            language?: string | null;
             /** Model */
             model?: string | null;
             /** Title */
@@ -6291,6 +6314,10 @@ export interface components {
             };
             /** Id */
             id: string;
+            /** Indic Engine */
+            indic_engine?: {
+                [key: string]: unknown;
+            } | null;
             /** Lipsync Engine */
             lipsync_engine: {
                 [key: string]: unknown;
@@ -14470,6 +14497,28 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: string[];
+                    };
+                };
+            };
+        };
+    };
+    indic_engine_products_wasifyai_voice_indic_engine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
                     };
                 };
             };

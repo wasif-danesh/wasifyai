@@ -57,3 +57,12 @@ def test_a_voice_speaks_its_own_language_or_every_one_of_its_model() -> None:
     assert languages.voices_for(model, "hi") == ["hf_alpha", "any"]
     assert languages.voices_for(model, "bn") == ["any"]
     assert languages.voices_for(model, "fr") == []
+
+
+def test_a_text_s_own_script_names_its_language_only_when_it_is_clear() -> None:
+    assert languages.script_language("আজ আবহাওয়া খুব সুন্দর।") == "bn"
+    assert languages.script_language("आज मौसम बहुत अच्छा है।") == "hi"
+    assert languages.script_language("இன்று வானிலை நன்றாக உள்ளது") == "ta"
+    assert languages.script_language("Hello, how are you?") is None
+    assert languages.script_language("Bengali word: আজ, then many English words here") is None
+    assert languages.script_language("12345 !!") is None

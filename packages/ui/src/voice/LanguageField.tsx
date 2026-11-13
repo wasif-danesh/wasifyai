@@ -11,6 +11,11 @@ import { LANGUAGES, baseCode, languageLabel, languageName, languagesOf, speaks }
 /** Where the language last used on a voice screen is kept (one for every screen). */
 export const LANGUAGE_KEY = "wasifyai.voice.language";
 export const FIRST_LANGUAGE = "en";
+/** "Find it by itself": the model works out the language of a recording */
+export const DETECT = "auto";
+/** Languages a model must be told: finding them by itself mistakes one for the other (ADR-0043,
+ *  docs/spikes/voice-languages-l0.md) */
+export const TELL_THE_MODEL = ["bn", "hi"];
 
 /** The models of a list that speak `language`, in the list's order. */
 export function modelsFor(models: VoiceModelInfo[], language: string): VoiceModelInfo[] {
@@ -35,11 +40,20 @@ export function LanguageField({
   value,
   onChange,
   disabled,
+  ready = "Ready to speak",
+  detect = false,
+  label = "Language",
 }: {
   models: VoiceModelInfo[];
   value: string;
   onChange: (code: string) => void;
   disabled?: boolean;
+  /** the heading of the languages a ready model knows */
+  ready?: string;
+  /** offer "Find it by itself" first (transcription) */
+  detect?: boolean;
+  /** what the field is called */
+  label?: string;
 }) {
   const id = useId();
   const spoken = languagesOf(models.filter((m) => m.state === "ready"));
@@ -50,14 +64,17 @@ export function LanguageField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id} className="font-semibold text-ui-lg">
-        Language
+        {label}
       </Label>
       <Select
         id={id}
-        value={baseCode(value)}
+        value={value === DETECT ? DETECT : baseCode(value)}
         disabled={disabled}
         options={[
-          ...(spoken.length ? [{ label: "Ready to speak", options: spoken.map(option) }] : []),
+          ...(detect
+            ? [{ label: "", options: [{ value: DETECT, label: "Find it by itself" }] }]
+            : []),
+          ...(spoken.length ? [{ label: ready, options: spoken.map(option) }] : []),
           ...(rest.length ? [{ label: "Other languages", options: rest.map(option) }] : []),
         ]}
         onValueChange={onChange}
@@ -73,6 +90,7 @@ export function LanguageField({
  */
 export function NoModelSpeaks({
   language,
+  verb = "speaks",
   task,
   models,
   onUse,
@@ -80,6 +98,8 @@ export function NoModelSpeaks({
   onOpenModels,
 }: {
   language: string;
+  /** what a model does with the language: "speaks", "writes down" */
+  verb?: string;
   task: VoiceTask;
   /** the models that speak the language, none of them ready */
   models: VoiceModelInfo[];
@@ -95,7 +115,9 @@ export function NoModelSpeaks({
   const openList = choices && onOpenModels ? onOpenModels : null;
   return (
     <div role="alert" className="grid gap-2 rounded-md border border-dashed p-3 text-sm">
-      <p className="m-0">No model here speaks {name} yet.</p>
+      <p className="m-0">
+        No model here {verb} {name} yet.
+      </p>
       {local.length || cloud.length || openList ? (
         <div className="flex flex-wrap gap-2">
           {local.map((m) => (

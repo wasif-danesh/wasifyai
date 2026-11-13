@@ -36,7 +36,7 @@ def test_a_language_is_its_two_letters_and_a_model_says_which_it_speaks():
     assert dubbing.language_name("de") == "German" and dubbing.language_name("xx") == "xx"
     models = FakeEngine().models_by_id
     assert dubbing.supports(models["kokoro-82m"], "en") and not dubbing.supports(
-        models["kokoro-82m"], "es"
+        models["kokoro-82m"], "bn"
     )
     assert dubbing.supports(models["qwen3-tts-0.6b-base"], "ES")
 
@@ -213,6 +213,30 @@ async def test_a_script_without_separating_hears_the_recording_as_it_is(tmp_path
     assert rig.engine.separated == []
 
 
+async def test_a_bengali_original_is_written_down_by_a_model_told_its_language(tmp_path, ctx):  # noqa: F811
+    """Voice languages plan, L7: the language of the recording is told, not found (finding it takes
+    Bengali for Hindi), and a model that writes it is chosen; dubbing into Bengali speaks with a
+    model that speaks it."""
+    rig = Rig(tmp_path, turns=[array_of("আজ আবহাওয়া খুব সুন্দর।", "দ্বিতীয় বাক্য।")])
+    await library_track(rig, rate=16000, channels=1, seconds=3.0)
+    final, _ = await rig.run(
+        task="dub_script", source_track="song", language="bn", source_language="hi"
+    )
+    assert final["status"] == "done", final
+    model_id, _, options = rig.engine.transcribed[-1]
+    assert model_id == "indic-conformer-600m" and options["language"] == "hi"
+    assert "Bengali" in rig.model.chats[0]["messages"][0]["content"]
+    rig.engine.ready -= {"indic-conformer-600m"}
+    final, _ = await rig.run(
+        task="dub_script", source_track="song", language="es", source_language="bn"
+    )
+    assert final["refusal"]["code"] == "no_model_for_language"
+    final, _ = await rig.run(
+        task="dub_script", source_track="song", language="es", source_language="xx"
+    )
+    assert final["refusal"]["code"] == "unknown_language"
+
+
 async def test_a_translation_that_is_not_the_right_lines_is_asked_for_line_by_line(tmp_path, ctx):  # noqa: F811
     rig = Rig(
         tmp_path, turns=[{"text": "Sorry I cannot"}, {"text": "Hola."}, {"text": "Segunda frase."}]
@@ -337,9 +361,9 @@ async def test_a_dub_that_cannot_be_made_is_refused_in_words(tmp_path, ctx):  # 
     for extra, code in (
         ({"language": "xx"}, "unknown_language"),
         (
-            {"language": "es", "voice_from": "builtin"},
+            {"language": "ar", "voice_from": "builtin"},
             "no_voice_for_language",
-        ),  # Kokoro is English only
+        ),  # no model here has an Arabic voice of its own
         ({"language": "es", "voice_from": "saved", "saved_voice": "ghost"}, "unknown_voice"),
         ({"language": "es", "voice_from": "speaker"}, "no_reference"),
         ({"language": "en", "segments": None}, "script_required"),

@@ -7,6 +7,7 @@ FETCH_ENGINE = "admin.fetch_engine"  # params `name`: a component of the speech 
 KINDS = [FETCH_MODEL, FETCH_ENGINE]
 ENGINES = [
     "lipsync-engine",
+    "indic-engine",
     "video-trainer",
     "image-trainer",
     "decision-trainer",
@@ -14,6 +15,7 @@ ENGINES = [
     "music-analysis",
 ]  # the names FETCH_ENGINE accepts
 LIPSYNC_COMPONENT = "lipsync_engine"  # the key of a worker's `components` entry for it
+INDIC_COMPONENT = "indic_engine"  # the Indian-language speech engine's (voice languages plan, L5)
 VIDEO_TRAINER = "video-trainer"  # the video trainer's set-up (a component of `train.video`)
 DECISION_TRAINER = (
     "decision-trainer"  # the decision trainer's set-up (a component of `train.decision`)

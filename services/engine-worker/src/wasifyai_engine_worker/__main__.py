@@ -155,6 +155,8 @@ async def main() -> None:
         await model3d.stop()
         if engine.lipsync_sidecar is not None:  # its server is a process of its own
             await engine.lipsync_sidecar.close()
+        if getattr(engine, "indic_sidecar", None) is not None:
+            await engine.indic_sidecar.close()
         await redis.aclose()
         tracing.flush()
 

@@ -21,6 +21,8 @@ export type WorkerInfo = {
   can_fetch: boolean;
   models: WorkerModel[];
   lipsync_engine: { installed: boolean; supported: boolean; bytes: number } | null;
+  /** the Indian-language speech engine (Indic Parler-TTS, IndicConformer) */
+  indic_engine?: { installed: boolean; supported: boolean; bytes: number } | null;
   components: Record<
     string,
     {
@@ -44,7 +46,7 @@ export type WorkersApi = {
   /** Start getting a model onto a worker; the id of the job to follow. */
   fetchModel(modelId: string): Promise<string>;
   fetchEngine(
-    name: "lipsync-engine" | "video-trainer" | "image-trainer" | "music-analysis",
+    name: "lipsync-engine" | "indic-engine" | "video-trainer" | "image-trainer" | "music-analysis",
   ): Promise<string>;
   job(id: string): Promise<FetchJob>;
 };

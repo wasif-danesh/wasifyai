@@ -44,8 +44,8 @@ extend-immutable-calls = ["fastapi.Depends"]
 
 [tool.pyright]
 include = ["services", "packages", "products"]
-# their libraries (torch, MuseTalk, AI Toolkit) exist only inside their own environments
-exclude = ["services/api/src/wasifyai_api/lipsync_server", "services/api/src/wasifyai_api/music_analysis_worker.py", "services/api/src/wasifyai_api/training_aitk_run.py", "services/comfyui", ".lipsync", "**/node_modules", "**/.venv"]
+# their libraries (torch, MuseTalk, Indic Parler-TTS, AI Toolkit) exist only inside their own environments
+exclude = ["services/api/src/wasifyai_api/lipsync_server", "services/api/src/wasifyai_api/indic_server", "services/api/src/wasifyai_api/music_analysis_worker.py", "services/api/src/wasifyai_api/training_aitk_run.py", "services/comfyui", ".lipsync", "**/node_modules", "**/.venv"]
 typeCheckingMode = "standard"
 # Test helper modules (conftest, fake_comfyui) are imported by name; pytest puts their folders on
 # sys.path, so tell pyright too.

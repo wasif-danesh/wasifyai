@@ -516,6 +516,16 @@ export function createVoiceApi(transport: Transport, options: VoiceApiOptions = 
     stopLipsyncEngine: desktopOnly(() =>
       json<{ stopped: boolean }>("/desktop/lipsync/stop", { method: "POST" }),
     ),
+    /** The Indian-language speech engine (Indic Parler-TTS, IndicConformer): the same shape. */
+    indicEngine: () =>
+      json<LipSyncEngine>(options.hosted ? `${base}/indic-engine` : "/desktop/indic"),
+    installIndicEngine: (confirmBytes: number) =>
+      options.hosted
+        ? notHere<LipSyncEngine>()
+        : json<LipSyncEngine>("/desktop/indic/install", post({ confirm_bytes: confirmBytes })),
+    stopIndicEngine: desktopOnly(() =>
+      json<{ stopped: boolean }>("/desktop/indic/stop", { method: "POST" }),
+    ),
     /** A picture to make a talking video from; it is kept until a clip uses it, or for a day. */
     addPicture(file: File) {
       const form = new FormData();
@@ -594,11 +604,13 @@ export function createVoiceApi(transport: Transport, options: VoiceApiOptions = 
       });
       return { ...got, wav: blobFromBase64(got.audio, "audio/wav") };
     },
-    transcribe(file: File, model?: string, title?: string) {
+    /** `language` is what the recording is in ("bn"); left out, the model finds it */
+    transcribe(file: File, model?: string, title?: string, language?: string) {
       const form = new FormData();
       form.append("file", file, file.name);
       if (model) form.append("model", model);
       if (title) form.append("title", title);
+      if (language) form.append("language", language);
       return json<Transcript>(`${base}/transcripts`, { method: "POST", body: form });
     },
     renameTranscript: (id: string, title: string) =>
@@ -1155,6 +1167,8 @@ export type DubScriptRequest = {
   language: string;
   /** separate the voice from the background first, to keep the background and clean the transcript */
   background?: boolean;
+  /** the language the recording is in; found by the model when not given (Bengali must be given) */
+  sourceLanguage?: string;
   transcribeModel?: string;
   separateModel?: string;
 };
@@ -1178,6 +1192,7 @@ export async function dubScript(
     language: request.language,
   };
   if (request.background) input.background = true;
+  if (request.sourceLanguage) input.source_language = request.sourceLanguage;
   if (request.transcribeModel) input.transcribe_model = request.transcribeModel;
   if (request.separateModel) input.separate_model = request.separateModel;
   await runs.startRun(VOICE_PRODUCT, input, signal, (e) => {

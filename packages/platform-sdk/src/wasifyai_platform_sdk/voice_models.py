@@ -28,7 +28,7 @@ TASKS = (
     "lipsync",
 )
 OPTION_TYPES = ("bool", "int", "float", "enum", "string")
-ENGINES = ("audiocpp", "comfyui", "sidecar", "llamacpp", "remote")
+ENGINES = ("audiocpp", "comfyui", "sidecar", "indic", "llamacpp", "remote")
 
 MAX_SPEAK_CHARS = 5000
 _ID = re.compile(r"^[a-z0-9][a-z0-9_.\-]*$")
@@ -871,6 +871,25 @@ def check_lipsync(
         )
     w, h = lipsync_frame(picture, shape, size) if picture else (0, 0)
     return LipSyncRequest(int(model.lipsync["fps"]), voice_seconds, w, h)
+
+
+def check_language(model: VoiceModel, language: str) -> str:
+    """The base code of a language a model is asked to speak or write down, or a refusal in words
+    (voice languages plan, stages L4 and L7)."""
+    from wasifyai_platform_sdk import languages
+
+    code = languages.base(language)
+    if code not in languages.LANGUAGES:
+        raise VoiceRequestError(
+            "unknown_language", f"This app does not know the language “{language}”."
+        )
+    if not languages.supports(model.languages, code):
+        raise VoiceRequestError(
+            "wrong_language",
+            f"{model.title} does not know {languages.language_name(code)}. "
+            "Choose a model that does.",
+        )
+    return code
 
 
 def check_transcribe(model: VoiceModel, options: dict[str, Any] | None) -> dict[str, Any]:

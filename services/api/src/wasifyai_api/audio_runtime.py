@@ -515,6 +515,7 @@ class AudioEngine:
         server: AudioServer,
         comfy: Any = None,
         lipsync: Any = None,
+        indic: Any = None,
     ):
         self._data_dir = data_dir
         self._models = models  # ModelsService: catalogue, locate()
@@ -522,6 +523,8 @@ class AudioEngine:
         self.server = server
         self.comfy = comfy  # ComfyMusic: the music models the image engine runs (V3b)
         self.lipsync_sidecar = lipsync  # LipSyncSidecar: MuseTalk, an optional component (V5)
+        # IndicSidecar: Indic Parler-TTS and IndicConformer (voice languages plan, L5 and L6)
+        self.indic_sidecar = indic
         self.slot: Any = None  # the SlotManager; set when the worker is built
 
     @property
@@ -558,6 +561,8 @@ class AudioEngine:
             return bool(self.comfy is not None and self.comfy.installed)
         if model.engine == "sidecar":
             return bool(self.lipsync_sidecar is not None and self.lipsync_sidecar.installed)
+        if model.engine == "indic":
+            return bool(self.indic_sidecar is not None and self.indic_sidecar.installed)
         return self.install is not None
 
     def models(self, task: str | None = None) -> list[dict[str, Any]]:
@@ -576,6 +581,12 @@ class AudioEngine:
                 and self.installer.pin() is None
             ):
                 state = "not_available"
+            if (
+                not runtime
+                and m.engine == "indic"
+                and (self.indic_sidecar is None or not self.indic_sidecar.installer.supported)
+            ):
+                state = "not_available"  # an Intel Mac, or a deployment without the engine
             missing = 0 if files else e.total_bytes
             out.append(
                 {**m.public(), "state": state, "files_ready": files, "runtime_ready": runtime,
@@ -605,6 +616,12 @@ class AudioEngine:
                     "runtime_missing",
                     f"{e.voice.title} needs the lip sync engine, which is not set up yet. "
                     "Set it up first.",
+                )
+            if e.voice.engine == "indic":
+                raise VoiceEngineError(
+                    "runtime_missing",
+                    f"{e.voice.title} needs the Indian-language speech engine, which is not set up "
+                    "yet. Set it up first.",
                 )
             if e.voice.engine == "comfyui":
                 raise VoiceEngineError(
@@ -698,6 +715,10 @@ class AudioEngine:
         *,
         beside: bool = False,
     ) -> SpeechResult:
+        if model.engine == "indic":
+            return await self._indic(
+                model, lambda s, files: s.speak(model, text, voice, files, options.get("seed"))
+            )
         body: dict[str, Any] = {"input": text}
         if voice:
             body["voice"] = voice
@@ -907,6 +928,24 @@ class AudioEngine:
                 model, req, picture, voice, {k: v for k, v in files.items() if v is not None}
             )
 
+    async def _indic(self, model: VoiceModel, work: Any) -> Any:
+        """Run `work(sidecar, files)` on the Indian-language speech engine, holding the one slot."""
+        sidecar = self.indic_sidecar
+        if sidecar is None or not sidecar.installed:
+            raise VoiceEngineError(
+                "runtime_missing",
+                "The Indian-language speech engine is not set up yet. Set it up first.",
+            )
+        entry = next(e for e in self._entries() if e.id == model.id)
+        files = {f.name: self._models.locate(f) for f in entry.files}
+        if not all(files.values()):
+            raise VoiceEngineError(
+                "model_missing", f"{model.title} is not on this computer yet. Get it in Models."
+            )
+        hold = self.slot.hold("indic") if self.slot is not None else contextlib.nullcontext()
+        async with hold:
+            return await work(sidecar, files)
+
     def _ram_bytes(self, model: VoiceModel) -> int:
         """What the model asks for in memory, by the catalogue (about, in bytes)."""
         entry = next((e for e in self._entries() if e.id == model.id), None)
@@ -915,9 +954,20 @@ class AudioEngine:
     async def transcribe(
         self, model: VoiceModel, wav: bytes, options: dict[str, Any], *, beside: bool = False
     ) -> TranscriptResult:
+        if model.engine == "indic":
+            language = str(options.get("language") or "")
+            if not language:
+                raise VoiceEngineError(
+                    "language_needed",
+                    f"Choose the language of the recording: {model.title} must be told it.",
+                )
+            return await self._indic(  # type: ignore[no-any-return]
+                model, lambda s, files: s.transcribe(model, wav, language, files)
+            )
         t0 = time.monotonic()
         files = {"file": ("audio.wav", wav, "audio/wav")}
-        data = {"model": model.id, **{k: str(v) for k, v in options.items()}}
+        # the language is not sent: Parakeet finds it among the ones it writes (checked before)
+        data = {"model": model.id, **{k: str(v) for k, v in options.items() if k != "language"}}
         r, _, held = await self._call_held(
             model, "/v1/audio/transcriptions/details",
             self._ram_bytes(model) if beside else None, files=files, data=data,

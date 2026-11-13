@@ -305,3 +305,11 @@ async def test_a_failure_at_the_start_says_nothing_was_kept(tmp_path, ctx):  # n
         "Nothing was kept." in e.value.message
         and store_for(rig.state).list_tracks("t1", "u1") == []
     )
+
+
+def test_a_bengali_chapter_is_cut_at_the_danda():
+    """Bengali and Hindi end a sentence with the danda (।), not a full stop (L7)."""
+    text = "আজ আবহাওয়া খুব সুন্দর। " * 30
+    pieces = audiobook.split_pieces(text, limit=120)
+    assert len(pieces) > 1
+    assert all(p.text.endswith("।") and len(p.text) <= 120 for p in pieces)

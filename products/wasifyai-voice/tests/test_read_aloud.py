@@ -200,3 +200,21 @@ def test_the_words_are_not_written_to_the_log(api, caplog):
     with caplog.at_level(logging.DEBUG):
         assert say(c, "My very secret sentence.").status_code == 200
     assert "secret" not in caplog.text
+
+
+def test_a_bengali_reply_is_read_by_a_model_and_voice_that_speak_bengali(api):
+    """Voice languages plan, L7: the script of the reply points to its language."""
+    c, engine, _, _ = api
+    r = say(c, "আজ আবহাওয়া খুব সুন্দর। তাই আমরা পার্কে হাঁটতে যাব।")
+    assert r.status_code == 200, r.text
+    assert r.json()["model"] == "indic-parler-tts" and engine.spoken[-1][2] == "Aditi"
+    hindi = say(c, "आज मौसम बहुत अच्छा है।")
+    assert hindi.status_code == 200 and engine.spoken[-1][0] == "kokoro-82m"
+    assert engine.spoken[-1][2] in {"hf_alpha", "hf_beta", "hm_omega", "hm_psi"}
+    english = say(c, "Plain English stays with the usual voice.")
+    assert english.json()["model"] == "kokoro-82m" and engine.spoken[-1][2] == "af_heart"
+    engine.ready -= {"indic-parler-tts"}
+    none = say(c, "আজ আবহাওয়া খুব সুন্দর।")
+    assert none.status_code == 409
+    assert none.json()["detail"]["code"] == "no_model_for_language"
+    assert "Bengali" in none.json()["detail"]["message"]

@@ -469,6 +469,18 @@
             "title": "File",
             "type": "string"
           },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
           "model": {
             "anyOf": [
               {
@@ -5224,6 +5236,18 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "indic_engine": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indic Engine"
           },
           "lipsync_engine": {
             "anyOf": [
@@ -16921,6 +16945,30 @@
           }
         },
         "summary": "Formats",
+        "tags": [
+          "wasifyai-voice"
+        ]
+      }
+    },
+    "/products/wasifyai-voice/indic-engine": {
+      "get": {
+        "description": "The Indian-language speech engine's state (voice languages plan, L5), when this service\nhas it.",
+        "operationId": "indic_engine_products_wasifyai_voice_indic_engine_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Indic Engine Products Wasifyai Voice Indic Engine Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Indic Engine",
         "tags": [
           "wasifyai-voice"
         ]

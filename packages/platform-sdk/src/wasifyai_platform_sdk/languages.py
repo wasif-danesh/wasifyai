@@ -109,6 +109,36 @@ class _Model(Protocol):
     def voices(self) -> tuple[Any, ...]: ...
 
 
+# scripts used by one language of the list, or by the one a reader most likely means (Devanagari
+# is Hindi's and Marathi's: Hindi is taken); Latin, Cyrillic and Han are shared by too many
+_SCRIPTS: tuple[tuple[int, int, str], ...] = (
+    (0x0980, 0x09FF, "bn"), (0x0900, 0x097F, "hi"), (0x0A80, 0x0AFF, "gu"),
+    (0x0B80, 0x0BFF, "ta"), (0x0C00, 0x0C7F, "te"), (0x0600, 0x06FF, "ar"),
+    (0x0370, 0x03FF, "el"), (0xAC00, 0xD7AF, "ko"), (0x3040, 0x30FF, "ja"),
+)  # fmt: skip
+
+
+def script_language(text: str) -> str | None:
+    """The language a text's own script points to, when most of its letters are in a script only
+    one language here uses (Bengali, Tamil ...); None for Latin and the other shared scripts. Used
+    where nobody chose a language (read aloud, voice languages plan L7)."""
+    counts: dict[str, int] = {}
+    letters = 0
+    for ch in text:
+        if not ch.isalpha():
+            continue
+        letters += 1
+        cp = ord(ch)
+        for lo, hi, code in _SCRIPTS:
+            if lo <= cp <= hi:
+                counts[code] = counts.get(code, 0) + 1
+                break
+    if not counts or not letters:
+        return None
+    code, n = max(counts.items(), key=lambda kv: kv[1])
+    return code if n * 2 > letters else None
+
+
 def voice_languages(model: _Model) -> dict[str, set[str]]:
     """Each voice of a model and the base codes it speaks: its own `language` when it names one (a
     Kokoro voice speaks the language of its accent), otherwise every language of the model."""

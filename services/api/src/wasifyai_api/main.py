@@ -33,6 +33,7 @@ from wasifyai_api.desktop_audio import router as desktop_audio_router
 from wasifyai_api.desktop_discovery import router as desktop_discovery_router
 from wasifyai_api.desktop_events import router as desktop_events_router
 from wasifyai_api.desktop_hub import router as desktop_hub_router
+from wasifyai_api.desktop_indic import router as desktop_indic_router
 from wasifyai_api.desktop_lipsync import router as desktop_lipsync_router
 from wasifyai_api.desktop_llm import router as desktop_llm_router
 from wasifyai_api.desktop_model3d import router as desktop_model3d_router
@@ -158,6 +159,7 @@ def create_app(given: Injected | None = None) -> FastAPI:
         app.include_router(desktop_models_router)
         app.include_router(desktop_audio_router)
         app.include_router(desktop_lipsync_router)
+        app.include_router(desktop_indic_router)
         app.include_router(desktop_video_builder_router)
         app.include_router(desktop_model3d_router)
         app.include_router(training_setup_router)

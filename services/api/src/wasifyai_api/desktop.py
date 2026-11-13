@@ -59,6 +59,7 @@ from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.desktop_styles import StylesService
 from wasifyai_api.desktop_video_builder import VideoBuilderService
 from wasifyai_api.desktop_vision import VisionService
+from wasifyai_api.indic_runtime import IndicSidecar
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
 from wasifyai_api.language_setup import LOCK_NAME as LANGUAGE_LOCK_NAME
 from wasifyai_api.language_setup import LanguageSetup
@@ -169,6 +170,8 @@ class DesktopBackends:
             await self.audio.server.close()  # the speech models' memory goes back with the process
             if self.audio.lipsync_sidecar is not None:
                 await self.audio.lipsync_sidecar.close()
+            if self.audio.indic_sidecar is not None:
+                await self.audio.indic_sidecar.close()
         if self.llama is not None:
             await self.llama.close()  # the language model's memory goes back with its process
         if self._consumer:
@@ -228,6 +231,7 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         AudioServer(settings.desktop_dir),
         ComfyMusic(products / "wasifyai-voice" / "workflows", lambda: models.sidecar),
         LipSyncSidecar(settings.desktop_dir),
+        IndicSidecar(settings.desktop_dir),
     )
     models.audio = audio
     discovery = DiscoveryService(SqliteSettingsStore(engine), models)
@@ -450,6 +454,8 @@ def _build_worker(d: DesktopBackends):
         owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
         if d.audio.lipsync_sidecar is not None:
             owners["lipsync"] = d.audio.lipsync_sidecar.stop
+        if d.audio.indic_sidecar is not None:
+            owners["indic"] = d.audio.indic_sidecar.stop  # Indic Parler-TTS: 3 to 7 GB
 
     async def can_share(small: str, need: int, resident: str) -> bool:
         """A speech model may stay in memory beside the chat model when the two fit (ADR-0083,

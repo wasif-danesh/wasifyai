@@ -58,12 +58,14 @@ def _rank(model: dict[str, Any]) -> int:
 class RemoteLipSync:
     """What `/lipsync-engine` reports: whoever runs the worker sets it up, so nothing to install."""
 
+    ENGINE = "sidecar"
+
     def __init__(self, engine: "RemoteSpeechEngine"):
         self._engine = engine
 
     def state(self) -> dict[str, Any]:
         ready = any(
-            m.get("engine") == "sidecar" and m.get("state") == "ready"
+            m.get("engine") == self.ENGINE and m.get("state") == "ready"
             for m in self._engine.models(None)
         )
         return {
@@ -72,6 +74,12 @@ class RemoteLipSync:
             "install": {"state": "ready", "step": None, "message": "", "done_bytes": 0,
                         "total_bytes": 0},
         }  # fmt: skip
+
+
+class RemoteIndic(RemoteLipSync):
+    """What `/indic-engine` reports on the web: the Indian-language speech engine of a worker."""
+
+    ENGINE = "indic"
 
 
 class RemoteSpeechEngine:
@@ -92,6 +100,7 @@ class RemoteSpeechEngine:
         self._directory = directory or WorkerDirectory(queue)
         self._owns_directory = directory is None
         self.lipsync_sidecar = RemoteLipSync(self)
+        self.indic_sidecar = RemoteIndic(self)
 
     # ---- which workers are here and what they list ----------------------------------------
 

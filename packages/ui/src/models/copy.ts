@@ -17,7 +17,8 @@ export const COPY: Record<string, Copy> = {
   },
   // voice
   "kokoro-82m": {
-    plain: "A small, fast voice that reads text aloud in natural English. Good for most uses.",
+    plain:
+      "A small, fast voice that reads text aloud in English, Spanish, French, Hindi, Italian and Portuguese. Good for most uses.",
   },
   "qwen3-tts-0.6b-base": {
     plain: "Copies a voice from a short, clean recording of it, then speaks new words in it.",
@@ -54,6 +55,12 @@ export const COPY: Record<string, Copy> = {
   },
   "stable-audio-3-small-sfx": {
     plain: "Makes sound effects from a description, such as rain on a window.",
+  },
+  "indic-parler-tts": {
+    plain: "Speaks Bengali, Hindi, Marathi, Telugu, Tamil and Gujarati with Indian voices.",
+  },
+  "indic-conformer-600m": {
+    plain: "Writes down Bengali, Hindi, Marathi, Telugu, Tamil and Gujarati recordings.",
   },
   htdemucs: { plain: "Splits a song into voice, drums, bass and the rest." },
   "htdemucs-6stems": {

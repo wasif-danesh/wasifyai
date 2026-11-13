@@ -9,6 +9,8 @@
   - media: the cheapest of Runware, WaveSpeed and fal.ai.
 
   Plan `docs/cloud-v1-plan.md`.
+- **Proposed amendment:** 2026-11-13, the Indian languages (`docs/voice-languages-plan.md`, L5 and L6); waits for
+  the owner's yes. See "Amendment (proposed 2026-11-13): Indian-language speech on the web".
 - **Date:** 2026-11-12
 - **Plan:** `docs/fal-only-v1-plan.md` (stages FA0 to FA11, the models chosen for each product). The file names keep
   "fal-only" so links still work.
@@ -74,3 +76,23 @@ model files.
 - Two outage points: an OpenRouter outage stops the web's chat; a fal.ai outage stops the web's media. The desktop can
   still use its local models.
 - A third provider later is a new ADR, not a setting.
+
+## Amendment (proposed 2026-11-13): Indian-language speech on the web
+
+**Status:** Proposed. Built behind it, not turned on anywhere; the owner says yes or no.
+
+**Why.** The owner chose Indic Parler-TTS for Bengali on every platform (`docs/voice-languages-plan.md`, decision 1),
+and IndicConformer measured best at writing Bengali down. L0 found no cloud provider that serves either model, and
+no cloud voice that speaks Bengali well enough (`docs/spikes/voice-languages-l0.md`). Decision 3 above leaves the web
+no way to run them.
+
+**What it changes.** One exception to decision 3: the web may run the Indian-language speech engine
+(`indic-engine`) on an engine worker, the same engine the desktop runs (ADR-0087's workers). It serves only Indic
+Parler-TTS and IndicConformer. Every other model on the web stays a cloud model.
+- The worker reports the part in Admin › Workers; the admin installs it there and fetches the two models onto it.
+- The API reaches it through `RemoteIndic` (`services/api/.../remote_speech.py`), like lip sync's `RemoteLipSync`.
+- It needs a CPU worker with about 8 GB of memory and 8 GB of disk for the models and the engine; a GPU makes
+  speech faster but is not required.
+
+**Cost.** One more worker to run and keep up to date on the web, and a second outage point for Indian-language
+speech. If the owner says no, the web offers no Indian-language speech and the two models stay desktop only.

@@ -71,6 +71,7 @@ class SpeakState(TypedDict, total=False):
     clip_id: str
     video_url: str
     language: str  # dubbing: the language to dub into
+    source_language: str  # dub_script: the language the recording is in (else found by the model)
     segments: list[
         dict[str, Any]
     ]  # dubbing: the script, a line with its times, words and translation

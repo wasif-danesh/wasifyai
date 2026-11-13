@@ -31,7 +31,11 @@ function memory() {
 
 function rig(
   models: VoiceModelInfo[],
-  opts: { isAdmin?: boolean; lipsync?: WorkerInfo["lipsync_engine"] } = {},
+  opts: {
+    isAdmin?: boolean;
+    lipsync?: WorkerInfo["lipsync_engine"];
+    indic?: WorkerInfo["indic_engine"];
+  } = {},
 ) {
   const mem = memory();
   const jobs: FetchJob[] = [
@@ -39,7 +43,13 @@ function rig(
     { status: "done", fraction: 1, label: "", error: null },
   ];
   const workers = {
-    list: vi.fn(async () => [{ id: "w1", lipsync_engine: opts.lipsync ?? null } as WorkerInfo]),
+    list: vi.fn(async () => [
+      {
+        id: "w1",
+        lipsync_engine: opts.lipsync ?? null,
+        indic_engine: opts.indic ?? null,
+      } as WorkerInfo,
+    ]),
     fetchModel: vi.fn(async () => "job-model"),
     fetchEngine: vi.fn(async () => "job-engine"),
     job: vi.fn(
@@ -245,6 +255,29 @@ describe("the picker on the web", () => {
     await webChoicesFor(deps, "faces", "lipsync").get("musetalk-v15", () => {}, never);
     expect(workers.fetchEngine).toHaveBeenCalledWith("lipsync-engine");
     expect(workers.fetchModel).toHaveBeenCalledWith("musetalk-v15");
+  });
+
+  it("sets up the Indian-language speech engine first for Indic Parler-TTS", async () => {
+    const indic = { installed: false, supported: true, bytes: 6.5e9 };
+    const parler = model({
+      id: "indic-parler-tts",
+      engine: "indic",
+      state: "can_install",
+      runtime_ready: false,
+      tasks: ["speak"],
+      languages: ["bn", "hi"],
+    });
+    const row = webRow(parler, ["speak"], null, true, indic);
+    expect(row.engineName).toBe("The Indian-language speech engine");
+    expect(row.engineBytes).toBe(6.5e9);
+    expect(
+      webRow(parler, ["speak"], null, true, { ...indic, supported: false }).unavailableReason,
+    ).toMatch(/cannot run Indian-language speech/);
+    const { deps, workers } = rig([parler], { indic, lipsync: { ...indic, bytes: 1 } });
+    await webChoicesFor(deps, "voice", "speak").get("indic-parler-tts", () => {}, never);
+    expect(workers.fetchEngine).toHaveBeenCalledWith("indic-engine");
+    expect(workers.fetchEngine).not.toHaveBeenCalledWith("lipsync-engine");
+    expect(workers.fetchModel).toHaveBeenCalledWith("indic-parler-tts");
   });
 
   it("does not let anyone but an admin start a fetch", async () => {

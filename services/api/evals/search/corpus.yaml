@@ -30,6 +30,7 @@ concepts:
       - { kind: song,  lang: pt, text: "Pôr do sol na praia. Bossa nova suave. As ondas beijam a areia enquanto o sol se despede no mar" }
       - { kind: image, lang: ar, text: "أمواج المحيط تتكسر على شاطئ رملي وقت الغروب والسماء بلون برتقالي" }
       - { kind: video, lang: hi, text: "सूर्यास्त के समय समुद्र की लहरें किनारे पर टकरा रही हैं, आसमान सुनहरा है" }
+      - { kind: speech, lang: bn, text: "সূর্য ডুবে যাচ্ছে, সমুদ্রের ঢেউ বালির উপর আছড়ে পড়ছে আর আকাশ কমলা রঙে ভরে গেছে।" }
     queries:
       - { lang: en, text: "waves rolling onto the shore as the sun goes down" }
       - { lang: zh, text: "夕阳下的海滩和海浪" }
@@ -64,6 +65,7 @@ concepts:
       - { kind: transcript, lang: es, text: "Mi gata duerme la siesta. Cada tarde se acurruca en el sofá junto a la ventana mientras nieva suavemente afuera." }
     queries:
       - { lang: hi, text: "सोफे पर सोती हुई बिल्ली खिड़की के पास" }
+      - { lang: bn, text: "জানালার পাশে সোফায় ঘুমিয়ে থাকা বিড়াল" }
       - { lang: ar, text: "قطة نائمة على الأريكة بجانب النافذة" }
       - { lang: de, text: "Katze döst auf der Couch" }
   - id: mountain-lake

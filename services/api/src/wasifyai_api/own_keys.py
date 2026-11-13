@@ -512,12 +512,8 @@ class OwnKeysService:
 
     async def _first_model(self, product: str) -> str | None:
         """On the web, the model a product runs on until the admin chooses one: the first of the
-        catalogue's that a key can run."""
-        keyed = await self._keyed(product)
-        for m in catalogue.models_of(product):
-            if m.media and any(o.provider in keyed for o in m.offers):
-                return m.model
-        return None
+        catalogue's that a key can run, or for lip sync the cheapest (`catalogue.default_model`)."""
+        return catalogue.default_model(product, await self._keyed(product))
 
     async def _media_route(self, p: Product, model: str) -> KeyRoute | None:
         m = catalogue.media_model(p.id, model)

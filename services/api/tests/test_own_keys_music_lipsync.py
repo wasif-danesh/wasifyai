@@ -125,7 +125,10 @@ class LocalVoice:
         self.made: list[str] = []
 
     def models(self, task=None):
-        rows = [{"id": "ace-step", "tasks": ["music"]}, {"id": "musetalk-v15", "tasks": ["lipsync"]}]
+        rows = [
+            {"id": "ace-step", "tasks": ["music"]},
+            {"id": "musetalk-v15", "tasks": ["lipsync"]},
+        ]
         return [r for r in rows if task is None or task in r["tasks"]]
 
     def resolve(self, task, model_id):

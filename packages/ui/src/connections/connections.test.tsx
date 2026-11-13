@@ -116,7 +116,7 @@ describe("Settings > Connections", () => {
     await user.clear(quota);
     await user.type(quota, "50{Enter}");
     await waitFor(() => expect(a.update).toHaveBeenCalledWith("c1", { calls_per_day: 50 }));
-  });
+  }, 15_000); // typing key by key can pass 5 s on the Windows runner
 
   it("shows what runs now, who started it, and Stop ends it", async () => {
     const a = api({

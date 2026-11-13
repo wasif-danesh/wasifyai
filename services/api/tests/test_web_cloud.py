@@ -76,7 +76,8 @@ async def test_a_tenant_key_runs_its_products_on_the_first_model_a_key_can_run()
 async def test_lip_sync_runs_on_the_cheapest_model_the_keys_can_run_never_infinitetalk(
     provider: str, model: str
 ):
-    # InfiniteTalk on WaveSpeed is the cheapest of all ($0.03 a second), but it is only chosen by hand
+    # InfiniteTalk on WaveSpeed is the cheapest of all ($0.03 a second), but it is only chosen
+    # by hand
     admin = providers()
     await admin.for_tenant("t1").save_key("media", provider, KEY)
     view = await admin.for_tenant("t1").view()

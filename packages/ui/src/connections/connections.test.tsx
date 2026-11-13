@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Settings > Connections and the approval cards (ADR-0069 decisions 3 and 8), on a scripted engine.
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type {
   ApprovalEvent,
@@ -109,14 +109,18 @@ describe("Settings > Connections", () => {
 
   it("saves the daily quota of a connection", async () => {
     const a = api();
-    const user = userEvent.setup();
     render(<ConnectionsSettings api={a} />);
     const quota = await screen.findByLabelText(/tool calls a day/i);
     expect(quota).toHaveValue(1000);
-    await user.clear(quota);
-    await user.type(quota, "50{Enter}");
+    // the new number in one change, not cleared and typed key by key: on a busy runner the
+    // field could lose its focus between the two, put 1000 back and save 100050
+    fireEvent.change(quota, { target: { value: "50" } });
+    fireEvent.keyDown(quota, { key: "Enter" });
     await waitFor(() => expect(a.update).toHaveBeenCalledWith("c1", { calls_per_day: 50 }));
-  }, 15_000); // typing key by key can pass 5 s on the Windows runner
+    fireEvent.change(quota, { target: { value: "0" } }); // not a quota: the saved one comes back
+    fireEvent.blur(quota);
+    expect(a.update).toHaveBeenCalledTimes(1);
+  });
 
   it("shows what runs now, who started it, and Stop ends it", async () => {
     const a = api({

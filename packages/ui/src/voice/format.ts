@@ -1,4 +1,5 @@
 import type { ModelState, VoiceInfo, VoiceModelInfo } from "@wasifyai/client";
+import { languageLabel } from "./languages";
 
 /** "1:05", "0:07": a length as a person reads it. */
 export function clock(seconds: number): string {
@@ -41,17 +42,23 @@ export function pickModel(models: VoiceModelInfo[], task: string, last?: string 
   );
 }
 
-const LANGUAGE: Record<string, string> = {
-  en: "English",
+const ACCENT: Record<string, string> = {
   "en-us": "American English",
   "en-gb": "British English",
+  "pt-br": "Brazilian Portuguese",
 };
+
+/** The heading a voice is listed under: its language (with the accent where the model gives one). */
+export function voiceGroup(language: string): string {
+  if (!language) return "Voices";
+  return ACCENT[language.toLowerCase()] ?? languageLabel(language);
+}
 
 /** Voices grouped for a list: by language, then as the model gives them. */
 export function groupVoices(voices: VoiceInfo[]): { label: string; voices: VoiceInfo[] }[] {
   const out = new Map<string, VoiceInfo[]>();
   for (const v of voices) {
-    const key = LANGUAGE[v.language] ?? (v.language || "Voices");
+    const key = voiceGroup(v.language);
     out.set(key, [...(out.get(key) ?? []), v]);
   }
   return [...out].map(([label, list]) => ({ label, voices: list }));

@@ -22,14 +22,23 @@ import { Spinner } from "../components/spinner";
 import { Stage, type StageState } from "../components/stage";
 import { Textarea } from "../components/textarea";
 import { takeDraft } from "../draft";
+import type { ModelSelectHandle } from "../models";
 import { fileNameFor, savedText, useSaveCopy } from "../save";
 import { appearsHere, makeLabel, makingLabel } from "../words";
+import {
+  FIRST_LANGUAGE,
+  LanguageField,
+  NoModelSpeaks,
+  languageForModel,
+  modelsFor,
+} from "./LanguageField";
 import { LoadingModels, ModelPicker, NotReadyText } from "./ModelPicker";
 import { OptionFields, expertsSummary } from "./OptionFields";
 import { RuntimeCard } from "./RuntimeCard";
 import { type VoiceChoice, VoicesPanel } from "./VoicesPanel";
 import { SAMPLE, VoicesWorkspace } from "./VoicesWorkspace";
 import { clock, pickModel } from "./format";
+import { voicesFor } from "./languages";
 import { useVoiceModels } from "./use-voice-models";
 
 const MAX_TEXT = 5000;
@@ -44,6 +53,9 @@ export type SpeakWorkspaceProps = {
   /** remembered between visits by the app (optional) */
   initialModel?: string | null;
   onModelChosen?: (id: string) => void;
+  /** the language last used on a voice screen, and where the choice is kept (both optional) */
+  initialLanguage?: string | null;
+  onLanguageChosen?: (code: string) => void;
   /** a voice the person saved, chosen from the Voices screen */
   initialSavedVoice?: string | null;
   /** the screen's heading and the line under it */
@@ -70,6 +82,8 @@ export function SpeakWorkspace({
   onGetModel,
   initialModel,
   onModelChosen,
+  initialLanguage,
+  onLanguageChosen,
   initialSavedVoice,
   title = "Text to speech",
   lead,
@@ -89,6 +103,7 @@ export function SpeakWorkspace({
   const task: VoiceTask = savedVoice ? savedVoice.kind : "speak";
   const { models, runtime, error, loading, reload } = useVoiceModels(api, task);
   const [modelId, setModelId] = useState<string | null>(initialModel ?? null);
+  const [language, setLanguage] = useState(initialLanguage || FIRST_LANGUAGE);
   const [values, setValues] = useState<Record<string, unknown>>({});
   // the words typed in the chat box before a quick start (ADR-0093 U9)
   const [text, setText] = useState(() => takeDraft().slice(0, MAX_TEXT));
@@ -101,8 +116,13 @@ export function SpeakWorkspace({
   const [deleting, setDeleting] = useState<Speech | null>(null);
   const [makingVoice, setMakingVoice] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  const picker = useRef<ModelSelectHandle>(null);
 
-  const chosen = models.find((m) => m.id === modelId) ?? pickModel(models, task, modelId);
+  // the language filters the models, and the model its voices (voice languages plan, stage L2)
+  const usable = modelsFor(models, language);
+  const chosen = usable.find((m) => m.id === modelId) ?? pickModel(usable, task, modelId);
+  const noneReady = !usable.some((m) => m.state === "ready");
+  const voices = chosen ? voicesFor(chosen, language) : [];
   const working = step !== null;
 
   const loadSpeeches = useCallback(
@@ -136,14 +156,30 @@ export function SpeakWorkspace({
   }, [working]);
 
   const builtInId =
-    choice?.kind === "builtin" && chosen?.voices.some((v) => v.id === choice.id)
+    choice?.kind === "builtin" && voices.some((v) => v.id === choice.id)
       ? choice.id
-      : (chosen?.default_voice ?? null);
+      : chosen?.default_voice && voices.some((v) => v.id === chosen.default_voice)
+        ? chosen.default_voice
+        : (voices[0]?.id ?? null);
   const panelValue: VoiceChoice | null = savedVoice
     ? { kind: "saved", id: savedVoice.id }
     : builtInId
       ? { kind: "builtin", id: builtInId }
       : null;
+
+  function chooseLanguage(code: string) {
+    setLanguage(code);
+    onLanguageChosen?.(code);
+    if (choice?.kind === "builtin") setChoice(null);
+  }
+
+  function chooseModel(id: string) {
+    setModelId(id);
+    setValues({});
+    onModelChosen?.(id);
+    const m = models.find((x) => x.id === id);
+    if (m && !modelsFor([m], language).length) chooseLanguage(languageForModel(m, language));
+  }
 
   function chooseVoice(next: VoiceChoice) {
     const wasSaved = choice?.kind === "saved";
@@ -356,16 +392,29 @@ export function SpeakWorkspace({
         ask={
           <>
             {runtime ? <RuntimeCard runtime={runtime} api={api} onChanged={reload} /> : null}
-            <ModelPicker
+            <LanguageField
               models={models}
+              value={language}
+              onChange={chooseLanguage}
+              disabled={working}
+            />
+            {noneReady ? (
+              <NoModelSpeaks
+                language={language}
+                task={task}
+                models={usable}
+                onUse={chooseModel}
+                onGetModel={onGetModel}
+                onOpenModels={() => picker.current?.open()}
+              />
+            ) : null}
+            <ModelPicker
+              handleRef={picker}
+              models={usable}
               task={task}
               inBody={panel}
               value={chosen?.id ?? null}
-              onChange={(id) => {
-                setModelId(id);
-                setValues({});
-                onModelChosen?.(id);
-              }}
+              onChange={chooseModel}
               onGetModel={onGetModel}
               disabled={working}
             />
@@ -379,7 +428,9 @@ export function SpeakWorkspace({
                 className="min-h-40"
                 value={text}
                 maxLength={MAX_TEXT}
-                placeholder="Type the words you want to hear, in any language the model speaks"
+                lang={language}
+                dir="auto"
+                placeholder="Type the words you want to hear, in the language chosen above"
                 disabled={working}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => {
@@ -394,7 +445,7 @@ export function SpeakWorkspace({
               </span>
             </div>
             <VoicesPanel
-              builtIn={savedVoice ? [] : (chosen?.voices ?? [])}
+              builtIn={savedVoice ? [] : voices}
               saved={saved}
               value={panelValue}
               onChange={chooseVoice}
@@ -430,7 +481,7 @@ export function SpeakWorkspace({
               {working ? <Spinner /> : null}
               {makeLabel("speech")}
             </Button>
-            {!ready && chosen ? (
+            {!ready && chosen && !noneReady ? (
               <p className="mt-2 text-muted-foreground text-xs">
                 <NotReadyText task="speak" seeAbove />
               </p>

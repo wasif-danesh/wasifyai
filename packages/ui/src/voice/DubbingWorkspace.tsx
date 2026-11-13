@@ -32,16 +32,9 @@ import { Textarea } from "../components/textarea";
 import { LoadingModels, ModelPicker, NotReadyText } from "./ModelPicker";
 import { type Library, SourcePicker } from "./SourcePicker";
 import { clock, pickModel, stepProgress } from "./format";
+import { languageLabel, languageName, languagesOf, speaks } from "./languages";
 import { useElapsed } from "./use-elapsed";
 import { useVoiceModels } from "./use-voice-models";
-
-export const LANGUAGE_NAMES: Record<string, string> = {
-  bg: "Bulgarian", cs: "Czech", da: "Danish", de: "German", el: "Greek", en: "English",
-  es: "Spanish", et: "Estonian", fi: "Finnish", fr: "French", hr: "Croatian", hu: "Hungarian",
-  it: "Italian", ja: "Japanese", ko: "Korean", lt: "Lithuanian", lv: "Latvian", mt: "Maltese",
-  nl: "Dutch", pl: "Polish", pt: "Portuguese", ro: "Romanian", ru: "Russian", sk: "Slovak",
-  sl: "Slovenian", sv: "Swedish", uk: "Ukrainian", zh: "Chinese",
-}; // biome-ignore format: a table
 
 export type DubbingWorkspaceProps = {
   api: VoiceApi;
@@ -57,14 +50,6 @@ export type DubbingWorkspaceProps = {
   title?: string;
   lead?: string;
 };
-
-const base = (code: string) => code.toLowerCase().split(/[-_]/)[0] ?? code;
-
-/** The languages a model speaks, as two-letter codes; "multi" is every one the app can name. */
-function spoken(languages: string[]): string[] {
-  const codes = languages.map(base);
-  return codes.includes("multi") ? Object.keys(LANGUAGE_NAMES) : codes;
-}
 
 const STEPS = ["Recording", "Language", "Script", "Voice"];
 type View = "setup" | "script" | "voice";
@@ -128,12 +113,8 @@ export function DubbingWorkspace({
   }, [api]);
 
   // the languages a voice can be made in: what some speaking or copying model knows
-  const languages = [
-    ...new Set([...speakers.models, ...clones.models].flatMap((m) => spoken(m.languages))),
-  ]
-    .filter((c) => LANGUAGE_NAMES[c])
-    .sort((a, b) => (LANGUAGE_NAMES[a] ?? a).localeCompare(LANGUAGE_NAMES[b] ?? b));
-  const usable = voices.models.filter((m) => !language || spoken(m.languages).includes(language));
+  const languages = languagesOf([...speakers.models, ...clones.models]);
+  const usable = voices.models.filter((m) => !language || speaks(m.languages, language));
   const chosen = usable.find((m) => m.id === modelId) ?? pickModel(usable, task, modelId);
   const ready = chosen?.state === "ready";
   const savedUsable = saved.filter((v) => v.kind === "clone");
@@ -344,7 +325,7 @@ export function DubbingWorkspace({
             caption: (
               <div className="grid gap-1">
                 <span>
-                  {lines.length} lines in {LANGUAGE_NAMES[language] ?? language}.{" "}
+                  {lines.length} lines in {languageName(language)}.{" "}
                   {view === "script"
                     ? "Change any line; the times stay."
                     : "Go back to Script to change a line."}
@@ -464,7 +445,7 @@ export function DubbingWorkspace({
                   value={language || undefined}
                   placeholder="Choose a language…"
                   disabled={working}
-                  options={languages.map((c) => ({ value: c, label: LANGUAGE_NAMES[c] ?? c }))}
+                  options={languages.map((c) => ({ value: c, label: languageLabel(c) }))}
                   onValueChange={(c) => {
                     setLanguage(c);
                     restart();
@@ -523,8 +504,8 @@ export function DubbingWorkspace({
               ) : null}
               {usable.length === 0 ? (
                 <p role="alert" className="m-0 text-destructive text-sm">
-                  No voice model speaks {LANGUAGE_NAMES[language] ?? language} this way. Get one in
-                  the Model hub or choose another voice.
+                  No voice model speaks {languageName(language)} this way. Get one in the Model hub
+                  or choose another voice.
                 </p>
               ) : null}
               {voiceFrom === "builtin" && builtinVoices.length > 0 ? (

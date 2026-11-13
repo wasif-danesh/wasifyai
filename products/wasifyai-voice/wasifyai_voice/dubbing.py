@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk import VoiceModel
+from wasifyai_platform_sdk import VoiceModel, languages
+from wasifyai_platform_sdk.languages import base, language_name
 from wasifyai_platform_sdk.voice_models import MAX_SPEAK_CHARS
 
 from wasifyai_voice.audio_input import find_converter
@@ -24,33 +25,15 @@ MAX_SEGMENTS = 400
 MAX_TEMPO = 1.3  # a line is spoken at most this much faster to fit; more would sound hurried
 TAIL_S = 2.0  # time after the last line before the end
 
-LANGUAGES = {
-    "bg": "Bulgarian", "cs": "Czech", "da": "Danish", "de": "German", "el": "Greek",
-    "en": "English", "es": "Spanish", "et": "Estonian", "fi": "Finnish", "fr": "French",
-    "hr": "Croatian", "hu": "Hungarian", "it": "Italian", "ja": "Japanese", "ko": "Korean",
-    "lt": "Lithuanian", "lv": "Latvian", "mt": "Maltese", "nl": "Dutch", "pl": "Polish",
-    "pt": "Portuguese", "ro": "Romanian", "ru": "Russian", "sk": "Slovak", "sl": "Slovenian",
-    "sv": "Swedish", "uk": "Ukrainian", "zh": "Chinese",
-}  # fmt: skip
 # how many characters a language speaks in a second, roughly: how long a line may be, for the
 # translator
 CHARS_PER_SECOND = {"zh": 5.0, "ja": 7.0, "ko": 7.0, "de": 14.0, "ru": 13.0, "fi": 13.0}
 DEFAULT_CPS = 15.0
 
 
-def base(code: str) -> str:
-    """`en-us` and `EN` are both `en`."""
-    return str(code).lower().replace("_", "-").split("-")[0]
-
-
-def language_name(code: str) -> str:
-    return LANGUAGES.get(base(code), str(code))
-
-
 def supports(model: VoiceModel, language: str) -> bool:
     """Whether a model speaks (or writes down) a language; `multi` means it is not limited."""
-    langs = {base(x) for x in model.languages}
-    return "multi" in langs or base(language) in langs
+    return languages.supports(model.languages, language)
 
 
 class DubError(Exception):

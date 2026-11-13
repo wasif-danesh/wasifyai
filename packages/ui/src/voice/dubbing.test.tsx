@@ -127,7 +127,7 @@ async function choose(list: string | RegExp, option: string | RegExp) {
   await userEvent.click(await screen.findByRole("option", { name: option }));
 }
 
-async function writeScript(language = "Spanish", recording: RegExp = /^My talk/) {
+async function writeScript(language = "Spanish (Español)", recording: RegExp = /^My talk/) {
   await choose("Which recording?", recording);
   await choose("Dub it into", language);
   await userEvent.click(screen.getByRole("button", { name: "Write the script" }));
@@ -143,9 +143,9 @@ describe("dubbing a recording", () => {
     render(<DubbingWorkspace api={api()} runs={runs} />);
     await userEvent.click(await screen.findByRole("combobox", { name: "Dub it into" }));
     const names = screen.getAllByRole("option").map((o) => o.textContent);
-    expect(names).toContain("Spanish");
+    expect(names).toContain("Spanish (Español)");
     expect(names).toContain("English");
-    expect(names).not.toContain("Maltese");
+    expect(names).not.toContain("Maltese (Malti)");
     await userEvent.keyboard("{Escape}");
     expect(
       (screen.getByRole("button", { name: "Write the script" }) as HTMLButtonElement).disabled,
@@ -198,7 +198,7 @@ describe("dubbing a recording", () => {
     render(<DubbingWorkspace api={api()} runs={runs} />);
     await choose("Which recording?", /^Hello/);
     await userEvent.click(screen.getByRole("checkbox", { name: /Keep the music/ }));
-    await choose("Dub it into", "Spanish");
+    await choose("Dub it into", "Spanish (Español)");
     await userEvent.click(screen.getByRole("button", { name: "Write the script" }));
     await screen.findByLabelText("Line 1");
     // the voice still has to be separated to be copied, even without the background
@@ -265,7 +265,7 @@ describe("dubbing a recording", () => {
     ]);
     render(<DubbingWorkspace api={api()} runs={failing} />);
     await choose("Which recording?", /^My talk/);
-    await choose("Dub it into", "Spanish");
+    await choose("Dub it into", "Spanish (Español)");
     await userEvent.click(screen.getByRole("button", { name: "Write the script" }));
     expect(await screen.findByText(/language model did not answer/)).toBeTruthy();
   });
@@ -276,7 +276,7 @@ describe("dubbing a recording", () => {
     });
     render(<DubbingWorkspace api={onlyKokoro} runs={runsFor([scripted])} />);
     await userEvent.click(await screen.findByRole("combobox", { name: "Dub it into" }));
-    expect(screen.queryByRole("option", { name: "Spanish" })).toBeNull();
+    expect(screen.queryByRole("option", { name: "Spanish (Español)" })).toBeNull();
     expect(screen.getByRole("option", { name: "English" })).toBeTruthy();
   });
 });

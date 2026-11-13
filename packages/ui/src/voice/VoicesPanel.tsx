@@ -18,6 +18,8 @@ type Row = {
   detail: string;
   /** a recording of this voice to play now, when there is one */
   sample: string | null;
+  /** the language it is listed under, which the search also finds */
+  group?: string;
 };
 
 const SEARCH_FROM = 9;
@@ -74,6 +76,7 @@ export function VoicesPanel({
         key: `builtin:${v.id}`,
         choice: { kind: "builtin", id: v.id },
         name: v.label,
+        group: g.label,
         detail: v.gender ? `${v.gender.charAt(0).toUpperCase()}${v.gender.slice(1)}` : "",
         sample:
           speeches.find(
@@ -85,7 +88,8 @@ export function VoicesPanel({
   }, [saved, builtIn, speeches, modelId]);
 
   const q = query.trim().toLowerCase();
-  const match = (r: Row) => !q || `${r.name} ${r.detail}`.toLowerCase().includes(q);
+  const match = (r: Row) =>
+    !q || `${r.name} ${r.detail} ${r.group ?? ""}`.toLowerCase().includes(q);
   const count = rows.own.length + rows.groups.reduce((n, g) => n + g.rows.length, 0);
   const current = value ? `${value.kind}:${value.id}` : null;
 

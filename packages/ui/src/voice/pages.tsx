@@ -7,6 +7,7 @@ import { TopBarSlot } from "../window-bar";
 import { AudioToolWorkspace } from "./AudioToolWorkspace";
 import { AudiobookWorkspace } from "./AudiobookWorkspace";
 import { DubbingWorkspace } from "./DubbingWorkspace";
+import { LANGUAGE_KEY } from "./LanguageField";
 import { LipSyncWorkspace } from "./LipSyncWorkspace";
 import { LyricsWriter } from "./LyricsWriter";
 import { MusicWorkspace } from "./MusicWorkspace";
@@ -133,6 +134,8 @@ export function SpeakPage(p: VoicePageProps) {
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
+        initialLanguage={p.remembered.get(LANGUAGE_KEY)}
+        onLanguageChosen={(code) => p.remembered.set(LANGUAGE_KEY, code)}
         initialSavedVoice={voice}
         onTool={(speech, tool) => {
           sendToTool(p.remembered, { kind: "speech", id: speech.id });
@@ -388,6 +391,8 @@ export function AudiobookPage(p: VoicePageProps) {
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
+        initialLanguage={p.remembered.get(LANGUAGE_KEY)}
+        onLanguageChosen={(code) => p.remembered.set(LANGUAGE_KEY, code)}
         onOpenLibrary={() => p.go("tracks")}
       />
     </MakeFrame>

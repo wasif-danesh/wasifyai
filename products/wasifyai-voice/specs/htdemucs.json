@@ -5,19 +5,11 @@
   "description": "Hybrid Transformer Demucs music source-separation model that combines waveform and spectrogram processing with Transformer layers to split mixtures into vocals, drums, bass, and accompaniment.",
   "category": "audio_tools",
   "status": "supported",
-  "tasks": [
-    "sep"
-  ],
-  "modes": [
-    "offline"
-  ],
-  "languages": [
-    "language_agnostic"
-  ],
+  "tasks": ["sep"],
+  "modes": ["offline"],
+  "languages": ["language_agnostic"],
   "capabilities": {
-    "sep": [
-      "stems"
-    ]
+    "sep": ["stems"]
   },
   "options": {
     "request": [],
@@ -33,20 +25,12 @@
     "load": []
   },
   "runtime": {
-    "tags": [
-      "gguf"
-    ]
+    "tags": ["gguf"]
   },
   "ui": {
     "recommended_package": "htdemucs_q8_0",
-    "tags": [
-      "Sep",
-      "GGUF"
-    ],
-    "docs": [
-      "docs/audio_tools.md",
-      "docs/gguf.md"
-    ]
+    "tags": ["Sep", "GGUF"],
+    "docs": ["docs/audio_tools.md", "docs/gguf.md"]
   },
   "package_defaults": {
     "download": {
@@ -64,9 +48,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "HTDemucs-GGUF",
-      "files": [
-        "HTDemucs-GGUF/htdemucs-q8_0.gguf"
-      ],
+      "files": ["HTDemucs-GGUF/htdemucs-q8_0.gguf"],
       "strip_prefix": "HTDemucs-GGUF"
     },
     {
@@ -75,9 +57,7 @@
       "format": "gguf",
       "precision": "f16",
       "target_directory": "HTDemucs-GGUF",
-      "files": [
-        "HTDemucs-GGUF/htdemucs-f16.gguf"
-      ],
+      "files": ["HTDemucs-GGUF/htdemucs-f16.gguf"],
       "strip_prefix": "HTDemucs-GGUF"
     }
   ],

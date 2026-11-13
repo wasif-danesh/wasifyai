@@ -5,19 +5,11 @@
   "description": "Music source-separation model that uses mel-scaled overlapping frequency bands and RoFormer attention to estimate stems such as vocals, drums, and accompaniment.",
   "category": "audio_tools",
   "status": "supported",
-  "tasks": [
-    "sep"
-  ],
-  "modes": [
-    "offline"
-  ],
-  "languages": [
-    "language_agnostic"
-  ],
+  "tasks": ["sep"],
+  "modes": ["offline"],
+  "languages": ["language_agnostic"],
   "capabilities": {
-    "sep": [
-      "stems"
-    ]
+    "sep": ["stems"]
   },
   "options": {
     "request": [],
@@ -40,20 +32,12 @@
     "load": []
   },
   "runtime": {
-    "tags": [
-      "gguf"
-    ]
+    "tags": ["gguf"]
   },
   "ui": {
     "recommended_package": "mel_band_roformer_q8_0",
-    "tags": [
-      "Sep",
-      "GGUF"
-    ],
-    "docs": [
-      "docs/audio_tools.md",
-      "docs/gguf.md"
-    ]
+    "tags": ["Sep", "GGUF"],
+    "docs": ["docs/audio_tools.md", "docs/gguf.md"]
   },
   "package_defaults": {
     "download": {
@@ -71,9 +55,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "Mel-Band-RoFormer-GGUF",
-      "files": [
-        "Mel-Band-RoFormer-GGUF/mel-band-roformer-q8_0.gguf"
-      ],
+      "files": ["Mel-Band-RoFormer-GGUF/mel-band-roformer-q8_0.gguf"],
       "strip_prefix": "Mel-Band-RoFormer-GGUF"
     },
     {
@@ -82,9 +64,7 @@
       "format": "gguf",
       "precision": "f16",
       "target_directory": "Mel-Band-RoFormer-GGUF",
-      "files": [
-        "Mel-Band-RoFormer-GGUF/mel-band-roformer-f16.gguf"
-      ],
+      "files": ["Mel-Band-RoFormer-GGUF/mel-band-roformer-f16.gguf"],
       "strip_prefix": "Mel-Band-RoFormer-GGUF"
     },
     {
@@ -93,10 +73,7 @@
       "format": "safetensors",
       "precision": "native",
       "target_directory": "mel-roformer-mlx",
-      "files": [
-        "config.json",
-        "model.safetensors"
-      ],
+      "files": ["config.json", "model.safetensors"],
       "download": {
         "kind": "huggingface_snapshot",
         "repo": "mlx-community/mel-roformer-mlx"

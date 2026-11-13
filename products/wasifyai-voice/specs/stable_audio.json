@@ -4,46 +4,21 @@
   "description": "Stability AI generative audio model family for text-to-music, sound effects, audio-to-audio editing, inpainting, continuation, variable-length generation, and LoRA personalization.",
   "category": "audio_generation",
   "status": "supported",
-  "tasks": [
-    "music",
-    "sfx",
-    "edit"
-  ],
-  "modes": [
-    "offline"
-  ],
-  "languages": [
-    "en"
-  ],
+  "tasks": ["music", "sfx", "edit"],
+  "modes": ["offline"],
+  "languages": ["en"],
   "capabilities": {
-    "music": [
-      "lyrics"
-    ],
-    "sfx": [
-      "prompt_generation"
-    ],
-    "edit": [
-      "prompt_editing"
-    ]
+    "music": ["lyrics"],
+    "sfx": ["prompt_generation"],
+    "edit": ["prompt_editing"]
   },
   "runtime": {
-    "tags": [
-      "gguf"
-    ]
+    "tags": ["gguf"]
   },
   "ui": {
     "recommended_package": "stable_audio_3_medium_q8_0",
-    "tags": [
-      "Music",
-      "SFX",
-      "Edit",
-      "GGUF"
-    ],
-    "docs": [
-      "docs/models/stable_audio.md",
-      "docs/music_generation.md",
-      "docs/gguf.md"
-    ]
+    "tags": ["Music", "SFX", "Edit", "GGUF"],
+    "docs": ["docs/models/stable_audio.md", "docs/music_generation.md", "docs/gguf.md"]
   },
   "package_defaults": {
     "download": {
@@ -61,9 +36,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "Stable-Audio-3-Medium-GGUF",
-      "files": [
-        "Stable-Audio-3-Medium-GGUF/stable-audio-3-medium-q8_0.gguf"
-      ],
+      "files": ["Stable-Audio-3-Medium-GGUF/stable-audio-3-medium-q8_0.gguf"],
       "strip_prefix": "Stable-Audio-3-Medium-GGUF"
     },
     {
@@ -72,9 +45,7 @@
       "format": "gguf",
       "precision": "f16",
       "target_directory": "Stable-Audio-3-Medium-GGUF",
-      "files": [
-        "Stable-Audio-3-Medium-GGUF/stable-audio-3-medium-f16.gguf"
-      ],
+      "files": ["Stable-Audio-3-Medium-GGUF/stable-audio-3-medium-f16.gguf"],
       "strip_prefix": "Stable-Audio-3-Medium-GGUF"
     },
     {
@@ -83,9 +54,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "Stable-Audio-3-Small-Music-GGUF",
-      "files": [
-        "Stable-Audio-3-Small-Music-GGUF/stable-audio-3-small-music-q8_0.gguf"
-      ],
+      "files": ["Stable-Audio-3-Small-Music-GGUF/stable-audio-3-small-music-q8_0.gguf"],
       "strip_prefix": "Stable-Audio-3-Small-Music-GGUF"
     },
     {
@@ -94,9 +63,7 @@
       "format": "gguf",
       "precision": "f16",
       "target_directory": "Stable-Audio-3-Small-Music-GGUF",
-      "files": [
-        "Stable-Audio-3-Small-Music-GGUF/stable-audio-3-small-music-f16.gguf"
-      ],
+      "files": ["Stable-Audio-3-Small-Music-GGUF/stable-audio-3-small-music-f16.gguf"],
       "strip_prefix": "Stable-Audio-3-Small-Music-GGUF"
     },
     {
@@ -105,9 +72,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "Stable-Audio-3-Small-SFX-GGUF",
-      "files": [
-        "Stable-Audio-3-Small-SFX-GGUF/stable-audio-3-small-sfx-q8_0.gguf"
-      ],
+      "files": ["Stable-Audio-3-Small-SFX-GGUF/stable-audio-3-small-sfx-q8_0.gguf"],
       "strip_prefix": "Stable-Audio-3-Small-SFX-GGUF"
     },
     {
@@ -116,9 +81,7 @@
       "format": "gguf",
       "precision": "f16",
       "target_directory": "Stable-Audio-3-Small-SFX-GGUF",
-      "files": [
-        "Stable-Audio-3-Small-SFX-GGUF/stable-audio-3-small-sfx-f16.gguf"
-      ],
+      "files": ["Stable-Audio-3-Small-SFX-GGUF/stable-audio-3-small-sfx-f16.gguf"],
       "strip_prefix": "Stable-Audio-3-Small-SFX-GGUF"
     },
     {
@@ -127,10 +90,7 @@
       "format": "safetensors",
       "precision": "native",
       "target_directory": "stable-audio-3-medium",
-      "files": [
-        "model_config.json",
-        "model.safetensors"
-      ],
+      "files": ["model_config.json", "model.safetensors"],
       "download": {
         "kind": "huggingface_snapshot",
         "repo": "stabilityai/stable-audio-3-medium",
@@ -143,10 +103,7 @@
       "format": "safetensors",
       "precision": "native",
       "target_directory": "stable-audio-3-small-music",
-      "files": [
-        "model_config.json",
-        "model.safetensors"
-      ],
+      "files": ["model_config.json", "model.safetensors"],
       "download": {
         "kind": "huggingface_snapshot",
         "repo": "stabilityai/stable-audio-3-small-music",
@@ -159,10 +116,7 @@
       "format": "safetensors",
       "precision": "native",
       "target_directory": "stable-audio-3-small-sfx",
-      "files": [
-        "model_config.json",
-        "model.safetensors"
-      ],
+      "files": ["model_config.json", "model.safetensors"],
       "download": {
         "kind": "huggingface_snapshot",
         "repo": "stabilityai/stable-audio-3-small-sfx",

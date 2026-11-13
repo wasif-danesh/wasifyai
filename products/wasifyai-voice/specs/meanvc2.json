@@ -5,25 +5,14 @@
   "description": "MeanVC2 is a lightweight streaming zero-shot voice conversion model. The current audio.cpp package covers the recommended 120ms/40ms quality path.",
   "category": "voice_conversion",
   "status": "supported",
-  "tasks": [
-    "vc"
-  ],
-  "modes": [
-    "offline",
-    "streaming"
-  ],
-  "languages": [
-    "language_agnostic"
-  ],
+  "tasks": ["vc"],
+  "modes": ["offline", "streaming"],
+  "languages": ["language_agnostic"],
   "capabilities": {
-    "vc": [
-      "speaker_reference"
-    ]
+    "vc": ["speaker_reference"]
   },
   "runtime": {
-    "tags": [
-      "gguf"
-    ]
+    "tags": ["gguf"]
   },
   "options": {
     "request": [
@@ -55,9 +44,7 @@
       "format": "gguf",
       "precision": "f32",
       "target_directory": "MeanVC2-GGUF",
-      "files": [
-        "MeanVC2-GGUF/meanvc2-120ms-40ms-fp32.gguf"
-      ],
+      "files": ["MeanVC2-GGUF/meanvc2-120ms-40ms-fp32.gguf"],
       "strip_prefix": "MeanVC2-GGUF"
     },
     {
@@ -67,24 +54,15 @@
       "format": "gguf",
       "precision": "q4_k",
       "target_directory": "MeanVC2-GGUF",
-      "files": [
-        "MeanVC2-GGUF/meanvc2-120ms-40ms-q4_k.gguf"
-      ],
+      "files": ["MeanVC2-GGUF/meanvc2-120ms-40ms-q4_k.gguf"],
       "strip_prefix": "MeanVC2-GGUF"
     }
   ],
   "dependencies": [],
   "ui": {
     "recommended_package": "meanvc2_120ms_40ms_f32",
-    "tags": [
-      "VC",
-      "GGUF"
-    ],
-    "docs": [
-      "docs/models/meanvc2.md",
-      "docs/audio_tools.md",
-      "docs/gguf.md"
-    ]
+    "tags": ["VC", "GGUF"],
+    "docs": ["docs/models/meanvc2.md", "docs/audio_tools.md", "docs/gguf.md"]
   },
   "sources": [
     {

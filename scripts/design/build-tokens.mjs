@@ -28,20 +28,57 @@ if (useIdx >= 0) {
   const block = readFileSync(src, "utf8").match(/```json tokens\n[\s\S]*?\n```/);
   if (!block) fail([`design/themes/${name}.md has no fenced block tagged \`json tokens\``]);
   const current = readFileSync(DESIGN, "utf8");
-  if (!/```json tokens\n[\s\S]*?\n```/.test(current)) fail(["design/DESIGN.md has no tokens block to replace"]);
-  writeFileSync(DESIGN, current.replace(/```json tokens\n[\s\S]*?\n```/, () => block[0]));
+  if (!/```json tokens\n[\s\S]*?\n```/.test(current))
+    fail(["design/DESIGN.md has no tokens block to replace"]);
+  writeFileSync(
+    DESIGN,
+    current.replace(/```json tokens\n[\s\S]*?\n```/, () => block[0]),
+  );
 }
 
 // ---------------------------------------------------------------------------------------------- the schema
 // Every template must define all of these CSS variables: this is what makes a template swappable.
 const REQUIRED = [
-  "--bg", "--surface", "--surface-solid", "--surface-2", "--text", "--muted", "--border",
-  "--accent", "--accent-2", "--accent-3", "--on-accent", "--accent-soft",
-  "--ok", "--warn", "--danger", "--ok-soft", "--on-ok-soft", "--scrim", "--on-scrim",
-  "--radius-sm", "--radius", "--radius-lg", "--radius-control", "--shadow",
-  "--font", "--font-serif", "--space",
-  "--text-step--1", "--text-step-0", "--text-step-1", "--text-step-2", "--text-step-3",
-  "--text-2xs", "--text-ui-sm", "--text-ui", "--text-ui-lg", "--text-lead", "--text-title", "--text-display", "--text-display-lg",
+  "--bg",
+  "--surface",
+  "--surface-solid",
+  "--surface-2",
+  "--text",
+  "--muted",
+  "--border",
+  "--accent",
+  "--accent-2",
+  "--accent-3",
+  "--on-accent",
+  "--accent-soft",
+  "--ok",
+  "--warn",
+  "--danger",
+  "--ok-soft",
+  "--on-ok-soft",
+  "--scrim",
+  "--on-scrim",
+  "--radius-sm",
+  "--radius",
+  "--radius-lg",
+  "--radius-control",
+  "--shadow",
+  "--font",
+  "--font-serif",
+  "--space",
+  "--text-step--1",
+  "--text-step-0",
+  "--text-step-1",
+  "--text-step-2",
+  "--text-step-3",
+  "--text-2xs",
+  "--text-ui-sm",
+  "--text-ui",
+  "--text-ui-lg",
+  "--text-lead",
+  "--text-title",
+  "--text-display",
+  "--text-display-lg",
   "--ease-out-soft",
 ];
 
@@ -133,7 +170,9 @@ function cssValue(t) {
 // ---------------------------------------------------------------------------------------------- colour maths
 // OKLCH -> linear sRGB (Ottosson), WCAG relative luminance and contrast ratio.
 function parseOklch(s) {
-  const mm = s.trim().match(/^oklch\(\s*([\d.]+)%\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)$/);
+  const mm = s
+    .trim()
+    .match(/^oklch\(\s*([\d.]+)%\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)$/);
   if (!mm) return null;
   return { L: +mm[1] / 100, C: +mm[2], h: +mm[3], a: mm[4] === undefined ? 1 : +mm[4] };
 }
@@ -155,8 +194,16 @@ const encode = (x) => {
   x = clamp01(x);
   return x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055;
 };
-const luminance = (lin) => 0.2126 * clamp01(lin[0]) + 0.7152 * clamp01(lin[1]) + 0.0722 * clamp01(lin[2]);
-const hex = (lin) => `#${lin.map((v) => Math.round(encode(v) * 255).toString(16).padStart(2, "0")).join("")}`;
+const luminance = (lin) =>
+  0.2126 * clamp01(lin[0]) + 0.7152 * clamp01(lin[1]) + 0.0722 * clamp01(lin[2]);
+const hex = (lin) =>
+  `#${lin
+    .map((v) =>
+      Math.round(encode(v) * 255)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
 function contrast(a, b) {
   const la = luminance(a);
   const lb = luminance(b);
@@ -195,9 +242,14 @@ for (const t of semantic) {
   if (t.type !== "color") continue;
   for (const mode of isPair(t) ? ["light", "dark"] : ["light"]) {
     const c = colourOf(modeValue(t, mode, false), mode);
-    if (!c) errors.push(`${t.path} (${mode}) is not a colour this tool understands: ${modeValue(t, mode, false)}`);
+    if (!c)
+      errors.push(
+        `${t.path} (${mode}) is not a colour this tool understands: ${modeValue(t, mode, false)}`,
+      );
     else if (!c.gamutOk && c.gamutOk !== undefined)
-      (doc.checks?.gamut === "warn" ? warnings : errors).push(`${t.path} (${mode}) is outside sRGB and would be clipped`);
+      (doc.checks?.gamut === "warn" ? warnings : errors).push(
+        `${t.path} (${mode}) is outside sRGB and would be clipped`,
+      );
   }
 }
 
@@ -220,7 +272,9 @@ for (const rule of doc.checks?.contrast ?? []) {
     if (bgC.alpha < 1) {
       const back = bdT ? colourOf(modeValue(bdT, mode, false), mode) : null;
       if (!back) {
-        errors.push(`contrast rule ${JSON.stringify(rule)}: ${bgName} is transparent and needs a backdrop token as the fourth item`);
+        errors.push(
+          `contrast rule ${JSON.stringify(rule)}: ${bgName} is transparent and needs a backdrop token as the fourth item`,
+        );
         continue;
       }
       bgLin = over(bgC, back);
@@ -228,19 +282,26 @@ for (const rule of doc.checks?.contrast ?? []) {
     const fgLin = fgC.alpha < 1 ? over(fgC, { lin: bgLin }) : fgC.lin;
     const ratio = contrast(fgLin, bgLin);
     contrastRows.push({ fg: fgName, bg: bgName, mode, min, ratio });
-    if (ratio + 1e-9 < min) errors.push(`contrast ${fgName} on ${bgName} (${mode}) is ${ratio.toFixed(2)}:1, needs ${min}:1`);
+    if (ratio + 1e-9 < min)
+      errors.push(
+        `contrast ${fgName} on ${bgName} (${mode}) is ${ratio.toFixed(2)}:1, needs ${min}:1`,
+      );
   }
 }
 
 // 4. the base stylesheet still switches motion off for people who ask for less
-if (existsSync(BASE_CSS) && !/prefers-reduced-motion:\s*reduce/.test(readFileSync(BASE_CSS, "utf8")))
+if (
+  existsSync(BASE_CSS) &&
+  !/prefers-reduced-motion:\s*reduce/.test(readFileSync(BASE_CSS, "utf8"))
+)
   errors.push("packages/ui/src/tailwind.css no longer has a prefers-reduced-motion rule");
 
 if (errors.length) fail(errors);
 
 // ---------------------------------------------------------------------------------------------- outputs
 const groups = { root: [], theme: [] };
-for (const t of semantic) (t.type === "dimension-theme" || t.type === "cubicBezier" ? groups.theme : groups.root).push(t);
+for (const t of semantic)
+  (t.type === "dimension-theme" || t.type === "cubicBezier" ? groups.theme : groups.root).push(t);
 
 const header = (what) =>
   `/* ${what}. GENERATED from design/DESIGN.md by scripts/design/build-tokens.mjs (ADR-0081). Do not edit by hand:\n   change design/DESIGN.md and run \`pnpm design:build\`. Template: ${doc.meta.id} ${doc.meta.version}. */\n`;
@@ -255,7 +316,8 @@ for (const t of groups.root) {
   }
   css += `  ${t.css}: ${cssValue(t)};\n`;
 }
-css += "}\n\n/* sizes and easing that Tailwind reads as theme values (fluid type steps, the soft ease) */\n@theme {\n";
+css +=
+  "}\n\n/* sizes and easing that Tailwind reads as theme values (fluid type steps, the soft ease) */\n@theme {\n";
 for (const t of groups.theme) css += `  ${t.css}: ${cssValue(t)};\n`;
 css += "}\n";
 
@@ -280,12 +342,15 @@ docMd += "| Token | CSS variable | Type | Light | Dark | Use |\n|---|---|---|---
 for (const t of semantic) {
   const l = modeValue(t, "light", false);
   const d = isPair(t) ? modeValue(t, "dark", false) : "same";
-  const swatch = (s) => (parseOklch(s) ? `\`${s}\` ≈ \`${hex(toLinear(parseOklch(s)))}\`` : `\`${s}\``);
+  const swatch = (s) =>
+    parseOklch(s) ? `\`${s}\` ≈ \`${hex(toLinear(parseOklch(s)))}\`` : `\`${s}\``;
   docMd += `| \`${t.path}\` | \`${t.css}\` | ${t.type} | ${swatch(l)} | ${d === "same" ? "same" : swatch(d)} | ${t.description} |\n`;
 }
 if (contrastRows.length) {
-  docMd += "\n## Contrast checks (WCAG 2.2 AA)\n\n| Foreground | Background | Scheme | Ratio | Needs |\n|---|---|---|---|---|\n";
-  for (const r of contrastRows) docMd += `| \`${r.fg}\` | \`${r.bg}\` | ${r.mode} | ${r.ratio.toFixed(2)}:1 | ${r.min}:1 |\n`;
+  docMd +=
+    "\n## Contrast checks (WCAG 2.2 AA)\n\n| Foreground | Background | Scheme | Ratio | Needs |\n|---|---|---|---|---|\n";
+  for (const r of contrastRows)
+    docMd += `| \`${r.fg}\` | \`${r.bg}\` | ${r.mode} | ${r.ratio.toFixed(2)}:1 | ${r.min}:1 |\n`;
 }
 
 const outputs = [
@@ -294,14 +359,21 @@ const outputs = [
   [OUT_DOC, docMd],
 ];
 if (check) {
-  const stale = outputs.filter(([p, body]) => !existsSync(p) || readFileSync(p, "utf8") !== body).map(([p]) => p.replace(`${root}/`, ""));
-  if (stale.length) fail([`generated files are out of date, run \`pnpm design:build\`: ${stale.join(", ")}`]);
-  console.log(`design: ${semantic.length} tokens, ${contrastRows.length} contrast checks, generated files are current (${doc.meta.id} ${doc.meta.version})`);
+  const stale = outputs
+    .filter(([p, body]) => !existsSync(p) || readFileSync(p, "utf8") !== body)
+    .map(([p]) => p.replace(`${root}/`, ""));
+  if (stale.length)
+    fail([`generated files are out of date, run \`pnpm design:build\`: ${stale.join(", ")}`]);
+  console.log(
+    `design: ${semantic.length} tokens, ${contrastRows.length} contrast checks, generated files are current (${doc.meta.id} ${doc.meta.version})`,
+  );
 } else {
   for (const [p, body] of outputs) {
     mkdirSync(dirname(p), { recursive: true });
     writeFileSync(p, body);
   }
   for (const w of warnings) console.warn(`design: warning: ${w}`);
-  console.log(`design: wrote ${outputs.length} files from ${doc.meta.id} ${doc.meta.version} (${semantic.length} tokens, ${contrastRows.length} contrast checks)`);
+  console.log(
+    `design: wrote ${outputs.length} files from ${doc.meta.id} ${doc.meta.version} (${semantic.length} tokens, ${contrastRows.length} contrast checks)`,
+  );
 }

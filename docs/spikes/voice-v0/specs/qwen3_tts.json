@@ -4,52 +4,20 @@
   "description": "Qwen TTS family for controllable 10-language speech synthesis, including 3-second voice cloning, CustomVoice instruction control over preset timbres, and VoiceDesign from natural-language descriptions.",
   "category": "tts",
   "status": "supported",
-  "tasks": [
-    "tts",
-    "clone",
-    "design"
-  ],
-  "modes": [
-    "offline"
-  ],
-  "languages": [
-    "zh",
-    "en",
-    "ja",
-    "ko",
-    "de",
-    "fr",
-    "ru",
-    "pt",
-    "es",
-    "it"
-  ],
+  "tasks": ["tts", "clone", "design"],
+  "modes": ["offline"],
+  "languages": ["zh", "en", "ja", "ko", "de", "fr", "ru", "pt", "es", "it"],
   "capabilities": {
-    "clone": [
-      "speaker_reference"
-    ],
-    "design": [
-      "voice_design"
-    ]
+    "clone": ["speaker_reference"],
+    "design": ["voice_design"]
   },
   "runtime": {
-    "tags": [
-      "gguf"
-    ]
+    "tags": ["gguf"]
   },
   "ui": {
     "recommended_package": "qwen3_tts_1_7b_base_q8_0",
-    "tags": [
-      "TTS",
-      "Clone",
-      "Design",
-      "GGUF"
-    ],
-    "docs": [
-      "docs/models/qwen3.md",
-      "docs/tts.md",
-      "docs/gguf.md"
-    ]
+    "tags": ["TTS", "Clone", "Design", "GGUF"],
+    "docs": ["docs/models/qwen3.md", "docs/tts.md", "docs/gguf.md"]
   },
   "package_defaults": {
     "download": {
@@ -67,9 +35,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "Qwen3-TTS-12Hz-1.7B-Base-GGUF",
-      "files": [
-        "Qwen3-TTS-12Hz-1.7B-Base-GGUF/qwen3-tts-12hz-1.7b-base-q8_0_v2.gguf"
-      ],
+      "files": ["Qwen3-TTS-12Hz-1.7B-Base-GGUF/qwen3-tts-12hz-1.7b-base-q8_0_v2.gguf"],
       "strip_prefix": "Qwen3-TTS-12Hz-1.7B-Base-GGUF"
     },
     {
@@ -78,9 +44,7 @@
       "format": "gguf",
       "precision": "bf16",
       "target_directory": "Qwen3-TTS-12Hz-1.7B-Base-GGUF",
-      "files": [
-        "Qwen3-TTS-12Hz-1.7B-Base-GGUF/qwen3-tts-12hz-1.7b-base-bf16.gguf"
-      ],
+      "files": ["Qwen3-TTS-12Hz-1.7B-Base-GGUF/qwen3-tts-12hz-1.7b-base-bf16.gguf"],
       "strip_prefix": "Qwen3-TTS-12Hz-1.7B-Base-GGUF"
     },
     {
@@ -89,9 +53,7 @@
       "format": "gguf",
       "precision": "orig",
       "target_directory": "Qwen3-TTS-12Hz-1.7B-Base-GGUF",
-      "files": [
-        "Qwen3-TTS-12Hz-1.7B-Base-GGUF/qwen3-tts-12hz-1.7b-base-orig.gguf"
-      ],
+      "files": ["Qwen3-TTS-12Hz-1.7B-Base-GGUF/qwen3-tts-12hz-1.7b-base-orig.gguf"],
       "strip_prefix": "Qwen3-TTS-12Hz-1.7B-Base-GGUF"
     },
     {
@@ -100,9 +62,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF",
-      "files": [
-        "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF/qwen3-tts-12hz-1.7b-customvoice-q8_0.gguf"
-      ],
+      "files": ["Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF/qwen3-tts-12hz-1.7b-customvoice-q8_0.gguf"],
       "strip_prefix": "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF"
     },
     {
@@ -111,9 +71,7 @@
       "format": "gguf",
       "precision": "bf16",
       "target_directory": "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF",
-      "files": [
-        "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF/qwen3-tts-12hz-1.7b-customvoice-bf16.gguf"
-      ],
+      "files": ["Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF/qwen3-tts-12hz-1.7b-customvoice-bf16.gguf"],
       "strip_prefix": "Qwen3-TTS-12Hz-1.7B-CustomVoice-GGUF"
     },
     {
@@ -122,9 +80,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF",
-      "files": [
-        "Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF/qwen3-tts-12hz-1.7b-voicedesign-q8_0.gguf"
-      ],
+      "files": ["Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF/qwen3-tts-12hz-1.7b-voicedesign-q8_0.gguf"],
       "strip_prefix": "Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF"
     },
     {
@@ -133,9 +89,7 @@
       "format": "gguf",
       "precision": "bf16",
       "target_directory": "Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF",
-      "files": [
-        "Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF/qwen3-tts-12hz-1.7b-voicedesign-bf16.gguf"
-      ],
+      "files": ["Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF/qwen3-tts-12hz-1.7b-voicedesign-bf16.gguf"],
       "strip_prefix": "Qwen3-TTS-12Hz-1.7B-VoiceDesign-GGUF"
     },
     {
@@ -144,9 +98,7 @@
       "format": "gguf",
       "precision": "q8_0",
       "target_directory": "Qwen3-TTS-12Hz-0.6B-Base-GGUF",
-      "files": [
-        "Qwen3-TTS-12Hz-0.6B-Base-GGUF/qwen3-tts-12hz-0.6b-base-q8_0.gguf"
-      ],
+      "files": ["Qwen3-TTS-12Hz-0.6B-Base-GGUF/qwen3-tts-12hz-0.6b-base-q8_0.gguf"],
       "strip_prefix": "Qwen3-TTS-12Hz-0.6B-Base-GGUF"
     },
     {
@@ -155,9 +107,7 @@
       "format": "gguf",
       "precision": "bf16",
       "target_directory": "Qwen3-TTS-12Hz-0.6B-Base-GGUF",
-      "files": [
-        "Qwen3-TTS-12Hz-0.6B-Base-GGUF/qwen3-tts-12hz-0.6b-base-bf16.gguf"
-      ],
+      "files": ["Qwen3-TTS-12Hz-0.6B-Base-GGUF/qwen3-tts-12hz-0.6b-base-bf16.gguf"],
       "strip_prefix": "Qwen3-TTS-12Hz-0.6B-Base-GGUF"
     },
     {

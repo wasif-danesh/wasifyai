@@ -117,7 +117,8 @@ BACKENDS: dict[str, BackendSpec] = {
                     placeholder="fal-ai/flux-2",
                     help="The fal.ai model: fal-ai/flux-2 (and fal-ai/flux-2/edit), "
                     "fal-ai/ltx-2/text-to-video/fast (and .../image-to-video/fast), fal-ai/kokoro, "
-                    "fal-ai/pixal3d, for music fal-ai/minimax-music/v2.6 or "
+                    "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d, "
+                    "for music fal-ai/minimax-music/v2.6 or "
                     "fal-ai/elevenlabs/music, for sound effects "
                     "fal-ai/elevenlabs/sound-effects/v2, or for lip sync veed/fabric-1.0/fast "
                     "(quickest), "

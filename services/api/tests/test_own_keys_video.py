@@ -58,6 +58,14 @@ def sent(provider: str, f) -> tuple[str, dict]:
     return one
 
 
+# what Runware's video models take beyond the clip itself: a field one does not take is refused
+# (found in CP13)
+RUNWARE_TAKES = {
+    "seedance-2.5": {"seed", "audio"}, "gemini-omni-flash-1.2": set(),
+    "minimax-h3-max": {"seed"}, "minimax-h3-max-turbo": {"seed"},
+    "grok-imagine-video-1.5-lite": set(),
+}  # fmt: skip
+
 CASES = [
     (m.model, o.provider, verb)
     for m in VIDEO.values()
@@ -105,7 +113,12 @@ async def test_each_offer_makes_animates_and_extends_what_it_can(model, provider
     where, body = sent(provider, f)
     if provider == "runware":
         assert where == offer.endpoint and body["includeCost"] is True
-        assert body["settings"]["audio"] is False  # no sound: the video product has none
+        takes = RUNWARE_TAKES[model]
+        assert ("seed" in body) == ("seed" in takes)
+        if "audio" in takes:
+            assert body["settings"]["audio"] is False  # no sound: the video product has none
+        else:
+            assert "audio" not in body.get("settings", {})
         if verb == "animate":
             (first,) = body["inputs"]["frameImages"]
             assert first["frame"] == "first" and first["image"].startswith("data:image/png")
@@ -129,10 +142,23 @@ async def test_each_offer_makes_animates_and_extends_what_it_can(model, provider
     # the length asked for, within what the model takes
     duration = body["duration"]
     assert 1 <= float(duration) <= 30
-    name = "extended" if verb == "extend" else "video"
+    # Seedance answers only the new part (CP13); every other offer, the clip and then the new part
+    name = "video" if verb != "extend" else ("continued" if model == "seedance-2.5" else "extended")
     assert list(out) == [name] and out[name][1] == "video/mp4"
     assert runner.cost.offer.provider == provider
     assert runner.cost.cost == pytest.approx(offer.price.amount * (5 + 1 / 24), abs=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("model", "shortest"),
+    [("gemini-omni-flash-1.2", 3), ("seedance-2.5", 4), ("minimax-h3-max", 5),
+     ("minimax-h3-max-turbo", 5), ("grok-imagine-video-1.5-lite", 1)],
+)  # fmt: skip
+def test_a_clip_shorter_than_a_model_makes_costs_its_shortest(model, shortest):
+    """A one-second ask is made at the model's shortest length, and costs that (CP13: the cost
+    was first written for the second asked for)."""
+    for o in VIDEO[model].offers:
+        assert o.price.of({"seconds": 1.0}) == pytest.approx(o.price.amount * shortest)
 
 
 @pytest.mark.parametrize("model", ["minimax-h3-max", "minimax-h3-max-turbo"])
@@ -171,7 +197,8 @@ async def test_the_cloud_tab_says_which_clips_a_model_can_extend_with_the_keys_t
     rows = {m["model"]: m for m in (await keys.cloud("video"))["models"]}
     assert rows["seedance-2.5"]["can"] == ["video.generate", "video.animate", "video.extend"]
     assert rows["minimax-h3-max"]["can"] == ["video.generate", "video.animate"]  # fal.ai extends
-    assert rows["grok-imagine-video-1.5-lite"]["price"] == "$0.03 per second"
+    # Runware's price, measured in CP13
+    assert rows["grok-imagine-video-1.5-lite"]["price"] == "$0.04 per second"
 
 
 async def test_seedance_extends_on_wavespeed_with_the_clip_uploaded_first():

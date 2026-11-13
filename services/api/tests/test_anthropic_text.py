@@ -10,9 +10,11 @@ import pytest
 from anthropic import AsyncAnthropic
 from wasifyai_api.anthropic_text import (
     REFUSED,
+    SHAPES,
     AnthropicText,
     ThinkingReplay,
     effort_for,
+    shape_of,
     to_anthropic,
 )
 from wasifyai_platform_sdk import (
@@ -65,11 +67,25 @@ def events(*blocks: dict[str, Any], stop: str = "end_turn") -> httpx.Response:
     return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
 
 
-def fake(*answers: httpx.Response) -> tuple[AsyncAnthropic, list[dict[str, Any]]]:
+def fake(
+    *answers: httpx.Response, caps: dict[str, Any] | None = None
+) -> tuple[AsyncAnthropic, list[dict[str, Any]]]:
+    """Anthropic answering `answers` in turn; the Models API knows the model by `caps`, or not."""
     sent: list[dict[str, Any]] = []
     queue = list(answers)
 
     def handler(req: httpx.Request) -> httpx.Response:
+        if req.method == "GET" and req.url.path.startswith("/v1/models/"):
+            model = req.url.path.rsplit("/", 1)[1]
+            if caps is None:
+                return httpx.Response(
+                    404,
+                    json={"type": "error", "error": {"type": "not_found_error", "message": "no"}},
+                )
+            return httpx.Response(200, json={
+                "type": "model", "id": model, "display_name": model,
+                "created_at": "2026-11-01T00:00:00Z", "capabilities": caps,
+            })  # fmt: skip
         sent.append(json.loads(req.content))
         return queue.pop(0)
 
@@ -132,6 +148,22 @@ async def test_a_schema_asks_for_structured_output(image_product):
     claude = AnthropicText("k", MODEL, InMemoryUsageRecorder(), client=client)
     assert "".join([t async for t in claude.stream("text.enhance", "s", "p", schema)]) == '{"a": 1}'
     assert sent[0]["output_config"]["format"] == {"type": "json_schema", "schema": schema}
+
+
+async def test_counts_and_lengths_it_cannot_enforce_go_into_the_descriptions(image_product):
+    """Anthropic refuses minItems above 1 and string lengths (found in CP13); the SDK's
+    transform keeps them as words for the model, and the caller checks the answer."""
+    client, sent = fake(events({"type": "text", "text": '{"beats": []}'}))
+    item = {"type": "string", "minLength": 25, "maxLength": 140}
+    schema = {"type": "object", "required": ["beats"], "additionalProperties": False,
+              "properties": {"beats": {"type": "array", "minItems": 3, "maxItems": 3,
+                                       "items": item}}}  # fmt: skip
+    claude = AnthropicText("k", MODEL, InMemoryUsageRecorder(), client=client)
+    _ = [t async for t in claude.stream("text.chat", "s", "p", schema)]
+    beats = sent[0]["output_config"]["format"]["schema"]["properties"]["beats"]
+    assert "minItems" not in beats and "maxItems" not in beats
+    assert "minLength" not in beats["items"] and "25" in beats["items"]["description"]
+    assert "3" in beats["description"]
 
 
 async def test_pictures_go_as_image_blocks_and_a_recording_is_refused(image_product):
@@ -264,7 +296,8 @@ async def test_a_refusal_is_said_in_words(assistant):
 @pytest.mark.parametrize(
     ("status", "words"),
     [(401, "Anthropic did not accept the key."), (404, "no model called claude-haiku-5-5"),
-     (429, "too many requests"), (529, "busy"), (500, "Anthropic answered 500.")],
+     (429, "too many requests"), (529, "busy"),
+     (500, "Anthropic answered 500: no")],  # its own words, which say what to fix
 )  # fmt: skip
 async def test_an_error_is_said_in_anthropics_name(assistant, status, words):
     answer = httpx.Response(status, json={"type": "error", "error": {"type": "x", "message": "no"}})
@@ -281,3 +314,39 @@ def test_a_conversation_never_ends_on_the_assistant():
         [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "Hel"}]
     )
     assert conv.messages[-1] == {"role": "user", "content": [{"type": "text", "text": "Continue."}]}
+
+
+OLD_CAPS = {"thinking": {"supported": True, "types": {"enabled": {"supported": True},
+            "adaptive": {"supported": False}}}, "effort": {"supported": False}}  # fmt: skip
+NEW_CAPS = {"thinking": {"supported": True, "types": {"enabled": {"supported": False},
+            "adaptive": {"supported": True}}}, "effort": {"supported": True}}  # fmt: skip
+
+
+async def test_an_older_model_is_asked_for_no_thinking_and_no_effort(image_product):
+    # Haiku 4.5, chosen from the key's list (owner, 2026-11-13): adaptive thinking, effort are 400s
+    SHAPES.clear()
+    client, sent = fake(events({"type": "text", "text": "A fox."}), caps=OLD_CAPS)
+    claude = AnthropicText("k", "claude-haiku-4-5-20251001", InMemoryUsageRecorder(), client=client)
+    assert "".join([t async for t in claude.stream("text.enhance", "", "a fox")]) == "A fox."
+    (body,) = sent
+    assert "thinking" not in body and "output_config" not in body
+    assert "claude-haiku-4-5-20251001" in SHAPES  # read once, for every key
+
+
+async def test_a_model_whose_thinking_stays_on_is_never_sent_disabled(assistant):
+    SHAPES.clear()
+    for model in ("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-2"):
+        client, sent = fake(events({"type": "text", "text": "Nothing found."}), caps=NEW_CAPS)
+        claude = AnthropicText("k", model, InMemoryUsageRecorder(), client=client,
+                               replay=ThinkingReplay())  # fmt: skip
+        assert [c.text async for c in claude.chat("text.chat", LOOP, TOOLS)] == ["Nothing found."]
+        assert sent[0]["thinking"] == {"type": "adaptive"}, model
+        assert sent[0]["output_config"] == {"effort": "high"}
+
+
+def test_without_its_capabilities_a_model_is_known_by_its_name():
+    assert shape_of("claude-haiku-4-5-20251001") == shape_of("claude-x", OLD_CAPS)
+    assert not shape_of("claude-opus-4-5-20251101").adaptive
+    assert shape_of("claude-opus-4-5-20251101").effort
+    assert shape_of("claude-haiku-5-5").can_turn_off
+    assert not shape_of("claude-fable-5-1").can_turn_off

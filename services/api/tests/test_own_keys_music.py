@@ -3,6 +3,8 @@ WaveSpeed and fal.ai: each song and sound effect model on each offer; the cheape
 job (MiniMax Music 3 by length, Mureka by whether it sings); splitting a recording into stems; a
 stretch of a clip written again. The recordings go up the provider's way first."""
 
+import io
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -22,6 +24,7 @@ from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_platform_sdk import (
     InMemorySecretStore,
     InMemoryUsageRecorder,
+    VoiceEngineError,
     VoiceRequestError,
     check_music,
     check_music_edit,
@@ -82,6 +85,9 @@ def recording(tmp_path: Path, seconds: float = 4.0) -> Path:
 
 # ---- songs and sound effects -------------------------------------------------------------------
 
+# the offers that sing only words they are given (CP13); the model's other offers write them
+NEEDS_WORDS = {("minimax-music-2.6", "wavespeed"), ("minimax-music-3", "fal")}
+
 MAKE = [
     (m.product, m.model, o.provider, o.endpoint)
     for m in CATALOGUE if m.product in ("music", "sfx") for o in m.offers
@@ -97,7 +103,8 @@ async def test_each_song_and_sound_effect_model_makes_on_each_offer(
     engine = KeyedSpeechEngine(Here(), keys, f.client, poll_s=0)
     m = engine.resolve("music", KEYED_SFX if product == "sfx" else KEYED_MUSIC)
     mode = "sfx" if product == "sfx" else "song"
-    lyrics = "[verse]\nLa la la" if m.music["modes"][mode].get("lyrics") == "required" else None
+    words = m.music["modes"][mode].get("lyrics") == "required" or (model, provider) in NEEDS_WORDS
+    lyrics = "[verse]\nLa la la" if words else None
     req = check_music(
         m, mode, "A bright synth melody over soft drums", lyrics, False, None, {}, None
     )
@@ -107,6 +114,31 @@ async def test_each_song_and_sound_effect_model_makes_on_each_offer(
     assert res.seconds == pytest.approx(1.0) and res.wav[:4] == b"RIFF"
     said = " ".join(str(v) for v in body.values())
     assert "A bright synth melody" in said
+
+
+@pytest.mark.parametrize(("model", "provider"), sorted(NEEDS_WORDS))
+async def test_a_song_without_words_is_refused_before_sending_where_none_are_written(
+    model, provider
+):
+    keys = await on("music", model, provider)
+    f = fake(provider)
+    engine = KeyedSpeechEngine(Here(), keys, f.client, poll_s=0)
+    m = engine.resolve("music", KEYED_MUSIC)
+    req = check_music(m, "song", "A slow piano ballad in the rain", None, False, None, {}, None)
+    with pytest.raises(VoiceEngineError, match="add lyrics"):
+        await engine.music(m, req)
+    assert f.posts() == []
+
+
+async def test_minimax_music_3_on_wavespeed_writes_the_words_when_none_are_given():
+    keys = await on("music", "minimax-music-3", "wavespeed")
+    ws = fake("wavespeed")
+    engine = KeyedSpeechEngine(Here(), keys, ws.client, poll_s=0)
+    m = engine.resolve("music", None)
+    req = check_music(m, "song", "A slow piano ballad in the rain", None, False, None, {}, None)
+    await engine.music(m, req)
+    _, body = ws.posts()[-1]
+    assert body["lyrics_optimizer"] is True and "lyrics" not in body
 
 
 async def test_minimax_music_3_runs_where_a_song_of_its_length_is_cheaper():
@@ -124,7 +156,7 @@ async def test_minimax_music_3_runs_where_a_song_of_its_length_is_cheaper():
 
 @pytest.mark.parametrize(
     ("instrumental", "provider", "endpoint", "cost"),
-    [(False, "fal", "fal-ai/mureka/v9.5/song", 0.15),
+    [(False, "fal", "mureka/v9.5/generate/song", 0.15),
      (True, "wavespeed", "mureka-ai/mureka-v9.5/generate-bgm", 0.225)],
 )  # fmt: skip
 async def test_mureka_sings_on_fal_and_plays_instrumentals_on_wavespeed(
@@ -197,17 +229,38 @@ async def test_mureka_stems_on_wavespeed_are_read_in_order(tmp_path):
     assert [s.name for s in res.stems] == list(SPLIT_MODELS["mureka-stems"].stems)
 
 
-async def test_with_both_keys_mureka_stems_go_to_the_cheaper_fal(tmp_path):
+def stems_zip(*names: str) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for n in names:
+            z.writestr(n, WAV)
+    return buf.getvalue()
+
+
+async def test_with_both_keys_mureka_stems_go_to_the_cheaper_fal_as_an_mp3_and_come_back_zipped(
+    tmp_path, monkeypatch
+):
+    """Mureka on fal.ai reads no WAV and answers one zip of every part (CP13)."""
+    import wasifyai_api.own_keys_engines as engines
+
+    async def as_mp3(data: bytes, suffix: str = ".wav") -> bytes:
+        return b"ID3" + data[:8]
+
+    monkeypatch.setattr(engines, "to_mp3", as_mp3)
     usage = InMemoryUsageRecorder()
-    answer = {"vocals": {"url": "https://v3.fal.media/v.wav"},
-              "instrumental": {"url": "https://v3.fal.media/i.wav"}}  # fmt: skip
-    f = fake("fal", answer)
+    zipped = stems_zip("vocals.wav", "bass.wav", "instrumental.wav", "drums.wav", "song.wav")
+    f = Fal({"zip_url": "https://v3.fal.media/stems.zip", "midi_zip_url": None}, zipped)
     keys = await on("split", "mureka-stems", "wavespeed", "fal")
     engine = KeyedSpeechEngine(Here(), keys, f.client, poll_s=0, usage=usage)
     model = engine.resolve("separate", None)
-    await engine.separate(model, check_separate(model, 4.0, {}), recording(tmp_path))
+    res = await engine.separate(model, check_separate(model, 4.0, {}), recording(tmp_path))
     assert usage.events[0].meta["provider"] == "fal"
     assert usage.events[0].quantity == pytest.approx(0.02)
+    ((url, body),) = f.posts()
+    assert url.endswith("/mureka/api/song/stem")
+    assert list(f.uploads.values())[0].startswith(b"ID3")  # an MP3 went up
+    assert [s.name for s in res.stems] == ["vocals", "instrumental"]
+    assert all(s.wav[:4] == b"RIFF" for s in res.stems)
 
 
 # ---- a stretch of a clip written again ---------------------------------------------------------
@@ -228,13 +281,15 @@ async def test_ace_step_repaints_a_stretch_on_runware(tmp_path):
     assert air == "runware:ace-step@v1.5-turbo" and task["positivePrompt"] == "A guitar solo"
     assert task["inputs"]["audio"] == "media-0"  # the clip went up first
     assert task["settings"] == {"repaintingStart": 1.0, "repaintingEnd": 3.0}
+    assert "duration" not in task  # refused with a clip (CP13)
     assert res.wav[:4] == b"RIFF"
 
 
 @pytest.mark.parametrize(
     ("model_id", "action", "endpoint", "start"),
     [("ace-step-edit", "repaint", "fal-ai/ace-step/audio-inpaint", "start_time"),
-     ("stable-audio-3-inpaint", "inpaint", "fal-ai/stable-audio-3/medium/inpaint", "mask_start")],
+     ("stable-audio-3-inpaint", "inpaint", "fal-ai/stable-audio-3/medium/audio-inpainting",
+      "mask_start_seconds")],
 )  # fmt: skip
 async def test_editing_on_fal(tmp_path, model_id, action, endpoint, start):
     f = fake("fal")

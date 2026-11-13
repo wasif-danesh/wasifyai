@@ -18,6 +18,11 @@ vendors share, and Haiku 5.5 differs from older models in ways the code must fol
 - the model can decline (`stop_reason: "refusal"`); that is said in words, and the app adds no
   refusal of its own (ADR-0094).
 
+The person may choose any model their key lists (owner, 2026-11-13), and older and newer models take
+different requests (`Shape`, read once per model from Anthropic's Models API): Haiku 4.5 and the 4.5
+models have no adaptive thinking (they are asked for none), Haiku 4.5 has no effort, and Fable, Opus
+5.5 and Sonnet 5.5 cannot turn thinking off (a turn whose thinking is gone runs with it on).
+
 The request also asks for prompt caching (`cache_control` at the top level), so a long system
 prompt or a notebook's sources cost a tenth on the next turn."""
 
@@ -29,7 +34,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from anthropic import APIConnectionError, APIStatusError, AsyncAnthropic
+from anthropic import APIConnectionError, APIStatusError, AsyncAnthropic, transform_schema
 from wasifyai_platform_sdk import ChatChunk, RunError, ToolCall
 from wasifyai_platform_sdk.context import require_context
 from wasifyai_platform_sdk.parts import Audio, Image, Prompt, as_parts
@@ -251,8 +256,44 @@ def said_of(e: Exception, model: str) -> str:
             return "Anthropic is busy. Try again soon."
         if e.status_code == 400 and "credit" in str(e).lower():
             return "Anthropic says the account has no credit left."
+        body = e.body if isinstance(e.body, dict) else {}
+        error = body.get("error")
+        said = error.get("message") if isinstance(error, dict) else None
+        if isinstance(said, str) and said.strip():  # its own words say what to fix (CP13)
+            return f"Anthropic answered {e.status_code}: {said.strip()[:300]}"
         return f"Anthropic answered {e.status_code}."
     return "Anthropic did not answer."
+
+
+# models whose thinking cannot be turned off: `disabled` is a 400 (the claude-api notes, 2026-11)
+THINKING_STAYS_ON = ("claude-fable", "claude-mythos", "claude-opus-5-5", "claude-sonnet-5-5")
+
+
+@dataclass(frozen=True)
+class Shape:
+    """What a model's requests may carry."""
+
+    adaptive: bool = True  # adaptive thinking; without it no thinking is asked for
+    effort: bool = True  # `output_config.effort`
+    can_turn_off: bool = True  # `thinking: {"type": "disabled"}`
+
+
+def shape_of(model: str, capabilities: dict[str, Any] | None = None) -> Shape:
+    """`model`'s shape from the capabilities Anthropic lists for it, or, when they could not be
+    read, from its name (the 4.5 models are the ones before adaptive thinking)."""
+    stays_on = model.startswith(THINKING_STAYS_ON)
+    if capabilities:
+        thinking = (capabilities.get("thinking") or {}).get("types") or {}
+        adaptive = bool((thinking.get("adaptive") or {}).get("supported", True))
+        effort = bool((capabilities.get("effort") or {}).get("supported", True))
+        return Shape(adaptive, effort, not stays_on)
+    old = "-4-5" in model
+    return Shape(
+        not old, not model.startswith(("claude-haiku-4-5", "claude-sonnet-4-5")), not stays_on
+    )
+
+
+SHAPES: dict[str, Shape] = {}  # read once per model, for every key
 
 
 class _ThinkingRejected(Exception):
@@ -295,14 +336,17 @@ class AnthropicText:
     ) -> dict[str, Any]:
         ctx = require_context()
         effort = effort_for(capability, ctx.product_id)
+        shape = SHAPES.get(self._model) or shape_of(self._model)
         body: dict[str, Any] = {
             "model": self._model,
             "max_tokens": MAX_TOKENS[effort],
             "messages": messages,
-            "output_config": {"effort": effort},
+            "output_config": {"effort": effort} if shape.effort else {},
             "cache_control": {"type": "ephemeral"},
         }
-        if thinking_off:
+        if not shape.adaptive:
+            pass  # a model before adaptive thinking runs without thinking
+        elif thinking_off and shape.can_turn_off:
             body["thinking"] = {"type": "disabled"}
         else:
             body["thinking"] = (
@@ -315,8 +359,32 @@ class AnthropicText:
         if tools:
             body["tools"] = tools
         if schema is not None:
-            body["output_config"]["format"] = {"type": "json_schema", "schema": schema}
+            # Anthropic refuses counts and lengths it cannot enforce (minItems above 1, minLength,
+            # found in CP13); the SDK moves them into the descriptions, and callers check answers
+            strict = transform_schema(schema)
+            body["output_config"]["format"] = {"type": "json_schema", "schema": strict}
+        if not body["output_config"]:
+            del body["output_config"]
         return body
+
+    async def _learn_shape(self) -> None:
+        """Read this model's capabilities once (`SHAPES`); when they cannot be read, its name
+        says enough (`shape_of`), and it is asked again next time."""
+        if self._model in SHAPES:
+            return
+        client = self._make()
+        try:
+            found = await client.models.retrieve(self._model)
+            caps = getattr(found, "capabilities", None)
+            if caps is not None and not isinstance(caps, dict):  # the SDK's typed tree
+                caps = caps.model_dump(exclude_none=True)
+            if isinstance(caps, dict) and caps:
+                SHAPES[self._model] = shape_of(self._model, caps)
+        except Exception:  # the request goes as its name says; Anthropic's answer will say more
+            log.info("could not read the capabilities of %s", self._model)
+        finally:
+            if self._client is None:
+                await client.close()
 
     async def _run(
         self, capability: str, body: dict[str, Any], thinking_retry: bool = False
@@ -377,6 +445,7 @@ class AnthropicText:
         self, capability: str, system: str, prompt: Prompt, schema: dict[str, Any] | None = None
     ) -> AsyncIterator[str]:
         messages = [{"role": "user", "content": prompt_content(prompt)}]
+        await self._learn_shape()
         body = self._request(capability, system, messages, show_thinking=False, schema=schema)
         async for chunk in self._run(capability, body):
             if chunk.text:
@@ -390,6 +459,7 @@ class AnthropicText:
         thinking: bool = False,
     ) -> AsyncIterator[ChatChunk]:
         conv = to_anthropic(messages, self._replay)
+        await self._learn_shape()
         # thinking can be turned off at effort high or below, which is all this module asks for
         body = self._request(
             capability, conv.system, conv.messages, show_thinking=thinking,

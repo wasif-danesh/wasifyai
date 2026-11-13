@@ -222,7 +222,7 @@ async def test_3d_on_this_computer_is_untouched():
 async def test_3d_on_the_key_needs_nothing_set_up_and_runs_on_fal(tmp_path: Path):
     fal = Fal({"model_glb": {"url": "https://v3.fal.media/m.glb"}}, GLB)
     local, keys = Local3d(), keys_service()
-    await on_key(keys, "model3d", "fal-ai/pixal3d")
+    await on_key(keys, "model3d", "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d")
     engine = KeyedModel3d(local, keys, fal.client, poll_s=0)
     assert engine.ready() and engine.problem() is None
     assert engine.fit()["verdict"] == "fits"
@@ -238,18 +238,16 @@ async def test_3d_on_the_key_needs_nothing_set_up_and_runs_on_fal(tmp_path: Path
     assert res.ok and res.output == tmp_path / "model.glb"
     assert (tmp_path / "model.glb").read_bytes() == GLB
     ((url, body),) = fal.posts()
-    assert url == "https://queue.fal.run/fal-ai/pixal3d"
-    assert fal.uploads[body["image_url"]] == PNG  # uploaded first, then named by its address
-    assert {k: body[k] for k in ("seed", "resolution", "texture_size")} == {
-        "seed": 7, "resolution": 1024, "texture_size": 4096,
-    }  # fmt: skip
+    assert url == "https://queue.fal.run/fal-ai/hunyuan-3d/v3.1/pro/image-to-3d"
+    assert fal.uploads[body["input_image_url"]] == PNG  # uploaded first, named by its address
+    assert body["seed"] == 7
     assert seen and local.ran == []
 
 
 async def test_the_cut_out_on_the_key_is_made_by_fal_too(tmp_path: Path):
     fal = Fal({"image": {"url": "https://v3.fal.media/cut.png"}}, PNG)
     local, keys = Local3d(), keys_service()
-    await on_key(keys, "model3d", "fal-ai/pixal3d")
+    await on_key(keys, "model3d", "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d")
     engine = KeyedModel3d(local, keys, fal.client, poll_s=0)
     picture = tmp_path / "picture.png"
     picture.write_bytes(PNG)
@@ -263,7 +261,7 @@ async def test_the_cut_out_on_the_key_is_made_by_fal_too(tmp_path: Path):
 
 async def test_a_3d_failure_on_fal_is_a_failed_run_in_fals_words(tmp_path: Path):
     local, keys = Local3d(), keys_service()
-    await on_key(keys, "model3d", "fal-ai/pixal3d")
+    await on_key(keys, "model3d", "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d")
     engine = KeyedModel3d(local, keys, Fal({}, GLB, submit=429).client, poll_s=0)
     cutout = tmp_path / "cutout.png"
     cutout.write_bytes(PNG)
@@ -274,7 +272,7 @@ async def test_a_3d_failure_on_fal_is_a_failed_run_in_fals_words(tmp_path: Path)
 
 async def test_removing_the_3d_key_brings_it_back_here_at_once():
     local, keys = Local3d(), keys_service()
-    await on_key(keys, "model3d", "fal-ai/pixal3d")
+    await on_key(keys, "model3d", "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d")
     engine = KeyedModel3d(local, keys)
     assert engine.ready()
     await keys.remove_key("model3d", "fal")

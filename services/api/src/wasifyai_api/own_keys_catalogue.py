@@ -13,7 +13,9 @@ kind of request, its body in the runner). Prices are as each provider lists them
 
 # ruff: noqa: E501 - the catalogue is a table, one model to a line
 
+from collections.abc import Collection
 from dataclasses import dataclass
+from typing import Any
 
 from wasifyai_platform_sdk.offers import Offer, cheapest_words, offer
 
@@ -62,6 +64,21 @@ CATALOGUE: tuple[CloudModel, ...] = (
     # million tokens in / out, checked 2026-11-12, docs/spikes/cloud-v1-cp0.md)
     _m("chat", "anthropic", "claude-haiku-5-5", "Claude Haiku 5.5", "Anthropic. Quick and cheap; the default.", "$0.10 in / $0.50 out per million tokens"),
     _m("chat", "anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5", "Anthropic. For harder work.", "$2 in / $10 out per million tokens"),
+    # every other model the key lists is shown too (owner, 2026-11-13); these lines give the ones
+    # Anthropic lists today their words and prices (the claude-api notes, 2026-11-03)
+    _m("chat", "anthropic", "claude-fable-5-2", "Claude Fable 5.2", "Anthropic. The most capable.", "$8 in / $40 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-5-5", "Claude Opus 5.5", "Anthropic. Long, demanding work.", "$4 in / $20 out per million tokens"),
+    _m("chat", "anthropic", "claude-fable-5-1", "Claude Fable 5.1", "Anthropic. The previous Fable.", "$10 in / $50 out per million tokens"),
+    _m("chat", "anthropic", "claude-fable-5", "Claude Fable 5", "Anthropic. An older Fable.", "$10 in / $50 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-5", "Claude Opus 5", "Anthropic. The previous Opus.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-sonnet-5", "Claude Sonnet 5", "Anthropic. The previous Sonnet.", "$2 in / $10 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-4-8", "Claude Opus 4.8", "Anthropic. An older Opus.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-4-7", "Claude Opus 4.7", "Anthropic. An older Opus.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-4-6", "Claude Opus 4.6", "Anthropic. An older Opus.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-sonnet-4-6", "Claude Sonnet 4.6", "Anthropic. An older Sonnet.", "$3 in / $15 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-4-5-20251101", "Claude Opus 4.5", "Anthropic. An older Opus; does not think here.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-sonnet-4-5-20250929", "Claude Sonnet 4.5", "Anthropic. An older Sonnet; does not think here.", "$3 in / $15 out per million tokens"),
+    _m("chat", "anthropic", "claude-haiku-4-5-20251001", "Claude Haiku 4.5", "Anthropic. The previous Haiku; does not think here.", "$1 in / $5 out per million tokens"),
     _m("chat", "openai", "gpt-6-luna", "GPT-6 Luna", "OpenAI.", "$0.10 in / $0.50 out per million tokens"),
     _m("chat", "gemini", "gemini-3.8-flash", "Gemini 3.8 Flash", "Google.", "$0.75 in / $3.75 out per million tokens"),
     _m("chat", "deepseek", "deepseek-flash", "DeepSeek V4.1 Flash", "DeepSeek, in China.", "$0.30 in / $1.20 out per million tokens"),
@@ -98,27 +115,29 @@ CATALOGUE: tuple[CloudModel, ...] = (
                  endpoints={"inpaint": "fal-ai/z-image/turbo/inpaint", "lora": "fal-ai/z-image/turbo/lora"})),
     # ---- video (ADR-0100, CP5: per second at 720p, 768p for MiniMax H3, without sound; "animate"
     # starts from a picture, "extend" makes a clip longer; prices as listed 2026-11-12)
+    # a clip's `minimum` is its shortest length's price: shorter asks are made at that length; the
+    # Runware prices are what its jobs cost in CP13 (`includeCost`)
     _media("video", "gemini-omni-flash-1.2", "Gemini Omni Flash 1.2", "Google. Makes and animates clips of 3 to 15 s, wide or tall; extends them with a Runware key.",
-           offer("runware", "google:gemini@omni-flash-1.2", 0.07, "second", "animate", "extend"),
-           offer("wavespeed", "google/gemini-omni-1.2-flash/text-to-video", 0.07, "second", "animate",
+           offer("runware", "google:gemini@omni-flash-1.2", 0.07, "second", "animate", "extend", minimum=0.21),
+           offer("wavespeed", "google/gemini-omni-1.2-flash/text-to-video", 0.07, "second", "animate", minimum=0.21,
                  endpoints={"animate": "google/gemini-omni-1.2-flash/image-to-video"})),
     _media("video", "seedance-2.5", "Seedance 2.5", "ByteDance. The best motion; makes, animates and extends clips of 4 to 30 s.",
-           offer("runware", "bytedance:seedance@2.5", 0.23, "second", "animate", "extend"),
-           offer("wavespeed", "bytedance/seedance-2.5/text-to-video", 0.36, "second", "animate", "extend",
+           offer("runware", "bytedance:seedance@2.5", 0.23, "second", "animate", "extend", minimum=0.92),
+           offer("wavespeed", "bytedance/seedance-2.5/text-to-video", 0.36, "second", "animate", "extend", minimum=1.44,
                  endpoints={"animate": "bytedance/seedance-2.5/image-to-video",
                             "extend": "bytedance/seedance-2.5/video-extend"})),
     _media("video", "minimax-h3-max", "MiniMax H3 Max", "MiniMax. Makes and animates clips of 5 to 10 s; extends them with a fal.ai key.",
-           offer("runware", "minimax:h3@max", 0.08, "second", "animate"),
-           offer("fal", "minimax/h3-max/text-to-video", 0.08, "second", "animate", "extend",
+           offer("runware", "minimax:h3@max", 0.056, "second", "animate", minimum=0.28),
+           offer("fal", "minimax/h3-max/text-to-video", 0.08, "second", "animate", "extend", minimum=0.40,
                  endpoints={"animate": "minimax/h3-max/image-to-video",
                             "extend": "minimax/h3-max/extend-video"})),
     _media("video", "minimax-h3-max-turbo", "MiniMax H3 Max Turbo", "MiniMax, quicker and half the price; extends clips with a fal.ai key.",
-           offer("runware", "minimax:h3@max-turbo", 0.04, "second", "animate"),
-           offer("fal", "minimax/h3-max-turbo/text-to-video", 0.04, "second", "animate", "extend",
+           offer("runware", "minimax:h3@max-turbo", 0.028, "second", "animate", minimum=0.14),
+           offer("fal", "minimax/h3-max-turbo/text-to-video", 0.04, "second", "animate", "extend", minimum=0.20,
                  endpoints={"animate": "minimax/h3-max-turbo/image-to-video",
                             "extend": "minimax/h3-max-turbo/extend-video"})),
     _media("video", "grok-imagine-video-1.5-lite", "Grok Imagine Video 1.5 lite", "xAI. The cheapest; makes and animates clips of 1 to 15 s.",
-           offer("runware", "xai:grok-imagine@video-1.5-lite", 0.03, "second", "animate"),
+           offer("runware", "xai:grok-imagine@video-1.5-lite", 0.04, "second", "animate"),
            offer("fal", "xai/grok-imagine-video/v1.5/lite/text-to-video", 0.03, "second", "animate",
                  endpoints={"animate": "xai/grok-imagine-video/v1.5/lite/image-to-video"})),
     # ---- voice (ADR-0100, CP7: speaking per 1,000 characters; a copied or designed MiniMax voice
@@ -164,24 +183,24 @@ CATALOGUE: tuple[CloudModel, ...] = (
     _media("music", "minimax-music-3", "MiniMax Music 3", "Songs with your lyrics, or it writes them.",
            # fal.ai counts seconds: cheaper below 75 s, and MiniMax picks the length (ADR-0100, CP8)
            offer("wavespeed", "minimax/music-3.0", 0.15, "song"),
-           offer("fal", "fal-ai/minimax-music/v3", 0.002, "second")),
+           offer("fal", "minimax/music-3", 0.002, "second")),
     _media("music", "elevenlabs-music", "ElevenLabs Music v2.5", "Instrumentals or vocals, 3 s to 10 min.",
            offer("wavespeed", "elevenlabs/music-v2.5", 0.75, "minute"),
            offer("fal", "fal-ai/elevenlabs/music", 0.60, "minute")),
     _media("music", "mureka-v9.5", "Mureka v9.5", "Sings your lyrics, or makes an instrumental.",
            offer("wavespeed", "mureka-ai/mureka-v9.5/generate-song", 0.225, "song",
                  endpoints={"instrumental": "mureka-ai/mureka-v9.5/generate-bgm"}),
-           offer("fal", "fal-ai/mureka/v9.5/song", 0.15, "song", setting="task",
+           offer("fal", "mureka/v9.5/generate/song", 0.15, "song", setting="task",
                  by={"song": 0.15, "instrumental": 0.50},
-                 endpoints={"instrumental": "fal-ai/mureka/v9.5/instrumental"})),
+                 endpoints={"instrumental": "mureka/v9.5/generate/instrumental"})),
     _media("sfx", "elevenlabs-sfx-v3", "ElevenLabs Sound Effects v3", "0.5 to 30 s.",
            offer("wavespeed", "elevenlabs/sound-effects-v3", 0.002, "second"),
            offer("fal", "fal-ai/elevenlabs/sound-effects/v3", 0.002, "second")),
     _media("sfx", "mirelo-sfx-2", "Mirelo SFX 2.0", "Sound effects and ambience, 1 s to 2 min.",
            offer("wavespeed", "mirelo-ai/sfx-2.0/text-to-audio", 0.02, "second"),
-           offer("fal", "mirelo-ai/sfx-v2/text-to-audio", 0.01, "second")),
+           offer("fal", "mirelo-ai/sfx2.0/text-to-audio", 0.01, "second")),
     _media("sfx", "stable-audio-3-sfx", "Stable Audio 3 small", "Sound effects and ambience, up to 2 min.",
-           offer("fal", "fal-ai/stable-audio-3/small/sfx", 0.02, "clip")),
+           offer("fal", "fal-ai/stable-audio-3/small/sfx/text-to-audio", 0.0206, "clip")),
     _media("sfx", "elevenlabs-sfx-v2", "ElevenLabs Sound Effects", "0.5 to 22 s, can loop.",
            offer("fal", "fal-ai/elevenlabs/sound-effects/v2", 0.002, "second")),
     _media("split", "demucs", "Demucs", "Drums, bass, vocals, guitar, piano and the rest.",
@@ -191,13 +210,13 @@ CATALOGUE: tuple[CloudModel, ...] = (
            offer("fal", "fal-ai/sam-audio/separate", 0.001667, "second", minimum=0.05)),
     _media("split", "mureka-stems", "Mureka stems", "The singing, and the backing.",
            offer("wavespeed", "mureka-ai/stem-song", 0.09, "song"),
-           offer("fal", "fal-ai/mureka/stem-song", 0.02, "song")),
+           offer("fal", "mureka/api/song/stem", 0.02, "song")),
     _media("musicedit", "ace-step-edit", "ACE-Step 1.5", "Writes a stretch of a clip again, up to 4 min.",
            # Runware bills its compute time: about $0.012 a minute of music (provider-cost spike)
            offer("runware", "runware:ace-step@v1.5-turbo", 0.0002, "second"),
            offer("fal", "fal-ai/ace-step/audio-inpaint", 0.0002, "second")),
     _media("musicedit", "stable-audio-3-inpaint", "Stable Audio 3", "Fills a stretch of a clip in, up to 2 min.",
-           offer("fal", "fal-ai/stable-audio-3/medium/inpaint", 0.044, "clip")),
+           offer("fal", "fal-ai/stable-audio-3/medium/audio-inpainting", 0.0442, "clip")),
     # ---- lip sync (speed: seconds of work per second of video, fal.ai, 2026-11-12, docs/spikes/lipsync-cloud-race.md;
     # LongCat Avatar was taken off the same day: a black video). ADR-0100, CP6: the cheaper offer beside fal.ai
     _media("lipsync", "fabric-1.0", "Fabric 1.0 Fast", "VEED. Quickest; crops to a square. Up to 1 min.",
@@ -207,7 +226,7 @@ CATALOGUE: tuple[CloudModel, ...] = (
            speed="5 to 25 s per second of video at 480p (two runs)"),
     _media("lipsync", "kling-avatar-v2", "Kling Avatar v2", "Keeps the picture's shape; moves the head most. Up to 1 min.",
            offer("runware", "klingai:avatar@2.0-standard", 0.044, "second"),
-           offer("fal", "fal-ai/kling-video/ai-avatar/v2/standard", 0.06, "second"),
+           offer("fal", "fal-ai/kling-video/ai-avatar/v2/standard", 0.0562, "second"),
            speed="about 40 s per second of video"),
     _media("lipsync", "omnihuman-1.5", "OmniHuman 1.5", "ByteDance, turbo. Natural blinks and movement. 720p, up to 1 min.",
            offer("runware", "bytedance:5@2", 0.132, "second"),
@@ -220,21 +239,44 @@ CATALOGUE: tuple[CloudModel, ...] = (
     # ---- 3D
     # ---- Train models (ADR-0100, CP10): picture looks, used afterwards on the cloud image model
     _media("train", "flux3-klein-look", "Picture look on FLUX.3 klein", "Black Forest Labs' trainer. People, things or a style.",
-           offer("fal", "fal-ai/flux-3-klein-trainer", 0.0043, "step", "style", "content")),
+           offer("fal", "blackforestlabs/flux-3/klein/base/trainer", 0.0043, "step", "style", "content")),
     _media("train", "z-image-look", "Picture look on Z-Image", "Tongyi. Style looks on Runware; people and things on fal.ai.",
            offer("runware", "runware:z-image@style-lora-training", 0.00182, "step", "style"),
            offer("fal", "fal-ai/z-image-trainer", 0.00226, "step", "style", "content")),
-    _media("model3d", "pixal3d", "Pixal3D", "A textured 3D model from a picture.",
-           offer("fal", "fal-ai/pixal3d", 0.06, "model")),
     # ADR-0100, CP9. Hunyuan3D without PBR ($0.15 more on both); TRELLIS 2 on Runware is billed by
     # compute time, about a cent a model (CP0)
     _media("model3d", "hunyuan3d-3.1-pro", "Hunyuan3D 3.1 Pro", "Tencent. Detailed textured models from a picture.",
            offer("runware", "tencent:hunyuan-3d@3.1-pro", 0.375, "model"),
-           offer("fal", "fal-ai/hunyuan3d-v31/pro/image-to-3d", 0.375, "model")),
+           offer("fal", "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d", 0.375, "model")),
     _media("model3d", "trellis-2", "TRELLIS 2", "Microsoft. Quick textured models from a picture.",
-           offer("runware", "microsoft:trellis-2@4b", 0.01, "model"),
+           offer("runware", "microsoft:trellis-2@4b", 0.028, "model"),
            offer("wavespeed", "wavespeed-ai/trellis-2/image-to-3d", 0.20, "model")),
 )  # fmt: skip
+
+
+# A product whose default is its cheapest model rather than its first (owner, 2026-11-13), priced
+# at the job its screen starts with; a model here is never the default, only chosen by hand
+CHEAPEST_DEFAULT: dict[str, dict[str, Any]] = {"lipsync": {"resolution": "480p", "seconds": 1}}
+NEVER_DEFAULT = {("lipsync", "infinitalk")}
+
+
+def default_model(product: str, keyed: Collection[str]) -> str | None:
+    """The media model `product` runs on until one is chosen, with keys for the providers in
+    `keyed`: the first in the list that a key can run or, for a product in `CHEAPEST_DEFAULT`, the
+    one whose cheapest keyed offer costs least (a tie goes to the first in the list)."""
+    runs = [
+        m for m in models_of(product)
+        if m.media and (product, m.model) not in NEVER_DEFAULT
+        and any(o.provider in keyed for o in m.offers)
+    ]  # fmt: skip
+    if not runs:
+        return None
+    job = CHEAPEST_DEFAULT.get(product)
+    if job is None:
+        return runs[0].model
+    return min(
+        runs, key=lambda m: min(o.price.of(job) for o in m.offers if o.provider in keyed)
+    ).model
 
 
 def models_of(product: str, provider: str | None = None) -> list[CloudModel]:

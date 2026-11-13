@@ -431,7 +431,8 @@ def seed_clip(state, clip_id="c1", script="Welcome everybody"):
     finally:
         reset_context(token)
     return store_for(state).add_clip(
-        "t1", "u1", title="Greeting", model_id="echomimic-v3-flash", picture_key="lipsync/pictures/p.png",
+        "t1", "u1", title="Greeting", model_id="echomimic-v3-flash",
+        picture_key="lipsync/pictures/p.png",
         video_key=f"lipsync/{clip_id}.mp4", voice={"kind": "speech", "id": "s"}, script=script,
         seconds=2, fps=25, width=80, height=60,
         load_s=0, elapsed_s=1, clip_id=clip_id,

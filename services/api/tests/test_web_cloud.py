@@ -69,6 +69,27 @@ async def test_a_tenant_key_runs_its_products_on_the_first_model_a_key_can_run()
     assert await admin.plan_of("t1", "wasifyai-voice") is None  # not a picture or clip job
 
 
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    [("fal", "kling-avatar-v2"), ("wavespeed", "fabric-1.0"), ("runware", "kling-avatar-v2")],
+)
+async def test_lip_sync_runs_on_the_cheapest_model_the_keys_can_run_never_infinitetalk(
+    provider: str, model: str
+):
+    # InfiniteTalk on WaveSpeed is the cheapest of all ($0.03 a second), but it is only chosen
+    # by hand
+    admin = providers()
+    await admin.for_tenant("t1").save_key("media", provider, KEY)
+    view = await admin.for_tenant("t1").view()
+    lipsync = next(p for p in view["products"] if p["id"] == "lipsync")
+    assert lipsync["use"]["model"] == model
+    if provider == "runware":
+        return  # InfiniteTalk is not on Runware
+    await admin.for_tenant("t1").use("lipsync", None, "infinitalk")  # still there to choose
+    view = await admin.for_tenant("t1").view()
+    assert next(p for p in view["products"] if p["id"] == "lipsync")["use"]["model"] == "infinitalk"
+
+
 async def test_the_model_the_admin_chose_is_the_one_a_job_runs_on():
     admin = providers()
     keys = admin.for_tenant("t1")

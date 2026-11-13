@@ -8,10 +8,13 @@ Four cloud products carry the music tools, each with its own model in use (Setti
 `docs/spikes/cloud-v1-cp0.md` and the providers' model pages show them (read 2026-11-12); the ones
 not shown there are marked "(CP13)" and checked in the real run."""
 
+import io
+import zipfile
 from dataclasses import dataclass
 from typing import Any
 
 from wasifyai_platform_sdk import MusicEditRequest, MusicRequest, VoiceEngineError
+from wasifyai_platform_sdk.fal import FalError
 from wasifyai_platform_sdk.voice_models import VoiceModel
 
 KEYED_MUSIC = "key:music"
@@ -36,7 +39,7 @@ MINIMAX_MODES = {
 }
 MINIMAX = (  # MiniMax's endpoints, each of which refuses a description under ten letters
     "fal-ai/minimax-music/v2.6", "minimax/music-2.6", "minimax:music@2.6",
-    "fal-ai/minimax-music/v3", "minimax/music-3.0",
+    "minimax/music-3", "minimax/music-3.0",
 )  # fmt: skip
 MINIMAX_MIN_PROMPT = 10
 # by the catalogue's id for the model (`own_keys_catalogue.py`); an admin's row on the web names
@@ -58,6 +61,11 @@ MUSIC_MODELS: dict[str, tuple[str, dict[str, Any]]] = {
     "mirelo-sfx-2": ("Mirelo SFX 2.0", {"sfx": {"duration": [1, 5, 120]}}),
     "stable-audio-3-sfx": ("Stable Audio 3 small", {"sfx": {"duration": [1, 8, 120]}}),
 }  # fmt: skip
+
+
+def _needs_lyrics(where: str) -> FalError:
+    """Refused before anything is sent, so another offer of the model may take it."""
+    return FalError("provider_refused", f"{where} sings only words it is given: add lyrics.", True)
 
 
 def music_job(req: MusicRequest) -> dict[str, Any]:
@@ -87,12 +95,21 @@ def music_body(endpoint: str, req: MusicRequest) -> dict[str, Any]:
             "taskType": "audioInference", "positivePrompt": req.description,
             "outputFormat": "WAV", "settings": settings, "includeCost": True,
         }  # fmt: skip
-    if endpoint in ("minimax/music-2.6", "minimax/music-3.0"):  # WaveSpeed writes the words itself
+    if endpoint in ("minimax/music-2.6", "minimax/music-3.0"):  # WaveSpeed
         ws: dict[str, Any] = {"prompt": req.description, "is_instrumental": req.instrumental}
         if req.lyrics:
             ws["lyrics"] = req.lyrics
+        elif not req.instrumental:
+            # a song needs words: Music 3 writes them when asked; 2.6 here cannot (CP13)
+            if endpoint == "minimax/music-2.6":
+                raise _needs_lyrics("MiniMax Music 2.6 on WaveSpeed")
+            ws["lyrics_optimizer"] = True
         return ws
-    if endpoint in ("fal-ai/minimax-music/v2.6", "fal-ai/minimax-music/v3"):
+    if endpoint == "minimax/music-3":  # fal.ai: it takes words only, and picks no length (CP13)
+        if req.instrumental or not req.lyrics:
+            raise _needs_lyrics("MiniMax Music 3 on fal.ai")
+        return {"prompt": req.description, "lyrics": req.lyrics}
+    if endpoint == "fal-ai/minimax-music/v2.6":
         body: dict[str, Any] = {"prompt": req.description, "is_instrumental": req.instrumental}
         if req.lyrics:
             body["lyrics"] = req.lyrics
@@ -104,17 +121,17 @@ def music_body(endpoint: str, req: MusicRequest) -> dict[str, Any]:
             "prompt": req.description, "music_length_ms": round(req.duration * 1000),
             "force_instrumental": req.instrumental,
         }  # fmt: skip
-    if endpoint.startswith(("mureka-ai/", "fal-ai/mureka/")):  # a song takes lyrics; bgm does not
+    if endpoint.startswith(("mureka-ai/", "mureka/")):  # a song takes lyrics; bgm does not
         mureka: dict[str, Any] = {"prompt": req.description}
         if not req.instrumental:
             mureka["lyrics"] = req.lyrics
         return mureka
-    if endpoint == "elevenlabs/sound-effects-v3":  # WaveSpeed
-        return {"text": req.description, "duration_seconds": req.duration, "loop": False}
-    if endpoint in ("mirelo-ai/sfx-2.0/text-to-audio", "mirelo-ai/sfx-v2/text-to-audio"):
+    if endpoint == "elevenlabs/sound-effects-v3":  # WaveSpeed (CP13: its names)
+        return {"prompt": req.description, "duration": req.duration, "loop": False}
+    if endpoint in ("mirelo-ai/sfx-2.0/text-to-audio", "mirelo-ai/sfx2.0/text-to-audio"):
         return {"prompt": req.description, "duration": req.duration}  # (CP13: fal.ai's names)
-    if endpoint == "fal-ai/stable-audio-3/small/sfx":  # (CP13)
-        return {"prompt": req.description, "seconds_total": req.duration}
+    if endpoint == "fal-ai/stable-audio-3/small/sfx/text-to-audio":  # (CP13)
+        return {"prompt": req.description, "duration": req.duration, "output_format": "wav"}
     return {"text": req.description, "duration_seconds": req.duration}  # fal.ai's ElevenLabs SFX
 
 
@@ -151,6 +168,7 @@ SPLIT_MODELS: dict[str, CloudSplit] = {
     ),
 }  # fmt: skip
 SPLIT_RATE = 44100
+MP3_ONLY = {("mureka-stems", "fal")}  # splitters that cannot read a WAV: sent an MP3 (CP13)
 SAM_PROMPT = "singing voice"
 
 
@@ -179,6 +197,33 @@ def stems_of(model_id: str, result: dict[str, Any]) -> list[tuple[str, Any]]:
         item = holder.get(theirs)
         if item and ours not in (s for s, _ in found):
             found.append((ours, item))
+    return found
+
+
+# a stem's file in a zip, by the words its name holds (Mureka stems on fal.ai answers a zip, CP13)
+ZIP_STEMS = (("vocal", "vocals"), ("accompan", "instrumental"), ("instrument", "instrumental"),
+             ("backing", "instrumental"), ("drum", "drums"), ("bass", "bass"))  # fmt: skip
+AUDIO_EXTS = (".wav", ".mp3", ".flac", ".m4a", ".ogg")
+
+
+def stems_in_zip(model_id: str, data: bytes) -> list[tuple[str, bytes, str]]:
+    """The stems of a splitter's zip, by this app's names (each name once), with their files."""
+    wanted = set(SPLIT_MODELS[model_id].stems)
+    found: list[tuple[str, bytes, str]] = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            for info in z.infolist():
+                low = info.filename.lower()
+                ext = next((e for e in AUDIO_EXTS if low.endswith(e)), None)
+                if ext is None or low.startswith("__macosx"):
+                    continue
+                name = next((ours for word, ours in ZIP_STEMS if word in low), None)
+                if name in wanted and name not in (n for n, _, _ in found):
+                    found.append((name, z.read(info), ext))
+    except zipfile.BadZipFile:
+        raise VoiceEngineError(
+            "engine_failed", "The parts came back in a file that is not a zip."
+        ) from None
     return found
 
 
@@ -226,7 +271,7 @@ def edit_body(endpoint: str, provider: str, audio: str, req: MusicEditRequest) -
     if provider == "runware":  # ACE-Step's repaint: an `audioInference` task (CP0)
         return {
             "taskType": "audioInference", "positivePrompt": req.description,
-            "inputs": {"audio": audio}, "duration": round(req.source_seconds, 2),
+            "inputs": {"audio": audio},  # no `duration` with a clip: Runware refuses it (CP13)
             "settings": {"repaintingStart": round(start, 2), "repaintingEnd": round(end, 2)},
             "outputFormat": "WAV", "includeCost": True,
         }  # fmt: skip
@@ -236,8 +281,8 @@ def edit_body(endpoint: str, provider: str, audio: str, req: MusicEditRequest) -
             "start_time": round(start, 2), "end_time": round(end, 2),
         }  # fmt: skip
     return {  # Stable Audio 3 inpainting on fal.ai (CP13)
-        "audio_url": audio, "prompt": req.description,
-        "mask_start": round(start, 2), "mask_end": round(end, 2),
+        "audio_url": audio, "prompt": req.description, "output_format": "wav",
+        "mask_start_seconds": round(start, 2), "mask_end_seconds": round(end, 2),
     }  # fmt: skip
 
 

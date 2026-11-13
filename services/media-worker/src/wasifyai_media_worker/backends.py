@@ -10,7 +10,7 @@ import logging
 import mimetypes
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import httpx
@@ -35,7 +35,7 @@ from wasifyai_platform_sdk.offers import (
     run_cheapest,
 )
 
-from wasifyai_media_worker.cloud_recipes import RECIPES, ask_of
+from wasifyai_media_worker.cloud_recipes import EXTEND_NEW_PART_ONLY, RECIPES, ask_of
 from wasifyai_media_worker.comfy import ComfyClient, ComfyError, ProgressFn, use_picture
 from wasifyai_media_worker.settings import WorkerSettings
 
@@ -530,9 +530,11 @@ class RecipeRunner:
         self, model: str, c: CloudChoice, http: httpx.AsyncClient, timeout_s: float, poll_s: float
     ):
         self.backend = c.provider
+        self._new_part_only = (c.provider, model) in EXTEND_NEW_PART_ONLY
         self._recipe = RECIPES[(c.provider, model)]
         self._offer = c.offer
         self._queue = queue_for(c.provider, c.key, http, timeout_s, poll_s, c.base_url)
+        self.charged: float | None = None  # what the provider said the job cost (Runware does)
 
     async def run(
         self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
@@ -542,16 +544,21 @@ class RecipeRunner:
         )
         video = kind == "video"
         if job.capability == "video.extend":
-            name = "extended"  # the clip it was sent, then the new part: the product joins it (CP5)
+            # "extended": the clip it was sent, then the new part (CP5); "continued": the new part
+            # alone (CP13); the product joins either to the clip
+            name = "continued" if self._new_part_only else "extended"
         send = self._queue.upload  # each provider's way: a file store, or inside the task
         try:
             endpoint, body = await self._recipe(ask_of(job, files), self._offer, send)
-            data, ctype, _ = await self._queue.make(
+            data, ctype, result = await self._queue.make(
                 endpoint, body, "video" if video else "images",
                 "video/mp4" if video else "image/png", on_progress,
             )  # fmt: skip
         except FalError as e:
             raise _fal_failed(e) from None
+        charged = result.get("cost") if isinstance(result, dict) else None
+        if isinstance(charged, int | float) and not isinstance(charged, bool) and charged > 0:
+            self.charged = float(charged)
         await on_progress(1.0)
         return {name: (data, ctype, _EXT.get(ctype, "mp4" if video else "png"))}
 
@@ -622,12 +629,17 @@ class OfferRunner:
             e = no_offer(self._title, [c.offer for c in self._choices], needs, None)
             raise ComfyError(e.code, e.message)
 
+        ran: list[Any] = []
+
         async def attempt(p: Priced[CloudChoice]) -> Files:
             self.backend = p.choice.provider
-            return await self._runner(p.choice).run(job, on_progress, files)  # type: ignore[no-any-return]
+            ran.append(self._runner(p.choice))
+            return await ran[-1].run(job, on_progress, files)  # type: ignore[no-any-return]
 
         made, used = await run_cheapest(ordered, attempt)
-        self.cost = used
+        charged = getattr(ran[-1], "charged", None) if ran else None
+        # what the provider said it cost, when it says (Runware: `includeCost`), else the list price
+        self.cost = replace(used, cost=charged) if charged else used
         return made
 
 

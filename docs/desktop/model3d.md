@@ -24,10 +24,10 @@ computer and each model runs on the cheapest offer with a key (`KeyedModel3d` in
 
 | Model | Offers | What it is sent |
 |---|---|---|
-| Pixal3D | fal.ai $0.06 a model | the cut-out, uploaded to fal.ai; seed, resolution 1024, texture size from Detail |
-| Hunyuan3D 3.1 Pro | Runware $0.375, fal.ai $0.375 (a tie goes to Runware); PBR is not asked for | Runware: a `3dInference` task with the picture inside it; fal.ai: `input_image_url` |
-| TRELLIS 2 | Runware about $0.01 (billed by compute time), WaveSpeed $0.20 | Runware: the task, resolution 1024; WaveSpeed: the picture uploaded, resolution 1024, texture size from Detail, `remove_background` |
+| Hunyuan3D 3.1 Pro | Runware $0.375, fal.ai $0.375 (a tie goes to Runware); PBR is not asked for | Runware: a `3dInference` task with the picture in `inputs.images`, no seed; fal.ai (`fal-ai/hunyuan-3d/v3.1/pro/image-to-3d`): `input_image_url` |
+| TRELLIS 2 | Runware $0.028 (billed by compute time; $0.025 to $0.029 measured), WaveSpeed $0.20 | Runware: the task with the picture in `inputs.image`, a seed, resolution 1024; WaveSpeed: the picture uploaded, resolution 1024, texture size from Detail, `remove_background` |
 
 The cut-out is fal.ai's (BiRefNet) when a fal.ai key is there; without one the picture goes as it is, since these
-models cut the picture out themselves. Runware's task name and answer field (`3dInference`, `objectURL`) and fal.ai's
-Hunyuan3D endpoint are not on the providers' pages and are checked in the real run (CP13).
+models cut the picture out themselves. Runware answers a 3D task's file in `outputs.files[0].url` (checked in the real
+run, CP13). Pixal3D is not a cloud model: fal.ai has no model at `fal-ai/pixal3d` (CP13), so it runs only on this
+computer, above.

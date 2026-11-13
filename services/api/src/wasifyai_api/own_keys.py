@@ -27,6 +27,7 @@ Chat and every text product follow `route("chat")` (`own_keys_text.py`); images 
 the media worker (`own_keys_media.py`); speaking, music, lip sync and 3D through `known`
 (`own_keys_engines.py`)."""
 
+import hashlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -147,6 +148,11 @@ def providers_for(product: Product) -> list[str]:
         v for v in catalogue.providers_of(product.id)
         if v in PROVIDERS and PROVIDERS[v].url_for(product.kind)
     ]  # fmt: skip
+
+
+def listed_price(provider: str) -> str:
+    """The price line of a model the vendor lists and the catalogue does not."""
+    return f"price as {PROVIDERS[provider].title} lists it"
 
 
 def secret_name(product: str, provider: str) -> str:
@@ -352,6 +358,48 @@ async def try_media(provider: Provider, model: str, key: str, base_url: str) -> 
     return await MEDIA_TESTERS[provider.id](provider, model, key, base_url)
 
 
+# ---- every model a text vendor lists on the key (owner, 2026-11-13: they pick what they want)
+
+# (the vendor's model id, its name), newest first where the vendor says
+Listed = list[tuple[str, str]]
+Lister = Callable[[Provider, str], Awaitable[Listed]]
+LIST_FOR_S = 600.0  # a vendor's list is asked again after ten minutes
+# what an OpenAI-compatible list holds besides chat models
+NOT_CHAT = ("embed", "tts", "whisper", "dall-e", "moderation", "transcribe", "realtime", "image",
+            "audio", "sora", "search", "rerank")  # fmt: skip
+
+
+async def list_models(provider: Provider, key: str) -> Listed:
+    """The models `provider` serves on `key`: Anthropic's Models API, or the OpenAI-compatible
+    `GET /models` of the others. A failure answers nothing; the catalogue's lines are shown then."""
+    try:
+        async with httpx.AsyncClient(timeout=TEST_TIMEOUT_S) as http:
+            if provider.id == "anthropic":
+                r = await http.get(
+                    f"{ANTHROPIC_API}/v1/models", params={"limit": 100},
+                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                )  # fmt: skip
+            else:
+                r = await http.get(
+                    f"{provider.text_url.rstrip('/')}/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+        if r.status_code >= 400:
+            return []
+        rows = r.json().get("data") or []
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return []
+    out: Listed = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+            continue
+        model = row["id"].removeprefix("models/")  # Gemini's names
+        if any(w in model.lower() for w in NOT_CHAT):
+            continue
+        out.append((model, str(row.get("display_name") or row.get("name") or model)))
+    return out
+
+
 def _ms(t0: float) -> int:
     return round((time.monotonic() - t0) * 1000)
 
@@ -371,9 +419,12 @@ class OwnKeysService:
         secrets: SecretStore,
         testers: dict[Kind, Tester] | None = None,
         cloud_only: bool = False,
+        lister: Lister | None = None,
     ) -> None:
         self._store = store
         self._secrets = secrets
+        self._lister = lister  # None: `list_models`, looked up when used (tests replace it)
+        self._listed: dict[tuple[str, str], tuple[float, Listed]] = {}  # by vendor and key's hash
         # the web (ADR-0099, stage CP11): media only, and a product with a key runs on the cloud
         # model chosen for it, else on the first of its models that a key can run
         self.cloud_only = cloud_only
@@ -484,7 +535,7 @@ class OwnKeysService:
         key = await self._secrets.get(secret_name(p.id, v.id))
         model = str(use.get("model") or "")
         # a model taken off the list runs on this computer again
-        if not key or catalogue.find(p.id, v.id, model) is None:
+        if not key or (not use.get("listed") and catalogue.find(p.id, v.id, model) is None):
             return None
         return KeyRoute(v, model, key, v.url_for("text"))
 
@@ -512,12 +563,8 @@ class OwnKeysService:
 
     async def _first_model(self, product: str) -> str | None:
         """On the web, the model a product runs on until the admin chooses one: the first of the
-        catalogue's that a key can run."""
-        keyed = await self._keyed(product)
-        for m in catalogue.models_of(product):
-            if m.media and any(o.provider in keyed for o in m.offers):
-                return m.model
-        return None
+        catalogue's that a key can run, or for lip sync the cheapest (`catalogue.default_model`)."""
+        return catalogue.default_model(product, await self._keyed(product))
 
     async def _media_route(self, p: Product, model: str) -> KeyRoute | None:
         m = catalogue.media_model(p.id, model)
@@ -548,7 +595,7 @@ class OwnKeysService:
         p = BY_ID.get(product)
         if p is not None and p.kind == "media":
             return catalogue.media_model(product, model) is not None
-        return catalogue.find(product, provider, model) is not None
+        return bool(use.get("listed")) or catalogue.find(product, provider, model) is not None
 
     async def kept_voice(self, key: str, provider: str) -> str | None:
         """A MiniMax voice made before from the same recording or words on `provider` (CP7)."""
@@ -582,6 +629,20 @@ class OwnKeysService:
         rows[product] = row
         await self._store.put(SETTINGS, rows, "desktop")
         await self.warm()
+
+    async def vendor_models(self, product: str, v: Provider) -> Listed:
+        """Every model `v` lists on the key saved for `product`, kept for `LIST_FOR_S`."""
+        key = await self._secrets.get(secret_name(product, v.id)) if self._secrets.ready else None
+        if not key:
+            return []
+        at = (v.id, hashlib.sha256(key.encode()).hexdigest())
+        kept = self._listed.get(at)
+        if kept is not None and time.monotonic() - kept[0] < LIST_FOR_S:
+            return kept[1]
+        found = await (self._lister or list_models)(v, key)
+        if found:  # a failure is asked again next time
+            self._listed[at] = (time.monotonic(), found)
+        return found
 
     def _model_title(self, product: str, provider: str, model: str) -> tuple[str, str]:
         m = catalogue.find(product, provider, model)
@@ -654,6 +715,11 @@ class OwnKeysService:
                     use = None
                 else:
                     title, price = self._model_title(p.id, use["provider"], use["model"])
+                    if (
+                        use.get("listed")
+                        and catalogue.find(p.id, use["provider"], use["model"]) is None
+                    ):
+                        title, price = str(use.get("title") or title), listed_price(use["provider"])
                     use = {**use, "title": title, "price": price}
             elif use:
                 m = catalogue.media_model(p.id, str(use.get("model") or ""))
@@ -690,12 +756,12 @@ class OwnKeysService:
         if p.kind == "text":
             for k in row["keys"]:
                 v = PROVIDERS[k["provider"]]
-                for m in catalogue.models_of(p.id, v.id):
+                for model, title, about, price, speed in await self._text_models(p.id, v):
                     models.append({
                         "provider": v.id, "provider_title": v.title, "host": v.host,
-                        "model": m.model, "title": m.title, "about": m.about,
-                        "price": m.price_words, "speed": m.speed, "works": k["state"] == "ok",
-                        "chosen": use.get("provider") == v.id and use.get("model") == m.model,
+                        "model": model, "title": title, "about": about,
+                        "price": price, "speed": speed, "works": k["state"] == "ok",
+                        "chosen": use.get("provider") == v.id and use.get("model") == model,
                         "providers": [v.id], "cheaper_with": None, "can": [],
                     })  # fmt: skip
             return {"product": p.id, "models": models, "has_keys": bool(row["keys"])}
@@ -705,6 +771,23 @@ class OwnKeysService:
             if found is not None:
                 models.append(found)
         return {"product": p.id, "models": models, "has_keys": bool(keyed)}
+
+    async def _text_models(self, product: str, v: Provider) -> list[tuple[str, str, str, str, str]]:
+        """The rows of `v` on the Cloud tab: every model its key lists, in its order (newest first
+        for Anthropic), a catalogue line keeping its title, words and price; the catalogue's lines
+        alone when the list could not be read."""
+        lines = catalogue.models_of(product, v.id)
+        listed = await self.vendor_models(product, v)
+        if not listed:
+            return [(m.model, m.title, m.about, m.price_words, m.speed) for m in lines]
+        rows = []
+        for model, name in listed:
+            m = catalogue.find(product, v.id, model)
+            rows.append(
+                (model, m.title, m.about, m.price_words, m.speed) if m
+                else (model, name, f"{v.title}.", listed_price(v.id), "")
+            )  # fmt: skip
+        return rows
 
     # ---- checking a request ------------------------------------------------------------------
 
@@ -815,9 +898,16 @@ class OwnKeysService:
         if saved is None or secret_name(p.id, v.id) not in names:
             raise OwnKeyRefused(f"Save a {v.title} key for {p.title.lower()} first.", 409)
         name = (model or "").strip()
-        if not name or catalogue.find(p.id, v.id, name) is None:
-            raise OwnKeyRefused(f"{v.title} has no {p.title.lower()} model called {name} here.")
-        await self._put(product, {**row, "use": {"provider": v.id, "model": name}})
+        chosen: dict[str, Any] = {"provider": v.id, "model": name}
+        if name and catalogue.find(p.id, v.id, name) is None:
+            title = dict(await self.vendor_models(p.id, v)).get(name)
+            if title is not None:  # not in the catalogue, but on the key's list
+                chosen |= {"listed": True, "title": title}
+            else:
+                name = ""
+        if not name:
+            raise OwnKeyRefused(f"{v.title} has no {p.title.lower()} model called {model} here.")
+        await self._put(product, {**row, "use": chosen})
         return await self.cloud(product)
 
     async def _use_media(self, p: Product, row: dict[str, Any], model: str) -> dict[str, Any]:

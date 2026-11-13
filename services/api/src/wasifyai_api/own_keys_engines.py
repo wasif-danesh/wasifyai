@@ -48,7 +48,7 @@ from wasifyai_platform_sdk.usage import UsageRecorder, record_safely
 from wasifyai_platform_sdk.voice_models import VoiceModel
 
 from wasifyai_api.audio_runtime import _wav_rate, _wav_seconds
-from wasifyai_api.comfy_music import to_wav
+from wasifyai_api.comfy_music import to_mp3, to_wav
 from wasifyai_api.desktop_model3d import ATLAS, RunResult
 from wasifyai_api.lipsync_runtime import _video_size
 from wasifyai_api.logging import product_id as current_product
@@ -59,6 +59,7 @@ from wasifyai_api.own_keys_music import (
     KEYED_MUSICEDIT,
     KEYED_SFX,
     KEYED_SPLIT,
+    MP3_ONLY,
     MUSIC_PRODUCTS,
     SPLIT_MODELS,
     edit_body,
@@ -69,6 +70,7 @@ from wasifyai_api.own_keys_music import (
     music_model,
     music_verb,
     split_body,
+    stems_in_zip,
     stems_of,
 )
 from wasifyai_api.own_keys_voice import (
@@ -755,12 +757,19 @@ class KeyedSpeechEngine:
         t0 = time.monotonic()
 
         async def attempt(c: KeyChoice) -> list[tuple[str, bytes, str]]:
-            sent = await self._send(c, recording, source.name)
+            if (model_id, c.provider.id) in MP3_ONLY:  # it cannot read a WAV (CP13)
+                sent = await self._send(c, await to_mp3(recording, source.suffix), "song.mp3")
+            else:
+                sent = await self._send(c, recording, source.name)
             body = split_body(model_id, c.provider.id, sent)
             async with self._client() as http:
                 queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
                 result = await queue.call(c.offer.endpoint, body, _no_progress)
                 files = []
+                if isinstance(result.get("zip_url"), str):  # Mureka on fal.ai: one zip (CP13)
+                    data, _ = await fetch_file(http, c.provider.title, result["zip_url"],
+                                               "application/zip", self._timeout)  # fmt: skip
+                    return stems_in_zip(model_id, data)
                 for name, where in stems_of(model_id, result):
                     url = where.get("url") if isinstance(where, dict) else where
                     data, ctype = await fetch_file(http, c.provider.title, url, "audio/wav",
@@ -845,20 +854,20 @@ def model3d_body(
     if provider == "runware":
         task: dict[str, Any] = {
             "taskType": RUNWARE_3D, "inputs": {"images": [picture]}, "outputFormat": "GLB",
-            "seed": seed, "includeCost": True,
+            "includeCost": True,
         }  # fmt: skip
-        if model_id == "trellis-2":
+        if model_id == "trellis-2":  # one picture, and a seed (CP13)
+            task["inputs"] = {"image": picture}
+            task["seed"] = seed
             task["settings"] = {"resolution": FAL_3D_RESOLUTION}
-        return task, ""
+        return task, ""  # Hunyuan3D takes no seed on Runware (CP13)
     if provider == "wavespeed":  # TRELLIS 2: it cuts the picture out itself
         return {
             "image": picture, "resolution": FAL_3D_RESOLUTION, "texture_size": texture,
             "remove_background": True, "seed": seed,
         }, ""  # fmt: skip
-    if model_id == "hunyuan3d-3.1-pro":  # (CP13)
-        return {"input_image_url": picture, "seed": seed}, "model_glb"
-    body = {"image_url": picture, "seed": seed, "resolution": FAL_3D_RESOLUTION}
-    return {**body, "texture_size": texture}, "model_glb"
+    # fal.ai: Hunyuan3D, the one 3D model it has here (Pixal3D's address there has no model, CP13)
+    return {"input_image_url": picture, "seed": seed}, "model_glb"
 
 
 class KeyedModel3d:
@@ -997,15 +1006,12 @@ class KeyedModel3d:
 
             if c.provider.id == "fal":
                 body, field = model3d_body(model_id, "fal", "", seed, detail)
-                if "input_image_url" in body:  # Hunyuan names its picture otherwise
-                    async with self._client() as http:
-                        fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
-                        body["input_image_url"] = await fal.upload(data, "picture.png")
-                        result = await fal.call(c.offer.endpoint, body, told)
-                        got, _ = await fal.fetch(result.get(field), GLB)
-                        return got
-                body.pop("image_url")
-                return await self._fal_run(c, data, body, c.offer.endpoint, field, told)
+                async with self._client() as http:
+                    fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
+                    body["input_image_url"] = await fal.upload(data, "picture.png")
+                    result = await fal.call(c.offer.endpoint, body, told)
+                    got, _ = await fal.fetch(result.get(field), GLB)
+                    return got
             async with self._client() as http:
                 queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
                 sent = data_uri(data) if c.provider.id == "runware" else (

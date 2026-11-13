@@ -323,7 +323,7 @@ async def test_what_fal_sends_back_must_be_a_video(tmp_path: Path):
           "frame": "square", "frame_short": {"480": 640}}),
         # Kling takes no size: the picture's own; a prompt only
         ("fal-ai/kling-video/ai-avatar/v2/standard", 720, {"prompt": LIPSYNC_PROMPT},
-         {"price_per_s": {"720": 0.06}, "work_per_s": {"720": 40.0},
+         {"price_per_s": {"720": 0.0562}, "work_per_s": {"720": 40.0},
           "frame": "shape", "frame_short": {"720": 912}}),
         # OmniHuman at 720p (its quicker size) and in turbo, its quicker setting
         ("fal-ai/bytedance/omnihuman/v1.5", 720,

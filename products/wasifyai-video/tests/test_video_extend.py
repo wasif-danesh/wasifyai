@@ -233,3 +233,22 @@ async def test_a_cloud_models_clip_is_joined_after_what_it_was_not_sent_at_the_s
     joined = await rig.raw.get(object_key("t1", "wasifyai-video", "u1", f"{row.id}/video.mp4"))
     assert frame_count(joined) == frames + 120  # nothing repeated, nothing lost
     assert not await exists(rig, f"jobs/{job.job_id}/extended.mp4")
+
+
+@pytest.mark.parametrize(("frames", "sent"), [(49, 49), (300, 24)])
+async def test_a_cloud_models_new_part_alone_is_joined_after_the_whole_clip(
+    tmp_path, ctx, frames, sent
+):
+    """Seedance answers only the new part (CP13): all of the clip is kept, then the new part,
+    filled and cut to the source's size (a wide answer to a square clip is not stretched)."""
+    rig, store = make_rig(tmp_path), InMemoryVideoStore()
+    vid = await make_source(rig, store, frames=frames)
+    s = await start(rig, store, vid)
+    (job,) = rig.sink.submitted
+    await s.finish_job(data=mp4(size=(256, 144), frames=96), output="continued")
+    assert s.state["status"] == "done"
+    row = next(v for v in store.videos if v.id == s.state["video_id"])
+    assert (row.width, row.height) == (128, 96)
+    joined = await rig.raw.get(object_key("t1", "wasifyai-video", "u1", f"{row.id}/video.mp4"))
+    assert frame_count(joined) == frames + 96  # the whole clip, then the new part
+    assert not await exists(rig, f"jobs/{job.job_id}/continued.mp4")

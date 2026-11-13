@@ -22,6 +22,9 @@ from wasifyai_api.own_keys import (
     try_text,
     try_wavespeed,
 )
+from wasifyai_api.own_keys import (
+    list_models as real_list_models,  # the real one: the tests' setup replaces it
+)
 from wasifyai_api.services import ApiServices
 from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_platform_sdk import Identity, InMemorySecretStore
@@ -440,3 +443,94 @@ async def test_a_text_provider_is_asked_for_one_token(monkeypatch, status, ok, w
     assert GOOD not in tried.said
     assert str(seen[0].url) == "https://openrouter.ai/api/v1/chat/completions"
     assert seen[0].headers["authorization"] == f"Bearer {GOOD}"
+
+
+# ---- every model the vendor lists (owner, 2026-11-13) --------------------------------------------
+
+ANTHROPIC_LIST = [
+    ("claude-fable-5-2", "Claude Fable 5.2"), ("claude-haiku-5-5", "Claude Haiku 5.5"),
+    ("claude-opus-5-5", "Claude Opus 5.5"), ("claude-mythos-9", "Claude Mythos 9"),
+    ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
+]  # fmt: skip
+
+
+class Lister:
+    def __init__(self, listed: list[tuple[str, str]]) -> None:
+        self.listed, self.asked = listed, 0
+
+    async def __call__(self, provider: Provider, key: str) -> list[tuple[str, str]]:
+        self.asked += 1
+        return self.listed if provider.id == "anthropic" and "good" in key else []
+
+
+async def a_service(listed: list[tuple[str, str]]) -> tuple[OwnKeysService, Lister]:
+    lister = Lister(listed)
+    svc = OwnKeysService(
+        InMemorySettingsStore(), Store(), {"text": FakeProviders(), "media": FakeProviders()},
+        lister=lister,
+    )  # fmt: skip
+    await svc.save_key("chat", "anthropic", GOOD)
+    return svc, lister
+
+
+async def test_the_cloud_tab_lists_every_model_the_key_lists_newest_first():
+    svc, lister = await a_service(ANTHROPIC_LIST)
+    models = (await svc.cloud("chat"))["models"]
+    assert [m["model"] for m in models] == [m for m, _ in ANTHROPIC_LIST]  # Anthropic's order
+    by = {m["model"]: m for m in models}
+    # a catalogue line keeps its words and price; another shows the vendor's name
+    assert by["claude-fable-5-2"]["price"] == "$8 in / $40 out per million tokens"
+    assert by["claude-opus-5-5"]["price"] == "$4 in / $20 out per million tokens"
+    assert by["claude-haiku-4-5-20251001"]["price"] == "$1 in / $5 out per million tokens"
+    assert "default" in by["claude-haiku-5-5"]["about"]
+    assert by["claude-mythos-9"]["title"] == "Claude Mythos 9"
+    assert by["claude-mythos-9"]["price"] == "price as Anthropic lists it"
+    await svc.cloud("chat")
+    assert lister.asked == 1  # kept for a while, not asked on every look
+
+
+async def test_a_listed_model_can_be_chosen_and_runs():
+    svc, _ = await a_service(ANTHROPIC_LIST)
+    await svc.use("chat", "anthropic", "claude-mythos-9")
+    route = await svc.route("chat")
+    assert route is not None and route.model == "claude-mythos-9"
+    chat = rows(await svc.view())["chat"]
+    assert chat["use"]["title"] == "Claude Mythos 9"
+    assert chat["use"]["price"] == "price as Anthropic lists it"
+    with pytest.raises(own_keys.OwnKeyRefused):  # neither listed nor in the catalogue
+        await svc.use("chat", "anthropic", "claude-nothing-1")
+
+
+async def test_when_the_list_cannot_be_read_the_catalogue_lines_are_shown():
+    svc, _ = await a_service([])
+    models = [m["model"] for m in (await svc.cloud("chat"))["models"]]
+    assert models[:2] == ["claude-haiku-5-5", "claude-sonnet-5-5"]
+    assert "claude-fable-5-2" in models and "claude-opus-5-5" in models
+
+
+async def test_the_lister_reads_anthropics_models_and_openai_shaped_lists(monkeypatch):
+    seen: list[httpx.Request] = []
+
+    def answer(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        if req.url.host == "api.anthropic.com":
+            return httpx.Response(
+                200,
+                json={
+                    "data": [{"id": "claude-fable-5-2", "display_name": "Claude Fable 5.2"}],
+                    "has_more": False,
+                },
+            )
+        return httpx.Response(200, json={"data": [
+            {"id": "models/gemini-3.8-flash"}, {"id": "text-embedding-005"}]})  # fmt: skip
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(
+        own_keys.httpx, "AsyncClient",
+        lambda **kw: real(transport=httpx.MockTransport(answer), **kw),
+    )  # fmt: skip
+    listed = await real_list_models(own_keys.PROVIDERS["anthropic"], GOOD)
+    assert listed == [("claude-fable-5-2", "Claude Fable 5.2")]
+    assert seen[0].headers["x-api-key"] == GOOD and seen[0].headers["anthropic-version"]
+    listed = await real_list_models(own_keys.PROVIDERS["gemini"], GOOD)
+    assert listed == [("gemini-3.8-flash", "gemini-3.8-flash")]  # no embedding model

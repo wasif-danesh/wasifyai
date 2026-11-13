@@ -1,5 +1,7 @@
 """Model descriptors and request validation (ADR-0066)."""
 
+from typing import Any
+
 import pytest
 from wasifyai_platform_sdk import (
     VoiceRequestError,
@@ -556,7 +558,10 @@ def test_a_lip_sync_video_has_the_shape_and_size_asked_for(picture, shape, size,
 def test_a_lip_sync_shape_or_size_the_model_does_not_make_is_refused():
     m = talker()
     assert check_lipsync(m, 10, picture=(1000, 1000)).height == 720  # the model's default size
-    for kw, code in (({"shape": "3:1"}, "bad_shape"), ({"size": 1080}, "bad_size")):
+    cases: tuple[tuple[dict[str, Any], str], ...] = (
+        ({"shape": "3:1"}, "bad_shape"), ({"size": 1080}, "bad_size"),
+    )  # fmt: skip
+    for kw, code in cases:
         with pytest.raises(VoiceRequestError) as e:
             check_lipsync(m, 10, picture=(1000, 1000), **kw)
         assert e.value.code == code

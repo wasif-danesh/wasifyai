@@ -234,9 +234,10 @@ async def z_image_fal(ask: Ask, o: Offer, send: Send) -> tuple[str, dict[str, An
     return o.endpoint_for("inpaint"), body
 
 
-def runware_image(refs: int, quality: str | None = None) -> Recipe:
+def runware_image(refs: int, quality: str | None = None, seed: bool = True) -> Recipe:
     """A Runware `imageInference` task: references for change and combine (up to `refs`), the
-    picture and mask for Inpaint (`inputs.seedImage`, `inputs.maskImage`)."""
+    picture and mask for Inpaint (`inputs.seedImage`, `inputs.maskImage`). Some models refuse a
+    seed (`seed=False`: Grok Imagine, CP13)."""
 
     async def recipe(ask: Ask, o: Offer, send: Send) -> tuple[str, dict[str, Any]]:
         task: dict[str, Any] = {
@@ -244,7 +245,7 @@ def runware_image(refs: int, quality: str | None = None) -> Recipe:
             "outputFormat": "PNG", "width": sixty_four(ask.width), "height": sixty_four(ask.height),
             "includeCost": True,
         }  # fmt: skip
-        if ask.seed is not None:
+        if seed and ask.seed is not None:
             task["seed"] = ask.seed
         if quality:
             task["settings"] = {"quality": quality}
@@ -259,6 +260,7 @@ def runware_image(refs: int, quality: str | None = None) -> Recipe:
                 "seedImage": await send(ask.pictures[0], "picture.png"),
                 "maskImage": await send(ask.mask, "mask.png"),
             }
+            task["strength"] = 1.0  # Runware's default barely changes the painted area (CP13)
         return o.endpoint_for(ask.verb), task
 
     return recipe
@@ -299,17 +301,24 @@ async def _first(send: Send, ask: Ask) -> str:
     return await send(ask.pictures[0], "picture.png")
 
 
-def runware_video(lowest: int, highest: int, size: str, extend: str | None = None) -> Recipe:
+def runware_video(
+    lowest: int, highest: int, size: str, extend: str | None = None, seed: bool = True,
+    audio: bool = True,
+) -> Recipe:  # fmt: skip
     """A Runware `videoInference` task: the first frame for animate (`inputs.frameImages`), the
-    clip for extend (`inputs.video`, with `settings.operation` where the model asks for it)."""
+    clip for extend (`inputs.video`, with `settings.operation` where the model asks for it).
+    Runware refuses a field a model does not take (CP13): `seed=False` where it takes no seed,
+    `audio=False` where it has no sound switch (a clip without sound is asked for where it has)."""
 
     async def recipe(ask: Ask, o: Offer, send: Send) -> tuple[str, dict[str, Any]]:
         task: dict[str, Any] = {
             "taskType": "videoInference", "positivePrompt": ask.prompt,
             "duration": seconds_in(ask, lowest, highest, 5), "resolution": size,
-            "outputFormat": "MP4", "includeCost": True, "settings": {"audio": False},
+            "outputFormat": "MP4", "includeCost": True,
         }  # fmt: skip
-        if ask.seed is not None:
+        if audio:
+            task["settings"] = {"audio": False}
+        if seed and ask.seed is not None:
             task["seed"] = ask.seed
         if ask.verb == "animate":
             task["inputs"] = {"frameImages": [{"image": await _first(send, ask), "frame": "first"}]}
@@ -318,7 +327,7 @@ def runware_video(lowest: int, highest: int, size: str, extend: str | None = Non
                 raise _bad("This model does not extend a clip on Runware.")
             task["inputs"] = {"video": await _clip(send, ask)}
             if extend:
-                task["settings"]["operation"] = extend
+                task.setdefault("settings", {})["operation"] = extend
         return o.endpoint_for(ask.verb), task
 
     return recipe
@@ -380,25 +389,32 @@ async def grok_video_fal(ask: Ask, o: Offer, send: Send) -> tuple[str, dict[str,
     return o.endpoint_for(ask.verb), body
 
 
+# the offers whose Extend answers only the new part, which begins where the clip it was sent ends
+# (CP13: Seedance on Runware; on WaveSpeed it is the same ByteDance model, not yet seen); every
+# other offer answers the clip it was sent, then the new part
+EXTEND_NEW_PART_ONLY = {("runware", "seedance-2.5"), ("wavespeed", "seedance-2.5")}
+
 RECIPES: dict[tuple[str, str], Recipe] = {
     ("wavespeed", "gpt-image-2.5"): gpt_image_wavespeed,
     ("fal", "gpt-image-2.5"): gpt_image_fal,
     ("runware", "nano-banana-2.1"): runware_image(14),
     ("wavespeed", "nano-banana-2.1"): nano_banana_wavespeed,
-    ("runware", "grok-imagine-image-2.0"): runware_image(5, "medium"),
+    ("runware", "grok-imagine-image-2.0"): runware_image(5, "medium", seed=False),
     ("fal", "grok-imagine-image-2.0"): grok_image_fal,
     ("runware", "flux-3-klein"): runware_image(4),
     ("fal", "flux-3-klein"): klein_fal,
     ("runware", "z-image-turbo"): runware_image(0),
     ("fal", "z-image-turbo"): z_image_fal,
-    ("runware", "gemini-omni-flash-1.2"): runware_video(3, 15, "720p", ""),
+    ("runware", "gemini-omni-flash-1.2"): runware_video(3, 15, "720p", "", seed=False, audio=False),
     ("wavespeed", "gemini-omni-flash-1.2"): omni_wavespeed,
     ("runware", "seedance-2.5"): runware_video(4, 30, "720p", "extend"),
     ("wavespeed", "seedance-2.5"): seedance_wavespeed,
-    ("runware", "minimax-h3-max"): runware_video(5, 15, "768p"),
+    ("runware", "minimax-h3-max"): runware_video(5, 15, "768p", audio=False),
     ("fal", "minimax-h3-max"): h3_fal,
-    ("runware", "minimax-h3-max-turbo"): runware_video(5, 15, "768p"),
+    ("runware", "minimax-h3-max-turbo"): runware_video(5, 15, "768p", audio=False),
     ("fal", "minimax-h3-max-turbo"): h3_fal,
-    ("runware", "grok-imagine-video-1.5-lite"): runware_video(1, 15, "720p"),
+    ("runware", "grok-imagine-video-1.5-lite"): runware_video(
+        1, 15, "720p", seed=False, audio=False
+    ),
     ("fal", "grok-imagine-video-1.5-lite"): grok_video_fal,
 }

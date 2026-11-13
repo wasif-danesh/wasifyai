@@ -5,12 +5,16 @@ Each provider's price list is read again and compared with the catalogue's offer
 person to read and apply (`git apply`), never applied here. A price in another unit, or an offer the
 provider does not list, is reported and left alone.
 
-- fal.ai: its price API, with a key (`FAL_KEY`): `GET /v1/models/pricing?endpoint_id=...`.
-- Runware: each model's `schema.json` (no key).
-- WaveSpeed: each model's page (no key).
+- fal.ai: its price API, with a key (`FAL_KEY`): `GET /v1/models/pricing?endpoint_id=...`, 50
+  endpoints a request; when fal.ai does not know one of them it refuses the whole request (404),
+  so each is then asked alone, slowly (it limits how often it is asked). A price in "compute
+  seconds" is what fal.ai answers for a name it has no model at: reported as not listed.
+- WaveSpeed: its models list, with a key (`WAVESPEED_API_KEY`): `GET /api/v3/models`, each model's
+  `base_price` at its default settings, in the unit the model is billed in.
+- Runware publishes no list a script can read (its pricing page shows a few models only); each
+  Runware job answers what it cost (`includeCost`), which the router keeps.
 
-The addresses and fields that are not on the providers' pages are marked "(CP13)" and checked in
-the real run. Nothing here prints a key."""
+Checked against the providers on 2026-11-13 (CP13). Nothing here prints a key."""
 
 import argparse
 import asyncio
@@ -28,21 +32,28 @@ import httpx
 from wasifyai_api import own_keys_catalogue as catalogue
 
 FAL_PRICING = "https://api.fal.ai/v1/models/pricing"
-RUNWARE_SCHEMA = "https://runware.ai/schemas/{air}/schema.json"  # (CP13)
-WAVESPEED_PAGE = "https://wavespeed.ai/models/{model}"  # (CP13)
+WAVESPEED_MODELS = "https://api.wavespeed.ai/api/v3/models"
 FAL_BATCH = 50  # endpoints asked at once
+FAL_PACE_S = 1.5  # between single questions: fal.ai answers 429 when asked faster
 
 # each provider's words for what a price is counted in, as the catalogue's units
 UNITS = {
     "image": "picture", "images": "picture", "picture": "picture", "megapixel": "picture",
+    "megapixels": "picture",  # fal.ai's flux and z-image: a 1024x1024 picture is about one
     "second": "second", "seconds": "second", "video second": "second",
     "minute": "minute", "minutes": "minute",
     "1000 characters": "1k_chars", "1k characters": "1k_chars", "1k_chars": "1k_chars",
     "thousand characters": "1k_chars",
     "step": "step", "steps": "step", "training step": "step",
-    "song": "song", "clip": "clip", "video": "clip", "model": "model", "3d model": "model",
-    "voice": "voice", "run": "run", "request": "run", "generation": "run",
+    "song": "song", "audio": "song", "audios": "song", "clip": "clip", "video": "clip",
+    "model": "model", "3d model": "model", "voice": "voice", "cloned voices": "voice",
+    "run": "run", "request": "run", "generation": "run",
 }  # fmt: skip
+
+
+# fal.ai answers a price in compute seconds for a name it has no model at: no model is there
+# (CP13: four music endpoints were wrong and priced so)
+NOT_A_MODEL = {"compute seconds"}
 
 
 @dataclass(frozen=True)
@@ -50,7 +61,7 @@ class Listed:
     """A price as the provider lists it."""
 
     amount: float
-    unit: str  # the provider's own word
+    unit: str  # the provider's own word; "" when it is the unit the model is billed in
 
 
 @dataclass(frozen=True)
@@ -74,69 +85,61 @@ def unit_of(word: str) -> str | None:
 # ---- the price lists -----------------------------------------------------------------------
 
 
-def fal_fetch(key: str) -> Fetch:
+def _fal_prices(data: Any) -> dict[str, Listed]:
+    out: dict[str, Listed] = {}
+    for p in data.get("prices") or []:
+        if isinstance(p, dict) and isinstance(p.get("unit_price"), int | float):
+            out[str(p.get("endpoint_id"))] = Listed(float(p["unit_price"]), str(p.get("unit")))
+    return out
+
+
+def fal_fetch(key: str, pace_s: float = FAL_PACE_S) -> Fetch:
+    headers = {"authorization": f"Key {key}"}
+
+    async def one(http: httpx.AsyncClient, endpoint: str) -> dict[str, Listed]:
+        r = await http.get(FAL_PRICING, params={"endpoint_id": endpoint}, headers=headers)
+        for attempt in range(3):
+            if r.status_code != 429:
+                break
+            await asyncio.sleep(pace_s * 2 * (attempt + 1))
+            r = await http.get(FAL_PRICING, params={"endpoint_id": endpoint}, headers=headers)
+        if r.status_code == 404:
+            return {}  # not in fal.ai's list: compared as "not in the provider's list"
+        r.raise_for_status()
+        return _fal_prices(r.json())
+
     async def fetch(http: httpx.AsyncClient, endpoints: list[str]) -> dict[str, Listed]:
         out: dict[str, Listed] = {}
         for n in range(0, len(endpoints), FAL_BATCH):
             batch = endpoints[n : n + FAL_BATCH]
             r = await http.get(
-                FAL_PRICING, params=[("endpoint_id", e) for e in batch],
-                headers={"authorization": f"Key {key}"},
-            )  # fmt: skip
+                FAL_PRICING, params=[("endpoint_id", e) for e in batch], headers=headers
+            )
+            if r.status_code in (404, 429):  # one unknown endpoint refuses them all: ask alone
+                for e in batch:
+                    out |= await one(http, e)
+                    await asyncio.sleep(pace_s)
+                continue
             r.raise_for_status()
-            for p in r.json().get("prices") or []:
-                if isinstance(p, dict) and isinstance(p.get("unit_price"), int | float):
-                    out[str(p.get("endpoint_id"))] = Listed(
-                        float(p["unit_price"]), str(p.get("unit"))
-                    )
+            out |= _fal_prices(r.json())
         return out
 
     return fetch
 
 
-def _price_in(data: Any) -> Listed | None:
-    """A price in a Runware schema: `pricing` or `price`, a number or {amount, unit} (CP13)."""
-    if not isinstance(data, dict):
-        return None
-    for name in ("pricing", "price", "cost"):
-        p = data.get(name)
-        if isinstance(p, int | float):
-            return Listed(float(p), str(data.get("unit") or "run"))
-        if isinstance(p, dict) and isinstance(p.get("amount"), int | float):
-            return Listed(float(p["amount"]), str(p.get("unit") or "run"))
-    return None
+def wavespeed_fetch(key: str) -> Fetch:
+    async def fetch(http: httpx.AsyncClient, models: list[str]) -> dict[str, Listed]:
+        r = await http.get(WAVESPEED_MODELS, headers={"authorization": f"Bearer {key}"})
+        r.raise_for_status()
+        wanted, out = set(models), {}
+        for m in r.json().get("data") or []:
+            if isinstance(m, dict) and m.get("model_id") in wanted:
+                price = m.get("base_price")
+                if isinstance(price, int | float):
+                    out[str(m["model_id"])] = Listed(float(price), "")
+        return out
 
-
-async def runware_fetch(http: httpx.AsyncClient, airs: list[str]) -> dict[str, Listed]:
-    out: dict[str, Listed] = {}
-    for air in airs:
-        r = await http.get(RUNWARE_SCHEMA.format(air=air))
-        if r.status_code == 200 and (found := _price_in(r.json())) is not None:
-            out[air] = found
-    return out
-
-
-PAGE_PRICE = re.compile(
-    r"\$\s?(\d+(?:\.\d+)?)\s*(?:per|/)\s*(1,?000 characters|1k characters|[a-z][a-z ]{1,20}?)\b",
-    re.IGNORECASE,
-)
-
-
-def price_on_page(html: str) -> Listed | None:
-    """The first "$0.04 per image" on a WaveSpeed model page (CP13)."""
-    m = PAGE_PRICE.search(re.sub(r"<[^>]+>", " ", html))
-    if m is None:
-        return None
-    return Listed(float(m.group(1)), m.group(2).replace("1,000", "1000"))
-
-
-async def wavespeed_fetch(http: httpx.AsyncClient, models: list[str]) -> dict[str, Listed]:
-    out: dict[str, Listed] = {}
-    for model in models:
-        r = await http.get(WAVESPEED_PAGE.format(model=model))
-        if r.status_code == 200 and (found := price_on_page(r.text)) is not None:
-            out[model] = found
-    return out
+    return fetch
 
 
 # ---- comparing and the diff ----------------------------------------------------------------
@@ -157,10 +160,10 @@ def compare(
             continue
         got = listed[o.provider].get(o.endpoint)
         unit = o.price.unit
-        if got is None:
+        if got is None or got.unit in NOT_A_MODEL:
             out.append(Change(model, o.provider, o.endpoint, o.price.amount, None, unit,
                               "not in the provider's list"))  # fmt: skip
-        elif unit_of(got.unit) != unit:
+        elif got.unit and unit_of(got.unit) != unit:
             out.append(Change(model, o.provider, o.endpoint, o.price.amount, None, unit,
                               f"listed per {got.unit}, not per {unit}"))  # fmt: skip
         elif abs(got.amount - o.price.amount) > 1e-9:
@@ -234,14 +237,18 @@ CATALOGUE_PATH = "services/api/src/wasifyai_api/own_keys_catalogue.py"
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="The cloud catalogue's prices, read again.")
     p.add_argument("--out", default="cloud-prices.diff", help="where the diff is written")
-    p.add_argument("--only", choices=["fal", "runware", "wavespeed"], action="append")
+    p.add_argument("--only", choices=["fal", "wavespeed"], action="append")
     args = p.parse_args(argv)
-    fetchers: dict[str, Fetch] = {"runware": runware_fetch, "wavespeed": wavespeed_fetch}
-    key = os.environ.get("FAL_KEY", "").strip()
-    if key:
-        fetchers["fal"] = fal_fetch(key)
-    else:
-        print("FAL_KEY is not set: fal.ai's prices are not read.", file=sys.stderr)
+    fetchers: dict[str, Fetch] = {}
+    for provider, variable, make in (
+        ("fal", "FAL_KEY", fal_fetch), ("wavespeed", "WAVESPEED_API_KEY", wavespeed_fetch),
+    ):  # fmt: skip
+        key = os.environ.get(variable, "").strip()
+        if key:
+            fetchers[provider] = make(key)
+        else:
+            print(f"{variable} is not set: {provider}'s prices are not read.", file=sys.stderr)
+    print("Runware lists no prices to read; its jobs report what they cost.", file=sys.stderr)
     if args.only:
         fetchers = {k: v for k, v in fetchers.items() if k in args.only}
     models = [m for m in catalogue.CATALOGUE if m.media]

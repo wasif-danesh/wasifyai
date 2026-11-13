@@ -41,8 +41,9 @@ FAL_KOKORO = (  # Kokoro's American voices on fal.ai
     "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa",
 )  # fmt: skip
 # ElevenLabs' premade voices, by name as fal.ai takes them (WaveSpeed's `voice_id`: checked in CP13)
+# the names both WaveSpeed and fal.ai know (fal.ai's default, Rachel, is not on WaveSpeed: CP13)
 ELEVEN = (
-    ("Rachel", "female"), ("Aria", "female"), ("Sarah", "female"), ("Laura", "female"),
+    ("Aria", "female"), ("Sarah", "female"), ("Laura", "female"),
     ("Charlotte", "female"), ("Alice", "female"), ("Matilda", "female"), ("Jessica", "female"),
     ("Lily", "female"), ("Roger", "male"), ("Charlie", "male"), ("George", "male"),
     ("Callum", "male"), ("Liam", "male"), ("Will", "male"), ("Eric", "male"), ("Chris", "male"),
@@ -94,7 +95,7 @@ class Speaker:
 
 SPEAKERS: dict[str, Speaker] = {  # by the catalogue's id
     "kokoro": Speaker("Kokoro", _kokoro(), "af_heart", ("en-us",), speed=True),
-    "elevenlabs-v4": Speaker("ElevenLabs v4", _named(ELEVEN), "Rachel"),
+    "elevenlabs-v4": Speaker("ElevenLabs v4", _named(ELEVEN), "Aria"),
     "gemini-3.8-flash-tts": Speaker("Gemini 3.8 Flash TTS", _named(GEMINI), "Kore"),
     "chatterbox": Speaker("Chatterbox", (), None),
     "minimax-speech-2.8-hd": Speaker(
@@ -121,8 +122,8 @@ def speak_request(
         return body
     if model_id == "elevenlabs-v4":
         if provider == "wavespeed":
-            return {"text": text, "voice_id": voice or "Rachel"}
-        return {"text": text, "voice": voice or "Rachel"}
+            return {"text": text, "voice_id": voice or "Aria"}
+        return {"text": text, "voice": voice or "Aria"}
     if model_id == "gemini-3.8-flash-tts":
         field = "text" if provider == "wavespeed" else "prompt"  # WaveSpeed's: checked in CP13
         return {field: text, "voice": voice or "Kore"}

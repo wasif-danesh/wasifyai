@@ -181,3 +181,16 @@ async def test_a_runware_task_refused_at_once_is_before_running():
         await RunwareTasks("k", http(answer), 5).call("bad:1@1", {"taskType": "imageInference"},
                                                        nothing)  # fmt: skip
     assert e.value.before_running is True and "Invalid model" in e.value.message
+
+
+async def test_a_name_fal_has_no_model_at_is_said_so_not_blamed_on_the_key():
+    """fal.ai's queue takes any name, then refuses the job with 403 (CP13)."""
+
+    def answer(req: httpx.Request) -> httpx.Response:
+        detail = "Endpoint fal-ai/x is not available: no billing definition."
+        return httpx.Response(403, json={"detail": detail, "type": "endpoint_not_priced"})
+
+    with pytest.raises(FalError) as e:
+        await FalQueue("k", http(answer), 5).call("fal-ai/x", {}, nothing)
+    assert e.value.message.startswith("fal.ai has no such model: Endpoint fal-ai/x")
+    assert "key" not in e.value.message

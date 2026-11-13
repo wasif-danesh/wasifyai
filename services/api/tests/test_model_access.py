@@ -61,12 +61,36 @@ def test_defaults_load_with_addresses_filled_in():
             {"model": "openai/gemma4:e4b", "api_base": "http://x/v1"},
             ("openai_compatible", "gemma4:e4b"),
         ),
-        ({"model": "gemini/gemini-2.5-flash"}, ("gemini", "gemini-2.5-flash")),
-        ({"model": "anthropic/claude-x"}, ("litellm", "anthropic/claude-x")),
+        (
+            {"model": "openrouter/anthropic/claude-haiku-5.5"},
+            ("openrouter", "anthropic/claude-haiku-5.5"),
+        ),
+        # ADR-0100: the text vendors, Z.ai through `openai/` at its own address
+        ({"model": "anthropic/claude-haiku-5-5"}, ("anthropic", "claude-haiku-5-5")),
+        ({"model": "openai/gpt-6-luna"}, ("openai", "gpt-6-luna")),
+        ({"model": "gemini/gemini-3.8-flash"}, ("gemini", "gemini-3.8-flash")),
+        ({"model": "deepseek/deepseek-flash"}, ("deepseek", "deepseek-flash")),
+        (
+            {"model": "openai/glm-5.3-flash", "api_base": "https://api.z.ai/api/paas/v4/"},
+            ("zai", "glm-5.3-flash"),
+        ),
+        # a provider no longer offered (ADR-0100: Groq, Cerebras) is shown as a plain LiteLLM string
+        ({"model": "groq/llama-3.3-70b"}, ("litellm", "groq/llama-3.3-70b")),
     ],
 )
 def test_describe_reads_provider_and_model(params, expected):
     assert describe(params) == expected
+
+
+def test_z_ai_is_bound_at_its_own_address_whatever_the_admin_sends():
+    b = validate_binding(
+        Binding(provider="zai", model="glm-5.3-flash", api_base="http://elsewhere/", api_key=KEY)
+    )
+    assert b.api_base == "https://api.z.ai/api/paas/v4"
+    params = build_params({"litellm_params": {"model": "x"}}, b, "chat")
+    assert params["model"] == "openai/glm-5.3-flash"
+    assert params["api_base"] == "https://api.z.ai/api/paas/v4"
+    assert describe(params) == ("zai", "glm-5.3-flash")
 
 
 async def test_seed_creates_every_alias_once():
@@ -104,19 +128,21 @@ async def test_set_binds_a_hosted_provider_and_never_reveals_the_key():
     await models.seed()
     view = await models.set(
         "lyrics-writer",
-        Binding(provider="gemini", model="gemini-2.5-flash", api_key=KEY),
+        Binding(provider="openrouter", model="anthropic/claude-haiku-5.5", api_key=KEY),
         "admin-1",
     )
     assert (view.source, view.provider, view.model, view.key_set) == (
         "custom",
-        "gemini",
-        "gemini-2.5-flash",
+        "openrouter",
+        "anthropic/claude-haiku-5.5",
         True,
     )
     assert view.updated_by == "admin-1"
     assert KEY not in json.dumps(view.model_dump(mode="json"))
     _, params, info = backend.entries["alias:lyrics-writer"]
-    assert params["model"] == "gemini/gemini-2.5-flash" and params["api_key"] == KEY  # LiteLLM only
+    assert (
+        params["model"] == "openrouter/anthropic/claude-haiku-5.5" and params["api_key"] == KEY
+    )  # LiteLLM only
     assert KEY not in json.dumps(info)  # our own metadata never holds it
     assert params["think"] is False  # the alias keeps its behaviour parameters
 
@@ -124,7 +150,7 @@ async def test_set_binds_a_hosted_provider_and_never_reveals_the_key():
 async def test_reset_returns_to_the_default_and_drops_the_key():
     backend, models = make()
     await models.seed()
-    await models.set("default-chat", Binding(provider="groq", model="m", api_key=KEY), "a")
+    await models.set("default-chat", Binding(provider="openrouter", model="m", api_key=KEY), "a")
     view = await models.reset("default-chat", "a")
     assert (view.source, view.provider, view.key_set) == ("default", "ollama", False)
     assert backend.entries["alias:default-chat"][1]["api_key"] == "none"  # overwritten, not left
@@ -141,14 +167,15 @@ def test_embedding_aliases_use_the_embedding_prefix():
     ("binding", "message"),
     [
         (Binding(provider="nope", model="m"), "unknown provider"),
-        (Binding(provider="gemini", model="bad model!"), "characters"),
-        (Binding(provider="gemini", model="m"), "needs an API key"),
+        (Binding(provider="groq", model="m", api_key=KEY), "unknown provider"),  # ADR-0100
+        (Binding(provider="openrouter", model="bad model!"), "characters"),
+        (Binding(provider="openrouter", model="m"), "needs an API key"),
         (Binding(provider="ollama", model="m"), "needs a server address"),
         (Binding(provider="ollama", model="m", api_base="ftp://x"), r"http\(s\)"),
         (Binding(provider="ollama", model="m", api_base="http://u:p@x/"), "credentials"),
         (Binding(provider="ollama", model="m", api_base="http://169.254.169.254/"), "not allowed"),
-        (Binding(provider="gemini", model="m", api_key="two words"), "one token"),
-        (Binding(provider="gemini", model="m", api_key="k" * 600), "one token"),
+        (Binding(provider="openrouter", model="m", api_key="two words"), "one token"),
+        (Binding(provider="openrouter", model="m", api_key="k" * 600), "one token"),
     ],
 )
 def test_bad_bindings_are_rejected(binding, message):
@@ -171,7 +198,7 @@ def test_local_servers_are_allowed_and_keyless():
 async def test_unknown_alias_is_rejected():
     _, models = make()
     with pytest.raises(ModelAccessError, match="unknown alias"):
-        await models.set("nope", Binding(provider="groq", model="m", api_key=KEY), "a")
+        await models.set("nope", Binding(provider="openrouter", model="m", api_key=KEY), "a")
 
 
 async def test_test_connection_uses_the_alias_or_a_candidate_and_redacts_errors():
@@ -183,7 +210,7 @@ async def test_test_connection_uses_the_alias_or_a_candidate_and_redacts_errors(
     bad = await models.test("default-chat")
     assert not bad.ok and "invalid api key" in bad.error
     backend.fail.clear()
-    res = await models.test("default-chat", Binding(provider="groq", model="m", api_key=KEY))
+    res = await models.test("default-chat", Binding(provider="openrouter", model="m", api_key=KEY))
     assert res.ok and backend.calls[-1].startswith("candidate:default-chat:")
     assert not [i for i in backend.entries if i.startswith("candidate:")]
 
@@ -251,13 +278,16 @@ def test_routes_are_for_admins_only(routes):
 def test_list_shows_aliases_and_the_provider_choices(routes):
     body = routes.get("/admin/models", headers=ADMIN).json()
     assert {m["alias"] for m in body["models"]} >= {"multimodal", "lyrics-writer"}
-    assert {p["id"] for p in body["providers"]} >= {"ollama", "gemini", "groq", "openrouter"}
+    assert [p["id"] for p in body["providers"]] == [
+        "anthropic", "openai", "gemini", "deepseek", "zai", "openrouter", "ollama",
+        "openai_compatible",
+    ]  # fmt: skip
 
 
 def test_changing_a_model_is_audited_without_the_key_and_the_key_is_never_returned(routes):
     res = routes.put(
         "/admin/models/lyrics-writer",
-        json={"provider": "gemini", "model": "gemini-2.5-flash", "api_key": KEY},
+        json={"provider": "openrouter", "model": "google/gemini-3.8-flash", "api_key": KEY},
         headers=ADMIN,
     )
     assert res.status_code == 200 and res.json()["model"]["key_set"] is True
@@ -269,12 +299,12 @@ def test_changing_a_model_is_audited_without_the_key_and_the_key_is_never_return
 
 
 def test_bad_input_is_422(routes):
-    missing_key = {"provider": "gemini", "model": "m"}
+    missing_key = {"provider": "openrouter", "model": "m"}
     assert (
         routes.put("/admin/models/lyrics-writer", json=missing_key, headers=ADMIN).status_code
         == 422
     )
-    unknown = {"provider": "groq", "model": "m", "api_key": KEY}
+    unknown = {"provider": "openrouter", "model": "m", "api_key": KEY}
     assert routes.put("/admin/models/nope", json=unknown, headers=ADMIN).status_code == 422
 
 
@@ -289,7 +319,7 @@ def test_test_and_reset_routes_record_audit_entries(routes):
 async def test_switching_from_a_keyed_provider_to_a_keyless_one_overwrites_the_old_key():
     backend, models = make()
     await models.seed()
-    await models.set("lyrics-writer", Binding(provider="gemini", model="m", api_key=KEY), "a")
+    await models.set("lyrics-writer", Binding(provider="openrouter", model="m", api_key=KEY), "a")
     assert backend.entries["alias:lyrics-writer"][1]["api_key"] == KEY
     local = Binding(provider="ollama", model="m", api_base="http://somewhere-else:11434")
     view = await models.set("lyrics-writer", local, "a")
@@ -301,6 +331,6 @@ async def test_every_default_reset_writes_an_explicit_key():
     backend, models = make()
     await models.seed()
     for alias in models.aliases():
-        await models.set(alias, Binding(provider="gemini", model="m", api_key=KEY), "a")
+        await models.set(alias, Binding(provider="openrouter", model="m", api_key=KEY), "a")
         await models.reset(alias, "a")
         assert backend.entries[f"alias:{alias}"][1]["api_key"] == "none"

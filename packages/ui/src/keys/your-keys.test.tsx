@@ -9,7 +9,7 @@ const product = (over: Partial<KeyProduct>): KeyProduct => ({
   id: "chat",
   title: "Chat and writing",
   kind: "text",
-  providers: ["fal", "openrouter", "compatible"],
+  providers: ["openrouter"],
   keys: [],
   use: null,
   ...over,
@@ -20,16 +20,12 @@ const saved = (provider: string, over: Partial<SavedKey> = {}): SavedKey => ({
   state: "ok",
   said: null,
   tested_at: 1,
-  base_url: null,
-  model: null,
   ...over,
 });
 
 const providers: OwnKeys["providers"] = [
-  { id: "fal", title: "fal.ai", host: "fal.ai", needs_base: false },
-  { id: "wavespeed", title: "WaveSpeed", host: "wavespeed.ai", needs_base: false },
-  { id: "openrouter", title: "OpenRouter", host: "openrouter.ai", needs_base: false },
-  { id: "compatible", title: "Another OpenAI-compatible server", host: "", needs_base: true },
+  { id: "openrouter", title: "OpenRouter", host: "openrouter.ai" },
+  { id: "fal", title: "fal.ai", host: "fal.ai" },
 ];
 
 function keys(products: KeyProduct[], can_save = true): OwnKeys {
@@ -54,10 +50,7 @@ function fakeApi(start: OwnKeys) {
       if (!b.key?.includes("good")) throw new Error("fal.ai did not accept the key.");
       return edit(id, (p) => ({
         ...p,
-        keys: [
-          ...p.keys,
-          saved(provider, { base_url: b.base_url ?? null, model: b.model ?? null }),
-        ],
+        keys: [...p.keys, saved(provider)],
       }));
     }),
     check: vi.fn(async (id: string, provider: string) =>
@@ -94,25 +87,66 @@ describe("Your keys", () => {
           id: "lipsync",
           title: "Lip sync",
           kind: "media",
-          providers: ["fal", "wavespeed"],
-          keys: [saved("fal"), saved("wavespeed", { state: "bad", said: "Key was revoked." })],
+          providers: ["fal"],
+          keys: [saved("fal")],
           use: { provider: "fal", model: "fal-ai/infinitalk", title: "InfiniteTalk", price: "" },
+        }),
+        product({
+          id: "music",
+          title: "Music",
+          kind: "media",
+          providers: ["fal"],
+          keys: [saved("fal", { state: "bad", said: "Key was revoked." })],
         }),
       ]),
     );
     render(<YourKeys api={api} />);
     const chat = await screen.findByRole("listitem", { name: "Chat and writing" });
     expect(chat).toHaveTextContent("No key: Chat and writing uses this computer's models only.");
-    expect(
-      within(chat).getByText("fal.ai, OpenRouter, Another OpenAI-compatible server"),
-    ).toBeTruthy();
+    expect(within(chat).getByText("OpenRouter")).toBeTruthy();
     const lipsync = row("Lip sync");
     expect(lipsync).toHaveTextContent("fal.aiSaved · works");
-    expect(lipsync).toHaveTextContent("Key not working");
-    expect(lipsync).toHaveTextContent("Key was revoked.");
     expect(lipsync).toHaveTextContent("In use: InfiniteTalk");
-    // every provider of lip sync has a key: nothing left to add
+    // lip sync's one provider has a key: nothing left to add
     expect(within(lipsync).queryByRole("button", { name: /Add a key/ })).toBeNull();
+    const music = row("Music");
+    expect(music).toHaveTextContent("Key not working");
+    expect(music).toHaveTextContent("Key was revoked.");
+  });
+
+  it("offers every text vendor for chat, Anthropic first, and saves the one picked", async () => {
+    const user = userEvent.setup();
+    const vendors = ["anthropic", "openai", "gemini", "deepseek", "zai", "openrouter"];
+    const api = fakeApi({
+      products: [product({ providers: vendors })],
+      providers: [
+        { id: "anthropic", title: "Anthropic", host: "api.anthropic.com" },
+        { id: "openai", title: "OpenAI", host: "api.openai.com" },
+        { id: "gemini", title: "Google Gemini", host: "generativelanguage.googleapis.com" },
+        { id: "deepseek", title: "DeepSeek", host: "api.deepseek.com" },
+        { id: "zai", title: "Z.ai", host: "api.z.ai" },
+        ...providers,
+      ],
+      can_save: true,
+    });
+    render(<YourKeys api={api} />);
+    const chat = await screen.findByRole("listitem", { name: "Chat and writing" });
+    expect(chat).toHaveTextContent("Anthropic, OpenAI, Google Gemini, DeepSeek, Z.ai, OpenRouter");
+    await user.click(screen.getByRole("button", { name: "Add a key for Chat and writing" }));
+    const form = screen.getByRole("region", { name: "Add a key for Chat and writing" });
+    const pick = within(form).getByRole("combobox", { name: "Provider" });
+    expect(pick).toHaveTextContent("Anthropic");
+    await user.click(pick);
+    await user.click(await screen.findByRole("option", { name: "DeepSeek" }));
+    await user.type(within(form).getByLabelText("Key"), "sk-good-ds");
+    await user.click(within(form).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(api.save).toHaveBeenCalledWith("chat", "deepseek", { key: "sk-good-ds" }),
+    );
+    // five vendors are still there to add
+    expect(
+      await screen.findByRole("button", { name: "Add a key for Chat and writing" }),
+    ).toBeTruthy();
   });
 
   it("tests without saving, then saves a key that works, and never shows it", async () => {
@@ -124,16 +158,14 @@ describe("Your keys", () => {
     await user.type(within(form).getByLabelText("Key"), "sk-good-1");
     await user.click(within(form).getByRole("button", { name: "Test" }));
     expect(await within(form).findByText(/answered in 840 ms/)).toBeTruthy();
-    expect(api.test).toHaveBeenCalledWith("chat", "fal", { key: "sk-good-1" });
+    expect(api.test).toHaveBeenCalledWith("chat", "openrouter", { key: "sk-good-1" });
     expect(api.save).not.toHaveBeenCalled();
     await user.click(within(form).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(row("Chat and writing")).toHaveTextContent("Saved · works"));
-    expect(api.save).toHaveBeenCalledWith("chat", "fal", { key: "sk-good-1" });
+    expect(api.save).toHaveBeenCalledWith("chat", "openrouter", { key: "sk-good-1" });
     expect(document.body.textContent).not.toContain("sk-good-1");
-    // fal.ai has a key now: it is not offered again
-    await user.click(screen.getByRole("button", { name: "Add a key for Chat and writing" }));
-    const again = screen.getByRole("region", { name: "Add a key for Chat and writing" });
-    expect(within(again).getByRole("combobox")).toHaveTextContent("OpenRouter");
+    // OpenRouter has a key now: there is no other text provider to add
+    expect(screen.queryByRole("button", { name: "Add a key for Chat and writing" })).toBeNull();
   });
 
   it("says why a refused key was not saved", async () => {
@@ -148,44 +180,29 @@ describe("Your keys", () => {
     expect(row("Chat and writing")).not.toHaveTextContent("Saved · works");
   });
 
-  it("asks for the address and the model of another OpenAI-compatible server", async () => {
-    const user = userEvent.setup();
-    const api = fakeApi(keys([product({ providers: ["compatible"] })]));
-    render(<YourKeys api={api} />);
-    await user.click(await screen.findByRole("button", { name: "Add a key for Chat and writing" }));
-    const form = screen.getByRole("region", { name: "Add a key for Chat and writing" });
-    await user.type(within(form).getByLabelText("Key"), "good");
-    const save = within(form).getByRole("button", { name: "Save" });
-    expect(save).toBeDisabled();
-    await user.type(within(form).getByLabelText("The server's address"), "http://box:8000/v1");
-    await user.type(within(form).getByLabelText("The model it runs"), "llama3");
-    await user.click(save);
-    expect(api.save).toHaveBeenCalledWith("chat", "compatible", {
-      key: "good",
-      base_url: "http://box:8000/v1",
-      model: "llama3",
-    });
-    await waitFor(() => expect(row("Chat and writing")).toHaveTextContent("llama3"));
-  });
-
   it("tests a saved key again, and removes one after asking", async () => {
     const user = userEvent.setup();
     const api = fakeApi(
       keys([
         product({
-          keys: [saved("fal")],
-          use: { provider: "fal", model: "openai/gpt-4o-mini", title: "GPT-4o mini", price: "" },
+          keys: [saved("openrouter")],
+          use: {
+            provider: "openrouter",
+            model: "openai/gpt-4o-mini",
+            title: "GPT-4o mini",
+            price: "",
+          },
         }),
       ]),
     );
     render(<YourKeys api={api} />);
     await user.click(
-      await screen.findByRole("button", { name: "Test the fal.ai key for Chat and writing" }),
+      await screen.findByRole("button", { name: "Test the OpenRouter key for Chat and writing" }),
     );
     await waitFor(() => expect(row("Chat and writing")).toHaveTextContent("Key not working"));
-    expect(api.check).toHaveBeenCalledWith("chat", "fal");
+    expect(api.check).toHaveBeenCalledWith("chat", "openrouter");
     await user.click(
-      screen.getByRole("button", { name: "Remove the fal.ai key for Chat and writing" }),
+      screen.getByRole("button", { name: "Remove the OpenRouter key for Chat and writing" }),
     );
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("goes back to this computer's model");
@@ -193,7 +210,7 @@ describe("Your keys", () => {
     await waitFor(() =>
       expect(row("Chat and writing")).toHaveTextContent("No key: Chat and writing"),
     );
-    expect(api.remove).toHaveBeenCalledWith("chat", "fal");
+    expect(api.remove).toHaveBeenCalledWith("chat", "openrouter");
   });
 
   it("says when this computer cannot keep a key, and offers nothing to add", async () => {

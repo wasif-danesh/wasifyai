@@ -6,7 +6,7 @@ import type { CloudModel, OwnKeysApi } from "@wasifyai/client";
 import type { ModelChoice } from "@wasifyai/ui";
 import { routePath } from "../router";
 
-/** A cloud row's picker id: `cloud:<product>:<provider>:<model>` (a model may hold colons: `runware:100@1`). */
+/** A cloud row's picker id: `cloud:<product>:<provider>:<model>` (a model may hold colons). */
 export const cloudId = (product: string, provider: string, model: string) =>
   `cloud:${product}:${provider}:${model}`;
 export const isCloud = (id: string | null | undefined) => Boolean(id?.startsWith("cloud:"));

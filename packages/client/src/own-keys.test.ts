@@ -34,17 +34,17 @@ describe("the own keys client", () => {
     const api = createOwnKeysApi(transport);
     await api.list();
     const t = await api.test("lipsync", "fal", { key: "k1" });
-    await api.save("lipsync", "wavespeed", { key: "k2" });
+    await api.save("lipsync", "fal", { key: "k2" });
     await api.check("lipsync", "fal");
     await api.remove("lipsync", "fal");
     await api.cloud("lipsync");
-    await api.use("lipsync", { provider: "wavespeed", model: "wavespeed-ai/infinitetalk" });
+    await api.use("lipsync", { provider: "fal", model: "fal-ai/infinitalk" });
     await api.use("lipsync", null);
     expect(t).toEqual({ ok: true, ms: 9, said: null });
     expect(calls.map((c) => [c.init?.method ?? "GET", c.path])).toEqual([
       ["GET", "/desktop/keys"],
       ["POST", "/desktop/keys/lipsync/keys/fal/test"],
-      ["PUT", "/desktop/keys/lipsync/keys/wavespeed"],
+      ["PUT", "/desktop/keys/lipsync/keys/fal"],
       ["POST", "/desktop/keys/lipsync/keys/fal/check"],
       ["DELETE", "/desktop/keys/lipsync/keys/fal"],
       ["GET", "/desktop/keys/lipsync/cloud"],
@@ -53,8 +53,8 @@ describe("the own keys client", () => {
     ]);
     expect(JSON.parse(String(calls[2]?.init?.body))).toEqual({ key: "k2" });
     expect(JSON.parse(String(calls[6]?.init?.body))).toEqual({
-      provider: "wavespeed",
-      model: "wavespeed-ai/infinitetalk",
+      provider: "fal",
+      model: "fal-ai/infinitalk",
     });
     expect(JSON.parse(String(calls[7]?.init?.body))).toEqual({ provider: null });
   });

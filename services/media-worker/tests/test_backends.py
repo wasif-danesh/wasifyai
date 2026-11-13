@@ -560,3 +560,34 @@ async def test_openai_images_edit_without_a_picture_is_refused():
     with pytest.raises(ComfyError) as caught:
         await r.run(edit_job(), Progress())
     assert caught.value.code == "invalid_input" and not seen
+
+
+async def test_a_job_on_a_cloud_offer_records_what_it_cost():
+    """ADR-0100 stage CP3: the provider and its list price for the job, as a `cloud.cost` event."""
+    from wasifyai_platform_sdk.offers import Priced, offer
+
+    class Cloud:
+        local_gpu = False
+        backend = "wavespeed"
+        model = "z-image-turbo"
+
+        def __init__(self):
+            self.cost = None
+
+        async def run(self, job, on_progress, files=None):
+            o = offer("wavespeed", "wavespeed-ai/z-image/turbo", 0.005, "picture")
+            self.cost = Priced(None, o, 0.005)
+            return {"image": (b"\x89PNG\r\n\x1a\n", "image/png", "png")}
+
+    usage = InMemoryUsageRecorder()
+    p = JobProcessor(
+        WorkerSettings(ollama_base_url=""), InMemoryEventLog(), memory_storage(), usage,
+        Cloud(), SpyLock(), InMemoryJobState(),
+    )  # fmt: skip
+    result = await p.process(job())
+    assert result.status == "completed"
+    (cost,) = [e for e in usage.events if e.kind == "cloud.cost"]
+    assert (cost.quantity, cost.unit) == (0.005, "dollars")
+    assert cost.meta["provider"] == "wavespeed" and cost.meta["model"] == "z-image-turbo"
+    assert cost.meta["endpoint"] == "wavespeed-ai/z-image/turbo"
+    assert cost.meta["capability"] == "image.generate"

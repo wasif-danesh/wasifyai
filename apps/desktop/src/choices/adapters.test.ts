@@ -7,8 +7,10 @@ import type { ModelEntry, ModelsApi } from "../models";
 import { CATALOGUE_GROUPS, catalogueChoices } from "./catalogue-choices";
 import { chatChoices, fitOf, pickVariant } from "./chat-choices";
 import { recommendedChat } from "./copy";
+import { cloudRow } from "./keyed";
 import { model3dChoices } from "./model3d-choices";
 import type { Step } from "./steps";
+import { TRAIN_HERE_ID, trainChoices } from "./train-choices";
 import type { Engines, Memory } from "./types";
 import { choiceKey, voiceChoices } from "./voice-choices";
 
@@ -108,6 +110,8 @@ function cloudKeys(product: string, models: string[], inUse: string | null) {
               title: `Model ${m}`,
               about: "It makes things.",
               price: "$1 each",
+              providers: ["fal"],
+              cheaper_with: null,
               works: true,
               chosen: m === inUse,
             }))
@@ -488,7 +492,7 @@ describe("speech and listening", () => {
     expect(use).toHaveBeenLastCalledWith("voice", null);
   });
 
-  it("listening and the other voice tools do not follow the Voice key", async () => {
+  it("listening has its own cloud models and does not follow the Voice key (ADR-0100, CP7)", async () => {
     const { keys, use } = onKey("voice", "fal-ai/kokoro");
     const ready = [voiceModel({ id: "a", state: "ready" })];
     const api = voiceChoices(
@@ -496,10 +500,63 @@ describe("speech and listening", () => {
       "listening",
       "transcribe",
     );
-    expect(api.cloud).toBeUndefined();
+    expect(api.cloud?.product).toBe("Speech to text");
     expect((await api.list()).choices.some((r) => r.place === "cloud")).toBe(false);
     await api.choose("a");
     expect(use).not.toHaveBeenCalled();
+  });
+
+  it("a cloud model for copying a voice is chosen for its own product", async () => {
+    const { keys, use } = cloudKeys("voiceclone", ["qwen3-tts"], null);
+    const local = voiceModel({
+      id: "voxcpm2",
+      tasks: ["speak", "clone", "design"],
+      state: "ready",
+    });
+    const api = voiceChoices(
+      { voice: voice([local]), models, memory: memory(), engines: engines(), keys },
+      "voice",
+      "clone",
+    );
+    expect(api.cloud?.product).toBe("Copy or design a voice");
+    const rows = (await api.list()).choices.filter((r) => r.place === "cloud");
+    expect(rows.map((r) => [r.id, r.engineId])).toEqual([
+      ["cloud:voiceclone:fal:qwen3-tts", "key:voiceclone"],
+    ]);
+    await api.choose("cloud:voiceclone:fal:qwen3-tts");
+    expect(use).toHaveBeenCalledWith("voiceclone", { provider: "fal", model: "qwen3-tts" });
+  });
+
+  it("splitting has its own cloud models; choosing one on this computer takes it off the cloud (CP8)", async () => {
+    const { keys, use } = onKey("split", "demucs");
+    const local = voiceModel({ id: "htdemucs", tasks: ["separate"], state: "ready" });
+    const api = voiceChoices(
+      { voice: voice([local]), models, memory: memory(), engines: engines(), keys },
+      "music",
+      "separate",
+    );
+    expect(api.cloud?.product).toBe("Split into parts");
+    const rows = (await api.list()).choices.filter((r) => r.place === "cloud");
+    expect(rows.map((r) => [r.id, r.engineId])).toEqual([["cloud:split:fal:demucs", "key:split"]]);
+    expect(rows[0]?.plain).toContain("the recording");
+    await api.choose("cloud:split:fal:demucs");
+    expect(use).toHaveBeenCalledWith("split", { provider: "fal", model: "demucs" });
+    await api.choose("htdemucs");
+    expect(use).toHaveBeenLastCalledWith("split", null);
+  });
+
+  it("the music group offers cloud models for songs, effects, splitting and editing (CP8)", () => {
+    const api = voiceChoices(
+      {
+        voice: voice([]),
+        models,
+        memory: memory(),
+        engines: engines(),
+        keys: onKey("music", "x").keys,
+      },
+      "music",
+    );
+    expect(api.cloud?.product).toBe("Music or Sound effects or Split into parts or Edit music");
   });
 
   it("lip sync lists its cloud models and a cloud model of music is chosen for music", async () => {
@@ -558,6 +615,28 @@ describe("3D", () => {
       ["pixal3d", true, "ready"],
       ["cloud:model3d:fal:fal-ai/pixal3d", false, "ready"],
     ]);
+  });
+});
+
+describe("training (ADR-0100, CP10)", () => {
+  it("teaches on this computer until a cloud trainer is chosen, and comes back to it", async () => {
+    const here = onKey("train", "z-image-look", "here");
+    const rows = (await trainChoices(here.keys).list()).choices;
+    expect(rows.map((r) => [r.id, r.chosen])).toEqual([
+      [TRAIN_HERE_ID, true],
+      ["cloud:train:fal:z-image-look", false],
+    ]);
+    const { keys, use } = onKey("train", "z-image-look");
+    const api = trainChoices(keys);
+    expect(api.cloud?.product).toBe("Train models");
+    const on = (await api.list()).choices;
+    expect(on.map((r) => [r.id, r.chosen])).toEqual([
+      [TRAIN_HERE_ID, false],
+      ["cloud:train:fal:z-image-look", true],
+    ]);
+    expect(on[1]?.plain).toContain("the pictures and their captions");
+    await api.choose(TRAIN_HERE_ID);
+    expect(use).toHaveBeenCalledWith("train", null);
   });
 });
 
@@ -713,5 +792,47 @@ describe("chat", () => {
     expect(pickVariant([v("Q8_0", 4e9), v("Q4_K_M", 2.5e9)], 5e9)?.quant).toBe("Q4_K_M");
     expect(pickVariant([v("Q8_0", 4e9), v("Q2_K", 1.5e9)], 1.4e9)?.quant).toBe("Q2_K");
     expect(pickVariant([], 1)).toBeNull();
+  });
+});
+
+describe("a media model on several providers", () => {
+  const row = {
+    provider: "runware",
+    provider_title: "Runware",
+    host: "runware.ai",
+    model: "minimax-music-2.6",
+    title: "MiniMax Music 2.6",
+    about: "Songs.",
+    price: "$0.15 per song",
+    providers: ["runware", "fal"],
+    cheaper_with: null,
+    works: true,
+    chosen: false,
+  };
+
+  it("says each job goes to the cheapest of its keyed providers", () => {
+    const c = cloudRow("music", row);
+    expect(c.plain).toBe(
+      "Songs. Runs on the cheapest of Runware or fal.ai for each job, with your keys, which sends what you describe and your lyrics there.",
+    );
+    expect(c.price).toBe("$0.15 per song");
+  });
+
+  it("carries what a picture model can do with the keys there are, for its screen", () => {
+    const c = cloudRow("images", { ...row, can: ["image.generate", "image.inpaint"] });
+    expect(c.can).toEqual(["image.generate", "image.inpaint"]);
+    expect(cloudRow("music", row).can).toBeUndefined();
+  });
+
+  it("says when a key it does not have would be cheaper", () => {
+    const c = cloudRow("music", {
+      ...row,
+      providers: ["fal"],
+      provider: "fal",
+      provider_title: "fal.ai",
+      cheaper_with: "Runware",
+    });
+    expect(c.plain).toContain("Runs on fal.ai with your key");
+    expect(c.plain).toContain("A Runware key would make it cheaper.");
   });
 });

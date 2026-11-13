@@ -32,6 +32,13 @@ spec:
               valueFrom:
                 secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: LITELLM_SALT_KEY }
             - { name: STORE_MODEL_IN_DB, value: "True" }
+            # the default aliases read the text vendors' keys (ADR-0100)
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: ANTHROPIC_API_KEY, optional: true }
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: OPENAI_API_KEY, optional: true }
             {{- with .Values.langfuse.baseUrl }}
             - { name: LANGFUSE_HOST, value: {{ . | quote }} }
             - name: LANGFUSE_PUBLIC_KEY

@@ -52,15 +52,15 @@ def catalogue(tmp_path):
     return tmp_path
 
 
-async def test_it_names_the_chat_model_and_what_the_product_ships(tmp_path):
+async def test_it_names_the_chat_model(tmp_path):
     out = await in_use(request_with(catalogue(tmp_path)), WHO)
     assert [m.title for m in out.chat] == ["gemma4:e4b"]  # the provider's prefix is not shown
-    assert [m.title for m in out.images] == ["FLUX.2 klein 4B"]
-    assert [m.title for m in out.video] == ["LTX-Video 2B"]
-    assert all(m.ready for m in out.images + out.video)
+    # pictures, clips and 3D name the service's cloud model: tests/test_admin_providers.py
+    assert out.images == [] and out.video == []  # no cloud keys service here
 
 
-async def test_it_names_the_model_an_admin_chose_and_the_choice_is_checked(tmp_path):
+async def test_the_model_an_admin_chose_is_checked(tmp_path):
+    """The desktop keeps a product's chosen model with the same service (ADR-0097, MV6)."""
     from wasifyai_api.media_access import MediaAccessError, ModelOption
     from wasifyai_api.settings_store import InMemorySettingsStore
 
@@ -70,45 +70,15 @@ async def test_it_names_the_model_an_admin_chose_and_the_choice_is_checked(tmp_p
             ModelOption(id="qwen", title="Qwen-Image 2.1", can=["image.generate"]),
         ]
     }
-    request = request_with(catalogue(tmp_path))
     media = MediaAccess(
         InMemoryMediaBindingStore(), SecretBox(SecretBox.generate_key()), lambda: CAPS,
         "http://c", checks=InMemorySettingsStore(), models=lambda: options,
     )  # fmt: skip
-    request.app.state.services.media = media
-    out = await in_use(request, WHO)
-    assert [m.title for m in out.images] == ["FLUX.2 klein 4B"]  # none chosen: the first
     await media.choose_model("wasifyai-image", "qwen", "admin")
-    out = await in_use(request, WHO)
-    assert [m.title for m in out.images] == ["Qwen-Image 2.1"]
     assert await media.chosen_model("wasifyai-image") == "qwen"
     with pytest.raises(MediaAccessError):
         await media.choose_model("wasifyai-image", "nope", "admin")
     assert [c.chosen for c in await media.model_choices()] == ["qwen"]
-
-
-async def test_a_chosen_service_is_named_by_the_service(tmp_path):
-    request = request_with(catalogue(tmp_path))
-    from wasifyai_api.media_access import MediaBindingIn
-
-    await request.app.state.services.media.set(
-        "t",
-        "wasifyai-image",
-        "image.generate",
-        MediaBindingIn(
-            backend="comfy-api", config={"base_url": "https://c.example"}, api_key="k" * 30
-        ),
-        "admin",
-    )
-    out = await in_use(request, WHO)
-    assert [m.title for m in out.images] != ["FLUX.2 klein 4B"]
-    assert "k" * 30 not in out.model_dump_json()  # no key, no address
-
-
-async def test_nothing_set_up_is_an_empty_list_not_an_error(tmp_path):
-    request = request_with(tmp_path, caps=[])
-    out = await in_use(request, WHO)
-    assert out.images == [] and out.video == []
 
 
 @pytest.fixture

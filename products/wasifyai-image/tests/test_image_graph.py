@@ -324,6 +324,24 @@ async def test_styles_by_id_reach_the_job_as_their_files_and_the_recipe_keeps_th
     ]  # fmt: skip
 
 
+async def test_a_look_taught_on_a_cloud_model_reaches_the_job_with_its_address(tmp_path, ctx):
+    """ADR-0100, CP10: the cloud image model loads it by its address, for the model it was for."""
+    rig = make_rig(tmp_path)
+    url = "https://v3.fal.media/ink.safetensors"
+
+    async def to_files(wanted):
+        return [{"name": "ink.safetensors", "weight": 0.7, "sha256": "ab" * 32, "title": "Ink",
+                 "url": url, "model": "z-image-turbo"}], ""  # fmt: skip
+
+    rig.caps.extras["styles"] = to_files
+    await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "styles": [{"id": "a1b2c3d4e5f6", "strength": 0.7}]}
+    )
+    job = rig.sink.submitted[0].prompt
+    assert job["loras"] == [{"name": "ink.safetensors", "weight": 0.7}]
+    assert job["lora_urls"] == {"ink.safetensors": {"url": url, "model": "z-image-turbo"}}
+
+
 @pytest.mark.parametrize(
     ("styles", "fragment"),
     [

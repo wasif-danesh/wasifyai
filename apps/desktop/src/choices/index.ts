@@ -9,6 +9,7 @@ import { CATALOGUE_GROUPS, catalogueChoices } from "./catalogue-choices";
 import { chatChoices } from "./chat-choices";
 import { createEngines } from "./engines";
 import { model3dChoices } from "./model3d-choices";
+import { trainChoices } from "./train-choices";
 import { voiceChoices } from "./voice-choices";
 
 /** One source for the window: an adapter is made once per group and task, so screens share its work. */
@@ -40,6 +41,8 @@ export function createChoicesSource(engines = createEngines()): ChoicesSource {
         );
       case "three_d":
         return model3dChoices(model3d, ownKeysApi);
+      case "train":
+        return trainChoices(ownKeysApi);
       default:
         return voiceChoices(
           { voice: voiceApi, models: modelsApi, memory: remembered, engines, keys: ownKeysApi },

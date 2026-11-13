@@ -25,11 +25,19 @@ export type VoiceChoicesDeps = {
   keys?: OwnKeysApi;
 };
 
-/** The product a voice task runs as on a cloud model (the other tasks run on this computer only). */
+/** The product a voice task runs as on a cloud model (Edit speech runs on this computer only). */
 const CLOUD_PRODUCT: Record<string, string> = {
   speak: "voice",
+  clone: "voiceclone",
+  design: "voiceclone",
+  transcribe: "transcribe",
+  convert: "voicechange",
   music: "music",
   sfx: "sfx",
+  separate: "split",
+  // not a task of the engine: the cloud model that changes a stretch of a clip (Edit music lists the music
+  // models that can)
+  musicedit: "musicedit",
   lipsync: "lipsync",
 };
 
@@ -46,7 +54,7 @@ export const choiceKey = (task: string) => `wasifyai.voice.model.${task}`;
 export const GROUP_TASKS: Record<string, string[]> = {
   voice: ["speak", "clone", "design", "convert", "edit"],
   listening: ["transcribe"],
-  music: ["music", "sfx", "separate"],
+  music: ["music", "sfx", "separate", "musicedit"],
   faces: ["lipsync"],
 };
 

@@ -9,13 +9,23 @@ environment. Differences live in env vars and Helm values overlays.
 |---|---|---|---|
 | Where | MacBook (Apple Silicon) | Home lab | AWS, GCP or Azure |
 | Orchestration | Podman + `compose.yaml`; `kind` for chart testing | k3s + Argo CD | EKS / GKE / AKS + Argo CD |
-| LLM | Ollama, native | Ollama pod on GPU node | vLLM, or hosted APIs via LiteLLM |
-| Media | ComfyUI native, or home lab ComfyUI via Tailscale, or stub worker | ComfyUI pod, GPU time-sliced | ComfyUI GPU pool, KEDA scale-to-zero |
+| LLM | Hosted vendors via LiteLLM (Claude Haiku 5.5 by default, ADR-0100) | same | same |
+| Media | Stub worker, or the cloud models of Admin › Media | Cloud models (Runware, WaveSpeed, fal.ai) | same |
 | Postgres | Container | CloudNativePG | Managed (RDS, Cloud SQL, Azure Flexible Server) |
 | Redis | Container | In-cluster | Managed |
 | Object storage | SeaweedFS | SeaweedFS | S3, GCS or Azure Blob |
+| Search embeddings | bge-m3 on llama.cpp (container) | same, in-cluster on the CPU | same |
 | Secrets | `.env` (gitignored) | SOPS / External Secrets | External Secrets from cloud secret manager |
 | Deploys | Manual | Auto-sync from `main` | Promotion only (tag or PR) |
+
+The web runs one model of its own, bge-m3 for search on the CPU (the `embedder` StatefulSet; ADR-0100's
+amendment of 2026-11-13). Otherwise it runs only cloud models (ADR-0099; ADR-0100, stage CP11): text goes through LiteLLM to the
+vendors of Admin › Models, and every picture, clip, voice, song, lip sync, 3D model and look to the
+cheapest offer of the model chosen in Admin › Media, with the service's Runware, WaveSpeed and
+fal.ai keys there (per tenant, encrypted in the `secrets` table). The chart has no ComfyUI, Ollama
+or GPU workload; the media worker runs in `COMFYUI_MODE=cloud`, where a picture or clip job carries
+its offers and the name each key is kept under, never the key. The desktop app keeps its own
+models (ComfyUI and the rest) on the person's computer. The GPU notes below are older history.
 
 ## Dev (MacBook)
 
@@ -26,9 +36,9 @@ environment. Differences live in env vars and Helm values overlays.
   Containers reach them at `host.containers.internal`, configured through
   `OLLAMA_BASE_URL` / `COMFYUI_BASE_URL`.
 - **Media worker modes:** `COMFYUI_MODE=stub` (the default in `.env.example`) returns placeholder
-  images and audio, so every machine can run the whole media flow. `COMFYUI_MODE=real` drives
-  ComfyUI at `COMFYUI_BASE_URL` (a native ComfyUI on the Mac works at
-  `http://host.containers.internal:8188`).
+  images and audio, so every machine can run the whole media flow with no key. `COMFYUI_MODE=cloud`
+  (the chart's default) runs each job on the cloud offers it came with. `COMFYUI_MODE=real` drives
+  a ComfyUI at `COMFYUI_BASE_URL` (the desktop app's own way).
 - **Heavy models:** ACE-Step and FLUX.2 klein may be slow or incomplete on Apple Silicon. Set
   `COMFYUI_BASE_URL` to the home lab ComfyUI over Tailscale, or run the worker in stub mode
   (returns sample files) for UI work.

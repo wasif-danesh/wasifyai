@@ -2,63 +2,83 @@
 # admin can point any of them at another provider and model, and "reset" returns to what is here.
 #
 # The API seeds these into LiteLLM's database at start (idempotent). `{OLLAMA_BASE_URL}` and
-# `{OLLAMA_OPENAI_BASE_URL}` are filled from the API's settings. `ollama_chat/<model>` entries are
-# also the models `make setup` pulls (scripts/lib.sh reads this file).
+# `{OLLAMA_OPENAI_BASE_URL}` are filled from the API's settings when an alias uses them;
+# `ollama_chat/<model>` entries are the models `make setup` pulls (scripts/lib.sh reads this file).
+# Since ADR-0100 no default uses Ollama.
 #
 # Behaviour parameters (temperature, think, reasoning_effort) stay with the alias when an admin
 # changes provider or model; LiteLLM drops the ones a provider does not support.
 aliases:
-  # Gemma 4 "thinks" by default: reasoning tokens count against max_tokens, double the latency and
-  # did not improve lyric quality in our test. Off for creative/chat aliases (ADR-0018).
+  # ADR-0100: every text job on the web runs on Claude Haiku 5.5 (Anthropic directly, through
+  # LiteLLM's `anthropic/`). Haiku 5.5 takes no temperature (a 400), so none is set here; how much
+  # it thinks is `reasoning_effort`, which LiteLLM sends as adaptive thinking and
+  # `output_config.effort`. Without `max_tokens` LiteLLM would send 128000, so each alias sets one.
+  # The key is LiteLLM's own environment (`ANTHROPIC_API_KEY`); an admin can bind an alias to
+  # another vendor and key in Admin › Models.
   default-chat:
-    purpose: General chat (the hello demo and tests)
+    purpose: Chat, Notebook answers, dubbing and speech scripts
     kind: chat
     litellm_params:
-      model: ollama_chat/gemma4:e4b
-      api_base: "{OLLAMA_BASE_URL}"
-      think: false
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+      reasoning_effort: medium
+      max_tokens: 16000
+  # Planning and tool use: the assistant, Creative Studio's plan and Motion graphics' drafts.
+  planner:
+    purpose: The assistant, Creative Studio's plan and Motion graphics (thinks the most)
+    kind: chat
+    litellm_params:
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+      reasoning_effort: high
+      max_tokens: 32000
   lyrics-writer:
     purpose: Writes song titles, lyrics, style tags and cover prompts
     kind: chat
     litellm_params:
-      model: ollama_chat/gemma4:e4b
-      api_base: "{OLLAMA_BASE_URL}"
-      think: false
-  # Rewrites a user's prompt for the image, video and music models (ADR-0038). A little sampling
-  # randomness is wanted; thinking is off, as for the other creative aliases.
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+      reasoning_effort: low
+      max_tokens: 8000
+  # Rewrites a user's prompt for the image, video and music models (ADR-0038).
   prompt-enhancer:
     purpose: Rewrites a user's prompt into a clearer one for the generation models
     kind: chat
     litellm_params:
-      model: ollama_chat/gemma4:e4b
-      api_base: "{OLLAMA_BASE_URL}"
-      temperature: 0.7
-      think: false
-  # Same model through Ollama's OpenAI-compatible API (`openai/` here means Ollama's /v1, not
-  # OpenAI). Unlike `ollama_chat/` it accepts audio input parts, so use this alias for
-  # capabilities that take image or audio input (ADR-0020).
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+      reasoning_effort: low
+      max_tokens: 8000
+  # Pictures in a prompt (describing a picture, judging a training sample). Claude takes no audio.
   multimodal:
-    purpose: Image and audio input to the model
+    purpose: Image input to the model
     kind: chat
     litellm_params:
-      model: openai/gemma4:e4b
-      api_base: "{OLLAMA_OPENAI_BASE_URL}"
-      api_key: none
-      reasoning_effort: none  # this route ignores `think`; reasoning_effort is honoured
-  # Search over a user's own creations (ADR-0041): multilingual (bge-m3, MIT, 1024 dimensions). The
-  # `embedder` above stays on 768 dimensions for the RAG helper (migration 0003), so search has its own.
+      model: anthropic/claude-haiku-5-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+      reasoning_effort: low
+      max_tokens: 8000
+  # Embeddings (ADR-0100, decision 4, owner 2026-11-13): bge-m3 on the web's own CPU (the
+  # `embedder` service of the chart and compose, llama.cpp's server): free per call, multilingual,
+  # 1024 dimensions for searching My creations (ADR-0041) and Notebook sources. Nothing leaves the
+  # service. `{EMBEDDER_BASE_URL}` is filled from the API's settings. Changing the embedder means the
+  # search index is built again.
   creation-embedder:
-    purpose: Multilingual embeddings for searching My creations
+    purpose: Multilingual embeddings for searching My creations and Notebook sources
     kind: embedding
     litellm_params:
-      model: ollama/bge-m3
-      api_base: "{OLLAMA_BASE_URL}"
+      model: openai/bge-m3
+      api_base: "{EMBEDDER_BASE_URL}/v1"
+      api_key: none  # the server takes no key; the OpenAI client needs a value
+  # The RAG helper's 768 dimensions (migration 0003): no product uses it on the web, so it stays on
+  # OpenAI's text-embedding-3-small and needs OPENAI_API_KEY only if something calls it.
   embedder:
     purpose: Text embeddings for search (RAG)
     kind: embedding
     litellm_params:
-      model: ollama/nomic-embed-text
-      api_base: "{OLLAMA_BASE_URL}"
+      model: openai/text-embedding-3-small
+      api_key: os.environ/OPENAI_API_KEY
+      dimensions: 768
   # Speech on the web (W5, ADR-0066): the voice product asks the gateway for these, and the provider the
   # alias is bound to receives the text, or the recording. The admin binds them to the provider's own speech
   # and transcription models (OpenRouter or similar); the defaults are only a starting point and need a key.

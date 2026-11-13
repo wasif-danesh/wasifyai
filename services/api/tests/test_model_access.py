@@ -26,6 +26,7 @@ from tests.test_runs import hello_registry, mem_app
 SUBST = {
     "OLLAMA_BASE_URL": "http://ollama:11434",
     "OLLAMA_OPENAI_BASE_URL": "http://ollama:11434/v1",
+    "EMBEDDER_BASE_URL": "http://embedder.test:8080",
 }
 KEY = "sk-live-0123456789abcdef0123456789abcdef"
 
@@ -39,6 +40,7 @@ def test_defaults_load_with_addresses_filled_in():
     d = load_defaults(SUBST)
     assert set(d) == {
         "default-chat",
+        "planner",
         "lyrics-writer",
         "prompt-enhancer",
         "creation-embedder",
@@ -47,9 +49,34 @@ def test_defaults_load_with_addresses_filled_in():
         "voice-speak",
         "voice-transcribe",
     }
-    assert d["default-chat"]["litellm_params"]["api_base"] == "http://ollama:11434"
-    assert d["multimodal"]["litellm_params"]["api_base"] == "http://ollama:11434/v1"
     assert not any("protected" in spec for spec in d.values())
+
+
+def test_every_text_alias_is_haiku_with_an_effort_and_no_temperature():
+    """ADR-0100: Claude Haiku 5.5 on Anthropic; it takes no sampling settings, thinks as much as
+    the job needs, and gets a `max_tokens` (LiteLLM would otherwise send 128000)."""
+    d = load_defaults(SUBST)
+    efforts = {}
+    for alias, spec in d.items():
+        p = spec["litellm_params"]
+        if spec["kind"] != "chat":
+            continue
+        assert p["model"] == "anthropic/claude-haiku-5-5", alias
+        assert p["api_key"] == "os.environ/ANTHROPIC_API_KEY", alias
+        assert not {"temperature", "top_p", "top_k", "think"} & set(p), alias
+        assert p["max_tokens"] >= 8000, alias
+        efforts[alias] = p["reasoning_effort"]
+    assert efforts == {
+        "default-chat": "medium", "planner": "high", "lyrics-writer": "low",
+        "prompt-enhancer": "low", "multimodal": "low",
+    }  # fmt: skip
+    # search runs on bge-m3 on the web's own embedder (decision 4, 2026-11-13); the RAG helper's
+    # 768 alias stays on OpenAI, unused by the products
+    p = d["creation-embedder"]["litellm_params"]
+    assert p["model"] == "openai/bge-m3" and "dimensions" not in p
+    assert p["api_base"] == "http://embedder.test:8080/v1"
+    p = d["embedder"]["litellm_params"]
+    assert p["model"] == "openai/text-embedding-3-small" and p["dimensions"] == 768
 
 
 @pytest.mark.parametrize(
@@ -95,11 +122,13 @@ def test_z_ai_is_bound_at_its_own_address_whatever_the_admin_sends():
 
 async def test_seed_creates_every_alias_once():
     backend, models = make()
-    assert await models.seed() == 8
+    assert await models.seed() == 9
     assert await models.seed() == 0  # idempotent: a second API replica changes nothing
     views = {v.alias: v for v in await models.list()}
-    assert views["default-chat"].source == "default" and views["default-chat"].provider == "ollama"
-    assert views["multimodal"].provider == "openai_compatible"
+    assert views["default-chat"].source == "default"
+    assert views["default-chat"].provider == "anthropic"  # ADR-0100
+    assert views["planner"].model == "claude-haiku-5-5"
+    assert views["embedder"].provider == "openai"
     assert all(v.key_set is False for v in views.values())
     assert set(backend.entries) == {f"alias:{a}" for a in views}
 
@@ -144,7 +173,8 @@ async def test_set_binds_a_hosted_provider_and_never_reveals_the_key():
         params["model"] == "openrouter/anthropic/claude-haiku-5.5" and params["api_key"] == KEY
     )  # LiteLLM only
     assert KEY not in json.dumps(info)  # our own metadata never holds it
-    assert params["think"] is False  # the alias keeps its behaviour parameters
+    # the alias keeps its behaviour parameters
+    assert params["reasoning_effort"] == "low" and params["max_tokens"] == 8000
 
 
 async def test_reset_returns_to_the_default_and_drops_the_key():
@@ -152,8 +182,9 @@ async def test_reset_returns_to_the_default_and_drops_the_key():
     await models.seed()
     await models.set("default-chat", Binding(provider="openrouter", model="m", api_key=KEY), "a")
     view = await models.reset("default-chat", "a")
-    assert (view.source, view.provider, view.key_set) == ("default", "ollama", False)
-    assert backend.entries["alias:default-chat"][1]["api_key"] == "none"  # overwritten, not left
+    assert (view.source, view.provider, view.key_set) == ("default", "anthropic", False)
+    # overwritten with the default's own reference to the environment, not left
+    assert backend.entries["alias:default-chat"][1]["api_key"] == "os.environ/ANTHROPIC_API_KEY"
 
 
 def test_embedding_aliases_use_the_embedding_prefix():
@@ -333,4 +364,4 @@ async def test_every_default_reset_writes_an_explicit_key():
     for alias in models.aliases():
         await models.set(alias, Binding(provider="openrouter", model="m", api_key=KEY), "a")
         await models.reset(alias, "a")
-        assert backend.entries[f"alias:{alias}"][1]["api_key"] == "none"
+        assert backend.entries[f"alias:{alias}"][1]["api_key"] != KEY

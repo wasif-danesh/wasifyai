@@ -155,13 +155,23 @@ interface applies (`obstore`); the adapter for each is a constructor in
 
 ### LiteLLM aliases
 
-An alias (`default-chat`, `lyrics-writer`, `prompt-enhancer`, `creation-embedder`, `multimodal`,
+An alias (`default-chat`, `planner`, `lyrics-writer`, `prompt-enhancer`, `creation-embedder`, `multimodal`,
 `embedder`) maps to a real model. Changing the underlying LLM never touches product config
 ([ADR-0025](decisions/0025-model-access-configuration.md)).
 
-- **Defaults** are in `services/api/src/wasifyai_api/model_defaults.yaml` (Gemma 4 E4B, nomic-embed-text and the
-  multilingual bge-m3 on Ollama). The API seeds them into LiteLLM's database at start, once. `make setup` pulls the
-  Ollama models named there, and Helm's `ollama.models` must list the same ones (a test checks it).
+- **Defaults** are in `services/api/src/wasifyai_api/model_defaults.yaml` (ADR-0100): every text alias is Claude
+  Haiku 5.5 on Anthropic (`anthropic/claude-haiku-5-5`), with no temperature (Haiku 5.5 rejects one), a
+  `max_tokens`, and a `reasoning_effort` per job: `planner` (the assistant, Creative Studio's plan, Motion graphics)
+  high; `default-chat` (chat, Notebook, dubbing) medium; `lyrics-writer`, `prompt-enhancer` and `multimodal`
+  (pictures in a prompt) low. LiteLLM turns the effort into adaptive thinking and `output_config.effort`. Search's
+  embedder, `creation-embedder`, is bge-m3 on the web's own CPU (llama.cpp's server, the `embedder` service;
+  `EMBEDDER_BASE_URL`, default `http://embedder:8080`, fills its `api_base`; 1024 dimensions; ADR-0100's amendment of
+  2026-11-13). The RAG helper's `embedder` stays OpenAI's `text-embedding-3-small` at 768 dimensions; no product
+  uses it on the web. The keys are LiteLLM's own environment, `ANTHROPIC_API_KEY` and
+  `OPENAI_API_KEY` (in `.env` for compose, the Secret for Helm, both optional); the defaults refer to them as
+  `os.environ/...`, so nothing of them is stored by the API. The API seeds the aliases into LiteLLM's database at
+  start, once; an install seeded earlier keeps its old bindings until an admin presses "Reset". No default uses
+  Ollama any more, so `make setup` pulls none and Helm's `ollama.models` is empty (a test checks they agree).
 - **Overrides** are made in the admin area (`/admin/models`): pick a provider (a text vendor of ADR-0100:
   Anthropic, OpenAI, Google Gemini, DeepSeek, Z.ai or OpenRouter; or the stack's own Ollama, directly or
   through its OpenAI-compatible route, until the web runs on cloud models only), a model and, for a
@@ -218,8 +228,10 @@ speech and lip sync runners were removed with ADR-0067. The voice product reache
 ### Search over My creations
 
 `SEARCH_MIN_SIMILARITY` (default 0.57) is the floor under which a match by meaning is not shown; re-tune it on
-real data (ADR-0041, known issue 1). `SEARCH_INDEX_MODEL` (default `bge-m3/v2`) names what made the index rows: the embedder and the
-text format. If an admin changes the model behind the `creation-embedder` alias, or `search_text` changes, change
+real data (ADR-0041, known issue 1). 0.57 was measured for bge-m3 on Ollama; the web's bge-m3 is
+the 8-bit file on llama.cpp (ADR-0100's amendment of 2026-11-13), so the search evaluation runs again on it in stage
+CP13 of `docs/cloud-v1-plan.md`. `SEARCH_INDEX_MODEL` (default `bge-m3-q8/v2`) names
+what made the index rows: the embedder and the text format. If an admin changes the model behind the `creation-embedder` alias, or `search_text` changes, change
 this too and the background indexer re-embeds everything (a model with a different number of dimensions needs a
 migration).
 `SEARCH_RECONCILE_EVERY_S` (300) and `SEARCH_RECONCILE_BATCH` (200) set how often the background indexer checks for

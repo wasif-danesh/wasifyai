@@ -25,6 +25,30 @@ Recordings: the runtime reads WAV only. Other formats are converted with ffmpeg 
 macOS's `afconvert`; with neither the person is told to install ffmpeg or save a WAV. Bundling ffmpeg is an open
 question for the owner (licence and size).
 
+### Voice on cloud models (ADR-0100, stage CP7)
+
+With a Runware, WaveSpeed or fal.ai key (for the product, or for Every media product), each voice task can run on a
+cloud model, chosen in its own picker. Four cloud products carry them, each with its own model in use:
+
+| Product (Settings › Your keys) | Tasks | Models and offers |
+|---|---|---|
+| Voice | Speak | Kokoro (fal.ai), ElevenLabs v4 (WaveSpeed, fal.ai), Gemini 3.8 Flash TTS (fal.ai, WaveSpeed), Chatterbox (fal.ai, WaveSpeed), MiniMax Speech 2.8 HD (Runware, fal.ai, WaveSpeed) |
+| Copy or design a voice | Clone, design | Qwen3-TTS (copy and design on Runware, design on fal.ai), Chatterbox (copy on WaveSpeed), MiniMax voice (copy and design on fal.ai and WaveSpeed) |
+| Speech to text | Transcribe | Scribe v2 (fal.ai), Whisper (WaveSpeed) |
+| Change a voice | Convert | Chatterbox (fal.ai, WaveSpeed) |
+
+Each speaking model offers its own named voices (`own_keys_voice.py`, `SPEAKERS`); Chatterbox has one. A MiniMax voice
+costs $1.50 to $3.10 to make, so it is made once: the voice MiniMax keeps is remembered by the recording or the words
+that made it (`own_keys.voices` in the settings), and later speech in it goes to MiniMax Speech 2.8 HD on the provider
+where it was made, per character. Recordings go to fal.ai's and WaveSpeed's stores first and to Runware with its
+`mediaStorage` task. Scribe's timed words are joined into sentences for the transcript. Dubbing and Audiobook use
+whichever models their steps resolve, so they follow these choices. Edit speech and splitting stay on this computer.
+
+Not built: ElevenLabs' voice changer (it changes to its own named voices, and the screen changes to a recorded voice);
+Wizper (its price is not listed); Qwen3-TTS copying on fal.ai (two requests, a voice file and then speech). Not yet
+known, for CP13: WaveSpeed's field names for ElevenLabs, Gemini, Scribe, Whisper and Chatterbox's speech to speech, and
+whether WaveSpeed takes ElevenLabs' voices by name. Checked against fakes only.
+
 ### Dictation: the Mic in the chat box (ADR-0083, stage CO4)
 
 The chat box writes down what the person says. The window records the microphone (`getUserMedia` and an `AudioWorklet` loaded from `/recorder-worklet.js`, a file of the app itself because the window's content policy
@@ -72,6 +96,24 @@ Music is another task of the same product and the same runtime, picked from the 
 Not built: the ComfyUI ACE-Step workflow as a second engine for the same list, models beyond these (HeartMuLa and
 others), a watermark decision for generated audio, a song longer than 4 minutes, and a listening check of the
 quality (sung lyrics in order cannot be tested by machine).
+
+### Music on cloud models (ADR-0100, stage CP8)
+
+Four cloud products carry the music tools, each with its own model in use (Settings › Your keys, or the Cloud tab of
+the Music group on the Models page). Each job runs on the cheapest offer with a key; a refusal before running hands it
+to the next. The requests are `services/api/.../own_keys_music.py`; the engine is `KeyedSpeechEngine` (`music`,
+`music_edit`, `separate`).
+
+| Product (engine id) | Models and offers | Notes |
+|---|---|---|
+| Music (`key:music`) | MiniMax Music 2.6 (Runware, WaveSpeed, fal.ai), MiniMax Music 3 (WaveSpeed $0.15 a song, fal.ai $0.002 a second), ElevenLabs Music v2.5 (WaveSpeed, fal.ai), Mureka v9.5 (WaveSpeed, fal.ai) | MiniMax and Mureka pick the length; MiniMax 3 is priced at the length shown (120 s), so WaveSpeed wins. Mureka sings only given lyrics; an instrumental goes to its own endpoint, and on fal.ai it costs $0.50, so WaveSpeed's $0.225 wins |
+| Sound effects (`key:sfx`) | ElevenLabs Sound Effects v3 (WaveSpeed, fal.ai), Mirelo SFX 2.0 (WaveSpeed, fal.ai), Stable Audio 3 small (fal.ai), ElevenLabs Sound Effects v2 (fal.ai) | priced per second except Stable Audio (a clip) |
+| Split into parts (`key:split`) | Demucs (six parts, fal.ai), SAM Audio (the singing and the rest, fal.ai), Mureka stems (the singing and the backing; WaveSpeed, fal.ai) | the recording goes up first; each stem the provider answers is fetched and kept as a track, as with the models on this computer |
+| Edit music (`key:musicedit`) | ACE-Step 1.5 repaint (Runware, fal.ai), Stable Audio 3 inpainting (fal.ai) | one stretch of a clip at a time; it is listed with the music models that can change a clip (Change it) |
+
+Field names not shown on the providers' pages are marked "(CP13)" in `own_keys_music.py` and checked in the real run
+(stage CP13): fal.ai's Mureka, Mirelo, Stable Audio and ACE-Step inpaint names, and what Mureka stems answers. Not
+built: Mureka's own song edit (it edits only Mureka's songs; dropped in FA0), ACE-Step's extend and cover on the cloud.
 
 ### Audio tools (stage V4)
 
@@ -128,7 +170,7 @@ must say `mark: required` or it does not load, and there is no switch. The syste
 moderation, daily limit) are not part of the desktop; consent and the mark are.
 
 **In the cloud (2026-11-12).** With a fal.ai key saved for Lip sync, the picker's Cloud tab offers VEED Fabric 1.0
-Fast, Kling Avatar v2, OmniHuman 1.5 and InfiniteTalk. Lip sync is fal.ai only (owner, 2026-11-12); LongCat and WaveSpeed's models were taken off. Each row says
+Fast, Kling Avatar v2, OmniHuman 1.5 and InfiniteTalk. LongCat was taken off (owner, 2026-11-12); the cheaper offers on WaveSpeed and Runware came back with ADR-0100 (below). Each row says
 its price and, where measured, its time per video second (`docs/spikes/lipsync-cloud-race.md`: Fabric 5 to 25 s (25 s used for the estimate),
 Kling about 40 s, OmniHuman about 45 s, InfiniteTalk about 50 s at 480p). Before Make the screen says the time and
 the cost of this voice at the chosen size; no length is forced. The picture and the voice go up to fal.ai's file
@@ -136,6 +178,16 @@ store first, then the model is asked (`own_keys_engines.py`, `lipsync_body`). Fa
 sent, so the screen hides the shape and sends a square picture; Kling and InfiniteTalk keep the shape at a size they
 pick, and the screen says their measured size as "about" (`frame`, `frame_short`). On the web the admin puts
 the same four on fal.ai in Admin › Media (row `speech.lipsync`, `docs/runbooks/web-notebooks-voice.md`).
+
+**The cheaper offers (ADR-0100, stage CP6).** The same four models also run where they are cheaper, with fal.ai kept as
+the fallback: Fabric 1.0 on WaveSpeed ($0.07 a second at 480p), InfiniteTalk on WaveSpeed ($0.03), Kling Avatar v2
+on Runware ($0.044) and OmniHuman 1.5 on Runware ($0.132). A key for Lip sync or for Every media product on any of the
+three providers is enough. Each job goes to the cheapest offer with a key, and a provider that refuses before running
+hands it to the next. The screen's price per second is the cheapest keyed offer's at each size, and its "where" is the
+provider of the default size. WaveSpeed is sent `image`, `audio` and the size (and InfiniteTalk a prompt), both
+uploaded to its store first; Runware is sent a `videoInference` task with the picture inside it and the voice uploaded
+first (`mediaStorage`). The measured times and frame sizes are fal.ai's; WaveSpeed's Fabric at 720p is priced at double
+its 480p until the price refresh (CP12) reads it. Checked against fakes only; the real run is CP13.
 
 Not built on this computer: other lip sync models (InfiniteTalk, LivePortrait, the CUDA `liveavatar`), video as the input,
 faster settings that keep the face (at 720p a clip costs about 2.5 minutes of work per second of video on a 64 GB M5 Pro, 6.7 minutes in portrait; 448 px is ten times faster but changes the face), choosing where the crop is, several faces, a CUDA lock for Windows and Linux, and

@@ -14,7 +14,8 @@ class WorkerSettings(BaseSettings):
     # process-wide setting that would slow the image and music models. Empty: COMFYUI_BASE_URL.
     comfyui_video_base_url: str = ""
     # real: a ComfyUI at COMFYUI_BASE_URL; sidecar: the ComfyUI the desktop app installed, started
-    # and stopped by this worker (a Mac running the web stack, ADR-0087); stub: placeholder files
+    # and stopped by this worker (a Mac running the web stack, ADR-0087); stub: placeholder files;
+    # cloud: no ComfyUI, only the cloud offers each job comes with (the web, ADR-0100 CP11)
     comfyui_mode: str = "real"
     # sidecar mode: the desktop app's data folder (where its ComfyUI and models are), and the
     # model folders it reads (the app's own, then read-only ones, separated like PATH)

@@ -279,6 +279,25 @@ async def test_train_names_its_style_with_the_real_title_and_word(tmp_path):
     assert await svc.describe("../x.safetensors", "X", None, {"kind": "trained"}) is None
 
 
+async def test_a_look_taught_on_a_cloud_model_is_chosen_with_its_address(tmp_path):
+    """ADR-0100, CP10: a Z-Image look reads as made for another model here, yet it is for the
+    cloud model it was taught for, which loads it by its address."""
+    folder = tmp_path / "loras"
+    folder.mkdir()
+    write(folder, "wasify-cloud-ink-run9.safetensors", lora(width=4096, doubles=8, singles=40))
+    svc = StylesService(folder)
+    cloud = {"provider": "fal", "url": "https://v3.fal.media/ink.safetensors",
+             "model": "z-image-turbo"}  # fmt: skip
+    s = await svc.describe(
+        "wasify-cloud-ink-run9.safetensors", "Ink", "ink",
+        {"kind": "trained", "run": "run9", "cloud": cloud},
+    )  # fmt: skip
+    assert s is not None and s.fit == "other"
+    assert s.public()["selectable"] is True and s.public()["cloud"] == "z-image-turbo"
+    (found,) = await svc.resolve([{"id": s.id, "strength": 0.8}])
+    assert found["url"] == cloud["url"] and found["model"] == "z-image-turbo"
+
+
 def test_a_style_another_app_keeps_is_listed_and_copied_in(tmp_path):
     from fastapi import FastAPI
     from wasifyai_api.desktop_styles import router

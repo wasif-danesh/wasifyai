@@ -13,7 +13,8 @@ export type GroupId =
   | "music"
   | "faces"
   | "documents"
-  | "three_d";
+  | "three_d"
+  | "train";
 
 export type Group = {
   id: GroupId;
@@ -75,6 +76,12 @@ export const GROUPS: Group[] = [
     select: "Select 3D model",
     about: "Turns a picture into a 3D model",
   },
+  {
+    id: "train",
+    title: "Training",
+    select: "Select where to teach",
+    about: "Teaches your own looks from your pictures",
+  },
 ];
 
 export const groupOf = (id: GroupId): Group => GROUPS.find((g) => g.id === id) as Group;
@@ -82,7 +89,7 @@ export const groupOf = (id: GroupId): Group => GROUPS.find((g) => g.id === id) a
 /** The group a voice task belongs to: the screens name tasks, the picker names groups. */
 export function groupOfTask(task: string): GroupId {
   if (task === "transcribe") return "listening";
-  if (task === "music" || task === "sfx" || task === "separate") return "music";
+  if (["music", "sfx", "separate", "musicedit"].includes(task)) return "music";
   if (task === "lipsync") return "faces";
   return "voice";
 }
@@ -137,6 +144,8 @@ export type ModelChoice = {
   speed?: string;
   /** a cloud model's key worked when last tested */
   works?: boolean;
+  /** what a cloud model can do with the keys there are ("image.inpaint"), for its screen to offer */
+  can?: string[];
   /** the id the screen's engine knows a cloud model by while it is in use (`key:lipsync`), when not this row's id */
   engineId?: string;
 };

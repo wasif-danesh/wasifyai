@@ -75,6 +75,8 @@ class ImageState(TypedDict, total=False):
     lora_files: dict[
         str, str
     ]  # on the web: the storage key of each style, which is the person's own
+    # a look taught on a cloud model: {name: {url, model}}, loaded there by its address (CP10)
+    lora_urls: dict[str, dict[str, str]]
     # which of the product's models makes the picture (ADR-0097); absent: the first in product.yaml
     model: str
     # what the job is sent instead of the prompt: a prompt writer's caption (Ideogram 4)
@@ -406,6 +408,12 @@ def build_image_graph(
             for r in (raw_loras if isinstance(raw_loras, list) else [])
             if isinstance(r, dict) and r.get("key")
         }
+        # a look taught on a cloud model: its address there and the model it is for (CP10)
+        lora_urls: dict[str, dict[str, str]] = {
+            str(r["name"]): {"url": str(r["url"]), "model": str(r.get("model") or "")}
+            for r in (raw_loras if isinstance(raw_loras, list) else [])
+            if isinstance(r, dict) and r.get("url")
+        }
         resolve_looks = caps.extras.get(
             "person_looks"
         )  # the web keeps each person's styles in storage
@@ -429,6 +437,7 @@ def build_image_graph(
             "loras": loras,
             "styles": styles,
             "lora_files": lora_files,
+            "lora_urls": lora_urls,
             "source_id": await source_of(state, mode),
             "status": "working",
         }
@@ -486,6 +495,8 @@ def build_image_graph(
             extra["steps"] = state["steps"]
         if state.get("lora_files"):
             extra["lora_files"] = state["lora_files"]
+        if state.get("lora_urls"):
+            extra["lora_urls"] = state["lora_urls"]
         if state.get("model"):
             extra["model"] = state["model"]
         prompt = state.get("job_prompt") or state["prompt"]

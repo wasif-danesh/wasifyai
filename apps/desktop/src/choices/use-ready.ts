@@ -17,6 +17,8 @@ export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSel
   // the id of the chosen row (a catalogue model's id, or `cloud:<product>:<provider>:<model>`), null before one is
   // chosen
   const [chosen, setChosen] = useState<string | null>(null);
+  // the chosen cloud model's name and what it can do with the keys there are (stage CP4), null for others
+  const [cloud, setCloud] = useState<{ title: string; can: string[] } | null>(null);
   const version = useChoicesVersion();
   // biome-ignore lint/correctness/useExhaustiveDependencies: the version is the trigger
   useEffect(() => {
@@ -29,6 +31,7 @@ export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSel
         const row = l.choices.find((c) => c.chosen);
         setKeyed(isCloud(row?.id));
         setChosen(row?.id ?? null);
+        setCloud(isCloud(row?.id) && row?.can ? { title: row.title, can: row.can } : null);
       })
       .catch(() => !gone && setReady(null));
     return () => {
@@ -40,5 +43,5 @@ export function useGroupReady(api: ChoicesApi | null, picker: RefObject<ModelSel
     picker.current?.open();
     return false;
   }, [ready, picker]);
-  return { ready, ensure, keyed, chosen };
+  return { ready, ensure, keyed, chosen, cloud };
 }

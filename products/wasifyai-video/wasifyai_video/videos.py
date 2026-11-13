@@ -626,17 +626,25 @@ class JoinError(Exception):
     """ffmpeg could not join two clips. The details go to the log; the message is safe to show."""
 
 
-async def join_clips(source: bytes, extension: bytes, keep: int) -> bytes:
-    """The first `keep` frames of `source` followed by every frame of `extension`, as one MP4.
-    Both are LTX clips of the same size at 24 frames a second; the join is frame exact."""
+async def join_clips(
+    source: bytes, extension: bytes, keep: int, size: tuple[int, int] | None = None
+) -> bytes:
+    """The first `keep` frames of `source` followed by every frame of `extension`, as one MP4 at
+    24 frames a second. Two LTX clips are the same size and the join is frame exact; a cloud
+    model's clip (ADR-0100, CP5) is brought to `size`, the source's, first. `keep` 0 is the
+    extension alone."""
     exe = ffmpeg_path()
     with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
         a, b, out = Path(tmp) / "a.mp4", Path(tmp) / "b.mp4", Path(tmp) / "joined.mp4"
         a.write_bytes(source)
         b.write_bytes(extension)
+        # the frame rate first: scaled first, fps drops the last frame
+        fit = f",scale={size[0]}:{size[1]},setsar=1" if size else ""
         graph = (
             f"[0:v]trim=end_frame={keep},setpts=PTS-STARTPTS,fps=24[a];"
-            "[1:v]setpts=PTS-STARTPTS,fps=24[b];[a][b]concat=n=2:v=1:a=0[v]"
+            f"[1:v]setpts=PTS-STARTPTS,fps=24{fit}[b];[a][b]concat=n=2:v=1:a=0[v]"
+            if keep > 0
+            else f"[1:v]setpts=PTS-STARTPTS,fps=24{fit}[v]"
         )
         try:
             proc = await asyncio.create_subprocess_exec(

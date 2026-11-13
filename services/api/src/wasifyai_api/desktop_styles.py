@@ -199,7 +199,9 @@ class Style:
         out = asdict(self)
         out.pop("file")
         out.pop("extra")
-        out["selectable"] = self.fit != "other"
+        # a look taught on a cloud model is for that model, whatever its file looks like here
+        out["selectable"] = self.fit != "other" or bool(self.source.get("cloud"))
+        out["cloud"] = (self.source.get("cloud") or {}).get("model")
         out["made_for_base"] = self.look_may_not_show
         return out
 
@@ -404,14 +406,18 @@ class StylesService:
             s = styles.get(str(w.get("id")))
             if s is None:
                 raise StyleRefused("One of those styles is not on this computer any more.")
-            if s.fit == "other":
+            cloud = s.source.get("cloud") or {}
+            if s.fit == "other" and not cloud:
                 raise StyleRefused(
                     f"{s.title} was made for another model and would give noise here."
                 )
-            out.append({
+            found = {
                 "name": s.file, "weight": w.get("strength", 1.0), "sha256": s.sha256,
                 "title": s.title,
-            })  # fmt: skip
+            }  # fmt: skip
+            if cloud.get("url"):  # taught on a cloud model: loaded there by its address (CP10)
+                found["url"], found["model"] = cloud["url"], cloud.get("model", "")
+            out.append(found)
         return out
 
     # ---- saved looks (ADR-0091 decision 11) ----------------------------------------------------

@@ -66,7 +66,7 @@ from wasifyai_platform_sdk.providers.litellm import LiteLLMTextProvider
 
 from wasifyai_api.actions_engine import build_executor
 from wasifyai_api.admin import AdminStore, PostgresAdminStore
-from wasifyai_api.admin_providers import AdminProviders
+from wasifyai_api.admin_providers import AdminProviders, CloudPlanSink
 from wasifyai_api.auth import Claims
 from wasifyai_api.components.comfyui import ComfyUiComponent
 from wasifyai_api.components.desktop import service_components
@@ -365,6 +365,12 @@ async def _shared(
             SqlSecretStore(db, SecretBox(settings.media_secrets_key)), EnvSecretStore()
         )
     s.secrets = secrets
+    if not desktop:
+        # the web runs only cloud models (ADR-0099, stage CP11): the service's media keys in
+        # Admin › Media, and each picture or clip job sent with the offers it may run on
+        s.admin_providers = AdminProviders(settings_store, secrets, settings.default_tenant_id)
+        s.own_keys = s.admin_providers
+        sink.sink = CloudPlanSink(sink.sink, s.admin_providers)
     deps = ProviderDeps(
         products_dir=pdir,
         usage=recorder,
@@ -381,7 +387,10 @@ async def _shared(
     models = given.model_access
     if models is None:
         base = settings.ollama_base_url.rstrip("/")
-        defaults = load_defaults({"OLLAMA_BASE_URL": base, "OLLAMA_OPENAI_BASE_URL": f"{base}/v1"})
+        defaults = load_defaults({
+            "OLLAMA_BASE_URL": base, "OLLAMA_OPENAI_BASE_URL": f"{base}/v1",
+            "EMBEDDER_BASE_URL": settings.embedder_base_url.rstrip("/"),
+        })  # fmt: skip
         if injected or desktop:  # tests, desktop: no gateway to seed
             models = ModelAccess(InMemoryModelBackend(), defaults)
         else:
@@ -393,8 +402,7 @@ async def _shared(
     s.products_dir = pdir  # the picker names the models a product ships (models_in_use)
     bindings = InMemoryMediaBindingStore() if injected or desktop else PostgresMediaBindingStore(db)
     box = SecretBox(settings.media_secrets_key)
-    if not desktop:  # speaking and 3D follow the admin's rows on the web (ADR-0095, K5)
-        s.admin_providers = AdminProviders(bindings, box, settings.default_tenant_id)
+    if s.admin_providers is not None:  # kept current: the admin may save on another replica
         r.background.append(asyncio.create_task(s.admin_providers.run()))
     s.media = given.media_access or MediaAccess(
         bindings,
@@ -403,7 +411,6 @@ async def _shared(
         settings.comfyui_base_url,
         video_local_url=settings.comfyui_video_base_url,
         checks=settings_store,
-        changed=s.admin_providers.changed if s.admin_providers else None,
         models=lambda: media_models_from(reg, pdir, settings.product_env),
     )
     s.caps = {}
@@ -757,7 +764,7 @@ async def _web_voice(s: ApiServices, settings: Settings, queue: Callable[[], Eng
         local = build_local_engine(settings, Path(pdir))
         s.audio = CombinedSpeechEngine(local, hosted) if hosted is not None else local
     if s.audio is not None and s.admin_providers is not None:  # Speak on fal.ai (K5)
-        s.audio = KeyedSpeechEngine(s.audio, s.admin_providers, admin=True)
+        s.audio = KeyedSpeechEngine(s.audio, s.admin_providers, admin=True, usage=s.usage)
 
 
 def _web_notebooks(s: ApiServices, settings: Settings) -> None:
@@ -799,7 +806,7 @@ async def _web_model3d(s: ApiServices, settings: Settings, queue: Callable[[], E
     s.model3d_blobs = StorageBlobs(s.storage)
     s.model3d = RemoteModel3dEngine(queue(), s.storage.backing, s.engine_workers, usage=s.usage)
     if s.admin_providers is not None:  # 3D models on fal.ai when the admin chose it (K5)
-        s.model3d = KeyedModel3d(s.model3d, s.admin_providers, admin=True)
+        s.model3d = KeyedModel3d(s.model3d, s.admin_providers, admin=True, usage=s.usage)
     await sweep_model3d(s)
 
 
@@ -855,6 +862,10 @@ async def _web_training(s: ApiServices, settings: Settings, queue: Callable[[], 
     tq, tdir, backing = queue(), s.engine_workers, s.storage.backing
     s.video_training = RemoteVideoTrainer(tq, backing, tdir, usage=s.usage)
     s.training = RemoteImageTrainer(tq, backing, tdir, usage=s.usage)
+    if s.admin_providers is not None:  # picture looks on the cloud trainer (ADR-0100, CP10, CP11)
+        from wasifyai_api.cloud_train import CloudLookTrainer
+
+        s.training = CloudLookTrainer(s.training, s.admin_providers, usage=s.usage)
     s.language_training = RemoteWritingTrainer(tq, backing, tdir, usage=s.usage)
     s.decision_training = RemoteDecisionTrainer(tq, backing, tdir, usage=s.usage)
     # a run a gone service left going is failed, and its worker job stopped
@@ -943,15 +954,20 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     if desktop.video_builder is not None:  # and the model it asks to fill a template
         desktop.video_builder.language = desktop.language
         desktop.video_builder.usage = s.usage
+        desktop.video_builder.own_keys = desktop.own_keys
     s.desktop_language = desktop.language
     s.desktop_vision = desktop.vision
     s.desktop_hub = desktop.hub
     s.own_keys = desktop.own_keys  # the person's own provider keys (ADR-0095)
     if desktop.own_keys is not None:  # speaking and 3D follow theirs too (K4)
         if desktop.audio is not None:
-            s.audio = KeyedSpeechEngine(desktop.audio, desktop.own_keys)
+            s.audio = KeyedSpeechEngine(desktop.audio, desktop.own_keys, usage=desktop.usage)
         if desktop.model3d is not None:
-            s.model3d = KeyedModel3d(desktop.model3d, desktop.own_keys)
+            s.model3d = KeyedModel3d(desktop.model3d, desktop.own_keys, usage=desktop.usage)
+        if desktop.training is not None:  # picture looks taught on a cloud model (ADR-0100, CP10)
+            from wasifyai_api.cloud_train import CloudLookTrainer
+
+            s.training = CloudLookTrainer(desktop.training, desktop.own_keys, usage=desktop.usage)
     if desktop.web is not None:  # web search: off until the person allows it (ADR-0083)
         desktop.web.usage = s.usage
         s.web = desktop.web

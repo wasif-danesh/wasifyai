@@ -32,6 +32,10 @@ from wasifyai_api.services import services_of
 RENDER_NEED_GB = 5.0
 
 
+async def _joined(parts: Any) -> str:
+    return "".join([t async for t in parts])
+
+
 class VideoBuilderService:
     """What the engine holds for Motion graphics: the installer, and what is installed."""
 
@@ -40,6 +44,8 @@ class VideoBuilderService:
         self.installer = vb.VideoBuilderInstaller(data_dir)
         self.language: Any = None  # the chosen chat model (set by the app); `complete` asks it
         self.usage: Any = None  # records the tokens it used
+        # the person's keys: while Chat and writing runs on a cloud model, a draft goes there too
+        self.own_keys: Any = None
         self._kit: dict[str, bytes] | None = None
 
     async def live_kit(self) -> dict[str, bytes]:
@@ -125,7 +131,18 @@ class VideoBuilderService:
     ) -> str:
         """Ask the chosen chat model once for an answer that follows `schema` (the product turns a
         description into the fields of a template with it). Thinking is off: the answer is short and
-        the person is waiting. Raises `RunError` with words for the person."""
+        the person is waiting. While Chat and writing runs on a cloud model (the person's key), the
+        draft goes to that model (ADR-0100: Claude Haiku 5.5 thinks at effort high for it).
+        Raises `RunError` with words for the person."""
+        if self.own_keys is not None and await self.own_keys.route("chat") is not None:
+            from wasifyai_api.own_keys_text import KeyedTextProvider
+
+            keyed = KeyedTextProvider(None, self.own_keys, self.usage)
+            parts = keyed.stream("video_builder.draft", None, system, prompt, schema)  # type: ignore[arg-type]
+            try:
+                return await asyncio.wait_for(_joined(parts), timeout=180)
+            except TimeoutError:
+                raise RunError("language_timeout", "The model took too long. Try again.") from None
         language = self.language
         if language is None:
             raise RunError("no_language_model", "There is no language model to ask.")

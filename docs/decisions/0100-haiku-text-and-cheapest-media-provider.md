@@ -86,8 +86,17 @@ ADR-0099 put text on OpenRouter and media on fal.ai. The owner then asked for th
   - it refuses a non-default temperature (four places in the code set one) and an assistant prefill;
   - it thinks before answering by default, so effort is set per job;
   - prompts over 100K tokens cost five times as much, so Notebook keeps its context under that.
-- **Anthropic has no embedding model.** Notebook and My creations search need one from another vendor on the web
-  (plan decision 4).
+- **Anthropic has no embedding model.** Notebook and My creations search need one of their own on the web (plan
+  decision 4).
+
+## Amendment (2026-11-13, owner): search on bge-m3 on the web's own CPU
+
+The owner asked for a free embedder and chose "bge-m3 on the web" (plan decision 4, option (b)) over OpenAI's
+text-embedding-3-small. The web now runs one model of its own: bge-m3 (8-bit GGUF, 635 MB, pinned by its sha256) on
+llama.cpp's server, on the CPU (`embedder` in the chart and compose). It is free per call, multilingual, 1024
+dimensions like the index, and nothing leaves the service. LiteLLM's `creation-embedder` alias points at it
+(`EMBEDDER_BASE_URL`), so rule 5 holds. The RAG helper's 768 alias stays on OpenAI; no product uses it on the web.
+This changes ADR-0099's "the web runs no model" for this one CPU model; everything else stays cloud.
 - **Three media balances and at least one text balance to keep topped up.** All are prepaid with no fee.
 - **Outages:** a media provider's outage moves jobs to the next offer where there is one. A text vendor's outage stops
   the web's chat until the admin turns on another vendor. The desktop can still use its local models.

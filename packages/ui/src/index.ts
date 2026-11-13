@@ -154,11 +154,19 @@ export {
   TEXT_ACCEPT,
   type AudiobookWorkspaceProps,
 } from "./voice/AudiobookWorkspace";
+export { DubbingWorkspace, type DubbingWorkspaceProps } from "./voice/DubbingWorkspace";
 export {
-  DubbingWorkspace,
-  LANGUAGE_NAMES,
-  type DubbingWorkspaceProps,
-} from "./voice/DubbingWorkspace";
+  LANGUAGES,
+  type Language,
+  baseCode,
+  findLanguage,
+  languageLabel,
+  languageName,
+  languagesOf,
+  speaks,
+  spokenCodes,
+  voicesFor,
+} from "./voice/languages";
 export {
   LipSyncWorkspace,
   type LipSyncWorkspaceProps,

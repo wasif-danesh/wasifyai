@@ -28,6 +28,7 @@ from wasifyai_platform_sdk import (
     check_separate,
     check_speak,
     check_transcribe,
+    languages,
     require_context,
 )
 
@@ -59,8 +60,7 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
         return sorted(ms, key=lambda m: task not in m["recommended"])
 
     def _langs(m: dict[str, Any]) -> set[str]:
-        langs = {dubbing.base(x) for x in m["languages"]}
-        return set(dubbing.LANGUAGES) if "multi" in langs else langs
+        return languages.spoken(m["languages"])
 
     # ---- the script -------------------------------------------------------------------------
 
@@ -107,7 +107,7 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
         say("Checking", "check_request")
         eng = engine()
         language = str(state.get("language", ""))
-        if dubbing.base(language) not in dubbing.LANGUAGES:
+        if dubbing.base(language) not in languages.LANGUAGES:
             return refuse_with("unknown_language", "Choose the language to dub into.")
         if not (ready_models("speak", language) or ready_models("clone", language)):
             return refuse_with(
@@ -245,7 +245,7 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
         assert caps.storage is not None, "storage is required"
         ctx = require_context()
         language = str(state.get("language", ""))
-        if dubbing.base(language) not in dubbing.LANGUAGES:
+        if dubbing.base(language) not in languages.LANGUAGES:
             return refuse_with("unknown_language", "Choose the language to dub into.")
         try:
             dubbing.ffmpeg_path()

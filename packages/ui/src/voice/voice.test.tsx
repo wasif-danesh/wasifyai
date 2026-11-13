@@ -287,6 +287,120 @@ describe("text to speech", () => {
   });
 });
 
+describe("text to speech starts from the language", () => {
+  const multi = model({
+    languages: ["en-us", "hi"],
+    voices: [
+      { id: "af_heart", label: "Heart", language: "en-us", gender: "female" },
+      { id: "hf_alpha", label: "Alpha", language: "hi", gender: "female" },
+    ],
+  });
+  const indic = model({
+    id: "indic-parler-tts",
+    title: "Indic Parler-TTS",
+    engine: "parler",
+    languages: ["bn", "hi"],
+    voices: [],
+    default_voice: null,
+    state: "can_install",
+    bytes_missing: 3_750_000_000,
+  });
+  const cloud = model({
+    id: "keyed-voice",
+    title: "ElevenLabs v4",
+    engine: "remote",
+    languages: ["multi"],
+    voices: [],
+    default_voice: null,
+    state: "needs_runtime",
+  });
+
+  async function chooseLanguage(name: string) {
+    await userEvent.click(await screen.findByRole("combobox", { name: "Language" }));
+    await userEvent.click(await screen.findByRole("option", { name }));
+  }
+
+  it("opens on English, and lists the languages a ready model speaks first", async () => {
+    render(
+      <SpeakWorkspace
+        api={api({ models: vi.fn(async () => [multi, indic]) })}
+        runs={runsThat([])}
+      />,
+    );
+    expect(await screen.findByRole("combobox", { name: "Language" })).toHaveTextContent("English");
+    await userEvent.click(screen.getByRole("combobox", { name: "Language" }));
+    const ready = screen.getByRole("group", { name: "Ready to speak" });
+    expect(
+      within(ready)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["English", "Hindi (हिन्दी)"]);
+    const other = screen.getByRole("group", { name: "Other languages" });
+    expect(within(other).getByRole("option", { name: "Bengali (বাংলা)" })).toBeInTheDocument();
+  });
+
+  it("shows only the voices of the chosen language, and remembers the choice", async () => {
+    const onLanguageChosen = vi.fn();
+    const runs = runsThat([done]);
+    render(
+      <SpeakWorkspace
+        api={api({ models: vi.fn(async () => [multi]) })}
+        runs={runs}
+        onLanguageChosen={onLanguageChosen}
+      />,
+    );
+    expect(await screen.findByText("Heart")).toBeInTheDocument();
+    expect(screen.queryByText("Alpha")).toBeNull();
+    await chooseLanguage("Hindi (हिन्दी)");
+    expect(onLanguageChosen).toHaveBeenCalledWith("hi");
+    expect(await screen.findByText("Alpha")).toBeInTheDocument();
+    expect(screen.queryByText("Heart")).toBeNull();
+    await userEvent.type(screen.getByLabelText("What should it say?"), "नमस्ते");
+    await userEvent.click(screen.getByRole("button", { name: "Make the speech" }));
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({ voice: "hf_alpha" });
+  });
+
+  it("starts from the language used last time", async () => {
+    render(
+      <SpeakWorkspace
+        api={api({ models: vi.fn(async () => [multi]) })}
+        runs={runsThat([])}
+        initialLanguage="hi"
+      />,
+    );
+    expect(await screen.findByText("Alpha")).toBeInTheDocument();
+    expect(screen.queryByText("Heart")).toBeNull();
+  });
+
+  it("says when no model here speaks it, with the models to get or use", async () => {
+    const onGet = vi.fn();
+    render(
+      <SpeakWorkspace
+        api={api({ models: vi.fn(async () => [multi, indic, cloud]) })}
+        runs={runsThat([])}
+        onGetModel={onGet}
+        initialLanguage="bn"
+      />,
+    );
+    expect(await screen.findByText("No model here speaks Bengali yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use ElevenLabs v4 (cloud)" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Get Indic Parler-TTS" }));
+    expect(onGet).toHaveBeenCalledWith("indic-parler-tts");
+    expect(screen.getByRole("button", { name: "Make the speech" })).toBeDisabled();
+  });
+
+  it("says plainly when no model here speaks it", async () => {
+    render(
+      <SpeakWorkspace
+        api={api({ models: vi.fn(async () => [multi]) })}
+        runs={runsThat([])}
+        initialLanguage="ta"
+      />,
+    );
+    expect(await screen.findByText("No model here speaks Tamil yet.")).toBeInTheDocument();
+  });
+});
+
 describe("setting up the speech runtime", () => {
   it("says the size, asks, and downloads only on the second click", async () => {
     const installRuntime = vi.fn(async () => runtime());

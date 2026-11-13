@@ -26,11 +26,20 @@ import { Spinner } from "../components/spinner";
 import { Stage, type StageState } from "../components/stage";
 import { Stepper } from "../components/stepper";
 import { Textarea } from "../components/textarea";
+import type { ModelSelectHandle } from "../models";
+import {
+  FIRST_LANGUAGE,
+  LanguageField,
+  NoModelSpeaks,
+  languageForModel,
+  modelsFor,
+} from "./LanguageField";
 import { LoadingModels, ModelPicker, NotReadyText } from "./ModelPicker";
 import { OptionFields, expertsSummary } from "./OptionFields";
 import { type VoiceChoice, VoicesPanel } from "./VoicesPanel";
 import { SAMPLE } from "./VoicesWorkspace";
 import { clock, minutesText, pickModel, stepProgress } from "./format";
+import { voicesFor } from "./languages";
 import { useElapsed } from "./use-elapsed";
 import { useVoiceModels } from "./use-voice-models";
 
@@ -48,6 +57,9 @@ export type AudiobookWorkspaceProps = {
   onGetModel?: (id: string) => void;
   initialModel?: string | null;
   onModelChosen?: (id: string) => void;
+  /** the language last used on a voice screen, and where the choice is kept (both optional) */
+  initialLanguage?: string | null;
+  onLanguageChosen?: (code: string) => void;
   onOpenLibrary?: () => void;
   title?: string;
   lead?: string;
@@ -69,6 +81,8 @@ export function AudiobookWorkspace({
   onGetModel,
   initialModel,
   onModelChosen,
+  initialLanguage,
+  onLanguageChosen,
   onOpenLibrary,
   title: heading = "Audiobook",
   lead,
@@ -81,6 +95,7 @@ export function AudiobookWorkspace({
   const [speeches, setSpeeches] = useState<Speech[]>([]);
   const [choice, setChoice] = useState<VoiceChoice | null>(null);
   const [modelId, setModelId] = useState<string | null>(initialModel ?? null);
+  const [language, setLanguage] = useState(initialLanguage || FIRST_LANGUAGE);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [readTitles, setReadTitles] = useState(true);
   const [whole, setWhole] = useState(false);
@@ -89,6 +104,7 @@ export function AudiobookWorkspace({
   const [made, setMade] = useState<Made | null>(null);
   const [books, setBooks] = useState<Track[] | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const picker = useRef<ModelSelectHandle>(null);
   const file = useRef<HTMLInputElement>(null);
   const working = step !== null;
   const waited = useElapsed(working);
@@ -97,12 +113,18 @@ export function AudiobookWorkspace({
     choice?.kind === "saved" ? (saved.find((v) => v.id === choice.id) ?? null) : null;
   const task = savedVoice ? savedVoice.kind : "speak";
   const { models, error, loading, reload } = useVoiceModels(api, task);
-  const chosen = models.find((m) => m.id === modelId) ?? pickModel(models, task, modelId);
+  // the language filters the models, and the model its voices (voice languages plan, stage L2)
+  const usable = modelsFor(models, language);
+  const chosen = usable.find((m) => m.id === modelId) ?? pickModel(usable, task, modelId);
+  const noneReady = !usable.some((m) => m.state === "ready");
+  const voices = chosen ? voicesFor(chosen, language) : [];
   const ready = chosen?.state === "ready";
   const builtInId =
-    choice?.kind === "builtin" && chosen?.voices.some((v) => v.id === choice.id)
+    choice?.kind === "builtin" && voices.some((v) => v.id === choice.id)
       ? choice.id
-      : (chosen?.default_voice ?? null);
+      : chosen?.default_voice && voices.some((v) => v.id === chosen.default_voice)
+        ? chosen.default_voice
+        : (voices[0]?.id ?? null);
   const panelValue: VoiceChoice | null = savedVoice
     ? { kind: "saved", id: savedVoice.id }
     : builtInId
@@ -176,6 +198,20 @@ export function AudiobookWorkspace({
       };
       return [...all.slice(0, i), merged, ...all.slice(i + 2)];
     });
+  }
+
+  function chooseLanguage(code: string) {
+    setLanguage(code);
+    onLanguageChosen?.(code);
+    if (choice?.kind === "builtin") setChoice(null);
+  }
+
+  function chooseModel(id: string) {
+    setModelId(id);
+    setValues({});
+    onModelChosen?.(id);
+    const m = models.find((x) => x.id === id);
+    if (m && !modelsFor([m], language).length) chooseLanguage(languageForModel(m, language));
   }
 
   function chooseVoice(next: VoiceChoice) {
@@ -446,19 +482,32 @@ export function AudiobookWorkspace({
           />
           {/* in the window the model button is in the top bar, so it is there at every step */}
           <ModelPicker
-            models={models}
+            handleRef={picker}
+            models={usable}
             task={task}
             value={chosen?.id ?? null}
-            onChange={(id) => {
-              setModelId(id);
-              setValues({});
-              onModelChosen?.(id);
-            }}
+            onChange={chooseModel}
             onGetModel={onGetModel}
             disabled={working}
           />
           {view === "text" ? (
             <>
+              <LanguageField
+                models={models}
+                value={language}
+                onChange={chooseLanguage}
+                disabled={working}
+              />
+              {noneReady ? (
+                <NoModelSpeaks
+                  language={language}
+                  task={task}
+                  models={usable}
+                  onUse={chooseModel}
+                  onGetModel={onGetModel}
+                  onOpenModels={() => picker.current?.open()}
+                />
+              ) : null}
               <div className="grid gap-2">
                 <Label htmlFor="book-title" className="font-semibold text-ui-lg">
                   Title of the book
@@ -501,6 +550,8 @@ export function AudiobookWorkspace({
                   rows={10}
                   className="min-h-48"
                   value={text}
+                  lang={language}
+                  dir="auto"
                   placeholder={
                     "Paste the text here. Chapters start at lines like “Chapter 1” or “# Title”."
                   }
@@ -521,8 +572,18 @@ export function AudiobookWorkspace({
 
           {view === "voice" ? (
             <>
+              {noneReady ? (
+                <NoModelSpeaks
+                  language={language}
+                  task={task}
+                  models={usable}
+                  onUse={chooseModel}
+                  onGetModel={onGetModel}
+                  onOpenModels={() => picker.current?.open()}
+                />
+              ) : null}
               <VoicesPanel
-                builtIn={savedVoice ? [] : (chosen?.voices ?? [])}
+                builtIn={savedVoice ? [] : voices}
                 saved={saved}
                 value={panelValue}
                 onChange={chooseVoice}
@@ -571,7 +632,7 @@ export function AudiobookWorkspace({
         ) : (
           <>
             {mainButton("Make the audiobook", () => void make(), !canMake)}
-            {!ready && chosen ? (
+            {!ready && chosen && !noneReady ? (
               <p className="mt-2 text-muted-foreground text-xs">
                 <NotReadyText task="speak" />
               </p>

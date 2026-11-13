@@ -1,11 +1,12 @@
 "use client";
 
 import type { VoiceModelInfo, VoiceTask } from "@wasifyai/client";
+import type { Ref } from "react";
 import { cn } from "../cn";
 import { Label } from "../components/label";
 import { Select } from "../components/select";
 import { Spinner } from "../components/spinner";
-import { ModelSelect, groupOfTask, useChoicesFor } from "../models";
+import { ModelSelect, type ModelSelectHandle, groupOfTask, useChoicesFor } from "../models";
 import { formatBytes } from "../notebook/format";
 import { PageHeader } from "../window-bar";
 import { costLine, modelOption, stateText } from "./format";
@@ -23,6 +24,7 @@ export function ModelPicker({
   onGetModel,
   disabled,
   inBody,
+  handleRef,
 }: {
   models: VoiceModelInfo[];
   task: VoiceTask;
@@ -33,6 +35,8 @@ export function ModelPicker({
   disabled?: boolean;
   /** a second picker on a screen that already has its one in the top bar (editing a track on the music screen) */
   inBody?: boolean;
+  /** opens the window's model list from elsewhere on the screen */
+  handleRef?: Ref<ModelSelectHandle>;
 }) {
   // in the app window the same button and panel as every other group (ADR-0086); on the web, the plain list
   const choices = useChoicesFor(groupOfTask(task), task);
@@ -45,6 +49,7 @@ export function ModelPicker({
           <ModelSelect
             group={groupOfTask(task)}
             api={choices}
+            handleRef={handleRef}
             value={value}
             disabled={disabled}
             onChanged={(id) => id && onChange(id)}
@@ -59,6 +64,7 @@ export function ModelPicker({
           <ModelSelect
             group={groupOfTask(task)}
             api={choices}
+            handleRef={handleRef}
             value={value}
             disabled={disabled}
             onChanged={(id) => id && onChange(id)}

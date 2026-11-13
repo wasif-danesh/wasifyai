@@ -262,6 +262,41 @@ describe("making an audiobook", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("were kept in Your music");
   });
 
+  it("asks for the language first, and reads with a voice of that language", async () => {
+    const both = {
+      ...kokoro,
+      languages: ["en-us", "hi"],
+      voices: [
+        ...kokoro.voices,
+        { id: "hf_alpha", label: "Alpha", language: "hi", gender: "female" },
+      ],
+    } as VoiceModelInfo;
+    const onLanguageChosen = vi.fn();
+    const runs = runsThat([finished]);
+    render(
+      <AudiobookWorkspace
+        api={api({ models: vi.fn(async () => [both]) })}
+        runs={runs}
+        onLanguageChosen={onLanguageChosen}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("combobox", { name: "Language" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Hindi (हिन्दी)" }));
+    expect(onLanguageChosen).toHaveBeenCalledWith("hi");
+    await planBook();
+    await toVoice();
+    expect(screen.getByRole("radio", { name: /Alpha/ })).toBeChecked();
+    expect(screen.queryByRole("radio", { name: /Heart/ })).toBeNull();
+    await userEvent.click(make());
+    await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({ voice: "hf_alpha" });
+  });
+
+  it("says when no model here reads the chosen language", async () => {
+    render(<AudiobookWorkspace api={api()} runs={runsThat([])} initialLanguage="bn" />);
+    expect(await screen.findByText("No model here speaks Bengali yet.")).toBeInTheDocument();
+  });
+
   it("names the tracks a book makes in Your music", () => {
     const t = (mode: string, edit: object) => ({ mode, edit }) as never;
     expect(trackKind(t("chapter", { chapter: 2, of: 9 }))).toBe("chapter 2 of 9");

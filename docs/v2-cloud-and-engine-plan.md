@@ -1,7 +1,9 @@
 # Wasify AI v2: the cloud for teams, and the plan for the three OpenHands parts
 
-Written 2026-11-13. This is a plan for the owner to accept or change: nothing here is built and no ADR
-is accepted. It follows `docs/v2-coding-agent-guideline.md` (version 2), which advises building the
+Written 2026-11-13. **Status: a wish list (owner, 2026-11-13).** The owner will decide on it later. It is
+kept so that v2 planning has it in view: nothing here is built, no ADR is accepted, no stage is scheduled
+and no spike may start from it. The one thing it asks of nearer work is small: do not build the coding
+agent in a way that rules it out (the "place" seam of section 5). It follows `docs/v2-coding-agent-guideline.md` (version 2), which advises building the
 coding agent on OpenHands' engine. The owner then asked for two things:
 
 1. A **Wasify AI Cloud** on the same idea as OpenHands' architecture picture, where a team buys a
@@ -261,7 +263,8 @@ ready connectors, 7 "apps" (pages for their own screen) and 2 marketplace lists.
 
 ## 9. Stages
 
-These come after or beside the guideline's stages (C0 to C10). Each has a gate.
+These come after or beside the guideline's stages (C0 to C10). Each has a gate. While this document is a
+wish list they are a possible order, not a schedule.
 
 | Stage | What is built | Gate |
 |---|---|---|
@@ -289,6 +292,9 @@ These come after or beside the guideline's stages (C0 to C10). Each has a gate.
 | The scope is very large for one owner | Nothing in WC1 onward starts before C1 to C4 ship; each stage ships alone |
 
 ## 11. Decisions for the owner
+
+None of these needs an answer now (owner, 2026-11-13: "I will decide later"). They are listed so they are
+not lost.
 
 1. **Three places with one engine**, and every call through the Wasify API of that place?
 2. **A team is a tenant**, a lone person is a team of one?

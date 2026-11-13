@@ -100,5 +100,10 @@
 | [0098](0098-writing-training-on-windows-and-linux.md) | Teaching writing on Windows and Linux: PEFT + TRL on CUDA PyTorch, mlx-lm stays on the Mac (spike `docs/spikes/writing-peft-wp0.md`) | Proposed |
 | [0099](0099-fal-only-v1-web-on-cloud-models.md) | OpenRouter for text models, fal.ai for media models in v1; the desktop runs local and cloud models, the web only cloud models (plan `docs/fal-only-v1-plan.md`) | Accepted; changed by ADR-0100 |
 | [0100](0100-haiku-text-and-cheapest-media-provider.md) | Text on Claude Haiku 5.5 by default with the person's choice of vendor; media on the cheapest of Runware, WaveSpeed and fal.ai (plan `docs/cloud-v1-plan.md`) | Accepted (2026-11-12) |
+| [0101](0101-coding-agent-on-openhands-agent-server.md) | The coding agent is built on OpenHands' Agent Server as pinned packages, with our own screens; in v1 on the desktop (plan `docs/v2-coding-agent-start-plan.md`, spikes `docs/spikes/coding-c0.md`) | Accepted (2026-11-14) |
+| [0102](0102-coding-engine-optional-part-in-a-sandbox.md) | The coding engine is an optional part run inside a sandbox by the Wasify engine; the model key stays outside, behind a gateway on loopback | Accepted (2026-11-14) |
+| [0103](0103-check-loop-and-undo-belong-to-the-wasify-engine.md) | The implement, check, fix loop and undo belong to the Wasify engine; "finished" is not "done" | Accepted (2026-11-14) |
+| [0104](0104-extensions-pinned-catalogue-our-module.md) | Extensions: OpenHands' catalogue as a pinned copy, the module that manages it is ours | Accepted (2026-11-14) |
+| [0105](0105-scheduler-of-our-own.md) | Scheduled runs on a scheduler of our own, not on OpenHands' automation service (the owner's choice, 2026-11-14) | Accepted (2026-11-14) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

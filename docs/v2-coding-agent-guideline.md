@@ -232,6 +232,9 @@ Unchanged in substance from version 1.
 
 ## 7. The Scheduled module
 
+> Changed 2026-11-14 (owner): Scheduled runs on a scheduler of our own, not on OpenHands' automation
+> service. See ADR-0105 and spike 8 in `docs/spikes/coding-c0.md`. The rest of this section is kept as written.
+
 **Use their automation service for agent schedules.** What it does today:
 
 - a schedule (cron with a time zone) or an event (GitHub, Slack, Jira, Bitbucket, Azure DevOps and a

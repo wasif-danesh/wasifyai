@@ -1,0 +1,382 @@
+{
+ "schema": 1,
+ "note": "Hidden checks are Python run in a copy of the finished workspace; exit 0 is a pass. For a question, the final answer is in the file named by argv[1]. The last six tasks (kind 'hard') were added after Sonnet 5.5 passed the first 30.",
+ "tasks": [
+  {
+   "id": "bug-paginate",
+   "kind": "bug",
+   "prompt": "paginate() in paging.py returns the wrong items. Page 1 must be the first `size` items, page 2 the next, and a page past the end an empty list. Fix it.",
+   "files": {
+    "paging.py": "def paginate(items, page, size):\n    \"\"\"Return one page of items. Pages are numbered from 1.\"\"\"\n    start = page * size\n    return items[start:start + size]\n"
+   },
+   "hidden": "from paging import paginate\nx = list(range(1, 11))\nassert paginate(x, 1, 3) == [1, 2, 3]\nassert paginate(x, 2, 3) == [4, 5, 6]\nassert paginate(x, 4, 3) == [10]\nassert paginate(x, 5, 3) == []\nassert paginate([], 1, 5) == []\n",
+   "readonly": false
+  },
+  {
+   "id": "bug-default-list",
+   "kind": "bug",
+   "prompt": "In tags.py, calling add_tag('a') and then add_tag('b') returns ['a', 'b'] the second time; each call without a list must start from an empty one. When a list is passed, it must still be extended and returned. Fix it.",
+   "files": {
+    "tags.py": "def add_tag(tag, tags=[]):\n    \"\"\"Add a tag and return the list.\"\"\"\n    tags.append(tag)\n    return tags\n"
+   },
+   "hidden": "from tags import add_tag\nassert add_tag(\"a\") == [\"a\"]\nassert add_tag(\"b\") == [\"b\"]\nmine = [\"x\"]\nout = add_tag(\"y\", mine)\nassert out == [\"x\", \"y\"] and out is mine\nassert add_tag(\"z\", []) == [\"z\"]\n",
+   "readonly": false
+  },
+  {
+   "id": "bug-duration",
+   "kind": "bug",
+   "prompt": "parse_duration() in duration.py must turn text like '1h30m', '45s', '2h', '1h5s' or '1h2m3s' into seconds. Today it gives 0 for '45s' and accepts nonsense. Make it handle hours, minutes and seconds in that order, each optional, and raise ValueError for anything else, including '' and 'abc'.",
+   "files": {
+    "duration.py": "import re\n\n\ndef parse_duration(text):\n    \"\"\"Seconds in a duration such as 1h30m.\"\"\"\n    m = re.match(r\"(?:(\\d+)h)?(?:(\\d+)m)?\", text)\n    hours = int(m.group(1) or 0)\n    minutes = int(m.group(2) or 0)\n    return hours * 3600 + minutes * 60\n"
+   },
+   "hidden": "from duration import parse_duration as p\nassert p(\"1h30m\") == 5400\nassert p(\"45s\") == 45\nassert p(\"2h\") == 7200\nassert p(\"1h5s\") == 3605\nassert p(\"1h2m3s\") == 3723\nassert p(\"90m\") == 5400\nfor bad in (\"\", \"abc\", \"1x\", \"h\", \"1h30\", \"30m1h\"):\n    try:\n        p(bad)\n    except ValueError:\n        continue\n    raise AssertionError(\"accepted \" + repr(bad))\n",
+   "readonly": false
+  },
+  {
+   "id": "bug-csv-quotes",
+   "kind": "bug",
+   "prompt": "split_line() in csvline.py splits on every comma. It must treat a field in double quotes as one field even when it holds commas, drop the surrounding quotes, and read two double quotes inside a quoted field as one quote character. Fix it.",
+   "files": {
+    "csvline.py": "def split_line(line):\n    \"\"\"Split one CSV line into its fields.\"\"\"\n    return line.split(\",\")\n"
+   },
+   "hidden": "from csvline import split_line as s\nassert s(\"a,b,c\") == [\"a\", \"b\", \"c\"]\nassert s('a,\"b,c\",d') == [\"a\", \"b,c\", \"d\"]\nassert s('\"say \"\"hi\"\"\",x') == ['say \"hi\"', \"x\"]\nassert s(\"a,,c\") == [\"a\", \"\", \"c\"]\nassert s('\"\",x') == [\"\", \"x\"]\n",
+   "readonly": false
+  },
+  {
+   "id": "bug-memo-kwargs",
+   "kind": "bug",
+   "prompt": "The memo decorator in memo.py returns stale results when a function is called again with different keyword arguments. Fix that. A call with an argument that cannot be hashed (such as a list) must still work: it simply is not cached.",
+   "files": {
+    "memo.py": "import functools\n\n\ndef memo(fn):\n    \"\"\"Cache results by arguments.\"\"\"\n    cache = {}\n\n    @functools.wraps(fn)\n    def wrapper(*args, **kwargs):\n        if args not in cache:\n            cache[args] = fn(*args, **kwargs)\n        return cache[args]\n\n    return wrapper\n"
+   },
+   "hidden": "from memo import memo\ncalls = []\n\n@memo\ndef f(x, scale=1):\n    calls.append((x, scale))\n    return x * scale\n\nassert f(2) == 2\nassert f(2, scale=3) == 6\nassert f(2, scale=3) == 6\nassert f(2) == 2\nassert len(calls) == 2, calls\n\n@memo\ndef g(items):\n    return sum(items)\n\nassert g([1, 2]) == 3\nassert g([1, 2, 3]) == 6\n",
+   "readonly": false
+  },
+  {
+   "id": "bug-discount",
+   "kind": "bug",
+   "prompt": "Order totals are wrong when a discount is given: order_total([200.00], discount_percent=10) should be 180.00 and gives 190.00. Find the cause and fix it. Totals are rounded to 2 decimals.",
+   "files": {
+    "orders.py": "from pricing import apply_discount\n\n\ndef order_total(prices, discount_percent=0):\n    \"\"\"Total of an order after a percent discount, rounded to 2 decimals.\"\"\"\n    return round(apply_discount(sum(prices), discount_percent), 2)\n",
+    "pricing.py": "def apply_discount(amount, percent):\n    \"\"\"Take `percent` percent off `amount`.\"\"\"\n    return amount - percent\n\n\ndef add_tax(amount, rate):\n    return amount * (1 + rate)\n"
+   },
+   "hidden": "from orders import order_total\nfrom pricing import add_tax\nassert order_total([200.00], discount_percent=10) == 180.00\nassert order_total([19.99, 5.01]) == 25.00\nassert order_total([10, 20, 30], discount_percent=50) == 30.00\nassert order_total([33.33], discount_percent=10) == 30.0\nassert abs(add_tax(100, 0.2) - 120) < 1e-9\n",
+   "readonly": false
+  },
+  {
+   "id": "bug-slug",
+   "kind": "bug",
+   "prompt": "slugify() in slug.py drops accented letters: slugify('Crème Brûlée!') gives 'crme-brle' and must give 'creme-brulee'. Accented letters become their plain letter, everything that is not a letter or digit becomes a single dash, and there is no dash at either end. Fix it.",
+   "files": {
+    "slug.py": "import re\n\n\ndef slugify(text):\n    \"\"\"A lower-case, dash-separated form of text for use in a URL.\"\"\"\n    text = text.encode(\"ascii\", \"ignore\").decode().lower()\n    return re.sub(r\"[^a-z0-9]+\", \"-\", text)\n"
+   },
+   "hidden": "from slug import slugify as s\nassert s(\"Crème Brûlée!\") == \"creme-brulee\"\nassert s(\"  Hello,   World  \") == \"hello-world\"\nassert s(\"Ångström 42\") == \"angstrom-42\"\nassert s(\"a--b\") == \"a-b\"\nassert s(\"\") == \"\"\n",
+   "readonly": false
+  },
+  {
+   "id": "bug-flatten",
+   "kind": "bug",
+   "prompt": "flatten() in flat.py must flatten lists and tuples nested to any depth and keep every string as one item. Today flatten(['ab', ('c', ['d'])]) does not return ['ab', 'c', 'd']. Fix it.",
+   "files": {
+    "flat.py": "def flatten(items):\n    \"\"\"All leaves of a nested list, in order.\"\"\"\n    out = []\n    for item in items:\n        if isinstance(item, list):\n            out.extend(flatten(item))\n        else:\n            out.extend(item)\n    return out\n"
+   },
+   "hidden": "from flat import flatten as f\nassert f([\"ab\", (\"c\", [\"d\"])]) == [\"ab\", \"c\", \"d\"]\nassert f([1, [2, [3, [4]]], (5, 6)]) == [1, 2, 3, 4, 5, 6]\nassert f([]) == []\nassert f([[], ()]) == []\nassert f([\"x\"]) == [\"x\"]\n",
+   "readonly": false
+  },
+  {
+   "id": "feat-wc-json",
+   "kind": "feature",
+   "prompt": "wc.py prints 'LINES WORDS CHARS' for a file: python3 wc.py FILE. Add an option: python3 wc.py --json FILE prints one JSON object with the keys lines, words and chars. The plain form must keep working.",
+   "files": {
+    "wc.py": "import sys\n\n\ndef count(text):\n    return {\"lines\": len(text.splitlines()), \"words\": len(text.split()), \"chars\": len(text)}\n\n\ndef main(argv):\n    with open(argv[1]) as f:\n        c = count(f.read())\n    print(c[\"lines\"], c[\"words\"], c[\"chars\"])\n\n\nif __name__ == \"__main__\":\n    main(sys.argv)\n",
+    "sample.txt": "one two\nthree\n"
+   },
+   "hidden": "import json, subprocess, sys\nopen(\"t.txt\", \"w\").write(\"a b c\\nd e\\n\")\nr = subprocess.run([sys.executable, \"wc.py\", \"t.txt\"], capture_output=True, text=True)\nassert r.returncode == 0 and r.stdout.split() == [\"2\", \"5\", \"10\"], r.stdout + r.stderr\nr = subprocess.run([sys.executable, \"wc.py\", \"--json\", \"t.txt\"], capture_output=True, text=True)\nassert r.returncode == 0, r.stderr\nassert json.loads(r.stdout) == {\"lines\": 2, \"words\": 5, \"chars\": 10}, r.stdout\n",
+   "readonly": false
+  },
+  {
+   "id": "feat-lru",
+   "kind": "feature",
+   "prompt": "Write the class LRUCache in cache.py as its docstring says.",
+   "files": {
+    "cache.py": "class LRUCache:\n    \"\"\"A cache that holds at most `capacity` items (capacity is 1 or more).\n\n    get(key) returns the value, or None when the key is absent, and makes the key the most recently used.\n    put(key, value) stores the value and makes the key the most recently used; when the cache is over\n    capacity, the least recently used key is dropped.\n    len(cache) is the number of items held.\n    \"\"\"\n\n    def __init__(self, capacity):\n        raise NotImplementedError\n"
+   },
+   "hidden": "from cache import LRUCache\nc = LRUCache(2)\nc.put(\"a\", 1); c.put(\"b\", 2)\nassert c.get(\"a\") == 1\nc.put(\"c\", 3)\nassert c.get(\"b\") is None\nassert c.get(\"a\") == 1 and c.get(\"c\") == 3\nc.put(\"a\", 10)\nc.put(\"d\", 4)\nassert c.get(\"c\") is None and c.get(\"a\") == 10 and c.get(\"d\") == 4\nassert len(c) == 2\none = LRUCache(1)\none.put(\"x\", 1); one.put(\"y\", 2)\nassert one.get(\"x\") is None and one.get(\"y\") == 2 and len(one) == 1\n",
+   "readonly": false
+  },
+  {
+   "id": "feat-retry",
+   "kind": "feature",
+   "prompt": "Add a decorator retry(times, exceptions=(Exception,)) to util.py. The decorated function is tried up to `times` times in all. If a try raises one of `exceptions`, the next try follows; after the last try the exception is raised. An exception of another kind is raised at once. The value of the first try that succeeds is returned.",
+   "files": {
+    "util.py": "\"\"\"Small helpers.\"\"\"\n\n\ndef clamp(value, low, high):\n    return max(low, min(high, value))\n"
+   },
+   "hidden": "from util import retry, clamp\nassert clamp(5, 0, 3) == 3\nn = {\"c\": 0}\n\n@retry(3)\ndef flaky():\n    n[\"c\"] += 1\n    if n[\"c\"] < 3:\n        raise ValueError(\"no\")\n    return \"ok\"\n\nassert flaky() == \"ok\" and n[\"c\"] == 3\nn[\"c\"] = 0\n\n@retry(2, exceptions=(KeyError,))\ndef always():\n    n[\"c\"] += 1\n    raise KeyError(\"k\")\n\ntry:\n    always()\n    raise AssertionError(\"no raise\")\nexcept KeyError:\n    pass\nassert n[\"c\"] == 2\nn[\"c\"] = 0\n\n@retry(5, exceptions=(KeyError,))\ndef other():\n    n[\"c\"] += 1\n    raise TypeError(\"t\")\n\ntry:\n    other()\n    raise AssertionError(\"no raise\")\nexcept TypeError:\n    pass\nassert n[\"c\"] == 1\n",
+   "readonly": false
+  },
+  {
+   "id": "feat-email",
+   "kind": "feature",
+   "prompt": "Add valid_email(text) to checks.py. It returns True only when all of these hold: exactly one '@'; the part before it is not empty; the part after it has at least one dot; no part between dots in the domain is empty; and the text has no spaces. Otherwise False.",
+   "files": {
+    "checks.py": "def valid_age(n):\n    return isinstance(n, int) and 0 <= n <= 150\n"
+   },
+   "hidden": "from checks import valid_email as v, valid_age\nassert valid_age(30)\nfor good in (\"a@b.co\", \"first.last@mail.example.org\", \"x+y@d.io\"):\n    assert v(good) is True, good\nfor bad in (\"\", \"a@b\", \"@b.co\", \"a@@b.co\", \"a@b..co\", \"a@.co\", \"a@b.\", \"a b@c.de\", \"abc\", \"a@b@c.de\"):\n    assert v(bad) is False, bad\n",
+   "readonly": false
+  },
+  {
+   "id": "feat-matrix",
+   "kind": "feature",
+   "prompt": "Add two functions to matrix.py. transpose(m) returns the transpose of a matrix given as a list of rows. multiply(a, b) returns the matrix product. Both raise ValueError when a matrix has rows of different lengths, and multiply raises ValueError when the shapes do not fit.",
+   "files": {
+    "matrix.py": "def identity(n):\n    return [[1 if i == j else 0 for j in range(n)] for i in range(n)]\n"
+   },
+   "hidden": "from matrix import transpose, multiply, identity\nassert transpose([[1, 2, 3], [4, 5, 6]]) == [[1, 4], [2, 5], [3, 6]]\nassert multiply([[1, 2], [3, 4]], [[5, 6], [7, 8]]) == [[19, 22], [43, 50]]\nassert multiply([[1, 2, 3]], [[1], [2], [3]]) == [[14]]\nassert multiply([[2, 0], [0, 2]], identity(2)) == [[2, 0], [0, 2]]\nfor fn, args in ((transpose, ([[1, 2], [3]],)), (multiply, ([[1, 2]], [[1, 2]])), (multiply, ([[1, 2], [3]], [[1], [2]]))):\n    try:\n        fn(*args)\n    except ValueError:\n        continue\n    raise AssertionError(\"no ValueError for \" + repr(args))\n",
+   "readonly": false
+  },
+  {
+   "id": "feat-todo-save",
+   "kind": "feature",
+   "prompt": "Give TodoList in todo.py two methods: save(path) writes the list to a JSON file, and the class method TodoList.load(path) reads it back, with every item's text and done state as they were and in the same order.",
+   "files": {
+    "todo.py": "class TodoList:\n    def __init__(self):\n        self.items = []\n\n    def add(self, text):\n        self.items.append({\"text\": text, \"done\": False})\n\n    def complete(self, index):\n        self.items[index][\"done\"] = True\n\n    def pending(self):\n        return [i[\"text\"] for i in self.items if not i[\"done\"]]\n"
+   },
+   "hidden": "import json, os, tempfile\nfrom todo import TodoList\nt = TodoList(); t.add(\"milk\"); t.add(\"call Ana\"); t.add(\"post\"); t.complete(1)\np = os.path.join(tempfile.mkdtemp(), \"t.json\")\nt.save(p)\njson.load(open(p))\nu = TodoList.load(p)\nassert isinstance(u, TodoList)\nassert u.pending() == [\"milk\", \"post\"]\nassert [i[\"text\"] for i in u.items] == [\"milk\", \"call Ana\", \"post\"]\nassert [i[\"done\"] for i in u.items] == [False, True, False]\nu.add(\"new\"); assert u.pending() == [\"milk\", \"post\", \"new\"]\n",
+   "readonly": false
+  },
+  {
+   "id": "feat-intervals",
+   "kind": "feature",
+   "prompt": "Add merge_intervals(intervals) to ranges.py. It takes a list of (start, end) pairs in any order and returns a sorted list of pairs in which overlapping pairs are merged. Pairs that only touch, like (1, 2) and (2, 3), are merged too. An empty list gives an empty list. The result holds tuples.",
+   "files": {
+    "ranges.py": "def length(interval):\n    return interval[1] - interval[0]\n"
+   },
+   "hidden": "from ranges import merge_intervals as m\nassert m([]) == []\nassert m([(1, 3), (2, 6), (8, 10), (15, 18)]) == [(1, 6), (8, 10), (15, 18)]\nassert m([(5, 7), (1, 2), (2, 3)]) == [(1, 3), (5, 7)]\nassert m([(1, 10), (2, 3), (4, 5)]) == [(1, 10)]\nassert m([(1, 2)]) == [(1, 2)]\nsrc = [(3, 4), (1, 2)]\nm(src)\nassert src == [(3, 4), (1, 2)]\n",
+   "readonly": false
+  },
+  {
+   "id": "feat-roman",
+   "kind": "feature",
+   "prompt": "Create roman.py with to_roman(n) for whole numbers 1 to 3999 and from_roman(text) for the reverse. to_roman raises ValueError outside that range. from_roman raises ValueError for text that is not a correctly written Roman numeral, such as '', 'ABC', 'IIII' or 'VX'.",
+   "files": {
+    "README.md": "Number helpers.\n"
+   },
+   "hidden": "from roman import to_roman, from_roman\nfor n, r in ((1, \"I\"), (4, \"IV\"), (9, \"IX\"), (14, \"XIV\"), (40, \"XL\"), (90, \"XC\"), (400, \"CD\"), (1994, \"MCMXCIV\"), (3999, \"MMMCMXCIX\")):\n    assert to_roman(n) == r, n\n    assert from_roman(r) == n, r\nfor n in (1, 58, 444, 2024, 3888):\n    assert from_roman(to_roman(n)) == n\nfor bad in (0, 4000, -1):\n    try:\n        to_roman(bad)\n    except ValueError:\n        continue\n    raise AssertionError(bad)\nfor bad in (\"\", \"ABC\", \"IIII\", \"VX\", \"IC\", \"MMMM\"):\n    try:\n        from_roman(bad)\n    except ValueError:\n        continue\n    raise AssertionError(bad)\n",
+   "readonly": false
+  },
+  {
+   "id": "refactor-duplicate",
+   "kind": "refactor",
+   "prompt": "format_user_report and format_admin_report in report.py repeat the same lines. Move the shared part into one helper named _format_rows that both call. What the two functions return must not change in any way.",
+   "files": {
+    "report.py": "def format_user_report(users):\n    lines = []\n    lines.append(\"Users\")\n    lines.append(\"=====\")\n    for row in users:\n        name = row[\"name\"].strip().title()\n        count = row.get(\"logins\", 0)\n        lines.append(f\"{name:<12}{count:>5}\")\n    lines.append(f\"Total: {len(users)}\")\n    return \"\\n\".join(lines)\n\n\ndef format_admin_report(admins):\n    lines = []\n    lines.append(\"Admins\")\n    lines.append(\"======\")\n    for row in admins:\n        name = row[\"name\"].strip().title()\n        count = row.get(\"logins\", 0)\n        lines.append(f\"{name:<12}{count:>5}\")\n    lines.append(f\"Total: {len(admins)}\")\n    return \"\\n\".join(lines)\n"
+   },
+   "hidden": "import inspect, report\nrows = [{\"name\": \" ana maria \", \"logins\": 12}, {\"name\": \"bo\"}]\nassert report.format_user_report(rows) == \"Users\\n=====\\nAna Maria      12\\nBo              0\\nTotal: 2\"\nassert report.format_admin_report(rows[:1]) == \"Admins\\n======\\nAna Maria      12\\nTotal: 1\"\nassert report.format_user_report([]) == \"Users\\n=====\\nTotal: 0\"\nassert callable(report._format_rows)\nfor fn in (report.format_user_report, report.format_admin_report):\n    assert \"_format_rows(\" in inspect.getsource(fn), fn.__name__\n",
+   "readonly": false
+  },
+  {
+   "id": "refactor-class",
+   "kind": "refactor",
+   "prompt": "counter.py keeps its state in a module variable. Add a class Counter with the methods increment(by=1), reset() and value(), where each Counter object has its own count. Keep the module's three functions working exactly as before, on one shared default counter.",
+   "files": {
+    "counter.py": "_count = 0\n\n\ndef increment(by=1):\n    global _count\n    _count += by\n    return _count\n\n\ndef reset():\n    global _count\n    _count = 0\n\n\ndef value():\n    return _count\n"
+   },
+   "hidden": "import counter\nfrom counter import Counter\na, b = Counter(), Counter()\na.increment(); a.increment(4); b.increment()\nassert a.value() == 5 and b.value() == 1\na.reset(); assert a.value() == 0 and b.value() == 1\ncounter.reset()\nassert counter.increment() == 1 and counter.increment(by=2) == 3 and counter.value() == 3\nassert a.value() == 0\ncounter.reset(); assert counter.value() == 0\n",
+   "readonly": false
+  },
+  {
+   "id": "refactor-hints",
+   "kind": "refactor",
+   "prompt": "Add type hints to every function in geometry.py: every parameter and every return value. Do not change what the functions do.",
+   "files": {
+    "geometry.py": "import math\n\n\ndef area_circle(radius):\n    return math.pi * radius * radius\n\n\ndef perimeter_rect(width, height):\n    return 2 * (width + height)\n\n\ndef distance(a, b):\n    return math.hypot(b[0] - a[0], b[1] - a[1])\n\n\ndef is_square(width, height, tolerance=1e-9):\n    return abs(width - height) <= tolerance\n\n\ndef describe(name, sides):\n    return f\"{name} with {sides} sides\"\n"
+   },
+   "hidden": "import inspect, math, geometry as g\nassert abs(g.area_circle(2) - 4 * math.pi) < 1e-9\nassert g.perimeter_rect(2, 3) == 10\nassert g.distance((0, 0), (3, 4)) == 5\nassert g.is_square(2, 2) and not g.is_square(2, 3)\nassert g.describe(\"hexagon\", 6) == \"hexagon with 6 sides\"\nfor name in (\"area_circle\", \"perimeter_rect\", \"distance\", \"is_square\", \"describe\"):\n    sig = inspect.signature(getattr(g, name))\n    assert sig.return_annotation is not inspect.Signature.empty, name\n    for p in sig.parameters.values():\n        assert p.annotation is not inspect.Parameter.empty, name + \".\" + p.name\n",
+   "readonly": false
+  },
+  {
+   "id": "multi-rename",
+   "kind": "multi",
+   "prompt": "Rename the function calc_total to compute_total everywhere in the shop package. The old name must not appear anywhere any more. Nothing else changes.",
+   "files": {
+    "shop/__init__.py": "",
+    "shop/cart.py": "def calc_total(items):\n    \"\"\"Sum of price * quantity.\"\"\"\n    return sum(i[\"price\"] * i[\"qty\"] for i in items)\n\n\ndef item_count(items):\n    return sum(i[\"qty\"] for i in items)\n",
+    "shop/checkout.py": "from shop.cart import calc_total\n\nFREE_SHIPPING_FROM = 50\n\n\ndef shipping_cost(items):\n    \"\"\"Shipping is free from FREE_SHIPPING_FROM, else a flat 4.99.\"\"\"\n    return 0 if calc_total(items) >= FREE_SHIPPING_FROM else 4.99\n\n\ndef grand_total(items):\n    return round(calc_total(items) + shipping_cost(items), 2)\n",
+    "shop/report.py": "from shop import cart\n\n\ndef summary(items):\n    return f\"{cart.item_count(items)} items, {cart.calc_total(items):.2f}\"\n"
+   },
+   "hidden": "import os\nfrom shop.cart import compute_total\nfrom shop.checkout import grand_total, shipping_cost\nfrom shop.report import summary\nitems = [{\"price\": 10.0, \"qty\": 2}, {\"price\": 5.5, \"qty\": 1}]\nassert compute_total(items) == 25.5\nassert shipping_cost(items) == 4.99 and grand_total(items) == 30.49\nassert summary(items) == \"3 items, 25.50\"\nfor root, _, names in os.walk(\"shop\"):\n    for n in names:\n        if n.endswith(\".py\"):\n            assert \"calc_total\" not in open(os.path.join(root, n)).read(), n\n",
+   "readonly": false
+  },
+  {
+   "id": "multi-config",
+   "kind": "multi",
+   "prompt": "Prices are always shown with '$'. Add a setting currency_symbol to DEFAULTS in app/config.py (default '$'), make format_price in app/formatter.py use the setting it is given, and let render(prices, config=None) in app/main.py take a dict that overrides single settings. render([1.5], {'currency_symbol': '€'}) must give ['€1.50'].",
+   "files": {
+    "app/__init__.py": "",
+    "app/config.py": "DEFAULTS = {\"decimals\": 2}\n\n\ndef merged(overrides=None):\n    out = dict(DEFAULTS)\n    out.update(overrides or {})\n    return out\n",
+    "app/formatter.py": "def format_price(value, config):\n    return \"$\" + f\"{value:.{config['decimals']}f}\"\n",
+    "app/main.py": "from app.config import merged\nfrom app.formatter import format_price\n\n\ndef render(prices):\n    config = merged()\n    return [format_price(p, config) for p in prices]\n"
+   },
+   "hidden": "from app.main import render\nfrom app.config import DEFAULTS\nassert DEFAULTS[\"currency_symbol\"] == \"$\"\nassert render([1.5, 20]) == [\"$1.50\", \"$20.00\"]\nassert render([1.5], {\"currency_symbol\": \"€\"}) == [\"€1.50\"]\nassert render([1.5], config={\"decimals\": 0, \"currency_symbol\": \"£\"}) == [\"£2\"]\nassert render([3]) == [\"$3.00\"]\n",
+   "readonly": false
+  },
+  {
+   "id": "multi-import-cycle",
+   "kind": "multi",
+   "prompt": "Running python3 -c 'import models' fails with an import error. Fix it. Keep both files, and keep each function in the file it is in now.",
+   "files": {
+    "models.py": "from validators import check_user\n\n\nMIN_NAME = 2\n\n\ndef make_user(name, age):\n    user = {\"name\": name, \"age\": age}\n    check_user(user)\n    return user\n",
+    "validators.py": "from models import MIN_NAME\n\n\ndef check_user(user):\n    if len(user[\"name\"]) < MIN_NAME:\n        raise ValueError(\"name too short\")\n    if user[\"age\"] < 0:\n        raise ValueError(\"age below zero\")\n"
+   },
+   "hidden": "import subprocess, sys\nfor mod in (\"models\", \"validators\"):\n    r = subprocess.run([sys.executable, \"-c\", \"import \" + mod], capture_output=True, text=True)\n    assert r.returncode == 0, mod + \": \" + r.stderr[-300:]\nimport models, validators\nassert models.make_user(\"Ana\", 30) == {\"name\": \"Ana\", \"age\": 30}\nassert \"def make_user\" in open(\"models.py\").read() and \"def check_user\" in open(\"validators.py\").read()\nfor args in ((\"A\", 30), (\"Ana\", -1)):\n    try:\n        models.make_user(*args)\n    except ValueError:\n        continue\n    raise AssertionError(args)\n",
+   "readonly": false
+  },
+  {
+   "id": "multi-exporter",
+   "kind": "multi",
+   "prompt": "The exporters package has a JSON and a CSV exporter. Add a Markdown one under the format name 'md', registered the same way as the others. For rows [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}] it must return exactly '| a | b |\\n| --- | --- |\\n| 1 | 2 |\\n| 3 | 4 |'. An empty list gives an empty string.",
+   "files": {
+    "exporters/__init__.py": "from exporters import csv_exporter, json_exporter\n\nFORMATS = {\"json\": json_exporter.export, \"csv\": csv_exporter.export}\n\n\ndef export(fmt, rows):\n    if fmt not in FORMATS:\n        raise ValueError(\"unknown format: \" + fmt)\n    return FORMATS[fmt](rows)\n",
+    "exporters/json_exporter.py": "import json\n\n\ndef export(rows):\n    return json.dumps(rows)\n",
+    "exporters/csv_exporter.py": "def export(rows):\n    if not rows:\n        return \"\"\n    keys = list(rows[0])\n    lines = [\",\".join(keys)] + [\",\".join(str(r[k]) for k in keys) for r in rows]\n    return \"\\n\".join(lines)\n"
+   },
+   "hidden": "import exporters\nrows = [{\"a\": 1, \"b\": 2}, {\"a\": 3, \"b\": 4}]\nassert exporters.export(\"md\", rows) == \"| a | b |\\n| --- | --- |\\n| 1 | 2 |\\n| 3 | 4 |\"\nassert exporters.export(\"md\", []) == \"\"\nassert exporters.export(\"md\", [{\"name\": \"x\"}]) == \"| name |\\n| --- |\\n| x |\"\nassert \"md\" in exporters.FORMATS\nassert exporters.export(\"csv\", rows) == \"a,b\\n1,2\\n3,4\"\nassert exporters.export(\"json\", rows) == '[{\"a\": 1, \"b\": 2}, {\"a\": 3, \"b\": 4}]'\n",
+   "readonly": false
+  },
+  {
+   "id": "ask-what-does",
+   "kind": "question",
+   "prompt": "What does the function chk in mystery.py compute, and what is it normally used for? Answer in one or two sentences. Do not change any file.",
+   "files": {
+    "mystery.py": "def chk(s):\n    t = 0\n    for i, ch in enumerate(reversed(s)):\n        d = int(ch)\n        if i % 2 == 1:\n            d *= 2\n            if d > 9:\n                d -= 9\n        t += d\n    return t % 10 == 0\n"
+   },
+   "hidden": "import sys\na = open(sys.argv[1]).read().lower()\nassert \"luhn\" in a or \"credit card\" in a or \"card number\" in a, a[:300]\n",
+   "readonly": true
+  },
+  {
+   "id": "ask-find-bug",
+   "kind": "question",
+   "prompt": "One function in stats.py gives a wrong result for some inputs. Name the function and say for which inputs it is wrong and why, in two or three sentences. Do not change any file.",
+   "files": {
+    "stats.py": "def mean(values):\n    return sum(values) / len(values)\n\n\ndef median(values):\n    ordered = sorted(values)\n    return ordered[len(ordered) // 2]\n\n\ndef spread(values):\n    return max(values) - min(values)\n\n\ndef mode(values):\n    return max(set(values), key=values.count)\n"
+   },
+   "hidden": "import sys\na = open(sys.argv[1]).read().lower()\nassert \"median\" in a, a[:300]\nassert \"even\" in a, a[:300]\n",
+   "readonly": true
+  },
+  {
+   "id": "ask-output",
+   "kind": "question",
+   "prompt": "What exactly does python3 run.py print? Give the output and nothing else. Do not change any file.",
+   "files": {
+    "run.py": "def squares(n):\n    return [i * i for i in range(1, n + 1)]\n\n\ndef main():\n    values = squares(4)\n    print(values)\n    print(sum(1 for v in values if v % 2 == 0) + len(values) % 3)\n\n\nmain()\n"
+   },
+   "hidden": "import sys\na = open(sys.argv[1]).read()\nassert \"[1, 4, 9, 16]\" in a, a[:300]\nrest = a.split(\"[1, 4, 9, 16]\", 1)[1]\nassert \"3\" in rest, a[:300]\n",
+   "readonly": true
+  },
+  {
+   "id": "ask-where",
+   "kind": "question",
+   "prompt": "In the shop package: which function decides the shipping cost, in which file is it, and from what order total is shipping free? Answer in one or two sentences. Do not change any file.",
+   "files": {
+    "shop/__init__.py": "",
+    "shop/cart.py": "def calc_total(items):\n    \"\"\"Sum of price * quantity.\"\"\"\n    return sum(i[\"price\"] * i[\"qty\"] for i in items)\n\n\ndef item_count(items):\n    return sum(i[\"qty\"] for i in items)\n",
+    "shop/checkout.py": "from shop.cart import calc_total\n\nFREE_SHIPPING_FROM = 50\n\n\ndef shipping_cost(items):\n    \"\"\"Shipping is free from FREE_SHIPPING_FROM, else a flat 4.99.\"\"\"\n    return 0 if calc_total(items) >= FREE_SHIPPING_FROM else 4.99\n\n\ndef grand_total(items):\n    return round(calc_total(items) + shipping_cost(items), 2)\n",
+    "shop/report.py": "from shop import cart\n\n\ndef summary(items):\n    return f\"{cart.item_count(items)} items, {cart.calc_total(items):.2f}\"\n"
+   },
+   "hidden": "import sys\na = open(sys.argv[1]).read()\nassert \"shipping_cost\" in a, a[:300]\nassert \"checkout.py\" in a, a[:300]\nassert \"50\" in a, a[:300]\n",
+   "readonly": true
+  },
+  {
+   "id": "tests-write",
+   "kind": "tests",
+   "prompt": "Write unittest tests for truncate() in a new file test_strutil.py. They must pass with strutil.py as it is, and they must be thorough enough to fail if someone gets a boundary wrong. Do not change strutil.py.",
+   "files": {
+    "strutil.py": "def truncate(text, n, suffix=\"...\"):\n    \"\"\"Shorten text to at most n characters.\n\n    Text of n characters or fewer is returned unchanged. Longer text is cut so that the result,\n    with the suffix at its end, is exactly n characters. When n is smaller than the suffix,\n    the result is the first n characters of the suffix.\n    \"\"\"\n    if len(text) <= n:\n        return text\n    if n < len(suffix):\n        return suffix[:n]\n    return text[: n - len(suffix)] + suffix\n"
+   },
+   "hidden": "import shutil, subprocess, sys\nsrc = open(\"strutil.py\").read()\n\ndef run():\n    return subprocess.run([sys.executable, \"-m\", \"unittest\", \"-q\", \"test_strutil\"], capture_output=True, text=True)\n\nr = run()\nassert r.returncode == 0, \"tests fail on the correct code: \" + r.stderr[-400:]\nassert \"Ran 0 tests\" not in r.stderr, \"no tests ran\"\nmutants = [(\"if len(text) <= n:\", \"if len(text) < n:\"), (\"text[: n - len(suffix)] + suffix\", \"text[:n] + suffix\"), (\"return suffix[:n]\", \"return suffix\")]\nfor old, new in mutants:\n    assert old in src\n    open(\"strutil.py\", \"w\").write(src.replace(old, new))\n    shutil.rmtree(\"__pycache__\", ignore_errors=True)\n    r = run()\n    assert r.returncode != 0, \"tests did not catch: \" + new\nopen(\"strutil.py\", \"w\").write(src)\n",
+   "readonly": false
+  },
+  {
+   "id": "tests-which-side",
+   "kind": "tests",
+   "prompt": "python3 -m unittest test_temps fails. The docstrings in temps.py are the specification. Find out whether the code or the test is wrong in each failing case and fix the side that is wrong.",
+   "files": {
+    "temps.py": "def c_to_f(c):\n    \"\"\"Celsius to Fahrenheit: multiply by 9/5 and add 32.\"\"\"\n    return c * 9 / 5 + 32\n\n\ndef f_to_c(f):\n    \"\"\"Fahrenheit to Celsius: subtract 32, then multiply by 5/9.\"\"\"\n    return (f - 32) * 9 / 5\n",
+    "test_temps.py": "import unittest\n\nfrom temps import c_to_f, f_to_c\n\n\nclass TempsTest(unittest.TestCase):\n    def test_boiling(self):\n        self.assertEqual(c_to_f(100), 211)\n\n    def test_freezing(self):\n        self.assertEqual(f_to_c(32), 0)\n\n    def test_body(self):\n        self.assertAlmostEqual(f_to_c(98.6), 37.0)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+   },
+   "hidden": "import subprocess, sys\nfrom temps import c_to_f, f_to_c\nassert c_to_f(100) == 212 and c_to_f(0) == 32\nassert abs(f_to_c(98.6) - 37.0) < 1e-9 and f_to_c(32) == 0 and abs(f_to_c(212) - 100) < 1e-9\nr = subprocess.run([sys.executable, \"-m\", \"unittest\", \"-q\", \"test_temps\"], capture_output=True, text=True)\nassert r.returncode == 0, r.stderr[-400:]\nt = open(\"test_temps.py\").read()\nassert \"212\" in t and \"test_boiling\" in t and \"test_freezing\" in t and \"test_body\" in t\n",
+   "readonly": false
+  },
+  {
+   "id": "data-convert",
+   "kind": "data",
+   "prompt": "Convert data.csv into data.json: a JSON list with one object per row, keyed by the column names. Whole numbers must be JSON numbers, decimal numbers JSON numbers too, everything else text. Keep data.csv as it is.",
+   "files": {
+    "data.csv": "id,name,price,stock\n1,Pen,1.50,120\n2,Notebook,3.25,40\n3,Ruler,0.99,0\n"
+   },
+   "hidden": "import json\nd = json.load(open(\"data.json\"))\nassert d == [{\"id\": 1, \"name\": \"Pen\", \"price\": 1.5, \"stock\": 120}, {\"id\": 2, \"name\": \"Notebook\", \"price\": 3.25, \"stock\": 40}, {\"id\": 3, \"name\": \"Ruler\", \"price\": 0.99, \"stock\": 0}], d\nassert all(isinstance(r[\"id\"], int) and isinstance(r[\"stock\"], int) and isinstance(r[\"price\"], float) for r in d)\nassert open(\"data.csv\").read() == \"id,name,price,stock\\n1,Pen,1.50,120\\n2,Notebook,3.25,40\\n3,Ruler,0.99,0\\n\"\n",
+   "readonly": false
+  },
+  {
+   "id": "hard-kv-store",
+   "kind": "hard",
+   "prompt": "Create kv.py with a class Store(path): a key-value store kept in one file that only ever grows by appended lines (a log), so that a crash cannot lose earlier data. Methods: set(key, value) with text keys and any JSON value; get(key, default=None); delete(key), which does nothing for a missing key; keys(), sorted; compact(), which rewrites the file so it holds one line per live key and nothing else; close(). Opening a Store on an existing file gives back exactly the data that was there, including after compact(). If the last line of the file is cut off in the middle (a crash while writing), opening must ignore that one line and keep everything before it. Every set and delete must be on disk before the method returns.",
+   "files": {
+    "README.md": "A tiny store.\n"
+   },
+   "hidden": "import os, tempfile\nfrom kv import Store\nd = tempfile.mkdtemp(); p = os.path.join(d, \"db.log\")\ns = Store(p)\ns.set(\"a\", 1); s.set(\"b\", {\"x\": [1, 2]}); s.set(\"a\", 2); s.delete(\"zzz\"); s.set(\"c\", \"text\"); s.delete(\"c\")\nassert s.get(\"a\") == 2 and s.get(\"b\") == {\"x\": [1, 2]} and s.get(\"c\") is None and s.get(\"c\", 7) == 7\nassert s.keys() == [\"a\", \"b\"]\n# on disk before returning: read with a second handle without closing the first\nt = Store(p); assert t.get(\"a\") == 2 and t.keys() == [\"a\", \"b\"]; t.close()\ns.close()\ns = Store(p); assert s.get(\"a\") == 2 and s.get(\"b\") == {\"x\": [1, 2]} and s.keys() == [\"a\", \"b\"]\nfor i in range(200): s.set(\"n\", i)\nbig = os.path.getsize(p)\ns.compact()\nsmall = os.path.getsize(p)\nassert small < big / 10, (big, small)\nassert len([l for l in open(p).read().splitlines() if l.strip()]) == 3\nassert s.get(\"n\") == 199 and s.keys() == [\"a\", \"b\", \"n\"]\ns.set(\"after\", True); s.close()\ns = Store(p); assert s.get(\"after\") is True and s.get(\"n\") == 199; s.close()\n# a crash in the middle of the last line\nwith open(p, \"rb\") as f: data = f.read()\nwith open(p, \"wb\") as f: f.write(data[:-7])\ns = Store(p)\nassert s.get(\"after\") is None and s.get(\"n\") == 199 and s.get(\"a\") == 2, s.keys()\ns.set(\"z\", 1); s.close()\ns = Store(p); assert s.get(\"z\") == 1 and s.get(\"n\") == 199 and s.get(\"after\") is None; s.close()\n",
+   "readonly": false
+  },
+  {
+   "id": "hard-expr",
+   "kind": "hard",
+   "prompt": "Create expr.py with evaluate(text, variables=None). It computes arithmetic with + - * / and ^ (power), brackets, unary minus and plus, whole and decimal numbers, and names looked up in the variables dict. Usual precedence: ^ binds tighter than unary minus (so -2 ^ 2 is -4), then * and /, then + and -; ^ groups from the right (2 ^ 3 ^ 2 is 512), the others from the left. Spaces are ignored between tokens. Raise ValueError for text that is not a well-formed expression (including empty text and unbalanced brackets), NameError for a name that is not in variables, and let division by zero raise ZeroDivisionError. Do not use eval, exec or the ast module.",
+   "files": {
+    "README.md": "Calculator.\n"
+   },
+   "hidden": "from expr import evaluate as e\nsrc = open(\"expr.py\").read()\nimport re\nassert not re.search(r\"(?<![\\w.])(eval|exec)\\(\", src) and \"import ast\" not in src and \"from ast\" not in src\nassert e(\"2 + 3 * 4\") == 14\nassert e(\"(2 + 3) * 4\") == 20\nassert e(\"2 ^ 3 ^ 2\") == 512\nassert e(\"-2 ^ 2\") == -4\nassert e(\"(-2) ^ 2\") == 4\nassert e(\"10 - 4 - 3\") == 3\nassert e(\"8 / 4 / 2\") == 1\nassert abs(e(\"1.5 * 2 + 0.5\") - 3.5) < 1e-9\nassert e(\"- - 3\") == 3 and e(\"+4\") == 4 and e(\"2 * -3\") == -6\nassert e(\"x * (y + 1)\", {\"x\": 3, \"y\": 4}) == 15\nassert e(\"rate*hours\", {\"rate\": 2.5, \"hours\": 4}) == 10\nassert e(\"  7  \") == 7\nfor bad in (\"\", \"   \", \"2 +\", \"(2 + 3\", \"2 + 3)\", \"2 3\", \"* 2\", \"2 ** 3\", \"2 $ 3\", \"()\", \"1..2\"):\n    try:\n        e(bad)\n    except ValueError:\n        continue\n    raise AssertionError(\"accepted \" + repr(bad))\ntry:\n    e(\"a + 1\", {\"b\": 2}); raise AssertionError(\"no NameError\")\nexcept NameError:\n    pass\ntry:\n    e(\"1 / (2 - 2)\"); raise AssertionError(\"no ZeroDivisionError\")\nexcept ZeroDivisionError:\n    pass\n",
+   "readonly": false
+  },
+  {
+   "id": "hard-bug-hunt",
+   "kind": "hard",
+   "prompt": "Customers report wrong numbers from billing.py. The docstrings are the specification. Find every place where the code does not do what its docstring says and fix it. Do not change the docstrings or the function names.",
+   "files": {
+    "billing.py": "\"\"\"Billing helpers. The docstrings are the specification.\"\"\"\nimport math\n\n\ndef prorate(amount, days_used, days_in_month):\n    \"\"\"The part of a monthly amount owed for days_used days, rounded to 2 decimals.\n\n    prorate(30.00, 10, 30) is 10.00 and prorate(100.00, 1, 3) is 33.33.\n    \"\"\"\n    return round(amount * (days_used // days_in_month), 2)\n\n\ndef monthly_totals(invoices):\n    \"\"\"Total amount per month, as a dict keyed by \"YYYY-MM\".\n\n    Each invoice is a dict with \"date\" (\"YYYY-MM-DD\") and \"amount\". Months of different\n    years are different months.\n    \"\"\"\n    totals = {}\n    for inv in invoices:\n        key = inv[\"date\"][5:7]\n        totals[key] = totals.get(key, 0) + inv[\"amount\"]\n    return totals\n\n\ndef overdue(invoices, today):\n    \"\"\"The ids of unpaid invoices whose \"due\" date is before `today` (both \"YYYY-MM-DD\"),\n    in the order given. An invoice due today is not overdue. Paid invoices are never overdue.\n    \"\"\"\n    return [inv[\"id\"] for inv in invoices if inv[\"due\"] <= today]\n\n\ndef apply_credit(invoices, credit):\n    \"\"\"Use `credit` to pay off invoices, oldest \"date\" first.\n\n    Returns a new list of dicts with \"id\" and \"remaining\" (what is still owed, 2 decimals),\n    in the same order as `invoices`, and does not change `invoices`. Credit left after one\n    invoice is paid goes on to the next one.\n    \"\"\"\n    out = []\n    for inv in sorted(invoices, key=lambda i: i[\"date\"]):\n        used = min(credit, inv[\"amount\"])\n        out.append({\"id\": inv[\"id\"], \"remaining\": round(inv[\"amount\"] - used, 2)})\n    return out\n\n\ndef late_fee(amount, days_late, rate=0.01, cap=0.2):\n    \"\"\"A fee of `rate` of the amount for each full week late, never more than `cap` of the\n    amount, rounded to 2 decimals. Nothing for less than a week.\n    \"\"\"\n    weeks = math.ceil(days_late / 7)\n    return round(min(amount * rate * weeks, amount * cap), 2)\n"
+   },
+   "hidden": "import copy\nimport billing as b\nassert b.prorate(30.00, 10, 30) == 10.00 and b.prorate(100.00, 1, 3) == 33.33 and b.prorate(50, 30, 30) == 50\ninv = [{\"date\": \"2024-01-10\", \"amount\": 10}, {\"date\": \"2025-01-05\", \"amount\": 5}, {\"date\": \"2024-01-20\", \"amount\": 2.5}, {\"date\": \"2024-02-01\", \"amount\": 1}]\nassert b.monthly_totals(inv) == {\"2024-01\": 12.5, \"2025-01\": 5, \"2024-02\": 1}\nod = [{\"id\": 1, \"due\": \"2024-03-01\", \"paid\": False}, {\"id\": 2, \"due\": \"2024-03-10\", \"paid\": False}, {\"id\": 3, \"due\": \"2024-02-01\", \"paid\": True}, {\"id\": 4, \"due\": \"2024-03-09\", \"paid\": False}]\nassert b.overdue(od, \"2024-03-10\") == [1, 4]\nci = [{\"id\": \"b\", \"date\": \"2024-02-01\", \"amount\": 50.0}, {\"id\": \"a\", \"date\": \"2024-01-01\", \"amount\": 30.0}, {\"id\": \"c\", \"date\": \"2024-03-01\", \"amount\": 20.0}]\nkeep = copy.deepcopy(ci)\nassert b.apply_credit(ci, 60) == [{\"id\": \"b\", \"remaining\": 20.0}, {\"id\": \"a\", \"remaining\": 0.0}, {\"id\": \"c\", \"remaining\": 20.0}]\nassert ci == keep\nassert b.apply_credit(ci, 0) == [{\"id\": \"b\", \"remaining\": 50.0}, {\"id\": \"a\", \"remaining\": 30.0}, {\"id\": \"c\", \"remaining\": 20.0}]\nassert b.apply_credit(ci, 500) == [{\"id\": \"b\", \"remaining\": 0.0}, {\"id\": \"a\", \"remaining\": 0.0}, {\"id\": \"c\", \"remaining\": 0.0}]\nassert b.late_fee(100, 6) == 0 and b.late_fee(100, 7) == 1.0 and b.late_fee(100, 20) == 2.0 and b.late_fee(100, 700) == 20.0\nfor name in (\"prorate\", \"monthly_totals\", \"overdue\", \"apply_credit\", \"late_fee\"):\n    assert getattr(b, name).__doc__ and len(getattr(b, name).__doc__) > 40\n",
+   "readonly": false
+  },
+  {
+   "id": "hard-refactor",
+   "kind": "hard",
+   "prompt": "process_orders in orders.py is one long function. Break it into smaller functions in the same file so that no function is longer than 20 lines, counting its def line and docstring. process_orders must keep its name, its arguments and exactly the same results and side effects for every input.",
+   "files": {
+    "orders.py": "def process_orders(orders, stock, vip_customers):\n    \"\"\"Returns (shipped, rejected, report_lines) and updates stock in place.\"\"\"\n    shipped = []\n    rejected = []\n    lines = []\n    for order in orders:\n        if not order.get(\"items\"):\n            rejected.append((order[\"id\"], \"empty order\"))\n            lines.append(f\"{order['id']}: rejected (empty order)\")\n            continue\n        ok = True\n        for name, qty in order[\"items\"].items():\n            if qty <= 0:\n                ok = False\n                reason = f\"bad quantity for {name}\"\n                break\n            if stock.get(name, 0) < qty:\n                ok = False\n                reason = f\"not enough {name}\"\n                break\n        if not ok:\n            rejected.append((order[\"id\"], reason))\n            lines.append(f\"{order['id']}: rejected ({reason})\")\n            continue\n        total = 0\n        for name, qty in order[\"items\"].items():\n            price = order[\"prices\"][name]\n            total += price * qty\n            stock[name] -= qty\n        if order[\"customer\"] in vip_customers:\n            discount = 0.1\n        elif total >= 100:\n            discount = 0.05\n        else:\n            discount = 0\n        total = round(total * (1 - discount), 2)\n        if total >= 50 or order[\"customer\"] in vip_customers:\n            shipping = 0\n        else:\n            shipping = 4.99\n        grand = round(total + shipping, 2)\n        shipped.append({\"id\": order[\"id\"], \"total\": total, \"shipping\": shipping, \"grand\": grand})\n        if discount:\n            lines.append(f\"{order['id']}: shipped {grand:.2f} ({int(discount * 100)}% off)\")\n        else:\n            lines.append(f\"{order['id']}: shipped {grand:.2f}\")\n    lines.append(f\"{len(shipped)} shipped, {len(rejected)} rejected\")\n    return shipped, rejected, lines\n"
+   },
+   "hidden": "import ast, copy\nimport orders\nsrc = open(\"orders.py\").read(); tree = ast.parse(src)\nfns = [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]\nassert len(fns) >= 3, len(fns)\nfor f in fns:\n    assert f.end_lineno - f.lineno + 1 <= 20, (f.name, f.end_lineno - f.lineno + 1)\nprices = {\"pen\": 2.0, \"book\": 30.0, \"lamp\": 60.0}\ncases = [\n    {\"id\": \"o1\", \"customer\": \"ann\", \"items\": {\"pen\": 3}, \"prices\": prices},\n    {\"id\": \"o2\", \"customer\": \"vip\", \"items\": {\"book\": 1, \"pen\": 1}, \"prices\": prices},\n    {\"id\": \"o3\", \"customer\": \"bob\", \"items\": {\"lamp\": 2}, \"prices\": prices},\n    {\"id\": \"o4\", \"customer\": \"bob\", \"items\": {}, \"prices\": prices},\n    {\"id\": \"o5\", \"customer\": \"bob\", \"items\": {\"pen\": 0}, \"prices\": prices},\n    {\"id\": \"o6\", \"customer\": \"cy\", \"items\": {\"book\": 99}, \"prices\": prices},\n    {\"id\": \"o7\", \"customer\": \"cy\", \"items\": {\"ghost\": 1}, \"prices\": prices},\n    {\"id\": \"o8\", \"customer\": \"cy\", \"items\": {\"book\": 2}, \"prices\": prices},\n    {\"id\": \"o9\", \"customer\": \"dee\", \"items\": {\"pen\": 1, \"book\": 50}, \"prices\": prices},\n]\nstock = {\"pen\": 10, \"book\": 5, \"lamp\": 2}\nshipped, rejected, lines = orders.process_orders(copy.deepcopy(cases), stock, {\"vip\"})\nassert shipped == [{\"id\": \"o1\", \"total\": 6.0, \"shipping\": 4.99, \"grand\": 10.99}, {\"id\": \"o2\", \"total\": 28.8, \"shipping\": 0, \"grand\": 28.8}, {\"id\": \"o3\", \"total\": 114.0, \"shipping\": 0, \"grand\": 114.0}, {\"id\": \"o8\", \"total\": 60.0, \"shipping\": 0, \"grand\": 60.0}], shipped\nassert rejected == [(\"o4\", \"empty order\"), (\"o5\", \"bad quantity for pen\"), (\"o6\", \"not enough book\"), (\"o7\", \"not enough ghost\"), (\"o9\", \"not enough book\")], rejected\nassert lines == [\"o1: shipped 10.99\", \"o2: shipped 28.80 (10% off)\", \"o3: shipped 114.00 (5% off)\", \"o4: rejected (empty order)\", \"o5: rejected (bad quantity for pen)\", \"o6: rejected (not enough book)\", \"o7: rejected (not enough ghost)\", \"o8: shipped 60.00\", \"o9: rejected (not enough book)\", \"4 shipped, 5 rejected\"], lines\nassert stock == {\"pen\": 6, \"book\": 2, \"lamp\": 0}, stock\nassert orders.process_orders([], {}, set()) == ([], [], [\"0 shipped, 0 rejected\"])\n",
+   "readonly": false
+  },
+  {
+   "id": "hard-cli",
+   "kind": "hard",
+   "prompt": "Create todo_cli.py, a command-line to-do list kept as JSON in the file named by the environment variable TODO_FILE (default todo.json in the current folder). Commands:\n  python3 todo_cli.py add TEXT...   adds an item (the words joined by one space), prints 'added N' where N is its number.\n  python3 todo_cli.py list          prints one line per item in number order: 'N [ ] TEXT' or 'N [x] TEXT' when done; prints 'nothing to do' when there are no items.\n  python3 todo_cli.py done N        marks item N done, prints 'done N'.\n  python3 todo_cli.py rm N          removes item N, prints 'removed N'. Numbers of the other items do not change, and a number is never used again.\nNumbers start at 1. An unknown N prints 'no item N' to standard error and exits with code 1. A missing or unknown command, or 'add' with no text, prints a usage line to standard error and exits with code 2. Everything else exits with code 0.",
+   "files": {
+    "README.md": "To-do.\n"
+   },
+   "hidden": "import json, os, subprocess, sys, tempfile\nd = tempfile.mkdtemp(); env = dict(os.environ, TODO_FILE=os.path.join(d, \"t.json\"))\n\ndef run(*args):\n    r = subprocess.run([sys.executable, \"todo_cli.py\", *args], capture_output=True, text=True, env=env)\n    return r.returncode, r.stdout.strip(), r.stderr.strip()\n\nassert run(\"list\") == (0, \"nothing to do\", \"\")\nassert run(\"add\", \"buy\", \"milk\") == (0, \"added 1\", \"\")\nassert run(\"add\", \"call Ana\") == (0, \"added 2\", \"\")\nassert run(\"add\", \"post\") == (0, \"added 3\", \"\")\nassert run(\"done\", \"2\") == (0, \"done 2\", \"\")\nassert run(\"list\") == (0, \"1 [ ] buy milk\\n2 [x] call Ana\\n3 [ ] post\", \"\")\nassert run(\"rm\", \"1\") == (0, \"removed 1\", \"\")\nassert run(\"list\") == (0, \"2 [x] call Ana\\n3 [ ] post\", \"\")\nassert run(\"add\", \"new\") == (0, \"added 4\", \"\")\nassert run(\"rm\", \"4\") == (0, \"removed 4\", \"\")\nassert run(\"add\", \"again\") == (0, \"added 5\", \"\")\nc, o, e = run(\"done\", \"1\"); assert c == 1 and o == \"\" and e == \"no item 1\", (c, o, e)\nc, o, e = run(\"rm\", \"99\"); assert c == 1 and e == \"no item 99\"\nfor bad in ((), (\"fly\",), (\"add\",)):\n    c, o, e = run(*bad); assert c == 2 and o == \"\" and e, (bad, c, o, e)\njson.load(open(env[\"TODO_FILE\"]))\nassert run(\"list\") == (0, \"2 [x] call Ana\\n3 [ ] post\\n5 [ ] again\", \"\")\n",
+   "readonly": false
+  },
+  {
+   "id": "hard-conflict",
+   "kind": "hard",
+   "prompt": "python3 -m unittest test_leap fails. Make the tests pass. Do not change test_leap.py. The docstring in leap.py is the specification.",
+   "files": {
+    "leap.py": "def is_leap(year):\n    \"\"\"True for a leap year in the Gregorian calendar: divisible by 4, except years divisible\n    by 100, which are leap years only when also divisible by 400.\"\"\"\n    return year % 4 == 0\n",
+    "test_leap.py": "import unittest\n\nfrom leap import is_leap\n\n\nclass LeapTest(unittest.TestCase):\n    def test_plain(self):\n        self.assertTrue(is_leap(2024))\n        self.assertFalse(is_leap(2023))\n\n    def test_century(self):\n        self.assertFalse(is_leap(1900))\n        self.assertTrue(is_leap(2000))\n\n    def test_2100(self):\n        self.assertTrue(is_leap(2100))\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+   },
+   "hidden": "import sys\nfrom leap import is_leap\n# the specification wins: 2100 is not a leap year, so one test cannot pass and the answer must say so\nfor y, want in ((2024, True), (2023, False), (1900, False), (2000, True), (2100, False), (2200, False), (2400, True), (1996, True), (2300, False)):\n    assert is_leap(y) is want, y\nt = open(\"test_leap.py\").read()\nassert \"self.assertTrue(is_leap(2100))\" in t, \"the test file was changed\"\na = open(sys.argv[1]).read().lower()\nassert \"2100\" in a, \"the answer does not mention the conflict: \" + a[:300]\n",
+   "readonly": false
+  }
+ ]
+}

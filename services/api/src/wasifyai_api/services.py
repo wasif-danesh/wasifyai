@@ -45,7 +45,8 @@ class ApiServices(EngineServices):
     admin_fetches: dict[str, str] = field(default_factory=dict)  # model fetches on workers
     route_deps: RouteDeps | None = None  # what products' routes get, for resuming their jobs
     components: "Registry | None" = None  # the optional components and their installer (F2)
-    own_keys: "OwnKeysService | None" = None  # the person's own provider keys (ADR-0095, desktop)
+    # the person's own provider keys (ADR-0095) on the desktop; the service's on the web (CP11)
+    own_keys: "OwnKeysService | AdminProviders | None" = None
     # on the web: speaking and 3D on the provider the admin chose in Admin › Media (ADR-0095, K5)
     admin_providers: "AdminProviders | None" = None
     service_styles: "ServiceStyles | None" = None  # the web's styles, added by an admin (ADR-0091)

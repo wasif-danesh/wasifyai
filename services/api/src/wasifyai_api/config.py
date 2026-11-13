@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     comfyui_base_url: str = "http://host.containers.internal:8188"
     comfyui_video_base_url: str = ""  # the ComfyUI video runs on (ADR-0037); empty: the one above
     ollama_base_url: str = "http://host.containers.internal:11434"
+    # the web's embedder (ADR-0100, decision 4): bge-m3 on llama.cpp's server, as LiteLLM
+    # reaches it; seeded into the `creation-embedder` alias (compose names the service `embedder`)
+    embedder_base_url: str = "http://embedder:8080"
     log_level: str = "INFO"
     # Traces (stage O1): OTLP to Tempo when OTEL_EXPORTER_OTLP_ENDPOINT is set (the OTel SDK reads
     # its own OTEL_* variables); JSON lines in this file when set. The desktop writes
@@ -64,10 +67,12 @@ class Settings(BaseSettings):
 
     # Search over My creations (ADR-0041). The embedder is the `creation-embedder` alias; the index
     # records which model made each row, and a row made by another model is re-embedded.
-    search_min_similarity: float = 0.57  # the floor under which a meaning match is not shown
+    # the floor under which a meaning match is not shown: 0.57 suited bge-m3 on Ollama (ADR-0041);
+    # the web's bge-m3 is the 8-bit file on llama.cpp, so the evaluation is run again on it (CP13)
+    search_min_similarity: float = 0.57
     # What made each index row: the embedder and the text format. Change it when an admin changes
     # the alias's model or when `search_text` changes: the background indexer re-embeds everything.
-    search_index_model: str = "bge-m3/v2"
+    search_index_model: str = "bge-m3-q8/v2"  # ADR-0100, decision 4
     search_reconcile_every_s: int = 300
     search_reconcile_batch: int = 200  # items embedded per check: about 3 seconds of work
 

@@ -50,6 +50,25 @@ Video items it cannot do, and `GET /desktop/models` gives each entry `can`; a pi
 not shown. Wan runs on its fp16 files (57 GB): torch has no float8 on Apple's graphics chip, so the fp8 ones do not
 load. Its picture to video workflow (`wan2.2-14b-i2v`) is written but waits for its own fp16 files.
 
+### Cloud models (ADR-0100, stage CP5)
+
+With a Runware, WaveSpeed or fal.ai key (Settings › Your keys, for Video or for Every media product), the picker's
+Cloud tab offers Gemini Omni Flash 1.2, Seedance 2.5, MiniMax H3 Max, MiniMax H3 Max Turbo and Grok Imagine Video 1.5
+lite, each once, "from" its lowest price per second with the keys there are. Every offer makes and animates a clip
+(720p, 768p for H3, no sound; the length nearest the one asked that the model takes). Extend runs on Gemini Omni with a
+Runware key, Seedance with a Runware or WaveSpeed key, and H3 with a fal.ai key; Grok does not extend. The Cloud tab's
+`can` says what a model can do with the keys there are, and the Video screen blocks a mode it cannot do before Make. A
+provider that refuses before running (an upload refused counts) hands the job to the next offer; the requests are in
+`services/media-worker/.../cloud_recipes.py`. The clip to extend goes to fal.ai's and WaveSpeed's file stores, and to
+Runware with its `mediaStorage` task.
+
+A cloud Extend is sent what this computer's model would be sent (the whole clip, or its last second when it is long) and
+answers that clip with the new part after it (the worker's `extended` output). The video product keeps its own clip up to
+what it sent, brings the new clip to the source's size and 24 frames a second, and joins them (`join_clips` with a
+`size`). Not yet known, for CP13: whether each provider takes a one second clip to extend, and whether Runware's and
+WaveSpeed's Seedance answer the whole clip or only the new part (the join assumes the whole). The clip's row keeps the
+frames asked for; a provider's own length can differ by a little. Checked against fakes only.
+
 ## Video Builder (ADR-0077, stages V1a to V1c and MG1; experimental)
 
 Videos written as an HTML page and drawn frame by frame on this computer, in a locked box. It is always in the

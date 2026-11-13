@@ -1,13 +1,12 @@
 """Which models this service uses, for everyone who is signed in (ADR-0086 on the web).
 
-An admin chooses what serves chat, images and video (`/admin/models`, `/admin/media`); a person only
-needs to see what that is, so the "Select ... model" button on the web screens can name it. Nothing
-here changes anything, and no key, address or setting is returned: only a title, a plain line and
-whether it is set up.
+An admin chooses what serves chat (`/admin/models`) and the cloud model of images, video and 3D
+(`/admin/media`, ADR-0100 CP11); a person only needs to see what that is, so the "Select ... model"
+button on the web screens can name it. Nothing here changes anything, and no key, address or
+setting is returned: only a title, a plain line and whether it is set up.
 """
 
 import logging
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
@@ -20,19 +19,13 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/models", tags=["models"])
 
 CHAT_ALIAS = "default-chat"
-MEDIA_PRODUCTS = {
-    "images": "wasifyai-image", "video": "wasifyai-video", "three_d": "wasifyai-model3d",
-}  # fmt: skip
-# fal.ai's models by the names people know (ADR-0095, K5); another model is shown as it is named
-FAL_NAMES = {
-    "fal-ai/flux-2": "FLUX.2", "fal-ai/flux-2/edit": "FLUX.2",
-    "fal-ai/ltx-2/text-to-video/fast": "LTX-2", "fal-ai/ltx-2/image-to-video/fast": "LTX-2",
-    "fal-ai/pixal3d": "Pixal3D", "fal-ai/kokoro": "Kokoro",
-}  # fmt: skip
+# the picker's groups that run on the service's cloud models (ADR-0099; ADR-0100, CP11), by the
+# product of the keys service
+MEDIA_PRODUCTS = {"images": "images", "video": "video", "three_d": "model3d"}
 SENT = {
-    "images": "What you describe and the pictures you add are sent to fal.ai.",
-    "video": "What you describe and the pictures you add are sent to fal.ai.",
-    "three_d": "The picture you add is sent to fal.ai.",
+    "images": "What you describe and the pictures you add are sent to the provider that runs it.",
+    "video": "What you describe and the pictures you add are sent to the provider that runs it.",
+    "three_d": "The picture you add is sent to the provider that runs it.",
 }
 
 
@@ -47,7 +40,7 @@ class InUse(BaseModel):
     chat: list[InUseModel] = []
     images: list[InUseModel] = []
     video: list[InUseModel] = []
-    three_d: list[InUseModel] = []  # only when an admin put 3D on a provider (fal.ai)
+    three_d: list[InUseModel] = []
 
 
 def _name(model: str | None) -> str:
@@ -83,80 +76,31 @@ async def _chat(request: Request) -> list[InUseModel]:
     ]
 
 
-def _titles(request: Request, product_id: str) -> list[str]:
-    from wasifyai_api.desktop_models import load_catalogue
-
-    pdir = services_of(request).products_dir
-    if pdir is None:
-        return []
-    try:
-        return [e.title for e in load_catalogue(Path(pdir), [product_id])]
-    except Exception:
-        log.warning("could not read the models of %s", product_id, exc_info=True)
-        return []
-
-
 async def _media(request: Request, who: Identity, group: str) -> list[InUseModel]:
-    media = services_of(request).media
-    if media is None:
+    """The cloud model the service runs the group on: the one the admin chose, else the first a
+    key can run; with no key, the button says an admin has to add one."""
+    providers = services_of(request).admin_providers
+    if providers is None:
         return []
-    product_id = MEDIA_PRODUCTS[group]
     try:
-        listing = await media.list(who.tenant_id)
+        route = await providers.for_tenant(who.tenant_id).route(MEDIA_PRODUCTS[group])
     except Exception:
-        log.warning("could not read the media setup for the picker", exc_info=True)
+        log.warning("could not read the cloud model for the picker", exc_info=True)
         return []
-    items = [i for i in listing.items if i.product_id == product_id]
-    if not items:
-        return []
-    labels = {b.id: b.label for b in listing.backends}
-    main = next((i for i in items if i.capability.endswith(".generate")), items[0])
-    if main.backend == "fal":
-        model = main.config.get("model", "")
+    if route is None:
         return [
             InUseModel(
-                id=f"{product_id}:fal",
-                title=f"{FAL_NAMES.get(model, model or 'fal.ai')} · fal.ai",
-                plain=f"Chosen by your admin. {SENT[group]}",
-                ready=main.key_set,
+                id=f"{group}:none", title="No cloud model yet",
+                plain="An admin adds a Runware, WaveSpeed or fal.ai key in Admin › Media.",
+                ready=False,
             )
-        ]
-    if group == "three_d":  # the engine workers: the 3D screen reads them itself
-        return []
-    # the product's own workflow runs the catalogue's model; another backend is named by its service
-    if all(i.source == "default" for i in items):
-        # the model the product's jobs use: the one an admin chose, else its first (ADR-0097, MV6)
-        choice = next((c for c in await media.model_choices() if c.product_id == product_id), None)
-        if choice is not None:
-            model = next(m for m in choice.models if m.id == choice.chosen)
-            return [
-                InUseModel(
-                    id=f"{product_id}:{model.id}",
-                    title=model.title,
-                    plain="Chosen by your admin.",
-                    ready=True,
-                )
-            ]
-        known = _titles(request, product_id)
-        if known:
-            return [
-                InUseModel(
-                    id=f"{product_id}:{n}",
-                    title=title,
-                    plain="Set up on this service by an admin.",
-                    ready=True,
-                )
-                for n, title in enumerate(known)
-            ]
-    first = items[0]
+        ]  # fmt: skip
     return [
         InUseModel(
-            id=f"{product_id}:{first.backend}",
-            title=labels.get(first.backend, first.backend),
-            plain="The service an admin chose for this.",
-            ready=True,
+            id=f"{group}:{route.model}", title=route.title or route.model,
+            plain=f"Chosen by your admin. {SENT[group]}", ready=True,
         )
-    ]
+    ]  # fmt: skip
 
 
 @router.get("/in-use", response_model=InUse)

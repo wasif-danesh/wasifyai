@@ -5,10 +5,10 @@ set -euo pipefail
 cd "$ROOT"
 
 CLUSTER=wasifyai; NS=wasifyai; TAG=dev; REG=localhost/wasifyai
-# KIND_MODE=full (the default): every service runs as a pod, nothing native: Ollama with its models, the CPU
-#   and ComfyUI. Needs a Podman VM of about 24 GB and a few tens of GB of
-#   model downloads on first start; no GPU, so the GPU media models are placeholders (stub mode).
-# KIND_MODE=light: the small cluster CI uses: Ollama is native or absent.
+# The web runs only cloud models (ADR-0099; ADR-0100, CP11): no model runs in the cluster. Without keys the media
+# worker makes placeholder files (stub mode, values/local.yaml).
+# KIND_MODE=full (the default): the kind product overlay and monitoring.
+# KIND_MODE=light: the small cluster CI uses.
 MODE="${KIND_MODE:-full}"
 [ "$CONTAINER_ENGINE" = "podman" ] && export KIND_EXPERIMENTAL_PROVIDER=podman
 
@@ -33,7 +33,6 @@ step "Building images"
 IMAGES=("api:services/api" "media-worker:services/media-worker" "web:apps/web")
 # the notebooks worker holds the document reader: the large image, and its name is the product's
 IMAGES+=("wasifyai-notebooks:products/wasifyai-notebooks")
-[ "$MODE" = "full" ] && IMAGES+=("comfyui:services/comfyui")
 for pair in "${IMAGES[@]}"; do
   name="${pair%%:*}"; dir="${pair##*:}"
   "$CONTAINER_ENGINE" build -q -f "$dir/Containerfile" -t "$REG/$name:$TAG" . >/dev/null
@@ -64,35 +63,18 @@ done
 step "Secrets"
 scripts/k8s-secrets.sh "$NS"
 
-OLLAMA_EXTERNAL_URL="${OLLAMA_EXTERNAL_URL:-}"
-if [ "$MODE" = "light" ]; then
-  # Where can pods reach the Ollama running natively on this machine?
-  OLLAMA_EXTERNAL_URL="${OLLAMA_EXTERNAL_URL:-}"
-  if [ -z "$OLLAMA_EXTERNAL_URL" ]; then
-    node="$CLUSTER-control-plane"
-    host="host.containers.internal"; [ "$CONTAINER_ENGINE" = "docker" ] && host="host.docker.internal"
-    ip="$("$CONTAINER_ENGINE" exec "$node" getent hosts "$host" 2>/dev/null | awk '{print $1; exit}')"
-    [ -n "$ip" ] && OLLAMA_EXTERNAL_URL="http://$ip:11434" || OLLAMA_EXTERNAL_URL="http://127.0.0.1:11434"
-  fi
-  ok "Ollama URL for pods: $OLLAMA_EXTERNAL_URL"
-fi
-
 extra=()
 
 step "Installing the chart"
 if [ "$MODE" = "full" ]; then
-  # nothing native: every service is a pod
   helm upgrade --install wasifyai deploy/helm/wasifyai -n "$NS" \
     -f deploy/helm/wasifyai/values/local.yaml \
-    --set ollama.enabled=true --set ollama.externalUrl= \
-    --set comfyui.enabled=true --set "comfyui.image=$REG/comfyui:$TAG" \
     --set env.PRODUCT_ENV=kind \
     ${extra[@]+"${extra[@]}"} \
-    --wait --timeout 90m
+    --wait --timeout 20m
 else
   helm upgrade --install wasifyai deploy/helm/wasifyai -n "$NS" \
     -f deploy/helm/wasifyai/values/local.yaml \
-    --set "ollama.externalUrl=$OLLAMA_EXTERNAL_URL" \
     ${extra[@]+"${extra[@]}"} \
     --wait --timeout 10m
 fi
@@ -100,11 +82,6 @@ fi
 if [ "$MODE" = "full" ] && [ "${KIND_MONITORING:-1}" = "1" ]; then
   # needs the telegram and heartbeat values in .env; without them the cluster is still usable
   scripts/monitoring-up.sh || warn "monitoring was not installed (see above); run make monitoring-up when ready"
-fi
-
-if [ "$MODE" = "full" ]; then
-  step "Waiting for the model downloads (Ollama: a first start takes a while)"
-  kubectl -n "$NS" wait --for=condition=complete job --all --timeout=90m
 fi
 
 printf '\n%sReady.%s Open %shttp://localhost:3000%s. Check with: make kind-test. Remove with: make kind-down\n' \

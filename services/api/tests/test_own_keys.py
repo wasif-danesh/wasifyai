@@ -70,7 +70,8 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     c, _, _ = rig()
     body = c.get("/desktop/keys").json()
     assert list(rows(body)) == [
-        "chat", "images", "video", "voice", "music", "sfx", "lipsync", "model3d",
+        "chat", "media", "images", "video", "voice", "voiceclone", "transcribe", "voicechange",
+        "music", "sfx", "split", "musicedit", "lipsync", "model3d", "train",
     ]  # fmt: skip
     assert all(p["keys"] == [] and p["use"] is None for p in body["products"])
     by = rows(body)
@@ -78,10 +79,14 @@ def test_every_product_starts_with_no_keys_and_offers_its_providers():
     assert by["chat"]["providers"] == [
         "anthropic", "openai", "gemini", "deepseek", "zai", "openrouter",
     ]  # fmt: skip
-    for media in ("images", "music"):
-        assert by[media]["providers"] == ["fal", "wavespeed", "runware"], media
-    for media in ("video", "voice", "sfx", "lipsync", "model3d"):
-        assert by[media]["providers"] == ["fal"], media
+    # one media key serves every media product (decision 9); the tie order throughout
+    assert by["media"]["providers"] == ["runware", "wavespeed", "fal"]
+    for media in ("images", "video", "voice", "voiceclone", "music", "lipsync", "model3d"):
+        assert by[media]["providers"] == ["runware", "wavespeed", "fal"], media
+    for media in ("transcribe", "voicechange", "sfx", "split"):
+        assert by[media]["providers"] == ["wavespeed", "fal"], media
+    assert by["musicedit"]["providers"] == ["runware", "fal"]
+    assert by["train"]["providers"] == ["runware", "fal"]
     assert [p["id"] for p in body["providers"]] == [
         "anthropic", "openai", "gemini", "deepseek", "zai", "openrouter",
         "runware", "wavespeed", "fal",
@@ -140,7 +145,7 @@ def test_test_saves_nothing_and_uses_the_saved_key_when_none_is_given():
 @pytest.mark.parametrize(
     ("product", "provider", "body", "words"),
     [
-        ("video", "wavespeed", {"key": GOOD}, "no video models"),
+        ("sfx", "runware", {"key": GOOD}, "no sound effects models"),
         ("images", "openai", {"key": GOOD}, "no images models"),
         ("images", "openrouter", {"key": GOOD}, "no images models"),  # no media on OpenRouter
         ("chat", "fal", {"key": GOOD}, "no chat and writing models"),  # no text through fal.ai
@@ -161,9 +166,9 @@ def test_the_cloud_tab_lists_every_model_of_each_provider_with_a_key():
     assert empty == {"product": "lipsync", "models": [], "has_keys": False}
     c.put("/desktop/keys/lipsync/keys/fal", json={"key": GOOD})
     cloud = c.get("/desktop/keys/lipsync/cloud").json()
-    assert [(m["provider"], m["title"]) for m in cloud["models"]] == [
-        ("fal", "Fabric 1.0 Fast"), ("fal", "Kling Avatar v2"), ("fal", "OmniHuman 1.5"),
-        ("fal", "InfiniteTalk"),
+    assert [(m["providers"], m["title"]) for m in cloud["models"]] == [
+        (["fal"], "Fabric 1.0 Fast"), (["fal"], "Kling Avatar v2"), (["fal"], "OmniHuman 1.5"),
+        (["fal"], "InfiniteTalk"),
     ]  # fmt: skip
     first = cloud["models"][0]
     assert first["price"] == "$0.10 per second at 480p, $0.20 at 720p"
@@ -175,20 +180,15 @@ def test_choosing_a_cloud_model_routes_the_product_and_clearing_it_keeps_the_key
     c, secrets, _ = rig()
     svc = c.app.state.services.own_keys  # type: ignore[attr-defined]
     c.put("/desktop/keys/music/keys/fal", json={"key": GOOD})
-    chosen = c.put(
-        "/desktop/keys/music/use",
-        json={"provider": "fal", "model": "fal-ai/minimax-music/v2.6"},
-    )
+    # a media model is chosen, not a provider: the job runs on its cheapest keyed offer
+    chosen = c.put("/desktop/keys/music/use", json={"model": "minimax-music-2.6"})
     assert chosen.status_code == 200, chosen.text
-    assert [m["model"] for m in chosen.json()["models"] if m["chosen"]] == [
-        "fal-ai/minimax-music/v2.6"
-    ]
+    assert [m["model"] for m in chosen.json()["models"] if m["chosen"]] == ["minimax-music-2.6"]
     route = svc.known("music")
-    assert (route.provider.id, route.model, route.key) == (
-        "fal",
-        "fal-ai/minimax-music/v2.6",
-        GOOD,
-    )
+    assert (route.provider.id, route.model, route.key) == ("fal", "minimax-music-2.6", GOOD)
+    assert [(c.provider.id, c.offer.endpoint) for c in route.choices] == [
+        ("fal", "fal-ai/minimax-music/v2.6")
+    ]
     assert route.base_url == own_keys.PROVIDERS["fal"].media_url
     use = rows(c.get("/desktop/keys").json())["music"]["use"]
     assert use["title"] == "MiniMax Music 2.6" and use["price"] == "$0.15 per song"
@@ -200,10 +200,10 @@ def test_choosing_a_cloud_model_routes_the_product_and_clearing_it_keeps_the_key
 @pytest.mark.parametrize(
     ("body", "status", "words"),
     [
-        ({"provider": "fal", "model": "fal-ai/minimax-music/v2.6"}, 409, "Save a fal.ai key"),
-        ({"provider": "openrouter", "model": "anthropic/claude-haiku-5.5"}, 422, "no music models"),
-        ({"provider": "wavespeed", "model": "minimax/music-2.6"}, 409, "Save a WaveSpeed key"),
-        ({"provider": "anthropic", "model": "claude-haiku-5-5"}, 422, "no music models"),
+        ({"model": "minimax-music-2.6"}, 409, "needs a Runware or WaveSpeed or fal.ai key"),
+        ({"provider": "openrouter", "model": "anthropic/claude-haiku-5.5"}, 422, "no music model"),
+        ({"provider": "fal", "model": "elevenlabs-music"}, 409, "needs a WaveSpeed or fal.ai key"),
+        ({"provider": "anthropic", "model": "claude-haiku-5-5"}, 422, "no music model"),
     ],
 )
 def test_a_cloud_model_needs_its_key_and_must_be_in_the_list(body, status, words):
@@ -227,7 +227,7 @@ def test_removing_a_key_forgets_it_and_a_model_that_used_it():
     svc = c.app.state.services.own_keys  # type: ignore[attr-defined]
     c.put("/desktop/keys/music/keys/fal", json={"key": GOOD})
     c.put("/desktop/keys/sfx/keys/fal", json={"key": GOOD})
-    c.put("/desktop/keys/music/use", json={"provider": "fal", "model": "fal-ai/elevenlabs/music"})
+    c.put("/desktop/keys/music/use", json={"provider": "fal", "model": "elevenlabs-music"})
     music = rows(c.delete("/desktop/keys/music/keys/fal").json())["music"]
     assert music["keys"] == [] and music["use"] is None
     assert svc.known("music") is None and secrets.values == {"keys.sfx.fal": GOOD}
@@ -246,7 +246,8 @@ async def test_a_row_saved_before_keys_per_provider_is_read_as_one_key_and_its_u
     svc = OwnKeysService(store, secrets, {"text": FakeProviders(), "media": FakeProviders()})
     route = await svc.route("music")
     assert route is not None
-    assert (route.provider.id, route.model) == ("fal", "fal-ai/elevenlabs/music")
+    # the old choice (a provider and its endpoint) is read as the model (stage CP3)
+    assert (route.provider.id, route.model) == ("fal", "elevenlabs-music")
     assert await svc.route("images") is None  # it ran on this computer; the key stays
     assert secrets.values == {"keys.music.fal": GOOD, "keys.images.fal": GOOD}
     saved = await store.get(SETTINGS)
@@ -280,7 +281,7 @@ async def test_keys_of_providers_no_longer_offered_are_deleted_on_first_start():
         "keys.music.wavespeed",
         "keys.images.runware",
         "keys.video.runware",
-        "keys.sfx.wavespeed",
+        "keys.sfx.runware",
     ):  # the last one has no row
         await secrets.put(name, GOOD)
     svc = OwnKeysService(store, secrets, {"text": FakeProviders(), "media": FakeProviders()})
@@ -293,13 +294,14 @@ async def test_keys_of_providers_no_longer_offered_are_deleted_on_first_start():
         "keys.music.fal": GOOD,
         "keys.music.wavespeed": GOOD,
         "keys.images.runware": GOOD,
+        "keys.video.runware": GOOD,
     }
     saved = await store.get(SETTINGS)
     assert isinstance(saved, dict)
     assert list(saved["chat"]["keys"]) == ["openai", "openrouter"] and "use" not in saved["chat"]
     assert list(saved["music"]["keys"]) == ["fal", "wavespeed"]
     assert list(saved["images"]["keys"]) == ["runware"]
-    assert saved["video"]["keys"] == {}  # Runware has no video model in the catalogue yet
+    assert list(saved["video"]["keys"]) == ["runware"]  # Runware has video models (CP5)
 
 
 # ---- the real testers, against fake providers ---------------------------------------------------

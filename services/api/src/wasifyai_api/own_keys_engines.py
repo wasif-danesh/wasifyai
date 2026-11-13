@@ -10,13 +10,17 @@ fal.ai; the cut-out with fal.ai's BiRefNet, so the 3D component need not be set 
 
 Both read `known`, which is kept up to date on every change, because the products ask them
 synchronously (`ready()`, `models()`, `resolve()`). On the desktop that is `OwnKeysService` (the
-person's key); on the web `AdminProviders` (the admin's fal.ai rows in Admin › Media, stage K5)."""
+person's key); on the web `AdminProviders` (the admin's fal.ai rows in Admin › Media, stage K5).
+
+Each job is priced on every offer of the route that can do it and runs on the cheapest; a provider
+that refuses before running hands it to the next (`on_cheapest`, ADR-0100 stage CP3). What it cost
+is written as a `cloud.cost` usage event."""
 
 import asyncio
 import io
 import math
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -24,35 +28,74 @@ from typing import Any, Protocol
 import httpx
 from PIL import Image, ImageOps
 from wasifyai_platform_sdk import (
+    ConvertRequest,
     LipSyncRequest,
     LipSyncResult,
+    MusicEditRequest,
     MusicRequest,
     MusicResult,
+    SeparateRequest,
+    SeparateResult,
     SpeechResult,
+    Stem,
+    TranscriptResult,
     VoiceEngineError,
 )
-from wasifyai_platform_sdk.cloud_queues import queue_for
-from wasifyai_platform_sdk.fal import FalError, FalQueue
-from wasifyai_platform_sdk.voice_models import OptionSpec, VoiceInfo, VoiceModel
+from wasifyai_platform_sdk.cloud_queues import fetch_file, queue_for
+from wasifyai_platform_sdk.fal import FalError, FalQueue, data_uri
+from wasifyai_platform_sdk.offers import Priced, cost_event, no_offer, order, run_cheapest
+from wasifyai_platform_sdk.usage import UsageRecorder, record_safely
+from wasifyai_platform_sdk.voice_models import VoiceModel
 
 from wasifyai_api.audio_runtime import _wav_rate, _wav_seconds
 from wasifyai_api.comfy_music import to_wav
 from wasifyai_api.desktop_model3d import ATLAS, RunResult
 from wasifyai_api.lipsync_runtime import _video_size
-from wasifyai_api.own_keys import KeyRoute
+from wasifyai_api.logging import product_id as current_product
+from wasifyai_api.logging import tenant_id as current_tenant
+from wasifyai_api.own_keys import KeyChoice, KeyRoute, offer_of
+from wasifyai_api.own_keys_music import (
+    KEYED_MUSIC,
+    KEYED_MUSICEDIT,
+    KEYED_SFX,
+    KEYED_SPLIT,
+    MUSIC_PRODUCTS,
+    SPLIT_MODELS,
+    edit_body,
+    edit_job,
+    model_name,
+    music_body,
+    music_job,
+    music_model,
+    music_verb,
+    split_body,
+    stems_of,
+)
+from wasifyai_api.own_keys_voice import (
+    KEYED_CHANGE,
+    KEYED_CLONE,
+    KEYED_TRANSCRIBE,
+    KEYED_VOICE,
+    VOICE_PRODUCTS,
+    change_model,
+    clone_model,
+    clone_request,
+    convert_request,
+    design_request,
+    made_voice,
+    new_voice_id,
+    speak_request,
+    speaker_model,
+    transcribe_model,
+    transcribe_request,
+    transcript_of,
+    voice_key,
+)
 
-# the voice model's id while Voice runs on the key: the one model offered for speaking
-KEYED_VOICE = "key:voice"
-# the voices fal.ai's Kokoro offers (its page lists the American ones only)
-FAL_VOICES = (
-    "af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica", "af_kore", "af_nicole",
-    "af_nova", "af_river", "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir",
-    "am_liam", "am_michael", "am_onyx", "am_puck", "am_santa",
-)  # fmt: skip
 FAL_MATTE = "fal-ai/birefnet"  # the cut-out of a picture, on the same key as the 3D model
 FAL_3D_RESOLUTION = 1024  # what this computer's run uses too (`--res 1024`)
-WITH_KEY = "Runs on fal.ai with your key: the picture is sent there."
-BY_ADMIN = "Runs on fal.ai, chosen by your admin: the picture is sent there."
+WITH_KEY = "Runs on a cloud model with your key: the picture is sent there."
+BY_ADMIN = "Runs on a cloud model, chosen by your admin: the picture is sent there."
 
 
 class Routes(Protocol):
@@ -68,11 +111,47 @@ async def _no_progress(_p: float) -> None:
 
 
 def _fal(keys: Routes, product: str) -> KeyRoute | None:
+    """The route of a product whose model has a fal.ai offer with a key (speaking and 3D)."""
     route = keys.known(product)
-    return route if route is not None and route.provider.id == "fal" else None
+    if route is None or not any(c.provider.id == "fal" for c in route.offers()):
+        return None
+    return route
+
+
+async def on_cheapest[T](
+    route: KeyRoute,
+    product: str,
+    job: dict[str, Any],
+    attempt: Callable[[KeyChoice], Awaitable[T]],
+    usage: UsageRecorder | None = None,
+    needs: tuple[str, ...] = (),
+    only: str | None = None,
+) -> tuple[T, Priced[KeyChoice]]:
+    """Run a job on the cheapest offer of `route` that can do it, the next on a refusal before
+    running, and write what it cost. `attempt(choice)` sends the job to that offer."""
+    ordered = order(route.offers(), offer_of, job, needs, only)
+    if not ordered:
+        raise no_offer(route.title or route.model, [c.offer for c in route.offers()], needs, only)
+
+    async def one(p: Priced[KeyChoice]) -> T:
+        return await attempt(p.choice)
+
+    made, used = await run_cheapest(ordered, one)
+    if usage is not None and used.cost > 0:
+        tenant = current_tenant.get()
+        pid = current_product.get()
+        await record_safely(
+            usage,
+            cost_event(
+                used, route.model, "default" if tenant in ("", "-") else tenant,
+                pid if pid not in ("", "-") else f"keys:{product}",
+            ),
+        )  # fmt: skip
+    return made, used
 
 
 MEDIA_PROVIDERS = ("fal", "wavespeed", "runware")
+TOOL_PRODUCTS = ("voiceclone", "transcribe", "voicechange")  # the voice tools (CP7)
 
 
 def _cloud(keys: Routes, product: str) -> KeyRoute | None:
@@ -83,43 +162,31 @@ def _cloud(keys: Routes, product: str) -> KeyRoute | None:
 
 
 def keyed_voice_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
-    title = f"{route.model} · {route.provider.title}" if admin else f"{route.model} · with your key"
-    return VoiceModel(
-        id=KEYED_VOICE, title=title, engine="remote",
-        family="kokoro_tts", package="", server_task="tts", tasks=("speak",),
-        recommended=("speak",), languages=("en-us",), sample_rate=24000,
-        voices=tuple(
-            VoiceInfo(v, v[3:].capitalize(), "en-us", "female" if v[1] == "f" else "male")
-            for v in FAL_VOICES
-        ),
-        default_voice="af_heart",
-        options=(OptionSpec("speed", "float", "Speed", "How fast it speaks.", 1.0, 0.5, 2.0),),
-    )  # fmt: skip
+    """The speaking model offered while Voice runs on a cloud model: its named voices."""
+    name = route.title or route.model
+    title = f"{name} · {route.provider.title}" if admin else f"{name} · with your key"
+    return speaker_model(_model_id("voice", route), title, route.provider.id)
+
+
+def keyed_tool_model(product: str, route: KeyRoute, admin: bool = False) -> VoiceModel:
+    """The model offered for copying or designing a voice, writing down speech or changing a voice
+    while that product runs on a cloud model; a copy model offers what its keyed offers can do."""
+    name = route.title or route.model
+    title = f"{name} · {route.provider.title}" if admin else f"{name} · with your key"
+    if product == "voiceclone":
+        can = {v for c in route.offers() for v in c.offer.can}
+        tasks = tuple(t for t in ("clone", "design") if t in can)
+        if not tasks:
+            raise VoiceEngineError("not_with_key", f"{name} can do nothing with these keys.")
+        return clone_model(tasks, title, route.provider.id, _model_id(product, route))
+    if product == "transcribe":
+        return transcribe_model(title, route.provider.id)
+    return change_model(title, route.provider.id)
 
 
 # ---- music, sound effects and lip sync on the key ------------------------------------------------
 
-KEYED_MUSIC = "key:music"
-KEYED_SFX = "key:sfx"
 KEYED_LIPSYNC = "key:lipsync"
-# what each cloud model can do, in the shape the music screen and `check_music` read. MiniMax
-# chooses the length itself (it takes no duration), so its one length is only what is shown.
-MINIMAX_MODES = {
-    "song": {"lyrics": "optional", "instrumental": "toggle", "duration": [120, 120, 120]}
-}
-MINIMAX = ("fal-ai/minimax-music/v2.6", "minimax/music-2.6", "minimax:music@2.6")
-MUSIC_MODELS: dict[str, tuple[str, dict[str, Any]]] = {
-    **{m: ("MiniMax Music 2.6", MINIMAX_MODES) for m in MINIMAX},
-    "fal-ai/elevenlabs/music": (
-        "ElevenLabs Music",
-        {"song": {"lyrics": "unused", "instrumental": "toggle", "duration": [3, 30, 600]}},
-    ),
-    "fal-ai/elevenlabs/sound-effects/v2": (
-        "ElevenLabs Sound Effects",
-        {"sfx": {"duration": [0.5, 5, 22]}},
-    ),
-}  # fmt: skip
-MINIMAX_MIN_PROMPT = 10  # fal.ai's MiniMax refuses a shorter description
 
 
 @dataclass(frozen=True)
@@ -144,23 +211,23 @@ class CloudLipSync:
     frame_short: dict[int, int] = field(default_factory=dict)
 
 
-LIPSYNC_MODELS: dict[str, CloudLipSync] = {
+LIPSYNC_MODELS: dict[str, CloudLipSync] = {  # by the catalogue's id, as MUSIC_MODELS
     # Fabric's time: 4.8 s per video second for a 3 s clip in the race, 25 s for a 5.6 s clip from
     # the app; the slower one is shown so the screen does not promise too little
-    "veed/fabric-1.0/fast": CloudLipSync(
+    "fabric-1.0": CloudLipSync(
         "Fabric 1.0 Fast", 60.0, (480, 720), 480, {480: 0.10, 720: 0.20}, {480: 25.0},
         frame="square", frame_short={480: 640},
     ),
-    "fal-ai/kling-video/ai-avatar/v2/standard": CloudLipSync(
+    "kling-avatar-v2": CloudLipSync(
         "Kling Avatar v2", 60.0, (720,), 720, {720: 0.0562}, {720: 40.0}, sends_size=False,
         frame_short={720: 912},
     ),
     # 720p: fal.ai says it is quicker and better than 1080p, and takes up to 60 s of voice
-    "fal-ai/bytedance/omnihuman/v1.5": CloudLipSync(
+    "omnihuman-1.5": CloudLipSync(
         "OmniHuman 1.5", 60.0, (720,), 720, {720: 0.16}, {720: 43.0}, {"turbo_mode": True},
         frame="square", frame_short={720: 960},
     ),
-    "fal-ai/infinitalk": CloudLipSync(
+    "infinitalk": CloudLipSync(
         "InfiniteTalk", 28.0, (480, 720), 480, {480: 0.20, 720: 0.40}, {480: 52.0},
         {"acceleration": "high"}, frame_short={480: 576},
     ),
@@ -171,93 +238,85 @@ LIPSYNC_PROMPT = "A person talks naturally to the camera, with natural expressio
 CROP_CENTRE = (0.5, 0.4)  # as the lip sync engine on this computer crops (`lipsync_server`)
 
 
+def _model_id(product: str, route: KeyRoute) -> str:
+    """The catalogue's id of the route's model (an admin's row names fal.ai's endpoint)."""
+    from wasifyai_api.own_keys_catalogue import media_model
+
+    m = media_model(product, route.model)
+    return m.model if m else route.model
+
+
 def _title(name: str, route: KeyRoute, admin: bool) -> str:
     return f"{name} · {route.provider.title}" if admin else f"{name} · with your key"
 
 
 def keyed_music_model(product: str, route: KeyRoute, admin: bool = False) -> VoiceModel:
-    """The music (or sound effects) model offered while that product runs on the key."""
-    name, modes = MUSIC_MODELS.get(route.model, (route.model, {}))
-    if not modes:
+    """The music model offered while that product (songs, sound effects, splitting or editing)
+    runs on a cloud model (ADR-0100, CP8)."""
+    model_id = _model_id(product, route)
+    name = model_name(model_id, route.model)
+    try:
+        return music_model(product, model_id, _title(name, route, admin), route.provider.id)
+    except VoiceEngineError:
         raise VoiceEngineError(
             "not_with_key",
             f"{route.model} is not a music model this app can use on {route.provider.title}.",
-        )
-    return VoiceModel(
-        id=KEYED_SFX if product == "sfx" else KEYED_MUSIC, title=_title(name, route, admin),
-        engine="remote", family=route.provider.id, package="", server_task="music",
-        tasks=("music",), recommended=(), languages=("multi",), sample_rate=44100,
-        music={"modes": modes, "request": {"duration": "top", "lyrics_option": "lyrics"}},
-    )  # fmt: skip
+        ) from None
 
 
 def keyed_lipsync_model(route: KeyRoute, admin: bool = False) -> VoiceModel:
     """The lip sync model offered while Lip sync runs on the key: its sizes, 25 frames each second,
     and, for the screen, its price and measured time per video second at each size and the frame
     it makes (square, or the picture's shape) with its measured short side."""
-    m = LIPSYNC_MODELS.get(route.model)
+    m = LIPSYNC_MODELS.get(_model_id("lipsync", route))
     if m is None:
         raise VoiceEngineError(
             "not_with_key",
             f"{route.model} is not a lip sync model this app can use on {route.provider.title}.",
         )
+    price, where = dict(m.price), route.provider.title
+    for size in m.sizes:  # the cheapest offer with a key at each size (ADR-0100, CP6)
+        priced = order(route.offers(), offer_of, {"seconds": 1, "resolution": f"{size}p"})
+        if priced and priced[0].cost > 0:
+            price[size] = priced[0].cost
+            if size == m.default_size:
+                where = priced[0].choice.provider.title
     return VoiceModel(
         id=KEYED_LIPSYNC, title=_title(m.name, route, admin), engine="remote",
         family=route.provider.id,
         package="", server_task="lipsync", tasks=("lipsync",), recommended=("lipsync",),
         languages=("multi",), sample_rate=0,
         lipsync={"max_voice_s": m.longest, "sizes": list(m.sizes), "default_size": m.default_size,
-                 "fps": LIPSYNC_FPS, "where": route.provider.title,
-                 "price_per_s": {str(k): v for k, v in m.price.items()},
+                 "fps": LIPSYNC_FPS, "where": where,
+                 "price_per_s": {str(k): v for k, v in price.items()},
                  "work_per_s": {str(k): v for k, v in m.work.items()},
                  "frame": m.frame, "frame_short": {str(k): v for k, v in m.frame_short.items()}},
     )  # fmt: skip
 
 
-def music_body(endpoint: str, req: MusicRequest) -> dict[str, Any]:
-    """What the model is sent for a checked music request (fal.ai's fields, WaveSpeed's or a
-    Runware task)."""
-    if endpoint in MINIMAX and len(req.description) < MINIMAX_MIN_PROMPT:
-        raise VoiceEngineError(
-            "description_too_short", "Describe the music in at least ten letters for MiniMax."
-        )
-    if endpoint == "minimax:music@2.6":  # Runware: an `audioInference` task
-        settings: dict[str, Any] = {"instrumental": req.instrumental}
-        if req.lyrics:
-            settings["lyrics"] = req.lyrics
-        elif not req.instrumental:
-            settings["lyricsOptimizer"] = True
-        return {
-            "taskType": "audioInference", "positivePrompt": req.description,
-            "outputFormat": "WAV", "settings": settings,
-        }  # fmt: skip
-    if endpoint == "minimax/music-2.6":  # WaveSpeed: no lyrics writes them from the description
-        ws: dict[str, Any] = {"prompt": req.description, "is_instrumental": req.instrumental}
-        if req.lyrics:
-            ws["lyrics"] = req.lyrics
-        return ws
-    if endpoint == "fal-ai/minimax-music/v2.6":
-        body: dict[str, Any] = {"prompt": req.description, "is_instrumental": req.instrumental}
-        if req.lyrics:
-            body["lyrics"] = req.lyrics
-        elif not req.instrumental:
-            body["lyrics_optimizer"] = True  # MiniMax writes the words from the description
-        return body
-    if endpoint == "fal-ai/elevenlabs/music":
-        return {
-            "prompt": req.description, "music_length_ms": round(req.duration * 1000),
-            "force_instrumental": req.instrumental,
-        }  # fmt: skip
-    return {"text": req.description, "duration_seconds": req.duration}
-
-
-def lipsync_body(endpoint: str, image: str, audio: str, req: LipSyncRequest) -> dict[str, Any]:
+def lipsync_body(
+    model_id: str, endpoint: str, image: str, audio: str, req: LipSyncRequest,
+    provider: str = "fal",
+) -> dict[str, Any]:  # fmt: skip
     """What the model is sent: the picture already cut to the video's shape, the size as the
     provider names it, the model's own speed setting, and on fal.ai the length where the model asks
-    for it (InfiniteTalk, in frames); the others take the voice's own length."""
-    model = LIPSYNC_MODELS.get(endpoint)
+    for it (InfiniteTalk, in frames); the others take the voice's own length. On Runware it is a
+    `videoInference` task with the picture and the voice in `inputs`; on WaveSpeed the fields are
+    `image` and `audio` (ADR-0100, CP6, the fields read in `docs/spikes/cloud-v1-cp0.md`)."""
+    model = LIPSYNC_MODELS.get(model_id)
     short = min(req.width, req.height)
     size = "720p" if short >= 720 else "480p"
+    if provider == "runware":  # Kling and OmniHuman: the picture's own size, a prompt
+        return {
+            "taskType": "videoInference", "positivePrompt": LIPSYNC_PROMPT,
+            "inputs": {"image": image, "audio": audio}, "outputFormat": "MP4",
+            "includeCost": True,
+        }  # fmt: skip
+    if provider == "wavespeed":  # Fabric and InfiniteTalk: a size; InfiniteTalk a prompt
+        ws: dict[str, Any] = {"image": image, "audio": audio, "resolution": size}
+        if endpoint == "wavespeed-ai/infinitetalk":
+            ws["prompt"] = LIPSYNC_PROMPT
+        return ws
     body: dict[str, Any] = {"image_url": image, "audio_url": audio}
     if endpoint != "veed/fabric-1.0/fast":  # Fabric takes the picture, the voice and the size only
         body["prompt"] = LIPSYNC_PROMPT
@@ -296,8 +355,10 @@ class KeyedSpeechEngine:
         timeout_s: float = 300,
         poll_s: float = 1.0,
         admin: bool = False,
+        usage: UsageRecorder | None = None,
     ):
         self._admin = admin
+        self._usage = usage
         self._local = local
         self._keys = keys
         self._client = client
@@ -311,13 +372,15 @@ class KeyedSpeechEngine:
         """The models on the key now, by their id (music, sound effects and lip sync are offered
         before this computer's models; speaking replaces them)."""
         out: dict[str, VoiceModel] = {}
-        for product in ("voice", "music", "sfx", "lipsync"):
+        for product in ("voice", *TOOL_PRODUCTS, *MUSIC_PRODUCTS.values(), "lipsync"):
             route = self._where(product)
             if route is None:
                 continue
             try:
                 model = (
                     keyed_voice_model(route, self._admin) if product == "voice"
+                    else keyed_tool_model(product, route, self._admin)
+                    if product in TOOL_PRODUCTS
                     else keyed_lipsync_model(route, self._admin) if product == "lipsync"
                     else keyed_music_model(product, route, self._admin)
                 )  # fmt: skip
@@ -327,7 +390,7 @@ class KeyedSpeechEngine:
         return out
 
     def _where(self, product: str) -> KeyRoute | None:
-        return _fal(self._keys, product) if product == "voice" else _cloud(self._keys, product)
+        return _cloud(self._keys, product)
 
     def _row(self, model: VoiceModel, route: KeyRoute) -> dict[str, Any]:
         return {
@@ -340,8 +403,7 @@ class KeyedSpeechEngine:
         keyed = self._keyed()
         if not keyed:
             return local
-        product = {KEYED_VOICE: "voice", KEYED_MUSIC: "music", KEYED_SFX: "sfx",
-                   KEYED_LIPSYNC: "lipsync"}  # fmt: skip
+        product = {**VOICE_PRODUCTS, **MUSIC_PRODUCTS, KEYED_LIPSYNC: "lipsync"}
         rows = [
             self._row(m, route)
             for m in keyed.values()
@@ -377,38 +439,254 @@ class KeyedSpeechEngine:
     ) -> SpeechResult:
         if model.id != KEYED_VOICE:
             return await self._local.speak(model, text, voice, options, beside=beside)
-        route = await self._keys.route("voice")
-        if route is None or route.provider.id != "fal":
-            raise VoiceEngineError(
-                "not_with_key", "Voice runs on this computer now. Choose a model and try again."
-            )
-        body: dict[str, Any] = {"prompt": text, "voice": voice or model.default_voice}
+        route = await self._route("voice")
+        model_id = _model_id("voice", route)
+        chosen = voice or model.default_voice
         speed = options.get("speed")
-        if isinstance(speed, int | float):
-            body["speed"] = float(speed)
+        speed = float(speed) if isinstance(speed, int | float) else None
         t0 = time.monotonic()
-        async with self._client() as http:
-            fal = FalQueue(route.key, http, self._timeout, self._poll, route.base_url)
-            try:
-                result = await fal.call(route.model, body, _no_progress)
-                wav, _ = await fal.fetch(result.get("audio"), "audio/wav")
-            except FalError as e:
-                raise VoiceEngineError(e.code, e.message) from None
-            except TimeoutError:
-                raise VoiceEngineError("provider_refused", "fal.ai took too long.") from None
-        seconds = _wav_seconds(wav)
-        if seconds <= 0:
-            raise VoiceEngineError(
-                "engine_failed", "fal.ai sent the speech in a form this app cannot read."
-            )
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            body = speak_request(model_id, c.provider.id, c.offer.endpoint, text, chosen, speed)
+            return await self._audio(c, c.offer.endpoint, body)
+
+        (data, ext), used = await self._cheapest(route, "voice", {"characters": len(text)}, attempt)
+        wav = await self._wav(data, ext, used)
         return SpeechResult(
-            wav, _wav_rate(wav) or model.sample_rate, seconds, route.model, body["voice"], 0.0,
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            chosen, 0.0, time.monotonic() - t0,
+        )  # fmt: skip
+
+    # ---- the voice tools on a cloud model (ADR-0100, CP7) --------------------------------------
+
+    async def _audio(
+        self, c: KeyChoice, endpoint: str, body: dict[str, Any], hold: Any = None
+    ) -> tuple[bytes, str]:
+        """The audio a provider makes for `body`: its bytes and their kind (wav or mp3)."""
+        async with self._client() as http:
+            queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+            data, ctype, result = await queue.make(
+                endpoint, body, "audio", "audio/mpeg", _no_progress
+            )
+            if hold is not None:
+                hold.update(result)
+            return data, ".wav" if "wav" in ctype else ".mp3"
+
+    async def _cheapest[T](
+        self, route: KeyRoute, product: str, job: dict[str, Any],
+        attempt: Callable[[KeyChoice], Awaitable[T]], needs: tuple[str, ...] = (),
+        only: str | None = None,
+    ) -> tuple[T, Priced[KeyChoice]]:  # fmt: skip
+        try:
+            return await on_cheapest(route, product, job, attempt, self._usage, needs, only)
+        except FalError as e:
+            raise VoiceEngineError(e.code, e.message) from None
+        except TimeoutError:
+            raise VoiceEngineError(
+                "provider_refused", f"{route.provider.title} took too long."
+            ) from None
+
+    async def _wav(self, data: bytes, ext: str, used: Priced[KeyChoice]) -> bytes:
+        unread = VoiceEngineError(
+            "engine_failed",
+            f"{used.choice.provider.title} sent the speech in a form this app cannot read.",
+        )
+        try:
+            wav = data if ext == ".wav" and data[:4] == b"RIFF" else await to_wav(data, ext)
+        except VoiceEngineError:
+            raise unread from None
+        if _wav_seconds(wav) <= 0:
+            raise unread
+        return wav
+
+    async def _send(self, c: KeyChoice, data: bytes, name: str) -> str:
+        """A recording up to the provider first: its address, or Runware's upload id."""
+        async with self._client() as http:
+            queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+            return await queue.upload(data, name)
+
+    def _kept(self) -> Any:
+        """Where MiniMax's voices are remembered (the person's settings; none on the web)."""
+        return self._keys if hasattr(self._keys, "kept_voice") else None
+
+    async def _kept_route(
+        self, route: KeyRoute, kind: str, made_from: bytes
+    ) -> tuple[KeyRoute, str] | None:
+        """A MiniMax voice made before from the same recording or words, on a provider with a key:
+        a route to MiniMax Speech there (priced per character) and the voice's id; else None."""
+        from wasifyai_api.own_keys_catalogue import media_model
+
+        kept, key = self._kept(), voice_key(kind, made_from)
+        speech = media_model("voice", "minimax-speech-2.8-hd")
+        if kept is None or speech is None:
+            return None
+        for c in route.offers():
+            voice_id = await kept.kept_voice(key, c.provider.id)
+            there = speech.offer_of(c.provider.id)
+            if voice_id and there is not None:
+                choice = KeyChoice(c.provider, c.key, c.base_url, there)
+                again = KeyRoute(
+                    c.provider, speech.model, c.key, c.base_url, (choice,), speech.title
+                )
+                return again, voice_id
+        return None
+
+    async def _made_voice(
+        self, route: KeyRoute, kind: str, made_from: bytes, text: str,
+        make: Callable[[KeyChoice, str], Awaitable[dict[str, Any]]],
+    ) -> tuple[tuple[bytes, str], Priced[KeyChoice]]:  # fmt: skip
+        """A MiniMax voice: one made before speaks again where it was made, priced per character;
+        otherwise it is made now (which says `text` too) and remembered by what made it."""
+        again = await self._kept_route(route, kind, made_from)
+        if again is not None:
+            speech_route, voice_id = again
+
+            async def speak(c: KeyChoice) -> tuple[bytes, str]:
+                body = speak_request(
+                    "minimax-speech-2.8-hd", c.provider.id, c.offer.endpoint, text, voice_id, None
+                )
+                return await self._audio(c, c.offer.endpoint, body)
+
+            return await self._cheapest(
+                speech_route, "voiceclone", {"characters": len(text)}, speak
+            )
+        kept = self._kept()
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            asked, result = new_voice_id(), {}
+            body = await make(c, asked)
+            made = await self._audio(c, c.offer.endpoint_for(kind), body, hold=result)
+            if kept is not None:
+                await kept.keep_voice(
+                    voice_key(kind, made_from), c.provider.id, made_voice(result, asked)
+                )
+            return made
+
+        job = {"characters": len(text), "task": kind}
+        return await self._cheapest(route, "voiceclone", job, attempt, (kind,))
+
+    async def clone(
+        self, model: VoiceModel, text: str, reference: Path, reference_text: str | None,
+        options: dict[str, Any],
+    ) -> SpeechResult:  # fmt: skip
+        if model.id != KEYED_CLONE:
+            return await self._local.clone(model, text, reference, reference_text, options)  # type: ignore[no-any-return]
+        route = await self._route("voiceclone")
+        model_id = _model_id("voiceclone", route)
+        recording = await asyncio.to_thread(reference.read_bytes)
+        t0 = time.monotonic()
+
+        async def make(c: KeyChoice, voice_id: str) -> dict[str, Any]:
+            sent = await self._send(c, recording, reference.name)
+            endpoint = c.offer.endpoint_for("clone")
+            return clone_request(
+                model_id, c.provider.id, endpoint, text, sent, reference_text, voice_id
+            )
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            return await self._audio(c, c.offer.endpoint_for("clone"), await make(c, ""))
+
+        if model_id == "minimax-voice":
+            (data, ext), used = await self._made_voice(route, "clone", recording, text, make)
+        else:
+            job = {"characters": len(text), "task": "clone"}
+            (data, ext), used = await self._cheapest(route, "voiceclone", job, attempt, ("clone",))
+        wav = await self._wav(data, ext, used)
+        return SpeechResult(
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            None, 0.0, time.monotonic() - t0,
+        )  # fmt: skip
+
+    async def design(
+        self, model: VoiceModel, text: str, description: str, options: dict[str, Any]
+    ) -> SpeechResult:
+        if model.id != KEYED_CLONE:
+            return await self._local.design(model, text, description, options)  # type: ignore[no-any-return]
+        route = await self._route("voiceclone")
+        model_id = _model_id("voiceclone", route)
+        t0 = time.monotonic()
+
+        async def make(c: KeyChoice, voice_id: str) -> dict[str, Any]:
+            return design_request(model_id, c.provider.id, text, description, voice_id)
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            return await self._audio(c, c.offer.endpoint_for("design"), await make(c, ""))
+
+        if model_id == "minimax-voice":
+            (data, ext), used = await self._made_voice(
+                route, "design", description.encode(), text, make
+            )
+        else:
+            job = {"characters": len(text), "task": "design"}
+            (data, ext), used = await self._cheapest(route, "voiceclone", job, attempt, ("design",))
+        wav = await self._wav(data, ext, used)
+        return SpeechResult(
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            None, 0.0, time.monotonic() - t0,
+        )  # fmt: skip
+
+    async def transcribe(
+        self, model: VoiceModel, wav: bytes, options: dict[str, Any], *, beside: bool = False
+    ) -> TranscriptResult:
+        if model.id != KEYED_TRANSCRIBE:
+            return await self._local.transcribe(model, wav, options, beside=beside)  # type: ignore[no-any-return]
+        route = await self._route("transcribe")
+        model_id = _model_id("transcribe", route)
+        language = options.get("language")
+        language = str(language) if language else None
+        t0 = time.monotonic()
+
+        async def attempt(c: KeyChoice) -> dict[str, Any]:
+            sent = await self._send(c, wav, "speech.wav")
+            body = transcribe_request(model_id, c.provider.id, sent, language)
+            async with self._client() as http:
+                queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+                return await queue.call(c.offer.endpoint, body, _no_progress)
+
+        result, used = await self._cheapest(
+            route, "transcribe", {"seconds": max(_wav_seconds(wav), 1.0)}, attempt
+        )
+        text, segments, seconds = transcript_of(result)
+        return TranscriptResult(
+            text,
+            segments,
+            seconds or _wav_seconds(wav),
+            used.offer.endpoint,
             time.monotonic() - t0,
+        )
+
+    async def convert(
+        self, model: VoiceModel, req: ConvertRequest, source: Path, reference: Path
+    ) -> SpeechResult:
+        if model.id != KEYED_CHANGE:
+            return await self._local.convert(model, req, source, reference)  # type: ignore[no-any-return]
+        route = await self._route("voicechange")
+        said, voice = (
+            await asyncio.to_thread(source.read_bytes),
+            await asyncio.to_thread(reference.read_bytes),
+        )
+        t0 = time.monotonic()
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            body = convert_request(
+                c.provider.id,
+                await self._send(c, said, source.name),
+                await self._send(c, voice, reference.name),
+            )
+            return await self._audio(c, c.offer.endpoint, body)
+
+        (data, ext), used = await self._cheapest(
+            route, "voicechange", {"seconds": req.source_seconds}, attempt
+        )
+        wav = await self._wav(data, ext, used)
+        return SpeechResult(
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            None, 0.0, time.monotonic() - t0,
         )  # fmt: skip
 
     async def _route(self, product: str) -> KeyRoute:
         route = await self._keys.route(product)
-        if route is None or route.provider.id not in MEDIA_PROVIDERS:
+        if route is None or not any(c.provider.id in MEDIA_PROVIDERS for c in route.offers()):
             raise VoiceEngineError(
                 "not_with_key", "That runs on this computer now. Choose a model and try again."
             )
@@ -417,31 +695,90 @@ class KeyedSpeechEngine:
     async def music(self, model: VoiceModel, req: MusicRequest) -> MusicResult:
         if model.id not in (KEYED_MUSIC, KEYED_SFX):
             return await self._local.music(model, req)  # type: ignore[no-any-return]
-        route = await self._route("sfx" if model.id == KEYED_SFX else "music")
-        body = music_body(route.model, req)
+        product = MUSIC_PRODUCTS[model.id]
+        route = await self._route(product)
+        model_id = _model_id(product, route)
+        verb = music_verb(model_id, req)
         t0 = time.monotonic()
-        name = route.provider.title
-        async with self._client() as http:
-            queue = queue_for(
-                route.provider.id, route.key, http, self._timeout, self._poll, route.base_url
-            )
-            try:
-                data, ctype, result = await queue.make(
-                    route.model, body, "audio", "audio/mpeg", _no_progress
-                )
-            except FalError as e:
-                raise VoiceEngineError(e.code, e.message) from None
-            except TimeoutError:
-                raise VoiceEngineError("provider_refused", f"{name} took too long.") from None
-        wav = await to_wav(data, ".wav" if "wav" in ctype else ".mp3")
-        seconds = _wav_seconds(wav)
-        if seconds <= 0:
-            raise VoiceEngineError("engine_failed", f"{name} sent audio this app cannot read.")
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str, dict[str, Any]]:
+            endpoint = c.offer.endpoint_for(verb)
+            body = music_body(endpoint, req)
+            async with self._client() as http:
+                queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+                return await queue.make(endpoint, body, "audio", "audio/mpeg", _no_progress)
+
+        (data, ctype, result), used = await self._cheapest(route, product, music_job(req), attempt)
+        wav = await self._wav(data, ".wav" if "wav" in ctype else ".mp3", used)
         return MusicResult(
-            wav, _wav_rate(wav) or model.sample_rate, seconds, route.model,
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav),
+            used.offer.endpoint_for(verb),
             result.get("seed") if isinstance(result.get("seed"), int) else None, 0.0,
             time.monotonic() - t0,
         )  # fmt: skip
+
+    async def music_edit(
+        self, model: VoiceModel, req: MusicEditRequest, source: Path
+    ) -> MusicResult:
+        """A stretch of a clip written again on a cloud model (ADR-0100, CP8): the clip goes up the
+        provider's way first."""
+        if model.id != KEYED_MUSICEDIT:
+            return await self._local.music_edit(model, req, source)  # type: ignore[no-any-return]
+        route = await self._route("musicedit")
+        clip = await asyncio.to_thread(source.read_bytes)
+        t0 = time.monotonic()
+
+        async def attempt(c: KeyChoice) -> tuple[bytes, str]:
+            sent = await self._send(c, clip, source.name)
+            body = edit_body(c.offer.endpoint, c.provider.id, sent, req)
+            return await self._audio(c, c.offer.endpoint, body)
+
+        (data, ext), used = await self._cheapest(route, "musicedit", edit_job(req), attempt)
+        wav = await self._wav(data, ext, used)
+        return MusicResult(
+            wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav), used.offer.endpoint,
+            None, 0.0, time.monotonic() - t0,
+        )  # fmt: skip
+
+    async def separate(
+        self, model: VoiceModel, req: SeparateRequest, source: Path
+    ) -> SeparateResult:
+        """A recording taken apart into stems on a cloud model (ADR-0100, CP8): each stem the
+        provider answers is fetched and read as a WAV."""
+        if model.id != KEYED_SPLIT:
+            return await self._local.separate(model, req, source)  # type: ignore[no-any-return]
+        route = await self._route("split")
+        model_id = _model_id("split", route)
+        if model_id not in SPLIT_MODELS:
+            raise VoiceEngineError("not_with_key", f"{route.model} does not split music here.")
+        recording = await asyncio.to_thread(source.read_bytes)
+        t0 = time.monotonic()
+
+        async def attempt(c: KeyChoice) -> list[tuple[str, bytes, str]]:
+            sent = await self._send(c, recording, source.name)
+            body = split_body(model_id, c.provider.id, sent)
+            async with self._client() as http:
+                queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+                result = await queue.call(c.offer.endpoint, body, _no_progress)
+                files = []
+                for name, where in stems_of(model_id, result):
+                    url = where.get("url") if isinstance(where, dict) else where
+                    data, ctype = await fetch_file(http, c.provider.title, url, "audio/wav",
+                                                   self._timeout)  # fmt: skip
+                    files.append((name, data, ".wav" if "wav" in ctype else ".mp3"))
+                return files
+
+        job = {"seconds": req.source_seconds}
+        files, used = await self._cheapest(route, "split", job, attempt)
+        stems = []
+        for name, data, ext in files:
+            wav = await self._wav(data, ext, used)
+            stems.append(Stem(name, wav, _wav_rate(wav) or model.sample_rate, _wav_seconds(wav)))
+        if not stems:
+            raise VoiceEngineError(
+                "engine_failed", f"{used.choice.provider.title} sent no parts back."
+            )
+        return SeparateResult(tuple(stems), used.offer.endpoint, 0.0, time.monotonic() - t0)
 
     async def lipsync(
         self, model: VoiceModel, req: LipSyncRequest, picture: Path, voice: Path
@@ -454,31 +791,74 @@ class KeyedSpeechEngine:
         )
         audio = await asyncio.to_thread(voice.read_bytes)
         t0 = time.monotonic()
-        name = route.provider.title
-        async with self._client() as http:
-            # lip sync runs on fal.ai only (owner, 2026-11-12)
-            queue = FalQueue(
-                route.key, http, max(self._timeout, 3600.0), self._poll, route.base_url
-            )  # fmt: skip
-            try:
-                # fal.ai refuses a voice inside the request ("URL too long"): upload both first
+        model_id = _model_id("lipsync", route)
+        size = "720p" if min(req.width, req.height) >= 720 else "480p"
+
+        async def attempt(c: KeyChoice) -> bytes:
+            async with self._client() as http:
+                queue = queue_for(
+                    c.provider.id, c.key, http, max(self._timeout, 3600.0), self._poll, c.base_url
+                )
+                # the picture and the voice go up first (fal.ai refuses a voice inside the request,
+                # "URL too long"; WaveSpeed takes addresses; Runware a voice by its upload id)
                 face, said = (
                     await queue.upload(image, "face.png"),
                     await queue.upload(audio, voice.name),
                 )
-                body = lipsync_body(route.model, face, said, req)
-                mp4, _, _ = await queue.make(route.model, body, "video", "video/mp4", _no_progress)
-            except FalError as e:
-                raise VoiceEngineError(e.code, e.message) from None
-            except TimeoutError:
-                raise VoiceEngineError("provider_refused", f"{name} took too long.") from None
+                body = lipsync_body(model_id, c.offer.endpoint, face, said, req, c.provider.id)
+                mp4, _, _ = await queue.make(
+                    c.offer.endpoint, body, "video", "video/mp4", _no_progress
+                )
+                return mp4
+
+        name = route.provider.title
+        try:
+            mp4, used = await on_cheapest(
+                route, "lipsync", {"seconds": req.voice_seconds, "resolution": size}, attempt,
+                self._usage,
+            )  # fmt: skip
+            name = used.choice.provider.title
+        except FalError as e:
+            raise VoiceEngineError(e.code, e.message) from None
+        except TimeoutError:
+            raise VoiceEngineError("provider_refused", f"{name} took too long.") from None
         width, height = _video_size(mp4)
         if not (width and height):
             raise VoiceEngineError("engine_failed", f"{name} sent a video this app cannot read.")
         return LipSyncResult(
-            mp4, req.voice_seconds, LIPSYNC_FPS, width, height, route.model, 0.0,
+            mp4, req.voice_seconds, LIPSYNC_FPS, width, height, used.offer.endpoint, 0.0,
             time.monotonic() - t0,
         )  # fmt: skip
+
+
+RUNWARE_3D = "3dInference"  # Runware's task for a model from pictures (CP13: its name)
+GLB = "model/gltf-binary"
+
+
+def model3d_body(
+    model_id: str, provider: str, picture: str, seed: int, detail: str
+) -> tuple[dict[str, Any], str]:
+    """What a 3D model is sent for a picture (an address, an upload id, or a data URI on Runware)
+    and the field of the answer that holds the model (ADR-0100, CP9; CP0 for Runware's and
+    WaveSpeed's fields; the ones marked CP13 are checked in the real run)."""
+    texture = ATLAS.get(detail, 2048)
+    if provider == "runware":
+        task: dict[str, Any] = {
+            "taskType": RUNWARE_3D, "inputs": {"images": [picture]}, "outputFormat": "GLB",
+            "seed": seed, "includeCost": True,
+        }  # fmt: skip
+        if model_id == "trellis-2":
+            task["settings"] = {"resolution": FAL_3D_RESOLUTION}
+        return task, ""
+    if provider == "wavespeed":  # TRELLIS 2: it cuts the picture out itself
+        return {
+            "image": picture, "resolution": FAL_3D_RESOLUTION, "texture_size": texture,
+            "remove_background": True, "seed": seed,
+        }, ""  # fmt: skip
+    if model_id == "hunyuan3d-3.1-pro":  # (CP13)
+        return {"input_image_url": picture, "seed": seed}, "model_glb"
+    body = {"image_url": picture, "seed": seed, "resolution": FAL_3D_RESOLUTION}
+    return {**body, "texture_size": texture}, "model_glb"
 
 
 class KeyedModel3d:
@@ -493,8 +873,10 @@ class KeyedModel3d:
         timeout_s: float = 900,
         poll_s: float = 2.0,
         admin: bool = False,
+        usage: UsageRecorder | None = None,
     ):
         self._where = BY_ADMIN if admin else WITH_KEY
+        self._usage = usage
         self._local = local
         self._keys = keys
         self._client = client
@@ -514,7 +896,7 @@ class KeyedModel3d:
 
     @property
     def keyed(self) -> bool:
-        return _fal(self._keys, "model3d") is not None
+        return _cloud(self._keys, "model3d") is not None
 
     def state(self) -> dict[str, Any]:
         local = self._local.state()
@@ -540,23 +922,26 @@ class KeyedModel3d:
             "capacity_bytes": None, "estimate": False, "partly_on_cpu": False,
         }  # fmt: skip
 
-    async def _run(
-        self, route: KeyRoute, picture: bytes, body: dict[str, Any], endpoint: str, field: str,
-        out: Path, on_progress: Callable[[float], Any] = _no_progress,
-    ) -> RunResult:  # fmt: skip
+    async def _fal_run(
+        self, c: KeyChoice, picture: bytes, body: dict[str, Any], endpoint: str, field: str,
+        on_progress: Callable[[float], Any] = _no_progress,
+    ) -> bytes:  # fmt: skip
         """`body` on fal.ai with `picture` as its `image_url`, uploaded to fal.ai's file store first
         (a picture inside the request can be refused as too long, as a voice was)."""
-        t0 = time.monotonic()
+        async with self._client() as http:
+            fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
+            sent = {"image_url": await fal.upload(picture, "picture.png"), **body}
+            result = await fal.call(endpoint, sent, on_progress)
+            data, _ = await fal.fetch(result.get(field), "application/octet-stream")
+            return data
+
+    async def _done(self, run: Awaitable[bytes], out: Path, t0: float, title: str) -> RunResult:
         try:
-            async with self._client() as http:
-                fal = FalQueue(route.key, http, self._timeout, self._poll, route.base_url)
-                body = {"image_url": await fal.upload(picture, "picture.png"), **body}
-                result = await fal.call(endpoint, body, on_progress)
-                data, _ = await fal.fetch(result.get(field), "application/octet-stream")
+            data = await run
         except FalError as e:
             return RunResult(False, "failed", e.message, time.monotonic() - t0)
         except TimeoutError:
-            return RunResult(False, "wall_time", "fal.ai took too long.", time.monotonic() - t0)
+            return RunResult(False, "wall_time", f"{title} took too long.", time.monotonic() - t0)
         await asyncio.to_thread(out.write_bytes, data)
         return RunResult(True, None, "", time.monotonic() - t0, output=out)
 
@@ -567,12 +952,20 @@ class KeyedModel3d:
         on_line: Callable[[str], None] | None = None,
         **again: Any,  # job_key, resume: the web's engine workers pick a job up again
     ) -> RunResult:
-        route = _fal(self._keys, "model3d")
+        route = _cloud(self._keys, "model3d")
         if route is None:
             return await self._local.matte(picture, out_dir, on_line, **again)
+        t0, out = time.monotonic(), out_dir / "keyed_cutout.png"
         data = await asyncio.to_thread(picture.read_bytes)
+        fal = next((c for c in route.offers() if c.provider.id == "fal"), None)
+        if fal is None:  # the cloud models cut the picture out themselves: it goes as it is
+            await asyncio.to_thread(out.write_bytes, data)
+            return RunResult(True, None, "", time.monotonic() - t0, output=out)
+        # a helper on the same key: not the model, not priced
         body = {"output_format": "png"}
-        return await self._run(route, data, body, FAL_MATTE, "image", out_dir / "keyed_cutout.png")
+        return await self._done(
+            self._fal_run(fal, data, body, FAL_MATTE, "image"), out, t0, "fal.ai"
+        )
 
     async def generate(
         self,
@@ -583,21 +976,47 @@ class KeyedModel3d:
         detail: str = "standard",
         on_line: Callable[[str], None] | None = None,
         on_progress: Callable[[float, str], None] | None = None,
-        **again: Any,  # job_key, resume: on fal.ai a run picked up again is made again
+        **again: Any,  # job_key, resume: on a cloud model a run picked up again is made again
     ) -> RunResult:
-        route = _fal(self._keys, "model3d")
+        route = _cloud(self._keys, "model3d")
         if route is None:
             return await self._local.generate(
                 cutout, out_glb, seed=seed, detail=detail, on_line=on_line,
                 on_progress=on_progress, **again,
             )  # fmt: skip
         data = await asyncio.to_thread(cutout.read_bytes)
-        body = {
-            "seed": seed, "resolution": FAL_3D_RESOLUTION, "texture_size": ATLAS.get(detail, 2048),
-        }  # fmt: skip
+        model_id = _model_id("model3d", route)
+        t0 = time.monotonic()
 
-        async def told(p: float) -> None:
-            if on_progress is not None:
-                on_progress(p, "Waiting for fal.ai" if p < 0.1 else "Making it on fal.ai")
+        async def attempt(c: KeyChoice) -> bytes:
+            title = c.provider.title
 
-        return await self._run(route, data, body, route.model, "model_glb", out_glb, told)
+            async def told(p: float) -> None:
+                if on_progress is not None:
+                    on_progress(p, f"Waiting for {title}" if p < 0.1 else f"Making it on {title}")
+
+            if c.provider.id == "fal":
+                body, field = model3d_body(model_id, "fal", "", seed, detail)
+                if "input_image_url" in body:  # Hunyuan names its picture otherwise
+                    async with self._client() as http:
+                        fal = FalQueue(c.key, http, self._timeout, self._poll, c.base_url)
+                        body["input_image_url"] = await fal.upload(data, "picture.png")
+                        result = await fal.call(c.offer.endpoint, body, told)
+                        got, _ = await fal.fetch(result.get(field), GLB)
+                        return got
+                body.pop("image_url")
+                return await self._fal_run(c, data, body, c.offer.endpoint, field, told)
+            async with self._client() as http:
+                queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
+                sent = data_uri(data) if c.provider.id == "runware" else (
+                    await queue.upload(data, "picture.png")
+                )  # fmt: skip
+                body, field = model3d_body(model_id, c.provider.id, sent, seed, detail)
+                got, _, _ = await queue.make(c.offer.endpoint, body, field, GLB, told)
+                return got
+
+        async def run() -> bytes:
+            got, _ = await on_cheapest(route, "model3d", {}, attempt, self._usage)
+            return got
+
+        return await self._done(run(), out_glb, t0, route.provider.title)

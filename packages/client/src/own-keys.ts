@@ -1,6 +1,8 @@
-// Settings > Your keys (ADR-0095, amendment of 2026-11-11): each product keeps provider keys, never a model. A
-// product's model picker lists, under Cloud, the models of every provider with a key, and choosing one makes the
-// product run there. The engine's `/desktop/keys` routes; a key goes in once and is never answered back.
+// Settings > Your keys (ADR-0095, amendment of 2026-11-11; ADR-0100): each product keeps provider keys, never a
+// model; a media key saved under "Every media product" (`media`) serves every media product. A product's model
+// picker lists, under Cloud, the models its keys can run, and choosing one makes the product run there: a text model
+// on its vendor, a media model on the cheapest of its offers with a key, priced for each job. The engine's
+// `/desktop/keys` routes; a key goes in once and is never answered back.
 import type { Transport } from "./transport";
 import { HttpError } from "./transport";
 
@@ -16,7 +18,7 @@ export type SavedKey = {
   tested_at: number | null;
 };
 
-/** The cloud model a product runs on now (null: this computer). */
+/** The cloud model a product runs on now (null: this computer); a media model's `provider` is its cheapest one. */
 export type KeyUse = { provider: string; model: string; title: string; price: string };
 
 export type KeyProduct = {
@@ -46,16 +48,23 @@ export type KeyBody = {
 
 export type KeyTest = { ok: boolean; ms: number; said: string | null };
 
-/** One row of a picker's Cloud tab. */
+/** One row of a picker's Cloud tab: a text vendor's model, or a media model once whatever runs it. */
 export type CloudModel = {
+  /** a text model's vendor; a media model's cheapest provider with a key */
   provider: string;
   provider_title: string;
   host: string;
   model: string;
   title: string;
   about: string;
-  /** as the provider lists it, in words: "$0.20 per second" */
+  /** as the provider lists it, in words: "$0.20 per second"; "from $0.006 per picture" when offers differ */
   price: string;
+  /** the providers with a key that can run it, cheapest first (a job may go to the next one) */
+  providers: string[];
+  /** a provider without a key whose price is lower: "Runware" (null when none) */
+  cheaper_with: string | null;
+  /** what a media model can do with the keys there are ("image.generate", "image.inpaint"); empty for text */
+  can?: string[];
   /** how long it took when measured, in words ("about 5 s per second of video"); empty when unknown */
   speed?: string;
   /** the key worked when last tested */
@@ -108,8 +117,11 @@ export function createOwnKeysApi(transport: Transport) {
     /** The picker's Cloud tab: the models of every provider with a key for `product`. */
     cloud: (product: string) =>
       json<CloudModels>(transport, `${BASE}/${encodeURIComponent(product)}/cloud`),
-    /** Run `product` on a cloud model, or on this computer again (`null`). The keys stay. */
-    use: (product: string, choice: { provider: string; model: string } | null) =>
+    /**
+     * Run `product` on a cloud model, or on this computer again (`null`). A media model needs no provider: each job
+     * runs on its cheapest offer with a key. The keys stay.
+     */
+    use: (product: string, choice: { provider?: string; model: string } | null) =>
       json<CloudModels>(
         transport,
         `${BASE}/${encodeURIComponent(product)}/use`,

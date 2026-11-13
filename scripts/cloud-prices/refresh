@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# The cloud catalogue's prices, read again from Runware, WaveSpeed and fal.ai (ADR-0100, stage CP12).
+# Writes the changes as a diff of services/api/src/wasifyai_api/own_keys_catalogue.py (default
+# cloud-prices.diff) for you to read and `git apply`; nothing is changed here. fal.ai's prices need
+# FAL_KEY in the environment. Usage: scripts/cloud-prices/refresh [--out FILE] [--only fal|runware|wavespeed]
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+exec uv run python -m wasifyai_api.cloud_prices "$@"

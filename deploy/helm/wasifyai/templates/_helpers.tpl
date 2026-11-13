@@ -23,15 +23,6 @@ imagePullSecrets:
 {{- end }}
 {{- end -}}
 
-{{- define "wasifyai.ollamaUrl" -}}
-{{- if .Values.ollama.externalUrl -}}{{ .Values.ollama.externalUrl }}{{- else -}}http://{{ .Release.Name }}-ollama:11434{{- end -}}
-{{- end -}}
-
-{{/* Models the Ollama pod must pull. */}}
-{{- define "wasifyai.ollamaModels" -}}
-{{- join " " .Values.ollama.models -}}
-{{- end -}}
-
 {{/* Env vars that give a workload its database connection. */}}
 {{- define "wasifyai.dbEnv" -}}
 {{- if .Values.postgres.enabled }}
@@ -49,10 +40,6 @@ imagePullSecrets:
 
 {{- define "wasifyai.storageEndpoint" -}}
 {{- if .Values.storage.enabled -}}http://{{ .Release.Name }}-storage:8333{{- else -}}{{ .Values.storage.endpoint }}{{- end -}}
-{{- end -}}
-
-{{- define "wasifyai.comfyuiUrl" -}}
-{{- if .Values.comfyui.enabled -}}http://{{ .Release.Name }}-comfyui:{{ .Values.comfyui.port }}{{- else -}}{{ .Values.env.COMFYUI_BASE_URL }}{{- end -}}
 {{- end -}}
 
 {{/* Object storage settings for the API and the media worker. */}}
@@ -79,12 +66,8 @@ imagePullSecrets:
 - name: LITELLM_API_KEY
   valueFrom:
     secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: LITELLM_API_KEY }
-- name: OLLAMA_BASE_URL
-  value: {{ include "wasifyai.ollamaUrl" . | quote }}
-- name: COMFYUI_BASE_URL
-  value: {{ .Values.env.COMFYUI_BASE_URL | quote }}
-- name: COMFYUI_VIDEO_BASE_URL
-  value: {{ .Values.env.COMFYUI_VIDEO_BASE_URL | quote }}
+- name: EMBEDDER_BASE_URL  # seeded into the `creation-embedder` alias; LiteLLM calls it
+  value: "http://{{ .Release.Name }}-embedder:8080"
 - name: LOG_LEVEL
   value: {{ .Values.env.LOG_LEVEL | quote }}
 - name: PRODUCT_ENV

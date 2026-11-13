@@ -178,6 +178,59 @@ async def test_back_to_this_computer_or_removing_the_key_is_followed_at_once(mon
 async def test_only_chat_and_writing_decides_where_text_goes(monkeypatch, ctx):
     p, keys, local, _, seen = await rig(monkeypatch)
     await keys.save_key("images", "fal", KEY)
-    await keys.use("images", "fal", "fal-ai/flux-2")
+    await keys.use("images", None, "flux-3-klein")
     assert await text(p.stream("chat", BINDING, "s", "hi")) == "from this computer"
     assert seen == []
+
+
+async def test_an_anthropic_key_goes_to_anthropics_own_api(monkeypatch, ctx):
+    """ADR-0100: Claude Haiku 5.5 is reached through the Messages API, not the OpenAI route."""
+    asked: list[tuple[str, str, str]] = []
+
+    class Claude:
+        def __init__(self, key, model, usage):
+            asked.append(("made", key, model))
+
+        async def stream(self, capability, system, prompt, schema=None):
+            asked.append(("stream", capability, system))
+            yield "from Claude"
+
+        async def chat(self, capability, messages, tools=None, thinking=False):
+            asked.append(("chat", capability, str(thinking)))
+            yield ChatChunk(text="from Claude")
+
+    monkeypatch.setattr(own_keys_text, "AnthropicText", Claude)
+    p, keys, local, _, seen = await rig(monkeypatch)
+    await keys.save_key("chat", "anthropic", "sk-ant-good")
+    await keys.use("chat", "anthropic", "claude-haiku-5-5")
+    assert await text(p.stream("enhance", BINDING, "Be brief.", "a fox")) == "from Claude"
+    chunks = [c async for c in p.chat("chat", BINDING, [{"role": "user", "content": "hi"}],
+                                      thinking=True)]  # fmt: skip
+    assert [c.text for c in chunks] == ["from Claude"]
+    assert asked == [
+        ("made", "sk-ant-good", "claude-haiku-5-5"), ("stream", "enhance", "Be brief."),
+        ("made", "sk-ant-good", "claude-haiku-5-5"), ("chat", "chat", "True"),
+    ]  # fmt: skip
+    assert local.asked == [] and seen == []  # nothing went the OpenAI way
+
+
+@pytest.mark.parametrize(
+    ("vendor", "model", "url"),
+    [("openai", "gpt-6-luna", "https://api.openai.com/v1/chat/completions"),
+     ("gemini", "gemini-3.8-flash",
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"),
+     ("deepseek", "deepseek-flash", "https://api.deepseek.com/chat/completions"),
+     ("zai", "glm-5.3-flash", "https://api.z.ai/api/paas/v4/chat/completions")],
+)  # fmt: skip
+async def test_every_other_vendor_is_reached_at_its_own_address(
+    monkeypatch, ctx, vendor, model, url
+):
+    p, keys, _, usage, seen = await rig(monkeypatch)
+    await keys.save_key("chat", vendor, KEY)
+    await keys.use("chat", vendor, model)
+    chunks = [c async for c in p.chat("chat", BINDING, [{"role": "user", "content": "hi"}])]
+    assert "".join(c.text for c in chunks) == "Blue sky."
+    (req,) = seen
+    assert str(req.url) == url and req.headers["authorization"] == f"Bearer {KEY}"
+    body = json.loads(req.content)
+    assert body["model"] == model and "temperature" not in body

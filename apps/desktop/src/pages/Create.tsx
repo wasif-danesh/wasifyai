@@ -48,12 +48,14 @@ export function CreatePage({
   // "Select image model": the model in use, or the way to get one (ADR-0086)
   const choices = useChoicesFor("images");
   const picker = useRef<ModelSelectHandle>(null);
-  const { ensure, keyed, chosen } = useGroupReady(choices, picker);
+  const { ensure, keyed, chosen, cloud } = useGroupReady(choices, picker);
   const model = useModelOf("wasifyai-image", keyed ? null : chosen);
   const engine = useImageEngine();
   // the chosen model makes the picture (ADR-0097); one that cannot do this screen's work says so
   const offered = !keyed && model !== null && model.id === chosen && (model.can?.length ?? 0) > 0;
-  const cannot = offered && !model.can?.includes(VERB[mode]);
+  // a cloud model says what its keys' offers can do (ADR-0100, stage CP4)
+  const cloudCannot = keyed && cloud !== null && !cloud.can.includes(VERB[mode]);
+  const cannot = (offered && !model.can?.includes(VERB[mode])) || cloudCannot;
   const header = <ModelSelect group="images" api={choices} handleRef={picker} />;
 
   // only a real model can be too big: the placeholder engine runs anywhere
@@ -87,7 +89,7 @@ export function CreatePage({
       model={offered ? model.id : null}
       blockedReason={
         cannot
-          ? `${model?.title} cannot ${CANNOT[mode]}. Choose another image model above.`
+          ? `${cloudCannot ? cloud?.title : model?.title} cannot ${CANNOT[mode]}. Choose another image model above.`
           : tooBig && model?.fit
             ? `${model.title} will not fit. ${model.fit.reason}`
             : null

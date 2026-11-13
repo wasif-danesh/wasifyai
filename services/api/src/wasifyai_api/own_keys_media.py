@@ -1,9 +1,10 @@
 """Images and video on the person's own key (ADR-0095, stage K3).
 
 `KeyedMediaRouter` is the desktop worker's router: a job of a product set to a cloud model in the
-picker's Cloud tab runs on that provider (fal.ai: `FalRunner`; WaveSpeed and Runware:
-`CloudImageRunner`) with the key saved in Settings › Your keys; every other job runs where it
-always did (the computer's own ComfyUI). It is asked again for every job, so a change in the
+picker's Cloud tab runs on the cheapest of that model's offers with a key saved in Settings › Your
+keys (`OfferRunner`, which sends it through `FalRunner` on fal.ai and `CloudImageRunner` on
+WaveSpeed and Runware; ADR-0100 stage CP3); every other job runs where it always did (the
+computer's own ComfyUI). It is asked again for every job, so a change in the
 picker applies to the next picture or clip."""
 
 from typing import Any
@@ -36,16 +37,13 @@ class KeyedMediaRouter:
     async def resolve(self, job: JobRequest) -> Any:
         product = PRODUCT_OF.get(job.product_id)
         route = await self._keys.route(product) if product else None
-        if route is None or route.provider.id not in ("fal", "wavespeed", "runware"):
+        if route is None or not route.choices:
             return self._local
         # the media worker is the desktop's (an extra of the API): imported where it runs
-        from wasifyai_media_worker.backends import CloudImageRunner, FalRunner
+        from wasifyai_media_worker.backends import CloudChoice, OfferRunner
 
-        if route.provider.id == "fal":
-            return FalRunner(
-                route.key, route.model, self._http, self._timeout, self._poll, route.base_url
-            )
-        return CloudImageRunner(
-            route.provider.id, route.key, route.model, self._http, self._timeout, self._poll,
-            route.base_url,
+        choices = [CloudChoice(c.provider.id, c.key, c.base_url, c.offer) for c in route.choices]
+        return OfferRunner(
+            route.model, route.title or route.model, choices, self._http, self._timeout,
+            self._poll,
         )  # fmt: skip

@@ -1,0 +1,79 @@
+{{- /*
+The web's text embedder (ADR-0100, decision 4 as changed by the owner on 2026-11-13): bge-m3 on
+llama.cpp's server, on the CPU, for searching My creations and Notebook sources. Free per call and
+multilingual; nothing leaves the service. LiteLLM reaches it as the `creation-embedder` alias
+(rule 5: the API never calls it directly). The model file is fetched once onto the pod's own volume
+and checked against its sha256 before the server starts.
+*/}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-embedder
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ .Release.Name }}-embedder
+  replicas: 1
+  selector:
+    matchLabels: {{- include "wasifyai.selector" (dict "root" . "component" "embedder") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "wasifyai.selector" (dict "root" . "component" "embedder") | nindent 8 }}
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000 }
+      initContainers:
+        - name: fetch-model
+          image: {{ .Values.embedder.image }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              f=/models/{{ .Values.embedder.model.file }}
+              ok() { echo "{{ .Values.embedder.model.sha256 }}  $f" | sha256sum -c - >/dev/null 2>&1; }
+              if [ -f "$f" ] && ok; then exit 0; fi
+              curl -fsSL --retry 3 -o "$f.part" "{{ .Values.embedder.model.url }}"
+              mv "$f.part" "$f"
+              ok || { echo "the model file does not match its checksum"; rm -f "$f"; exit 1; }
+          securityContext: { allowPrivilegeEscalation: false }
+          volumeMounts: [{ name: models, mountPath: /models }]
+      containers:
+        - name: embedder
+          image: {{ .Values.embedder.image }}
+          args:
+            - --model
+            - /models/{{ .Values.embedder.model.file }}
+            - --embedding
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8080"
+            # a whole input in one batch: an embedding cannot be split across batches
+            - --ctx-size
+            - {{ .Values.embedder.contextSize | quote }}
+            - --batch-size
+            - {{ .Values.embedder.contextSize | quote }}
+            - --ubatch-size
+            - {{ .Values.embedder.contextSize | quote }}
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+          securityContext: { allowPrivilegeEscalation: false }
+          volumeMounts: [{ name: models, mountPath: /models, readOnly: true }]
+          resources: {{- toYaml .Values.embedder.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata: { name: models }
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.embedder.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources: { requests: { storage: {{ .Values.embedder.storage }} } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-embedder
+  labels: {{- include "wasifyai.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "wasifyai.selector" (dict "root" . "component" "embedder") | nindent 4 }}
+  ports: [{ name: http, port: 8080, targetPort: http }]

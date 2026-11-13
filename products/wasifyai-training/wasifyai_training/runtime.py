@@ -574,13 +574,20 @@ class RunManager:
             log.exception("a trained model could not be published to the image engine")
             return None
         styles = getattr(self._deps.state, "desktop_styles", None)
+        # a look taught on a cloud model: where it is kept there, which the cloud image model loads
+        cloud_of = getattr(engine_for(self._deps.state), "cloud_of", None)
+        found = cloud_of(name) if callable(cloud_of) and name else None
+        cloud: dict[str, str] | None = found if isinstance(found, dict) else None
         if name and styles is not None:  # the image screens list it as yours (ADR-0091)
+            source = {"kind": "trained", "run": row["id"], "what": dataset["kind"]}
             with contextlib.suppress(Exception):
                 await styles.describe(
                     name, dataset["name"] or dataset["trigger_word"], dataset["trigger_word"],
-                    {"kind": "trained", "run": row["id"], "what": dataset["kind"]},
+                    {**source, "cloud": cloud} if cloud else source,
                 )  # fmt: skip
-        return {"lora_name": name} if name else None
+        if not name:
+            return None
+        return {"lora_name": name, "cloud": cloud["model"]} if cloud else {"lora_name": name}
 
     async def cancel(self, identity: Identity, run_id: str) -> bool:
         """Stop a run that is going, or discard one that is paused (its kept files go)."""

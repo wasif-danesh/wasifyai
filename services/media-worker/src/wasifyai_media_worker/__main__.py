@@ -8,11 +8,14 @@ import httpx
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import create_async_engine
 from wasifyai_platform_sdk import (
+    EnvSecretStore,
     InMemoryUsageRecorder,
+    LayeredSecretStore,
     PostgresMediaBindingStore,
     PostgresUsageRecorder,
     RedisEventLog,
     SecretBox,
+    SqlSecretStore,
     UsageRecorder,
     memory_storage,
     s3_storage,
@@ -20,7 +23,7 @@ from wasifyai_platform_sdk import (
 )
 from wasifyai_platform_sdk.jobqueue import RedisCancels
 
-from wasifyai_media_worker.backends import BackendRouter
+from wasifyai_media_worker.backends import BackendRouter, NoCloudModel
 from wasifyai_media_worker.comfy import ComfyClient
 from wasifyai_media_worker.consumer import Worker
 from wasifyai_media_worker.gpu import RedisGpuLock
@@ -77,7 +80,10 @@ async def main() -> None:
 
     comfy = ComfyClient(s.comfyui_base_url)
     sidecar = None
-    if s.comfyui_mode == "stub":
+    if s.comfyui_mode == "cloud":  # the web (ADR-0099, CP11): only the offers a job came with
+        log.info("COMFYUI_MODE=cloud: jobs run on cloud models only")
+        runner = NoCloudModel()
+    elif s.comfyui_mode == "stub":
         log.warning("COMFYUI_MODE=stub: producing placeholder files, no GPU work")
         runner = StubRunner()
     elif s.comfyui_mode == "sidecar":
@@ -99,6 +105,12 @@ async def main() -> None:
         PostgresMediaBindingStore(engine) if engine else None,
         SecretBox(s.media_secrets_key),
         http,
+        # the service's media keys (Admin › Media), read by the name a job carries (CP11)
+        secrets=LayeredSecretStore(
+            SqlSecretStore(engine, SecretBox(s.media_secrets_key)), EnvSecretStore()
+        )
+        if engine
+        else None,
     )
     processor = JobProcessor(
         s,

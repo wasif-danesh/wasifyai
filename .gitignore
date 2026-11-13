@@ -80,3 +80,6 @@ docs/listening/samples/
 apps/web/e2e/results/
 apps/web/test-results/
 apps/web/playwright-report/
+
+# the price refresh output (ADR-0100, CP12)
+cloud-prices.diff

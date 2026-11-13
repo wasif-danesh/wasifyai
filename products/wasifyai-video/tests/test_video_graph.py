@@ -33,17 +33,20 @@ class Story:
         intr = self.state.get("__interrupt__")
         return intr[0].value if intr else {}
 
-    async def finish_job(self, status="completed", data: bytes | None = None):
-        """What the media worker does: store the file, report the result."""
+    async def finish_job(
+        self, status="completed", data: bytes | None = None, output: str = "video"
+    ):
+        """What the media worker does: store the file, report the result (a cloud model's Extend
+        answers under `extended`)."""
         job = self.rig.sink.submitted[-1]
         assert self.waiting == {"kind": "job", "job_id": job.job_id}
         if status == "completed":
-            rel = f"jobs/{job.job_id}/video.mp4"
+            rel = f"jobs/{job.job_id}/{output}.mp4"
             await self.rig.raw.put(object_key("t1", "wasifyai-video", "u1", rel), data or mp4())
             result = JobResult(
                 job_id=job.job_id,
                 status="completed",
-                outputs={"video": JobOutput(key=rel, content_type="video/mp4", size=4)},
+                outputs={output: JobOutput(key=rel, content_type="video/mp4", size=4)},
             )
         else:
             result = JobResult(

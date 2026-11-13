@@ -385,6 +385,14 @@ class RemoteImageTrainer(RemoteTrainer):
     async def unpublish(self, name: str) -> None:
         return None  # `delete_model` removes the person's looks folder with the model
 
+    async def keep_file(self, adapter: Path, name: str, run_id: str) -> None:
+        """A look taught on a cloud model (ADR-0100, CP11), kept as it came under the person's own
+        prefix: the cloud image model loads it by its address, not from here."""
+        ctx = require_context()
+        key = look_key(ctx.tenant_id, ctx.user_id, run_id, name)
+        data = await asyncio.to_thread(adapter.read_bytes)
+        await self._storage.put(key, data, "application/octet-stream")
+
 
 class RemoteDecisionTrainer(RemoteTrainer):
     """`DecisionJob` in, `DecisionResult` out, like `LayaTrainer`. The taught model (about 850 MB) goes from the

@@ -26,6 +26,7 @@ from wasifyai_platform_sdk import (
     tracing,
 )
 from wasifyai_platform_sdk.jobs import progress_event
+from wasifyai_platform_sdk.offers import Priced, cost_event
 from wasifyai_platform_sdk.usage import record_safely
 from websockets.exceptions import WebSocketException
 
@@ -466,3 +467,12 @@ class JobProcessor:
             await record_safely(self.usage, event(REMOTE_SECONDS, round(elapsed, 2), "seconds"))
         if result.status == "completed":
             await record_safely(self.usage, event(JOB_COMPLETED, 1, "jobs"))
+            cost = getattr(runner, "cost", None)  # a cloud model's offer and its price (CP3)
+            if isinstance(cost, Priced) and cost.cost > 0:
+                await record_safely(
+                    self.usage,
+                    cost_event(
+                        cost, str(getattr(runner, "model", "")), job.tenant_id, job.product_id,
+                        job.user_id, job.run_id, capability=job.capability, job_id=job.job_id,
+                    ),
+                )  # fmt: skip

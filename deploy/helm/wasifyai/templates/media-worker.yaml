@@ -28,9 +28,6 @@ spec:
             {{- include "wasifyai.tracingEnv" (dict "root" . "service" "wasifyai-media-worker") | nindent 12 }}
             - { name: REDIS_URL, value: "redis://{{ .Release.Name }}-redis:6379/0" }
             - { name: COMFYUI_MODE, value: {{ .Values.mediaWorker.comfyuiMode | quote }} }
-            - { name: COMFYUI_BASE_URL, value: {{ include "wasifyai.comfyuiUrl" . | quote }} }
-            # Lets the worker free the GPU of LLMs before each generation job.
-            - { name: OLLAMA_BASE_URL, value: {{ include "wasifyai.ollamaUrl" . | quote }} }
             - { name: GPU_ID, value: {{ .Values.mediaWorker.gpuId | quote }} }
             - { name: JOB_TIMEOUT_S, value: {{ .Values.mediaWorker.jobTimeoutSeconds | quote }} }
             - { name: LOG_LEVEL, value: {{ .Values.env.LOG_LEVEL | quote }} }

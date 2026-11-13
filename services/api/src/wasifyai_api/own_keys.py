@@ -3,16 +3,22 @@ model, the model picker's Cloud tab chooses one; ADR-0100: text vendors and thre
 
 Settings › Your keys keeps, for each product, a key for each provider the person uses there. Chat
 and writing run on a text vendor: Anthropic (Claude Haiku 5.5, the default), OpenAI, Google Gemini,
-DeepSeek, Z.ai or OpenRouter. The media products run on Runware, WaveSpeed and fal.ai. Each key is
-tested before it is saved. Keys of providers the app no longer offers (Groq, another
+DeepSeek, Z.ai or OpenRouter. The media products run on Runware, WaveSpeed and fal.ai: a key saved
+under "Every media product" (`media`) serves them all, and a product's own key for the same provider
+wins (separate billing). Any one media key is enough (ADR-0100, decision 9). Each key is tested
+before it is saved. Keys of providers the app no longer offers (Groq, another
 OpenAI-compatible server, and fal.ai, WaveSpeed or Runware for chat) are deleted on the first start
 (`_prune`).
 
 The picker's Cloud tab lists the models of every provider with a key for that product
 (`own_keys_catalogue.py`); choosing one sets the product's `use`, choosing a model on this computer
-clears it. A key lives in the secret store as `keys.<product>.<provider>` (the keychain on the
-desktop, ADR-0092) and is never answered back, logged or sent anywhere but its provider: the window
-learns only whether one is saved and whether it worked.
+clears it. A text `use` names the vendor and its model; a media `use` names the model only, and its
+route carries every offer with a key (`KeyRoute.choices`), for the router to pick the cheapest for
+each job (`wasifyai_platform_sdk/offers.py`, stage CP3).
+
+A key lives in the secret store as `keys.<product>.<provider>` (the keychain on the desktop,
+ADR-0092) and is never answered back, logged or sent anywhere but its provider: the window learns
+only whether one is saved and whether it worked.
 
     OwnKeysService   keys (test, save, check, remove), `use`, the Cloud tab's rows, `route`
     router           `/desktop/keys`, what Settings › Your keys and the pickers call
@@ -41,15 +47,18 @@ from openai import (
 from pydantic import BaseModel, Field
 from wasifyai_platform_sdk import Identity, SecretStore
 from wasifyai_platform_sdk.cloud_queues import RUNWARE_API, WAVESPEED_API
+from wasifyai_platform_sdk.offers import TIE_ORDER, Offer, Price, cheapest_words, order
 
 from wasifyai_api import own_keys_catalogue as catalogue
-from wasifyai_api.identity import get_identity
+from wasifyai_api.identity import get_identity, require_admin
 from wasifyai_api.services import services_of
 from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 
 SETTINGS = "own_keys"
+VOICES = "own_keys.voices"  # MiniMax voices made from a recording or words, by what made them
+
 FAL_QUEUE = "https://queue.fal.run"
 OPENROUTER_TEXT = "https://openrouter.ai/api/v1"
 ANTHROPIC_API = "https://api.anthropic.com"
@@ -104,15 +113,25 @@ PROVIDERS: dict[str, Provider] = {
 }
 LEGACY_IDS = {"fal_text": "fal"}  # rows saved before 2026-11-11
 
+MEDIA = "media"  # the key row that serves every media product
+MEDIA_PROVIDERS = TIE_ORDER  # runware, wavespeed, fal
+
 PRODUCTS = (
     Product("chat", "Chat and writing", "text"),
+    Product(MEDIA, "Every media product", "media"),
     Product("images", "Images", "media"),
     Product("video", "Video", "media"),
     Product("voice", "Voice", "media"),
+    Product("voiceclone", "Copy or design a voice", "media"),
+    Product("transcribe", "Speech to text", "media"),
+    Product("voicechange", "Change a voice", "media"),
     Product("music", "Music", "media"),
     Product("sfx", "Sound effects", "media"),
+    Product("split", "Split into parts", "media"),
+    Product("musicedit", "Edit music", "media"),
     Product("lipsync", "Lip sync", "media"),
     Product("model3d", "3D", "media"),
+    Product("train", "Train models", "media"),
 )
 BY_ID = {p.id: p for p in PRODUCTS}
 
@@ -120,6 +139,10 @@ BY_ID = {p.id: p for p in PRODUCTS}
 def providers_for(product: Product) -> list[str]:
     """The providers a key can be saved for under `product`: those with models for it, of the
     product's kind (text on the vendors, media on Runware, WaveSpeed and fal.ai)."""
+    if product.id == MEDIA:
+        return list(MEDIA_PROVIDERS)
+    if product.kind == "media":  # in the tie order: Runware, WaveSpeed, fal.ai
+        return [v for v in MEDIA_PROVIDERS if v in catalogue.providers_of(product.id)]
     return [
         v for v in catalogue.providers_of(product.id)
         if v in PROVIDERS and PROVIDERS[v].url_for(product.kind)
@@ -131,13 +154,64 @@ def secret_name(product: str, provider: str) -> str:
 
 
 @dataclass(frozen=True)
+class KeyChoice:
+    """One offer of a media model that a saved key can run: the provider, its key and address, and
+    the offer (endpoint, price, what it can do)."""
+
+    provider: Provider
+    key: str
+    base_url: str
+    offer: Offer
+    secret: str = ""  # where the key is kept: what a web job names instead of the key (CP11)
+
+
+# what a media model can do, as the capabilities the screens ask for: making is always offered, the
+# rest by what an offer `can` (stages CP4 and CP5)
+MAKES = {"images": "image.generate", "video": "video.generate"}
+CAN = {
+    "edit": ("image.edit", "image.reference"),
+    "mask": ("image.inpaint",),
+    "animate": ("video.animate",),
+    "extend": ("video.extend",),
+    "clone": ("clone",),
+    "design": ("design",),
+}
+
+
+def capabilities(product: str, offers: list[Offer]) -> list[str]:
+    """What the offers a key can run let a product's model do, for its screen to offer."""
+    out = [MAKES[product]] if product in MAKES else []
+    for o in offers:
+        for verb in sorted(o.can):
+            out.extend(c for c in CAN.get(verb, ()) if c not in out)
+    return out
+
+
+def offer_of(c: KeyChoice) -> Offer:
+    return c.offer
+
+
+@dataclass(frozen=True)
 class KeyRoute:
-    """Where a product's requests go while it runs on a cloud model."""
+    """Where a product's requests go while it runs on a cloud model. A text route is its vendor,
+    model and key. A media route's `model` is the catalogue's id for the model and `choices` its
+    offers with a key, cheapest by list price first; `provider`, `key` and `base_url` are the first
+    choice's (the router prices each job and may pick another)."""
 
     provider: Provider
     model: str
     key: str
     base_url: str
+    choices: tuple[KeyChoice, ...] = ()
+    title: str = ""
+
+    def offers(self) -> tuple[KeyChoice, ...]:
+        """The choices to price for a job; a route without any (an admin's single row on the web)
+        is its own one choice, at no known price."""
+        if self.choices:
+            return self.choices
+        unpriced = Offer(self.provider.id, self.model, Price(0.0, "run"))
+        return (KeyChoice(self.provider, self.key, self.base_url, unpriced),)
 
 
 @dataclass(frozen=True)
@@ -296,9 +370,13 @@ class OwnKeysService:
         store: SettingsStore,
         secrets: SecretStore,
         testers: dict[Kind, Tester] | None = None,
+        cloud_only: bool = False,
     ) -> None:
         self._store = store
         self._secrets = secrets
+        # the web (ADR-0099, stage CP11): media only, and a product with a key runs on the cloud
+        # model chosen for it, else on the first of its models that a key can run
+        self.cloud_only = cloud_only
         self._testers: dict[Kind, Tester] = testers or {"text": try_vendor, "media": try_media}
         # each request asks where to go: the answer is kept until a key or a setting changes
         self._routes: dict[str, KeyRoute | None] = {}
@@ -333,8 +411,16 @@ class OwnKeysService:
                 changed = True
                 log.info("deleted the saved %s key for %s: no longer offered", prov, pid)
             use = row.get("use") or {}
-            if use and use.get("provider") not in keys:
+            text = p is None or p.kind == "text"
+            if use and text and use.get("provider") not in keys:
                 row.pop("use", None)
+                changed = True
+            if use and not text and use.get("provider"):  # a media choice saved before CP3
+                m = catalogue.media_model(pid, str(use.get("model") or ""))
+                if m is None:
+                    row.pop("use", None)
+                else:
+                    row["use"] = {"model": m.model}
                 changed = True
             row["keys"] = keys
         # a key in the secret store with no row (saved by an older build) goes too
@@ -373,34 +459,119 @@ class OwnKeysService:
         return changed
 
     async def route(self, product: str) -> KeyRoute | None:
-        """Where `product` runs now: None for this computer, else its provider, model and key."""
+        """Where `product` runs now: None for this computer, else its provider, model and key (and,
+        for a media model, every offer with a key)."""
         if product in self._routes:
             return self._routes[product]
         p = BY_ID.get(product)
-        row = (await self._all()).get(product, {})
-        use = row.get("use") or {}
-        v = PROVIDERS.get(use.get("provider") or "")
+        rows = await self._all()
+        use = rows.get(product, {}).get("use") or {}
         found: KeyRoute | None = None
-        if p is not None and v is not None and self._secrets.ready:
-            key = await self._secrets.get(secret_name(product, v.id))
-            if key:
-                base = v.url_for(p.kind)
-                model = str(use.get("model") or "")
-                # a model taken off the list (LongCat, 2026-11-12) runs on this computer again
-                if base and self._offered(p.id, use):
-                    found = KeyRoute(v, model, key, base)
+        if p is not None and not use and self.cloud_only and p.kind == "media":
+            use = {"model": await self._first_model(p.id)}
+        if p is not None and use and use.get("model") is not None and self._secrets.ready:
+            found = (
+                await self._text_route(p, use) if p.kind == "text"
+                else await self._media_route(p, str(use.get("model") or ""))
+            )  # fmt: skip
         self._routes[product] = found
         return found
+
+    async def _text_route(self, p: Product, use: dict[str, Any]) -> KeyRoute | None:
+        v = PROVIDERS.get(use.get("provider") or "")
+        if v is None:
+            return None
+        key = await self._secrets.get(secret_name(p.id, v.id))
+        model = str(use.get("model") or "")
+        # a model taken off the list runs on this computer again
+        if not key or catalogue.find(p.id, v.id, model) is None:
+            return None
+        return KeyRoute(v, model, key, v.url_for("text"))
+
+    async def keyed_media(self, product: str) -> dict[str, str]:
+        """The media providers with a key that serves `product`, and that key: the product's own,
+        else the one saved under "Every media product"."""
+        return {prov: key for prov, (key, _) in (await self._keyed(product)).items()}
+
+    async def _keyed(self, product: str) -> dict[str, tuple[str, str]]:
+        """`keyed_media` with the name each key is kept under."""
+        out: dict[str, tuple[str, str]] = {}
+        if not self._secrets.ready:
+            return out
+        rows = await self._all()
+        for prov in MEDIA_PROVIDERS:
+            for owner in (product, MEDIA):
+                if prov not in (rows.get(owner, {}).get("keys") or {}):
+                    continue
+                name = secret_name(owner, prov)
+                key = await self._secrets.get(name)
+                if key:
+                    out[prov] = (key, name)
+                    break
+        return out
+
+    async def _first_model(self, product: str) -> str | None:
+        """On the web, the model a product runs on until the admin chooses one: the first of the
+        catalogue's that a key can run."""
+        keyed = await self._keyed(product)
+        for m in catalogue.models_of(product):
+            if m.media and any(o.provider in keyed for o in m.offers):
+                return m.model
+        return None
+
+    async def _media_route(self, p: Product, model: str) -> KeyRoute | None:
+        m = catalogue.media_model(p.id, model)
+        if m is None:  # a model taken off the list (LongCat, 2026-11-12): this computer again
+            return None
+        keys = await self._keyed(p.id)
+        choices = [
+            KeyChoice(
+                PROVIDERS[o.provider],
+                keys[o.provider][0],
+                PROVIDERS[o.provider].media_url,
+                o,
+                keys[o.provider][1],
+            )
+            for o in m.offers
+            if o.provider in keys
+        ]
+        if not choices:
+            return None
+        ordered = tuple(x.choice for x in order(choices, offer_of, {}))
+        first = ordered[0]
+        return KeyRoute(first.provider, m.model, first.key, first.base_url, ordered, m.title)
 
     @staticmethod
     def _offered(product: str, use: dict[str, Any]) -> bool:
         """`use` names a model still on the list."""
         provider, model = str(use.get("provider") or ""), str(use.get("model") or "")
+        p = BY_ID.get(product)
+        if p is not None and p.kind == "media":
+            return catalogue.media_model(product, model) is not None
         return catalogue.find(product, provider, model) is not None
+
+    async def kept_voice(self, key: str, provider: str) -> str | None:
+        """A MiniMax voice made before from the same recording or words on `provider` (CP7)."""
+        kept = await self._store.get(VOICES)
+        row = kept.get(key) if isinstance(kept, dict) else None
+        return (
+            str(row["voice"]) if isinstance(row, dict) and row.get("provider") == provider else None
+        )
+
+    async def keep_voice(self, key: str, provider: str, voice: str) -> None:
+        kept = await self._store.get(VOICES)
+        rows = dict(kept) if isinstance(kept, dict) else {}
+        rows[key] = {"provider": provider, "voice": voice}
+        await self._store.put(VOICES, rows, "desktop")
 
     def known(self, product: str) -> KeyRoute | None:
         """`route` as of the last `warm`: read at start and after every change in Settings."""
         return self._known.get(product)
+
+    async def refresh(self) -> None:
+        """Read everything again: on the web another replica may have saved a key (CP11)."""
+        self._routes.clear()
+        await self.warm()
 
     async def warm(self) -> None:
         self._known = {p.id: await self.route(p.id) for p in PRODUCTS}
@@ -414,30 +585,87 @@ class OwnKeysService:
 
     def _model_title(self, product: str, provider: str, model: str) -> tuple[str, str]:
         m = catalogue.find(product, provider, model)
-        return (m.title, m.price) if m else (model, "")
+        return (m.title, m.price_words) if m else (model, "")
+
+    @staticmethod
+    def _key_rows(row: dict[str, Any], names: set[str], product: str) -> list[dict[str, Any]]:
+        keys = []
+        for prov, saved in (row.get("keys") or {}).items():
+            if secret_name(product, prov) not in names or prov not in PROVIDERS:
+                continue
+            keys.append({
+                "provider": prov, "state": "ok" if saved.get("ok") else "bad",
+                "said": saved.get("said") or None, "tested_at": saved.get("tested_at"),
+            })  # fmt: skip
+        return keys
+
+    @staticmethod
+    def _media_keys(
+        own: list[dict[str, Any]], shared: list[dict[str, Any]], product: str
+    ) -> dict[str, dict[str, Any]]:
+        """The media keys that serve `product`, by provider: its own, else the shared one."""
+        out = {k["provider"]: {**k, "shared": True} for k in shared}
+        out.update({k["provider"]: {**k, "shared": False} for k in own})
+        offered = set(catalogue.providers_of(product))
+        return {p: k for p, k in out.items() if p in offered}
+
+    @staticmethod
+    def _media_offer_row(
+        m: catalogue.CloudModel, keyed: dict[str, dict[str, Any]], use: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """One media model in the Cloud tab: shown once, priced from the offers a key can run,
+        with the provider that would be cheaper if the person had its key."""
+        able = [o for o in m.offers if o.provider in keyed]
+        if not able:
+            return None
+        first = order(able, lambda o: o, {})[0].offer
+        lowest = order(m.offers, lambda o: o, {})[0].offer
+        cheaper = lowest.provider not in keyed and lowest.price.amount < first.price.amount
+        v = PROVIDERS[first.provider]
+        return {
+            "provider": v.id, "provider_title": v.title, "host": v.host, "model": m.model,
+            "title": m.title, "about": m.about,
+            "price": cheapest_words(able), "speed": m.speed,
+            "works": any(keyed[o.provider]["state"] == "ok" for o in able),
+            "chosen": use.get("model") == m.model,
+            "providers": [x.offer.provider for x in order(able, lambda o: o, {})],
+            "cheaper_with": PROVIDERS[lowest.provider].title if cheaper else None,
+            "can": capabilities(m.product, able),
+        }  # fmt: skip
 
     async def view(self) -> dict[str, Any]:
         rows = await self._all()
         names = set(await self._secrets.names()) if self._secrets.ready else set()
+        shared = self._key_rows(rows.get(MEDIA, {}), names, MEDIA)
         products = []
         for p in PRODUCTS:
+            if self.cloud_only and p.kind != "media":
+                continue  # the web's text runs through LiteLLM (Admin › Models)
             row = rows.get(p.id, {})
-            keys = []
-            for prov, saved in (row.get("keys") or {}).items():
-                if secret_name(p.id, prov) not in names or prov not in PROVIDERS:
-                    continue
-                keys.append({
-                    "provider": prov, "state": "ok" if saved.get("ok") else "bad",
-                    "said": saved.get("said") or None, "tested_at": saved.get("tested_at"),
-                })  # fmt: skip
+            keys = self._key_rows(row, names, p.id)
             use = row.get("use")
-            if use and not any(k["provider"] == use.get("provider") for k in keys):
-                use = None
             if use and not self._offered(p.id, use):  # a model taken off the list: not in use
                 use = None
-            if use:
-                title, price = self._model_title(p.id, use["provider"], use["model"])
-                use = {**use, "title": title, "price": price}
+            if not use and self.cloud_only and p.kind == "media" and p.id != MEDIA:
+                first = await self._first_model(p.id)
+                use = {"model": first} if first else None
+            if use and p.kind == "text":
+                if not any(k["provider"] == use.get("provider") for k in keys):
+                    use = None
+                else:
+                    title, price = self._model_title(p.id, use["provider"], use["model"])
+                    use = {**use, "title": title, "price": price}
+            elif use:
+                m = catalogue.media_model(p.id, str(use.get("model") or ""))
+                offer_row = (
+                    self._media_offer_row(m, self._media_keys(keys, shared, p.id), use)
+                    if m else None
+                )  # fmt: skip
+                use = (
+                    {"provider": offer_row["provider"], "model": offer_row["model"],
+                     "title": offer_row["title"], "price": offer_row["price"]}
+                    if offer_row else None
+                )  # fmt: skip
             products.append({
                 "id": p.id, "title": p.title, "kind": p.kind, "providers": providers_for(p),
                 "keys": keys, "use": use,
@@ -451,22 +679,32 @@ class OwnKeysService:
         }
 
     async def cloud(self, product: str) -> dict[str, Any]:
-        """The Cloud tab of `product`'s picker: every model of every provider with a key saved."""
+        """The Cloud tab of `product`'s picker: a text vendor's models for each vendor with a key;
+        each media model once, when any key that serves the product can run it."""
         p = self._product(product)
         view = await self.view()
-        row = next(x for x in view["products"] if x["id"] == p.id)
+        by_id = {x["id"]: x for x in view["products"]}
+        row = by_id[p.id]
         use = row["use"] or {}
         models = []
-        for k in row["keys"]:
-            v = PROVIDERS[k["provider"]]
-            for m in catalogue.models_of(p.id, v.id):
-                models.append({
-                    "provider": v.id, "provider_title": v.title, "host": v.host,
-                    "model": m.model, "title": m.title, "about": m.about, "price": m.price,
-                    "speed": m.speed, "works": k["state"] == "ok",
-                    "chosen": use.get("provider") == v.id and use.get("model") == m.model,
-                })  # fmt: skip
-        return {"product": p.id, "models": models, "has_keys": bool(row["keys"])}
+        if p.kind == "text":
+            for k in row["keys"]:
+                v = PROVIDERS[k["provider"]]
+                for m in catalogue.models_of(p.id, v.id):
+                    models.append({
+                        "provider": v.id, "provider_title": v.title, "host": v.host,
+                        "model": m.model, "title": m.title, "about": m.about,
+                        "price": m.price_words, "speed": m.speed, "works": k["state"] == "ok",
+                        "chosen": use.get("provider") == v.id and use.get("model") == m.model,
+                        "providers": [v.id], "cheaper_with": None, "can": [],
+                    })  # fmt: skip
+            return {"product": p.id, "models": models, "has_keys": bool(row["keys"])}
+        keyed = self._media_keys(row["keys"], by_id[MEDIA]["keys"], p.id)
+        for m in catalogue.models_of(p.id):
+            found = self._media_offer_row(m, keyed, use)
+            if found is not None:
+                models.append(found)
+        return {"product": p.id, "models": models, "has_keys": bool(keyed)}
 
     # ---- checking a request ------------------------------------------------------------------
 
@@ -486,8 +724,13 @@ class OwnKeysService:
 
     @staticmethod
     def _test_model(p: Product, v: Provider) -> str:
-        listed = catalogue.models_of(p.id, v.id)
-        return listed[0].model if listed else ""
+        """A model to test the key with: a vendor's model, or a media provider's endpoint."""
+        products = [x.id for x in PRODUCTS if x.kind == "media"] if p.id == MEDIA else [p.id]
+        for pid in products:
+            for m in catalogue.models_of(pid, v.id):
+                o = m.offer_of(v.id)
+                return o.endpoint if o else m.model
+        return ""
 
     async def _key_for(self, product: str, provider: str, key: str | None) -> str:
         if key and key.strip():
@@ -549,20 +792,23 @@ class OwnKeysService:
         row = (await self._all()).get(product, {})
         keys = {k: v for k, v in (row.get("keys") or {}).items() if k != pid}
         new: dict[str, Any] = {**row, "keys": keys}
-        if (row.get("use") or {}).get("provider") == pid:
+        if p.kind == "text" and (row.get("use") or {}).get("provider") == pid:
             new.pop("use", None)
         await self._put(product, new)
         return await self.view()
 
     async def use(self, product: str, provider: str | None, model: str | None) -> dict[str, Any]:
         """Run `product` on a cloud model (from the picker's Cloud tab), or on this computer
-        again (`provider` None). The keys stay either way."""
+        again (no provider and no model). A media model needs no provider: each job runs on its
+        cheapest offer with a key. The keys stay either way."""
         p = self._product(product)
         row = (await self._all()).get(product, {"keys": {}})
-        if provider is None:
+        if provider is None and not (model or "").strip():
             new = {k: v for k, v in row.items() if k != "use"}
             await self._put(product, new)
             return await self.cloud(product)
+        if p.kind == "media":
+            return await self._use_media(p, row, (model or "").strip())
         v = self._provider(p, provider)
         saved = (row.get("keys") or {}).get(v.id)
         names = set(await self._secrets.names()) if self._secrets.ready else set()
@@ -573,6 +819,20 @@ class OwnKeysService:
             raise OwnKeyRefused(f"{v.title} has no {p.title.lower()} model called {name} here.")
         await self._put(product, {**row, "use": {"provider": v.id, "model": name}})
         return await self.cloud(product)
+
+    async def _use_media(self, p: Product, row: dict[str, Any], model: str) -> dict[str, Any]:
+        """A media model is chosen, not a provider: each job runs on its cheapest keyed offer."""
+        if p.id == MEDIA:
+            raise OwnKeyRefused("Choose a model under a product, not under every media product.")
+        m = catalogue.media_model(p.id, model) if model else None
+        if m is None:
+            raise OwnKeyRefused(f"There is no {p.title.lower()} model called {model} here.")
+        keyed = await self.keyed_media(p.id)
+        if not any(o.provider in keyed for o in m.offers):
+            names = " or ".join(PROVIDERS[o.provider].title for o in m.offers)
+            raise OwnKeyRefused(f"{m.title} needs a {names} key first.", 409)
+        await self._put(p.id, {**row, "use": {"model": m.model}})
+        return await self.cloud(p.id)
 
 
 # ---- routes -----------------------------------------------------------------------------------
@@ -585,15 +845,28 @@ class KeyBody(BaseModel):
 
 
 class UseBody(BaseModel):
-    provider: str | None = Field(None, max_length=40)  # None: this computer
-    model: str | None = Field(None, max_length=200)
+    provider: str | None = Field(None, max_length=40)  # a text vendor; not needed for media
+    model: str | None = Field(None, max_length=200)  # neither: this computer
 
 
 def _service(request: Request) -> OwnKeysService:
     svc = getattr(services_of(request), "own_keys", None)
     if svc is None:
         raise HTTPException(404, "Own keys are not available here.")
-    return svc
+    # on the web, the keys of the tenant the request is for (`TenantKeys`, stage CP11)
+    who = getattr(request.state, "keys_tenant", None)
+    by_tenant = getattr(svc, "for_tenant", None)
+    return by_tenant(who) if by_tenant is not None and who else svc  # type: ignore[no-any-return]
+
+
+async def _may(request: Request, who: Identity = Depends(get_identity)) -> Identity:
+    """Anyone on the desktop (it is their computer); on the web, where the keys are the service's,
+    an admin (Admin › Media, stage CP11)."""
+    svc = getattr(services_of(request), "own_keys", None)
+    if svc is not None and getattr(svc, "cloud_only", False):
+        await require_admin(request, who)
+    request.state.keys_tenant = who.tenant_id
+    return who
 
 
 async def _do(work: Awaitable[Any]) -> Any:
@@ -604,20 +877,18 @@ async def _do(work: Awaitable[Any]) -> Any:
 
 
 @router.get("")
-async def keys_view(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+async def keys_view(request: Request, _: Identity = Depends(_may)) -> dict[str, Any]:
     return await _service(request).view()
 
 
 @router.get("/{product}/cloud")
-async def keys_cloud(
-    product: str, request: Request, _: Identity = Depends(get_identity)
-) -> dict[str, Any]:
+async def keys_cloud(product: str, request: Request, _: Identity = Depends(_may)) -> dict[str, Any]:
     return await _do(_service(request).cloud(product))  # type: ignore[no-any-return]
 
 
 @router.put("/{product}/use")
 async def keys_use(
-    product: str, body: UseBody, request: Request, _: Identity = Depends(get_identity)
+    product: str, body: UseBody, request: Request, _: Identity = Depends(_may)
 ) -> dict[str, Any]:
     return await _do(_service(request).use(product, body.provider, body.model))  # type: ignore[no-any-return]
 
@@ -625,7 +896,7 @@ async def keys_use(
 @router.post("/{product}/keys/{provider}/test")
 async def keys_test(
     product: str, provider: str, body: KeyBody, request: Request,
-    _: Identity = Depends(get_identity),
+    _: Identity = Depends(_may),
 ) -> dict[str, Any]:  # fmt: skip
     t = await _do(_service(request).test(product, provider, body.key))
     return {"ok": t.ok, "ms": t.ms, "said": t.said or None}
@@ -634,7 +905,7 @@ async def keys_test(
 @router.put("/{product}/keys/{provider}")
 async def keys_save(
     product: str, provider: str, body: KeyBody, request: Request,
-    _: Identity = Depends(get_identity),
+    _: Identity = Depends(_may),
 ) -> dict[str, Any]:  # fmt: skip
     svc = _service(request)
     return await _do(svc.save_key(product, provider, body.key))  # type: ignore[no-any-return]
@@ -642,13 +913,13 @@ async def keys_save(
 
 @router.post("/{product}/keys/{provider}/check")
 async def keys_check(
-    product: str, provider: str, request: Request, _: Identity = Depends(get_identity)
+    product: str, provider: str, request: Request, _: Identity = Depends(_may)
 ) -> dict[str, Any]:
     return await _do(_service(request).check_key(product, provider))  # type: ignore[no-any-return]
 
 
 @router.delete("/{product}/keys/{provider}")
 async def keys_remove(
-    product: str, provider: str, request: Request, _: Identity = Depends(get_identity)
+    product: str, provider: str, request: Request, _: Identity = Depends(_may)
 ) -> dict[str, Any]:
     return await _do(_service(request).remove_key(product, provider))  # type: ignore[no-any-return]

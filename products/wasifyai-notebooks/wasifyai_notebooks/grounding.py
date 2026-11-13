@@ -252,7 +252,12 @@ def price(text: str) -> int:
 
 
 def history_budget(context: int, question: str) -> int:
-    return max(0, context - ANSWER_RESERVE - SYSTEM_PRICE - EXCERPT_PRICE - price(question))
+    """What of the window the earlier turns may take, never past `PROMPT_CAP_TOKENS` in all
+    (ADR-0100: a prompt over 100K tokens costs five times as much on Claude Haiku 5.5)."""
+    from wasifyai_notebooks.studio.context import PROMPT_CAP_TOKENS
+
+    usable = min(context, PROMPT_CAP_TOKENS)
+    return max(0, usable - ANSWER_RESERVE - SYSTEM_PRICE - EXCERPT_PRICE - price(question))
 
 
 def fit_history(turns: Sequence[tuple[str, str]], budget: int) -> list[tuple[str, str]]:

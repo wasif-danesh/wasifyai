@@ -16,12 +16,22 @@ from typing import Any
 
 import httpx
 
-from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue, ProgressFn
+from wasifyai_platform_sdk.fal import (
+    FAL_QUEUE,
+    FalError,
+    FalQueue,
+    ProgressFn,
+    data_uri,
+    media_type,
+    not_sent,
+    refused_before,
+)
 
 WAVESPEED_API = "https://api.wavespeed.ai/api/v3"
 RUNWARE_API = "https://api.runware.ai/v1"
 WAVESPEED_FAILED = ("failed", "cancelled", "timeout", "deleted")
-RUNWARE_URLS = ("imageURL", "videoURL", "audioURL")
+# objectURL: a 3D model; modelURL: a trained look (CP13: both names)
+RUNWARE_URLS = ("imageURL", "videoURL", "audioURL", "objectURL", "modelURL")
 
 
 def _said(r: httpx.Response) -> str:
@@ -41,19 +51,22 @@ def _said(r: httpx.Response) -> str:
     return ""
 
 
-def _refused(title: str, r: httpx.Response) -> FalError:
+def _refused(title: str, r: httpx.Response, before: bool = False) -> FalError:
     if r.status_code in (401, 403):
-        return FalError("provider_refused", f"{title} did not accept the key.")
+        return FalError("provider_refused", f"{title} did not accept the key.", before)
     if r.status_code == 429:
-        return FalError("provider_refused", f"{title} says too many requests. Try again soon.")
+        return FalError(
+            "provider_refused", f"{title} says too many requests. Try again soon.", before
+        )
     said = _said(r)
     return FalError(
         "provider_refused",
         f"{title} could not make it: {said}" if said else f"{title} answered {r.status_code}.",
+        before,
     )
 
 
-async def _fetch(
+async def fetch_file(
     http: httpx.AsyncClient, title: str, url: Any, fallback_type: str, wait_s: float
 ) -> tuple[bytes, str]:
     """The file at `url`, fetched without the key, and its type."""
@@ -87,6 +100,37 @@ class WaveSpeedQueue:
         self._poll = poll_s
         self._base = base_url.rstrip("/")
 
+    async def upload(self, data: bytes, name: str) -> str:
+        """Put a file in WaveSpeed's store and answer its address (kept 7 days): ask for a place
+        (`media/uploads`), send the bytes there without the key, use its `download_url`. A refusal
+        here comes before anything runs."""
+        ctype = media_type(data)
+        try:
+            r = await self._http.post(
+                f"{self._base}/media/uploads", headers=self._headers, timeout=30,
+                json={"filename": name, "size": len(data), "content_type": ctype},
+            )  # fmt: skip
+            if r.status_code >= 400:
+                raise _refused(self.title, r, before=True)
+            got = r.json().get("data") or {}
+            place, address = (got.get("upload") or {}).get("url"), got.get("download_url")
+            if not place or not address:
+                raise FalError("provider_refused", f"{self.title} gave no place to upload.", True)
+            up = await self._http.put(
+                str(place), content=data, headers={"Content-Type": ctype},
+                timeout=max(60.0, self._timeout),
+            )  # fmt: skip
+        except httpx.HTTPError:
+            raise FalError("connection_lost", f"{self.title} could not be reached.", True) from None
+        except ValueError:
+            nowhere = f"{self.title} gave no place to upload."
+            raise FalError("provider_refused", nowhere, True) from None
+        if up.status_code >= 400:
+            raise FalError(
+                "provider_refused", f"{self.title} did not take the file ({up.status_code}).", True
+            )
+        return str(address)
+
     async def call(
         self, endpoint: str, body: dict[str, Any], on_progress: ProgressFn
     ) -> dict[str, Any]:
@@ -96,10 +140,12 @@ class WaveSpeedQueue:
             r = await self._http.post(
                 f"{self._base}/{endpoint}", json=body, headers=self._headers, timeout=60
             )
-        except httpx.HTTPError:
-            raise FalError("connection_lost", f"{self.title} could not be reached.") from None
+        except httpx.HTTPError as e:
+            raise FalError(
+                "connection_lost", f"{self.title} could not be reached.", not_sent(e)
+            ) from None
         if r.status_code >= 400:
-            raise _refused(self.title, r)
+            raise _refused(self.title, r, refused_before(r))
         pid = (r.json().get("data") or {}).get("id")
         if not pid:
             raise FalError("missing_output", f"{self.title} did not take the request.")
@@ -133,7 +179,7 @@ class WaveSpeedQueue:
         result = await self.call(endpoint, body, on_progress)
         outputs = result.get("outputs") or []
         first = outputs[0] if isinstance(outputs, list) and outputs else None
-        data, ctype = await _fetch(self._http, self.title, first, fallback_type, self._timeout)
+        data, ctype = await fetch_file(self._http, self.title, first, fallback_type, self._timeout)
         return data, ctype, result
 
 
@@ -154,20 +200,43 @@ class RunwareTasks:
         self._poll = poll_s
         self._base = base_url.rstrip("/")
 
-    async def _post(self, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def _post(self, tasks: list[dict[str, Any]], first: bool = False) -> list[dict[str, Any]]:
+        """`first`: the request that starts the task; a refusal of it came before running."""
         try:
             r = await self._http.post(self._base, json=tasks, headers=self._headers, timeout=60)
-        except httpx.HTTPError:
-            raise FalError("connection_lost", f"{self.title} could not be reached.") from None
+        except httpx.HTTPError as e:
+            raise FalError(
+                "connection_lost", f"{self.title} could not be reached.", first and not_sent(e)
+            ) from None
         if r.status_code >= 400:
-            raise _refused(self.title, r)
+            raise _refused(self.title, r, first and refused_before(r))
         j = r.json()
         errors = j.get("errors") or j.get("error")
         if errors:
             said = _said(r) or str(errors)[:300]
-            raise FalError("provider_refused", f"{self.title} could not make it: {said}")
+            raise FalError("provider_refused", f"{self.title} could not make it: {said}", first)
         data = j.get("data") or []
         return [d for d in data if isinstance(d, dict)]
+
+    async def upload(self, data: bytes, name: str) -> str:
+        """A file as a task names it: a picture goes inside the task (a data URI); a clip or a
+        voice, which Runware takes only by address or upload id, goes up first with a
+        `mediaStorage` task and is named by its `mediaUUID`. A refusal here comes before anything
+        runs."""
+        if media_type(data).startswith("image/"):
+            return data_uri(data)
+        task = {
+            "taskType": "mediaStorage", "taskUUID": str(uuid.uuid4()), "operation": "upload",
+            "media": data_uri(data),
+        }  # fmt: skip
+        try:
+            rows = await self._post([task], first=True)
+        except FalError as e:
+            raise FalError(e.code, e.message, True) from None
+        stored = next((d.get("mediaUUID") for d in rows if d.get("mediaUUID")), None)
+        if not stored:
+            raise FalError("provider_refused", f"{self.title} did not keep the file.", True)
+        return str(stored)
 
     async def call(
         self, endpoint: str, body: dict[str, Any], on_progress: ProgressFn
@@ -177,7 +246,7 @@ class RunwareTasks:
         task_id = str(uuid.uuid4())
         task = {**body, "taskUUID": task_id, "model": endpoint, "deliveryMethod": "async"}
         started = time.monotonic()
-        rows = await self._post([task])
+        rows = await self._post([task], first=True)
         while True:
             done = next(
                 (d for d in rows if d.get("taskUUID") == task_id
@@ -206,7 +275,7 @@ class RunwareTasks:
     ) -> tuple[bytes, str, dict[str, Any]]:  # fmt: skip
         result = await self.call(endpoint, body, on_progress)
         url = next((result[u] for u in RUNWARE_URLS if result.get(u)), None)
-        data, ctype = await _fetch(self._http, self.title, url, fallback_type, self._timeout)
+        data, ctype = await fetch_file(self._http, self.title, url, fallback_type, self._timeout)
         return data, ctype, result
 
 

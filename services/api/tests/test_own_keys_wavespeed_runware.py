@@ -63,10 +63,13 @@ class WaveSpeed:
             n = len(self.uploads)
             self.uploads.append(json.loads(req.content))
             return httpx.Response(200, json={"data": {
-                "upload": {"url": f"https://up.wavespeed.ai/put/{n}"},
+                "upload": {"method": "PUT", "url": f"https://up.wavespeed.ai/put/{n}",
+                           "headers": {"Content-Type": "image/png", "If-None-Match": "*"}},
                 "download_url": f"https://d1.wavespeed.ai/in/{n}"}})  # fmt: skip
         if req.method == "PUT":
             assert "authorization" not in req.headers  # the key goes to WaveSpeed's API only
+            if req.headers.get("if-none-match") != "*":  # the address is signed over it
+                return httpx.Response(403)
             return httpx.Response(200)
         if req.method == "POST":
             return httpx.Response(
@@ -96,8 +99,8 @@ class WaveSpeed:
 class Runware:
     """A fake Runware: the task is taken, `getResponse` says processing once, then the URL."""
 
-    def __init__(self, field: str, file: bytes, ctype: str):
-        self.field, self.file, self.ctype = field, file, ctype
+    def __init__(self, field: str, file: bytes, ctype: str, cost: float | None = None):
+        self.field, self.file, self.ctype, self.cost = field, file, ctype, cost
         self.requests: list[httpx.Request] = []
         self.task = ""
         self.asks = 0
@@ -118,9 +121,13 @@ class Runware:
                         200, json={"data": [{"taskUUID": self.task, "status": "processing"}]}
                     )
                 url = "https://im.runware.ai/out/file"
-                return httpx.Response(
-                    200, json={"data": [{"taskUUID": self.task, self.field: url}]}
-                )
+                done = {"taskUUID": self.task, self.field: url}
+                if self.field == "files":  # a 3D task's answer (CP13)
+                    done = {"taskUUID": self.task, "status": "success",
+                            "outputs": {"files": [{"uuid": "f1", "url": url}]}}  # fmt: skip
+                if self.cost is not None:  # what the job cost, asked with `includeCost`
+                    done["cost"] = self.cost
+                return httpx.Response(200, json={"data": [done]})
             self.task = task["taskUUID"]
             return httpx.Response(200, json={"data": []})
         return httpx.Response(200, content=self.file, headers={"content-type": self.ctype})
@@ -230,6 +237,15 @@ async def test_a_picture_on_runware_is_an_image_task_of_the_sides_it_takes():
     assert task["includeCost"] is True and "inputs" not in task
     assert files["image"][1:] == ("image/png", "png")
     assert runner.cost.offer.provider == "runware" and runner.cost.cost == 0.006
+
+
+async def test_the_cost_runware_reports_is_kept_in_place_of_the_list_price():
+    rw = Runware("imageURL", a_png(), "image/png", cost=0.0013)
+    keys = await on("images", "runware", "flux-3-klein")
+    async with rw.client() as http:
+        runner = await KeyedMediaRouter(object(), keys, http, 60, 0).resolve(job())
+        await runner.run(job(), _progress)
+    assert runner.cost.offer.provider == "runware" and runner.cost.cost == 0.0013
 
 
 async def test_a_picture_changed_on_runware_carries_its_references_in_the_task():

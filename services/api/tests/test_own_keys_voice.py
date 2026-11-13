@@ -13,10 +13,12 @@ from wasifyai_api.own_keys import OwnKeysService, Provider, Tried
 from wasifyai_api.own_keys_catalogue import CATALOGUE
 from wasifyai_api.own_keys_engines import KeyedSpeechEngine
 from wasifyai_api.own_keys_voice import (
+    ELEVEN,
     KEYED_CHANGE,
     KEYED_CLONE,
     KEYED_TRANSCRIBE,
     KEYED_VOICE,
+    speak_request,
     transcript_of,
 )
 from wasifyai_api.settings_store import InMemorySettingsStore
@@ -279,3 +281,19 @@ async def test_chatterbox_changes_a_voice(tmp_path, provider):
         assert url.endswith("/chatterbox/speech-to-speech")
         assert set(body) == {"audio", "reference_audio"}
     assert res.wav[:4] == b"RIFF"
+
+
+# WaveSpeed's ElevenLabs v4 voices, read from its models list in CP13 (fal.ai knows these too)
+WAVESPEED_ELEVEN = {
+    "Alicia", "Aria", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Liam",
+    "Charlotte", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily",
+    "Bill", "Adam", "Bella", "Harry",
+}  # fmt: skip
+
+
+def test_every_elevenlabs_voice_is_one_both_providers_know():
+    """WaveSpeed refused fal.ai's default voice, Rachel (CP13)."""
+    assert {name for name, _ in ELEVEN} <= WAVESPEED_ELEVEN
+    for provider, field in (("wavespeed", "voice_id"), ("fal", "voice")):
+        body = speak_request("elevenlabs-v4", provider, "e", "Hi", None, None)
+        assert body[field] == "Aria"

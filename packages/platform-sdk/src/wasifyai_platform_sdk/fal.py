@@ -61,6 +61,14 @@ def data_uri(data: bytes) -> str:
     return f"data:{media_type(data)};base64,{base64.b64encode(data).decode()}"
 
 
+def _kind(r: httpx.Response) -> str:
+    try:
+        kind = r.json().get("type")
+    except (ValueError, AttributeError):
+        return ""
+    return kind if isinstance(kind, str) else ""
+
+
 def fal_said(r: httpx.Response) -> str:
     """fal.ai's own words for a refusal (its `detail`: a sentence or a list of them)."""
     try:
@@ -141,6 +149,9 @@ class FalQueue:
         return str(url)
 
     def _refused(self, r: httpx.Response, before: bool = False) -> FalError:
+        if r.status_code == 403 and _kind(r) == "endpoint_not_priced":
+            # a name fal.ai has no model at: its queue takes the job, then refuses it (CP13)
+            return FalError("provider_refused", f"fal.ai has no such model: {fal_said(r)}", before)
         if r.status_code in (401, 403):
             return FalError("provider_refused", "fal.ai did not accept the key.", before)
         if r.status_code == 429:

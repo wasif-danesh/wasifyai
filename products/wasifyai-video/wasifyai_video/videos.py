@@ -631,7 +631,8 @@ async def join_clips(
 ) -> bytes:
     """The first `keep` frames of `source` followed by every frame of `extension`, as one MP4 at
     24 frames a second. Two LTX clips are the same size and the join is frame exact; a cloud
-    model's clip (ADR-0100, CP5) is brought to `size`, the source's, first. `keep` 0 is the
+    model's clip (ADR-0100, CP5) is brought to `size`, the source's, first: filled and cut, not
+    stretched. `keep` 0 is the
     extension alone."""
     exe = ffmpeg_path()
     with tempfile.TemporaryDirectory(prefix="wasifyai-video-") as tmp:
@@ -639,7 +640,14 @@ async def join_clips(
         a.write_bytes(source)
         b.write_bytes(extension)
         # the frame rate first: scaled first, fps drops the last frame
-        fit = f",scale={size[0]}:{size[1]},setsar=1" if size else ""
+        # filled and cut to the source's shape, never stretched: Gemini Omni makes only wide or
+        # tall clips (CP13)
+        fit = (
+            f",scale={size[0]}:{size[1]}:force_original_aspect_ratio=increase,"
+            f"crop={size[0]}:{size[1]},setsar=1"
+            if size
+            else ""
+        )
         graph = (
             f"[0:v]trim=end_frame={keep},setpts=PTS-STARTPTS,fps=24[a];"
             f"[1:v]setpts=PTS-STARTPTS,fps=24{fit}[b];[a][b]concat=n=2:v=1:a=0[v]"

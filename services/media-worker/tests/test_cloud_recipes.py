@@ -106,6 +106,7 @@ async def test_z_image_paints_on_runware_with_the_files_in_the_task_and_on_fal_b
     assert task["inputs"]["maskImage"].startswith("data:image/png;base64,")
     assert (task["width"], task["height"], task["seed"]) == (1024, 768, 7)
     assert task["includeCost"] is True
+    assert task["strength"] == 1.0  # the default barely changed the painted area (CP13)
     fal = RECIPES[("fal", "z-image-turbo")]
     endpoint, body = await fal(
         ask("image.inpaint", pictures=(PIC,), mask=MASK), OFFERS["z-image-turbo"]["fal"], Sent()
@@ -128,6 +129,8 @@ async def test_runware_changes_a_picture_with_its_references(provider, model, re
     )
     assert endpoint == f"{model}:air"
     assert len(task["inputs"]["referenceImages"]) == refs  # no more than it takes
+    # Runware refuses a seed for Grok Imagine (found in CP13); the others take it
+    assert ("seed" in task) == (model != "grok-imagine-image-2.0")
 
 
 async def test_an_offer_that_cannot_take_the_job_says_so_before_sending():

@@ -33,16 +33,21 @@ def a_cutout(tmp_path: Path) -> Path:
     [("hunyuan3d-3.1-pro", "tencent:hunyuan-3d@3.1-pro"), ("trellis-2", "microsoft:trellis-2@4b")],
 )
 async def test_each_model_on_runware_takes_the_picture_inside_the_task(tmp_path, model, air):
-    rw = Runware("objectURL", GLB, "model/gltf-binary")
+    rw = Runware("files", GLB, "model/gltf-binary")  # outputs.files, as Runware answers
     usage = InMemoryUsageRecorder()
     engine = KeyedModel3d(Local3d(), await on(model, "runware"), rw.client, poll_s=0, usage=usage)
     assert engine.ready() and engine.state()["keyed"] is True
     res = await engine.generate(a_cutout(tmp_path), tmp_path / "m.glb", seed=3)
     assert res.ok and (tmp_path / "m.glb").read_bytes() == GLB
     (task,) = [t for t in rw.tasks() if t["taskType"] == "3dInference"]
-    assert task["model"] == air and task["outputFormat"] == "GLB" and task["seed"] == 3
-    assert task["inputs"]["images"][0].startswith("data:image/png;base64,")
-    assert ("settings" in task) is (model == "trellis-2")
+    trellis = model == "trellis-2"
+    assert task["model"] == air and task["outputFormat"] == "GLB"
+    # each takes its own fields on Runware (CP13): TRELLIS one picture and a seed, Hunyuan a list
+    # of pictures and no seed
+    picture = task["inputs"]["image"] if trellis else task["inputs"]["images"][0]
+    assert picture.startswith("data:image/png;base64,")
+    assert task.get("seed") == (3 if trellis else None)
+    assert ("settings" in task) is trellis
     assert usage.events[0].meta["provider"] == "runware"
 
 
@@ -67,18 +72,18 @@ async def test_hunyuan_on_fal_names_its_picture_its_own_way(tmp_path):
     res = await engine.generate(a_cutout(tmp_path), tmp_path / "m.glb", seed=9)
     assert res.ok and (tmp_path / "m.glb").read_bytes() == GLB
     ((url, body),) = fal.posts()
-    assert url.endswith("/fal-ai/hunyuan3d-v31/pro/image-to-3d")
+    assert url.endswith("/fal-ai/hunyuan-3d/v3.1/pro/image-to-3d")
     assert fal.uploads[body["input_image_url"]] == PNG and body["seed"] == 9
 
 
 async def test_with_both_keys_trellis_runs_on_the_cheaper_runware(tmp_path):
-    rw = Runware("objectURL", GLB, "model/gltf-binary")
+    rw = Runware("files", GLB, "model/gltf-binary")  # outputs.files, as Runware answers
     usage = InMemoryUsageRecorder()
     keys = await on("trellis-2", "runware", "wavespeed")
     engine = KeyedModel3d(Local3d(), keys, rw.client, poll_s=0, usage=usage)
     assert (await engine.generate(a_cutout(tmp_path), tmp_path / "m.glb")).ok
     (event,) = usage.events
-    assert event.meta["provider"] == "runware" and event.quantity == pytest.approx(0.01)
+    assert event.meta["provider"] == "runware" and event.quantity == pytest.approx(0.028)
 
 
 async def test_with_a_fal_key_the_cut_out_is_still_fals(tmp_path):

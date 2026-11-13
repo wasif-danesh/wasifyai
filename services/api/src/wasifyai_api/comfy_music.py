@@ -77,6 +77,34 @@ async def to_wav(data: bytes, suffix: str) -> bytes:
         return await asyncio.to_thread(dst.read_bytes)
 
 
+NOT_CONVERTED = "The recording could not be converted."
+
+
+async def to_mp3(data: bytes, suffix: str = ".wav") -> bytes:
+    """`data` as a 192 kbit/s MP3, for a provider that takes no WAV (Mureka stems on fal.ai,
+    CP13). Needs ffmpeg."""
+    ffmpeg = await asyncio.to_thread(_find_ffmpeg)
+    if not ffmpeg:
+        raise VoiceEngineError(
+            "needs_converter", "Sending this recording as an MP3 needs ffmpeg on this computer."
+        )
+    with tempfile.TemporaryDirectory(prefix="comfy-music-") as tmp:
+        src, dst = Path(tmp) / f"in{suffix}", Path(tmp) / "out.mp3"
+        await asyncio.to_thread(src.write_bytes, data)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                ffmpeg, "-nostdin", "-loglevel", "error", "-i", str(src), "-b:a", "192k", str(dst),
+                stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )  # fmt: skip
+            await asyncio.wait_for(proc.wait(), timeout=300)
+        except (OSError, TimeoutError):
+            raise VoiceEngineError("engine_failed", NOT_CONVERTED) from None
+        if proc.returncode != 0 or not dst.is_file():
+            raise VoiceEngineError("engine_failed", NOT_CONVERTED)
+        return await asyncio.to_thread(dst.read_bytes)
+
+
 def _wav_facts(wav: bytes) -> tuple[int, float]:
     import io
     import wave

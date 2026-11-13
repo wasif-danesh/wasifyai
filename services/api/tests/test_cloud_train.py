@@ -159,7 +159,8 @@ async def test_klein_looks_are_taught_on_fal_and_other_models_are_refused_in_wor
     _, told = report()
     await engine.train(a_job(tmp_path, "flux3-image-klein"), told, lambda name: None)
     ((url, body),) = fal.posts()
-    assert url.endswith("/fal-ai/flux-3-klein-trainer") and "training_type" not in body
+    assert url.endswith("/blackforestlabs/flux-3/klein/base/trainer")
+    assert "training_type" not in body
 
 
 async def test_with_train_on_this_computer_the_local_trainer_does_it(tmp_path):

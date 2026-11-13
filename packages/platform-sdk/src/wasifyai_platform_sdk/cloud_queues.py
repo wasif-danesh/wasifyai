@@ -34,6 +34,18 @@ WAVESPEED_FAILED = ("failed", "cancelled", "timeout", "deleted")
 RUNWARE_URLS = ("imageURL", "videoURL", "audioURL", "objectURL", "modelURL")
 
 
+def runware_url(d: dict[str, Any]) -> str | None:
+    """Where a finished Runware task's file is: one of `RUNWARE_URLS`, or, for a 3D task,
+    `outputs.files[0].url` (CP13)."""
+    found = next((d[u] for u in RUNWARE_URLS if d.get(u)), None)
+    if found:
+        return str(found)
+    files = (d.get("outputs") or {}).get("files") if isinstance(d.get("outputs"), dict) else None
+    if isinstance(files, list) and files and isinstance(files[0], dict) and files[0].get("url"):
+        return str(files[0]["url"])
+    return None
+
+
 def _said(r: httpx.Response) -> str:
     """A provider's own words for a refusal, from the usual places."""
     try:
@@ -113,11 +125,16 @@ class WaveSpeedQueue:
             if r.status_code >= 400:
                 raise _refused(self.title, r, before=True)
             got = r.json().get("data") or {}
-            place, address = (got.get("upload") or {}).get("url"), got.get("download_url")
+            spot = got.get("upload") or {}
+            place, address = spot.get("url"), got.get("download_url")
             if not place or not address:
                 raise FalError("provider_refused", f"{self.title} gave no place to upload.", True)
-            up = await self._http.put(
-                str(place), content=data, headers={"Content-Type": ctype},
+            # the address is signed over the headers WaveSpeed names (If-None-Match among them)
+            sent = {"Content-Type": ctype}
+            if isinstance(spot.get("headers"), dict):
+                sent |= {str(k): str(v) for k, v in spot["headers"].items()}
+            up = await self._http.request(
+                str(spot.get("method") or "PUT"), str(place), content=data, headers=sent,
                 timeout=max(60.0, self._timeout),
             )  # fmt: skip
         except httpx.HTTPError:
@@ -248,11 +265,7 @@ class RunwareTasks:
         started = time.monotonic()
         rows = await self._post([task], first=True)
         while True:
-            done = next(
-                (d for d in rows if d.get("taskUUID") == task_id
-                 and any(d.get(u) for u in RUNWARE_URLS)),
-                None,
-            )  # fmt: skip
+            done = next((d for d in rows if d.get("taskUUID") == task_id and runware_url(d)), None)
             if done is not None:
                 return done
             failed = next(
@@ -274,7 +287,7 @@ class RunwareTasks:
         on_progress: ProgressFn,
     ) -> tuple[bytes, str, dict[str, Any]]:  # fmt: skip
         result = await self.call(endpoint, body, on_progress)
-        url = next((result[u] for u in RUNWARE_URLS if result.get(u)), None)
+        url = runware_url(result)
         data, ctype = await fetch_file(self._http, self.title, url, fallback_type, self._timeout)
         return data, ctype, result
 

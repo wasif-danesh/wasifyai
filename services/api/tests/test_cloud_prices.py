@@ -1,7 +1,8 @@
 """The catalogue's prices kept current (ADR-0100, stage CP12), against fake price lists: a changed
 price becomes a diff of the catalogue's offer line, never applied; a price in another unit or an
 offer the provider does not list is reported and left alone; fal.ai's list is read with the key in
-batches; a provider whose list cannot be read is named and the others still compared."""
+batches, and alone when it does not know one of a batch; WaveSpeed's from its models list; a
+provider whose list cannot be read is named and the others still compared."""
 
 import subprocess
 from pathlib import Path
@@ -54,7 +55,10 @@ def test_the_same_price_another_unit_or_none_listed():
     assert other.new is None and "per second" in other.note
     (missing,) = cp.compare([m], {"fal": {}})
     assert missing.new is None and "not in the provider's list" in missing.note
-    assert cp.compare([m], {"runware": {}}) == []  # fal.ai not read: not compared
+    assert cp.compare([m], {"wavespeed": {}}) == []  # fal.ai not read: not compared
+    # fal.ai prices a name it has no model at in compute seconds (CP13)
+    (nowhere,) = cp.compare([m], {"fal": {"fal-ai/kokoro": cp.Listed(0.00017, "compute seconds")}})
+    assert nowhere.new is None and "not in the provider's list" in nowhere.note
     assert cp.catalogue_diff("x", [other, missing], "p") == ""
 
 
@@ -75,21 +79,40 @@ async def test_fal_prices_are_read_with_the_key_in_batches():
     assert got["fal-ai/m52"] == cp.Listed(0.01, "image")
 
 
-async def test_runware_schemas_and_wavespeed_pages():
+async def test_a_batch_fal_does_not_know_is_asked_one_by_one():
+    seen: list[list[str]] = []
+
     def answer(req: httpx.Request) -> httpx.Response:
-        if req.url.host == "runware.ai":
-            if "z-image" in str(req.url):
-                return httpx.Response(200, json={"pricing": {"amount": 0.0025, "unit": "image"}})
-            return httpx.Response(404)
-        return httpx.Response(200, text="<h2>Pricing</h2><p>Only <b>$0.05</b> per image</p>")
+        ids = req.url.params.get_list("endpoint_id")
+        seen.append(ids)
+        if "fal-ai/gone" in ids:  # fal.ai refuses the whole batch for one name it does not know
+            return httpx.Response(404, json={"error": {"type": "not_found"}})
+        prices = [{"endpoint_id": e, "unit_price": 0.005, "unit": "megapixels"} for e in ids]
+        return httpx.Response(200, json={"prices": prices})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(answer)) as http:
-        rw = await cp.runware_fetch(http, ["runware:z-image@turbo", "google:nano-banana@2.1"])
-        ws = await cp.wavespeed_fetch(http, ["google/nano-banana-2.1/text-to-image"])
-    assert rw == {"runware:z-image@turbo": cp.Listed(0.0025, "image")}
-    assert ws["google/nano-banana-2.1/text-to-image"] == cp.Listed(0.05, "image")
-    assert cp.price_on_page("$0.08 per 1,000 characters") == cp.Listed(0.08, "1000 characters")
-    assert cp.price_on_page("no price here") is None
+        got = await cp.fal_fetch(FAL_KEY, pace_s=0)(http, ["fal-ai/z-image/turbo", "fal-ai/gone"])
+    z, gone = "fal-ai/z-image/turbo", "fal-ai/gone"
+    assert seen == [[z, gone], [z], [gone]]
+    assert got == {"fal-ai/z-image/turbo": cp.Listed(0.005, "megapixels")}
+    assert cp.unit_of("megapixels") == "picture"
+
+
+async def test_wavespeed_prices_come_from_its_models_list():
+    def answer(req: httpx.Request) -> httpx.Response:
+        assert req.headers["authorization"] == "Bearer ws-key"
+        return httpx.Response(200, json={"data": [
+            {"model_id": "mureka-ai/stem-song", "base_price": 1.05},
+            {"model_id": "someone/else", "base_price": 9},
+        ]})  # fmt: skip
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(answer)) as http:
+        got = await cp.wavespeed_fetch("ws-key")(http, ["mureka-ai/stem-song"])
+    assert got == {"mureka-ai/stem-song": cp.Listed(1.05, "")}
+    stems = catalogue.media_model("split", "mureka-stems")
+    assert stems is not None
+    (c,) = cp.compare([stems], {"wavespeed": got})  # in the model's own unit: the amount compared
+    assert (c.provider, c.new, c.unit) == ("wavespeed", 1.05, "song")
 
 
 async def test_a_list_that_cannot_be_read_is_named_and_the_others_still_compared():
@@ -100,8 +123,8 @@ async def test_a_list_that_cannot_be_read_is_named_and_the_others_still_compared
         return {"fal-ai/kokoro": cp.Listed(0.03, "1000 characters")}
 
     async with httpx.AsyncClient() as http:
-        changes, failed = await cp.refresh(http, {"runware": broken, "fal": fal}, [kokoro()])
-    assert failed == ["runware: ConnectError"]
+        changes, failed = await cp.refresh(http, {"wavespeed": broken, "fal": fal}, [kokoro()])
+    assert failed == ["wavespeed: ConnectError"]
     assert [(c.endpoint, c.new) for c in changes] == [("fal-ai/kokoro", 0.03)]
     assert "fal-ai/kokoro" in cp.summary(changes) and "$0.02 -> $0.03" in cp.summary(changes)
     assert cp.summary([]) == "Every listed price is the catalogue's."

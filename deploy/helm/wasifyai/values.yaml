@@ -94,6 +94,22 @@ litellm:
     requests: { cpu: 100m, memory: 512Mi }
     limits: { memory: 2Gi }
 
+# The text embedder for search (ADR-0100, decision 4, owner 2026-11-13): bge-m3 (multilingual, 1024
+# dimensions) on llama.cpp's server, on the CPU. The file (635 MB) is fetched once onto the volume and
+# checked against its sha256; LiteLLM's `creation-embedder` alias points at the service.
+embedder:
+  image: ghcr.io/ggml-org/llama.cpp:server-b11669   # linux/amd64 and linux/arm64
+  model:
+    file: bge-m3-q8_0.gguf
+    url: https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF/resolve/9eba04c5d75ba5a1595e45de734d36bef4e5cb98/bge-m3-q8_0.gguf
+    sha256: aa473d51f451a22f0fcf39ba3330c14bed38a385712b1113440f69df4047a173
+  contextSize: 8192       # bge-m3's longest input, in tokens
+  storage: 2Gi
+  storageClass: ""
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { memory: 2Gi }
+
 postgres:
   enabled: true                          # false -> managed DB; provide DATABASE_URL in the Secret
   image: pgvector/pgvector:pg16

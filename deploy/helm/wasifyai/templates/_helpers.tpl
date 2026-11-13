@@ -66,6 +66,8 @@ imagePullSecrets:
 - name: LITELLM_API_KEY
   valueFrom:
     secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: LITELLM_API_KEY }
+- name: EMBEDDER_BASE_URL  # seeded into the `creation-embedder` alias; LiteLLM calls it
+  value: "http://{{ .Release.Name }}-embedder:8080"
 - name: LOG_LEVEL
   value: {{ .Values.env.LOG_LEVEL | quote }}
 - name: PRODUCT_ENV

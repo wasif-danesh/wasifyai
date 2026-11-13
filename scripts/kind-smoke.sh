@@ -26,6 +26,8 @@ check "prompt enhancing needs a known kind" "test \"\$(curl -s -o /dev/null -w '
 # with AUTH_MODE=stub, where the dev user is an admin, so ask the API from inside its own pod. The
 # expected list is the API's own (model_defaults.yaml), not a number written here.
 check "default model aliases are seeded in the gateway" "kubectl -n $NS exec deploy/wasifyai-api -c api -- python -c \"import urllib.request,json,sys,yaml; from wasifyai_api.model_access import DEFAULTS_FILE; want=set(yaml.safe_load(DEFAULTS_FILE.read_text())['aliases']); m=json.load(urllib.request.urlopen('http://localhost:8000/admin/models',timeout=20))['models']; sys.exit(0 if {x['alias'] for x in m}==want and all(x['source']=='default' for x in m) else 1)\""
+# Search embeds on bge-m3 in the cluster (ADR-0100, decision 4): the gateway's alias answers with 1024 numbers.
+check "search embedder answers through the gateway" "kubectl -n $NS exec deploy/wasifyai-api -c api -- python -c \"import os,urllib.request,json,sys; r=urllib.request.Request(os.environ['LITELLM_BASE_URL']+'/v1/embeddings',data=json.dumps({'model':'creation-embedder','input':['hello']}).encode(),headers={'Authorization':'Bearer '+os.environ['LITELLM_API_KEY'],'Content-Type':'application/json'}); d=json.load(urllib.request.urlopen(r,timeout=60)); sys.exit(0 if len(d['data'][0]['embedding'])==1024 else 1)\""
 
 # Media pipeline: queue -> worker (stub mode) -> object storage -> completion -> graph resumes.
 # Needs no LLM or GPU, so it also runs in CI.

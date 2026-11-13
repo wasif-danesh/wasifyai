@@ -14,10 +14,12 @@ environment. Differences live in env vars and Helm values overlays.
 | Postgres | Container | CloudNativePG | Managed (RDS, Cloud SQL, Azure Flexible Server) |
 | Redis | Container | In-cluster | Managed |
 | Object storage | SeaweedFS | SeaweedFS | S3, GCS or Azure Blob |
+| Search embeddings | bge-m3 on llama.cpp (container) | same, in-cluster on the CPU | same |
 | Secrets | `.env` (gitignored) | SOPS / External Secrets | External Secrets from cloud secret manager |
 | Deploys | Manual | Auto-sync from `main` | Promotion only (tag or PR) |
 
-The web runs no model of its own (ADR-0099; ADR-0100, stage CP11): text goes through LiteLLM to the
+The web runs one model of its own, bge-m3 for search on the CPU (the `embedder` StatefulSet; ADR-0100's
+amendment of 2026-11-13). Otherwise it runs only cloud models (ADR-0099; ADR-0100, stage CP11): text goes through LiteLLM to the
 vendors of Admin › Models, and every picture, clip, voice, song, lip sync, 3D model and look to the
 cheapest offer of the model chosen in Admin › Media, with the service's Runware, WaveSpeed and
 fal.ai keys there (per tenant, encrypted in the `secrets` table). The chart has no ComfyUI, Ollama

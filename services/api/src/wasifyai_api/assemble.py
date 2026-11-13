@@ -387,7 +387,10 @@ async def _shared(
     models = given.model_access
     if models is None:
         base = settings.ollama_base_url.rstrip("/")
-        defaults = load_defaults({"OLLAMA_BASE_URL": base, "OLLAMA_OPENAI_BASE_URL": f"{base}/v1"})
+        defaults = load_defaults({
+            "OLLAMA_BASE_URL": base, "OLLAMA_OPENAI_BASE_URL": f"{base}/v1",
+            "EMBEDDER_BASE_URL": settings.embedder_base_url.rstrip("/"),
+        })  # fmt: skip
         if injected or desktop:  # tests, desktop: no gateway to seed
             models = ModelAccess(InMemoryModelBackend(), defaults)
         else:

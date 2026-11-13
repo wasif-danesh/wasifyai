@@ -58,17 +58,20 @@ aliases:
       api_key: os.environ/ANTHROPIC_API_KEY
       reasoning_effort: low
       max_tokens: 8000
-  # Embeddings (ADR-0100, decision 4): OpenAI's text-embedding-3-small ($0.02 per million tokens),
-  # asked for the same sizes as before so the vector columns stay: 1024 for searching My creations
-  # (ADR-0041) and 768 for the RAG helper (migration 0003). Changing the embedder means the search
-  # index is built again.
+  # Embeddings (ADR-0100, decision 4, owner 2026-11-13): bge-m3 on the web's own CPU (the
+  # `embedder` service of the chart and compose, llama.cpp's server): free per call, multilingual,
+  # 1024 dimensions for searching My creations (ADR-0041) and Notebook sources. Nothing leaves the
+  # service. `{EMBEDDER_BASE_URL}` is filled from the API's settings. Changing the embedder means the
+  # search index is built again.
   creation-embedder:
-    purpose: Multilingual embeddings for searching My creations
+    purpose: Multilingual embeddings for searching My creations and Notebook sources
     kind: embedding
     litellm_params:
-      model: openai/text-embedding-3-small
-      api_key: os.environ/OPENAI_API_KEY
-      dimensions: 1024
+      model: openai/bge-m3
+      api_base: "{EMBEDDER_BASE_URL}/v1"
+      api_key: none  # the server takes no key; the OpenAI client needs a value
+  # The RAG helper's 768 dimensions (migration 0003): no product uses it on the web, so it stays on
+  # OpenAI's text-embedding-3-small and needs OPENAI_API_KEY only if something calls it.
   embedder:
     purpose: Text embeddings for search (RAG)
     kind: embedding

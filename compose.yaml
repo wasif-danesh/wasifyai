@@ -62,10 +62,35 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes: ["./deploy/compose/litellm.yaml:/app/config.yaml:ro"]
     ports: ["4000:4000"]
+  # The text embedder for search (ADR-0100, decision 4): bge-m3 on llama.cpp's server, on the CPU.
+  # LiteLLM's `creation-embedder` alias points at it (EMBEDDER_BASE_URL, default http://embedder:8080).
+  # The file (635 MB) is fetched once into the volume and checked; the pins match the Helm values.
+  embedder-model:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11669
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        f=/models/bge-m3-q8_0.gguf
+        ok() { echo "aa473d51f451a22f0fcf39ba3330c14bed38a385712b1113440f69df4047a173  $$f" | sha256sum -c - >/dev/null 2>&1; }
+        if [ -f "$$f" ] && ok; then exit 0; fi
+        curl -fsSL --retry 3 -o "$$f.part" https://huggingface.co/ggml-org/bge-m3-Q8_0-GGUF/resolve/9eba04c5d75ba5a1595e45de734d36bef4e5cb98/bge-m3-q8_0.gguf
+        mv "$$f.part" "$$f"
+        ok || { echo "the model file does not match its checksum"; rm -f "$$f"; exit 1; }
+    volumes: ["embeddermodels:/models"]
+  embedder:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11669
+    command: ["--model", "/models/bge-m3-q8_0.gguf", "--embedding", "--host", "0.0.0.0", "--port", "8080",
+              "--ctx-size", "8192", "--batch-size", "8192", "--ubatch-size", "8192"]
+    depends_on:
+      embedder-model: { condition: service_completed_successfully }
+    volumes: ["embeddermodels:/models:ro"]
+    ports: ["8090:8080"]
   api:
     build: { context: ., dockerfile: services/api/Containerfile }
     env_file: .env
-    depends_on: [postgres, redis, litellm, seaweedfs]
+    depends_on: [postgres, redis, litellm, seaweedfs, embedder]
     ports: ["8000:8000"]
   media-worker:
     build: { context: ., dockerfile: services/media-worker/Containerfile }
@@ -86,4 +111,4 @@ services:
     env_file: .env
     depends_on: [api]
     ports: ["3000:3000"]
-volumes: { pgdata: {}, seaweeddata: {} }
+volumes: { pgdata: {}, seaweeddata: {}, embeddermodels: {} }

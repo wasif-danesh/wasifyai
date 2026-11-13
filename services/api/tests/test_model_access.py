@@ -26,6 +26,7 @@ from tests.test_runs import hello_registry, mem_app
 SUBST = {
     "OLLAMA_BASE_URL": "http://ollama:11434",
     "OLLAMA_OPENAI_BASE_URL": "http://ollama:11434/v1",
+    "EMBEDDER_BASE_URL": "http://embedder.test:8080",
 }
 KEY = "sk-live-0123456789abcdef0123456789abcdef"
 
@@ -69,9 +70,13 @@ def test_every_text_alias_is_haiku_with_an_effort_and_no_temperature():
         "default-chat": "medium", "planner": "high", "lyrics-writer": "low",
         "prompt-enhancer": "low", "multimodal": "low",
     }  # fmt: skip
-    for alias, size in (("creation-embedder", 1024), ("embedder", 768)):
-        p = d[alias]["litellm_params"]
-        assert p["model"] == "openai/text-embedding-3-small" and p["dimensions"] == size
+    # search runs on bge-m3 on the web's own embedder (decision 4, 2026-11-13); the RAG helper's
+    # 768 alias stays on OpenAI, unused by the products
+    p = d["creation-embedder"]["litellm_params"]
+    assert p["model"] == "openai/bge-m3" and "dimensions" not in p
+    assert p["api_base"] == "http://embedder.test:8080/v1"
+    p = d["embedder"]["litellm_params"]
+    assert p["model"] == "openai/text-embedding-3-small" and p["dimensions"] == 768
 
 
 @pytest.mark.parametrize(

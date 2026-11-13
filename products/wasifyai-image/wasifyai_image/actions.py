@@ -4,9 +4,11 @@ change a picture of the library, and the library's pictures as a kind of creatio
 Adding an action is adding to `actions()`: the executor, the assistant and MCP read it there."""
 
 import asyncio
+import io
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
+from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk.actions import (
     Action,
@@ -32,12 +34,47 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class StyleIn(Strict):
+    """A style (LoRA) the desktop keeps, by its id from styles.list."""
+
+    id: str = Field(pattern=r"^[a-f0-9]{6,32}$", description="The style's id, from styles.list.")
+    strength: float = Field(1.0, ge=0.05, le=2.0, description="How strongly it is applied.")
+
+
+def styles_field() -> Any:
+    """The optional `styles` of an image action (one field object per model)."""
+    return Field(
+        default_factory=list, max_length=8,
+        description="Styles to apply (desktop only), from styles.list; put each style's word in "
+        "the prompt.",
+    )  # fmt: skip
+
+
+def model_field() -> Any:
+    """The optional `model` of an image action (ADR-0097)."""
+    return Field(
+        None, pattern=r"^[a-z0-9][a-z0-9.-]{0,63}$",
+        description="Which image model makes it, by its id (as the Models page names it, for "
+        "example qwen-image-2.1); leave it out for the default model.",
+    )  # fmt: skip
+
+
+def _styles(p: "GenerateIn | EditIn | ReferenceIn | InpaintIn") -> dict:
+    """The styles and the chosen model, as the image run takes them."""
+    out: dict = {"styles": [s.model_dump() for s in p.styles]} if p.styles else {}
+    if p.model:
+        out["model"] = p.model
+    return out
+
+
 class GenerateIn(Strict):
     prompt: str = Field(
         min_length=1, max_length=MAX_PROMPT_CHARS,
         description="A clear, concrete description of the picture, in English.",
     )  # fmt: skip
     size: Size = Field("square", description="The shape of the picture.")
+    styles: list[StyleIn] = styles_field()
+    model: str | None = model_field()
 
 
 class EditIn(Strict):
@@ -45,6 +82,45 @@ class EditIn(Strict):
     prompt: str = Field(
         min_length=1, max_length=MAX_PROMPT_CHARS, description="What to change, in English."
     )
+    styles: list[StyleIn] = styles_field()
+    model: str | None = model_field()
+
+
+class ReferenceIn(Strict):
+    image_ids: list[str] = Field(
+        min_length=2, max_length=2,
+        description="Two pictures of the library, in order: picture 1 and picture 2.",
+    )  # fmt: skip
+    prompt: str = Field(
+        min_length=1, max_length=MAX_PROMPT_CHARS,
+        description='What to make from them, in English: "the cat from picture 1 on the chair '
+        'from picture 2".',
+    )  # fmt: skip
+    size: Size = Field("square", description="The shape of the new picture.")
+    styles: list[StyleIn] = styles_field()
+    model: str | None = model_field()
+
+
+class Region(Strict):
+    """A rectangle on the picture, as shares of its width and height (0 is the left or top edge)."""
+
+    left: float = Field(ge=0, le=1, description="Where it starts, from the left edge.")
+    top: float = Field(ge=0, le=1, description="Where it starts, from the top edge.")
+    width: float = Field(gt=0, le=1, description="How wide it is.")
+    height: float = Field(gt=0, le=1, description="How tall it is.")
+
+
+class InpaintIn(Strict):
+    image_id: str = Field(min_length=1, max_length=64, description="The picture to change.")
+    prompt: str = Field(
+        min_length=1, max_length=MAX_PROMPT_CHARS,
+        description="What to put in the area, in English.",
+    )  # fmt: skip
+    region: Region = Field(
+        description="The area to change, as a rectangle. Everything outside it stays as it is."
+    )
+    styles: list[StyleIn] = styles_field()
+    model: str | None = model_field()
 
 
 class ImageOut(BaseModel):
@@ -71,7 +147,7 @@ def _made(outputs: dict, prompt: str, verb: str) -> Outcome | None:
 
 
 def _generate_input(p: GenerateIn, ctx: ActionContext) -> dict:
-    return {"mode": "text", "prompt": p.prompt, "size": p.size}
+    return {"mode": "text", "prompt": p.prompt, "size": p.size, **_styles(p)}
 
 
 def _generate_result(outputs: dict, p: GenerateIn) -> Outcome | None:
@@ -83,11 +159,85 @@ async def _edit_input(p: EditIn, ctx: ActionContext) -> dict:
     if data is None:
         raise ActionRefused("not_found", "That picture is not in the library.")
     key = await stage_picture(ctx, PRODUCT_ID, data)
-    return {"mode": "image", "prompt": p.prompt, "image_key": key}
+    return {
+        "mode": "image", "prompt": p.prompt, "image_key": key, "source_id": p.image_id,
+        **_styles(p),
+    }  # fmt: skip
 
 
 def _edit_result(outputs: dict, p: EditIn) -> Outcome | None:
     return _made(outputs, p.prompt, "changed")
+
+
+async def _reference_input(p: ReferenceIn, ctx: ActionContext) -> dict:
+    keys = []
+    for image_id in p.image_ids:
+        data = await _read(ctx, image_id)
+        if data is None:
+            raise ActionRefused("not_found", "One of those pictures is not in the library.")
+        keys.append(await stage_picture(ctx, PRODUCT_ID, data))
+    return {
+        "mode": "reference", "prompt": p.prompt, "size": p.size,
+        "image_key": keys[0], "image2_key": keys[1], "source_id": p.image_ids[0], **_styles(p),
+    }  # fmt: skip
+
+
+def _reference_result(outputs: dict, p: ReferenceIn) -> Outcome | None:
+    return _made(outputs, p.prompt, "made from the two pictures")
+
+
+async def _reference_check(p: ReferenceIn, ctx: ActionContext) -> None:
+    if p.image_ids[0] == p.image_ids[1]:
+        raise ActionRefused("same_picture", "Choose two different pictures.")
+    deps = need_deps(ctx)
+    for image_id in p.image_ids:
+        if (
+            await image_store(deps.engine).get(ctx.actor.tenant_id, ctx.actor.user_id, image_id)
+            is None
+        ):
+            raise ActionRefused("not_found", "One of those pictures is not in the library.")
+
+
+def _mask_of(data: bytes, region: Region) -> bytes:
+    """The rectangle as a white-on-black picture of the source's shape."""
+    with Image.open(io.BytesIO(data)) as source:
+        width, height = source.size
+    mask = Image.new("L", (width, height), 0)
+    box = (
+        round(region.left * width), round(region.top * height),
+        round(min(1.0, region.left + region.width) * width),
+        round(min(1.0, region.top + region.height) * height),
+    )  # fmt: skip
+    mask.paste(255, box)
+    out = io.BytesIO()
+    mask.save(out, "PNG")
+    return out.getvalue()
+
+
+async def _inpaint_input(p: InpaintIn, ctx: ActionContext) -> dict:
+    data = await _read(ctx, p.image_id)
+    if data is None:
+        raise ActionRefused("not_found", "That picture is not in the library.")
+    mask = await asyncio.to_thread(_mask_of, data, p.region)
+    return {
+        "mode": "inpaint", "prompt": p.prompt,
+        "image_key": await stage_picture(ctx, PRODUCT_ID, data),
+        "mask_key": await stage_picture(ctx, PRODUCT_ID, mask),
+        "source_id": p.image_id, **_styles(p),
+    }  # fmt: skip
+
+
+def _inpaint_result(outputs: dict, p: InpaintIn) -> Outcome | None:
+    return _made(outputs, p.prompt, "changed in the chosen area")
+
+
+async def _inpaint_check(p: InpaintIn, ctx: ActionContext) -> None:
+    deps = need_deps(ctx)
+    if (
+        await image_store(deps.engine).get(ctx.actor.tenant_id, ctx.actor.user_id, p.image_id)
+        is None
+    ):
+        raise ActionRefused("not_found", "That picture is not in the library.")
 
 
 async def _edit_check(p: EditIn, ctx: ActionContext) -> None:
@@ -108,11 +258,14 @@ def actions() -> list[Action]:
                 "Make a new picture from a description and save it to the person's library. Use "
                 "it when the person asks you to draw, paint, make or generate an image. Write the "
                 "prompt as a clear, concrete description in English. Returns the picture's id and "
-                "size. To change a picture that exists, use image.edit."
+                "size. To change a picture that exists, use image.edit. On the desktop, styles "
+                "from styles.list can be applied (put each style's word in the prompt)."
             ),
             input=GenerateIn, output=ImageOut,
             examples=({"prompt": "a red teapot on a wooden table"},
-                      {"prompt": "a cat dressed as an astronaut on the moon", "size": "wide"}),
+                      {"prompt": "a cat dressed as an astronaut on the moon", "size": "wide"},
+                      {"prompt": "a lighthouse at sunset, anime_style",
+                       "styles": [{"id": "c0fa6b280203", "strength": 1.0}]}),
             effect="make", requires=(need_product(PRODUCT_ID),), long=True, product=PRODUCT_ID,
             bind=RunBinding(PRODUCT_ID, "image", _generate_input, _generate_result),
             ui="images.create",
@@ -130,6 +283,47 @@ def actions() -> list[Action]:
             effect="make", requires=(need_product(PRODUCT_ID),), long=True, product=PRODUCT_ID,
             bind=RunBinding(PRODUCT_ID, "image", _edit_input, _edit_result, check=_edit_check),
             ui="images.edit",
+        ),
+        Action(
+            id="image.reference", title="Make a picture from two pictures",
+            summary="Make a new picture from a description and two library pictures.",
+            description=(
+                "Make a new picture from two pictures of the library and a description that says "
+                'what to take from each ("the cat from picture 1 on the chair from picture 2"). '
+                "The pictures are used in order, the originals stay, and the new picture is saved "
+                "to the library. Use image.edit to change one picture, image.generate for a "
+                "picture from words alone."
+            ),
+            input=ReferenceIn, output=ImageOut,
+            examples=({"image_ids": ["0b7c1f9e-0000-4000-8000-000000000000",
+                                     "0b7c1f9e-0000-4000-8000-000000000001"],
+                       "prompt": "the cat from picture 1 sitting on the chair from picture 2",
+                       "size": "wide"},),
+            effect="make", requires=(need_product(PRODUCT_ID),), long=True, product=PRODUCT_ID,
+            bind=RunBinding(
+                PRODUCT_ID, "image", _reference_input, _reference_result, check=_reference_check
+            ),
+            ui="images.reference",
+        ),
+        Action(
+            id="image.inpaint", title="Change part of a picture",
+            summary="Change only a rectangle of a library picture; the rest stays as it is.",
+            description=(
+                "Change one area of a picture of the library and leave every pixel outside it "
+                "as it was. Give the area as a rectangle (shares of the picture's width and "
+                "height) and say what to put there. It saves a new picture and keeps the "
+                "original. The model sometimes ignores a small area; a larger one works better. "
+                "Use image.edit to change the whole picture."
+            ),
+            input=InpaintIn, output=ImageOut,
+            examples=({"image_id": "0b7c1f9e-0000-4000-8000-000000000000",
+                       "prompt": "a white coffee cup with steam",
+                       "region": {"left": 0.6, "top": 0.55, "width": 0.3, "height": 0.35}},),
+            effect="make", requires=(need_product(PRODUCT_ID),), long=True, product=PRODUCT_ID,
+            bind=RunBinding(
+                PRODUCT_ID, "image", _inpaint_input, _inpaint_result, check=_inpaint_check
+            ),
+            ui="images.inpaint",
         ),
     ]  # fmt: skip
 

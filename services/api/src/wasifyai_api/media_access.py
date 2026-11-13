@@ -4,7 +4,8 @@ The product config says what a capability needs (a ComfyUI workflow); the admin 
 another backend. Bindings are stored in Postgres, keys encrypted; the worker reads them per job."""
 
 import logging
-from collections.abc import Callable
+import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
 
@@ -20,13 +21,50 @@ from wasifyai_platform_sdk import (
     SecretsUnavailable,
     backends_for,
     check_backend,
+    default_backend,
     family,
     validate_config,
 )
 
+from wasifyai_api.settings_store import SettingsStore
+
 log = logging.getLogger(__name__)
 
 DEFAULT_BACKEND = "comfyui-local"
+CHECKS = "media_checks"  # the last test of each saved row: "Key not working" comes from here
+# the rows the API runs itself (ADR-0095, K5): speaking, music, sound effects, lip sync and 3D
+# models, engine workers or fal.ai
+API_ROWS = (
+    ("wasifyai-voice", "speech.speak"),
+    ("wasifyai-voice", "speech.music"),
+    ("wasifyai-voice", "speech.sfx"),
+    ("wasifyai-voice", "speech.lipsync"),
+    ("wasifyai-model3d", "model3d.generate"),
+)
+# the rows whose fal.ai model must be one this app knows how to ask (each takes its own fields), by
+# the product of the cloud catalogue (`own_keys_catalogue.py`) that lists them, and their words
+CHECKED_ROWS = {
+    "speech.music": ("music", "a music model"),
+    "speech.sfx": ("sfx", "a sound effects model"),
+    "speech.lipsync": ("lipsync", "a lip sync model"),
+}
+
+
+def _check_model(backend: str, capability: str, config: dict[str, Any]) -> None:
+    """Music, sound effects and lip sync on fal.ai take only the catalogue's models: another name
+    would never be offered to anyone."""
+    from wasifyai_api.own_keys_catalogue import models_of
+
+    if backend != "fal" or capability not in CHECKED_ROWS:
+        return
+    product, what = CHECKED_ROWS[capability]
+    known = [m.model for m in models_of(product, "fal")]
+    model = str(config.get("model") or "")
+    if model not in known:
+        raise MediaAccessError(
+            f"{model or 'That'} is not {what} this service can use on fal.ai. "
+            f"Use one of: {', '.join(known)}."
+        )
 
 
 class MediaAccessError(Exception):
@@ -56,6 +94,12 @@ class BackendView(BaseModel):
     fields: list[FieldView]
 
 
+class CheckView(BaseModel):
+    ok: bool
+    message: str
+    at: float
+
+
 class MediaView(BaseModel):
     product_id: str
     capability: str
@@ -67,6 +111,7 @@ class MediaView(BaseModel):
     allowed_backends: list[str]
     updated_by: str | None
     updated_at: datetime | None
+    check: CheckView | None = None  # the last test of the saved row
 
 
 class MediaList(BaseModel):
@@ -79,6 +124,8 @@ class MediaBindingIn(BaseModel):
     backend: str
     config: dict[str, str] = {}
     api_key: str | None = None  # write-only: encrypted, never returned
+    # "Use the key saved for …": another row of the same backend, "<product>/<capability>"
+    key_from: str | None = None
 
 
 def backend_views() -> list[BackendView]:
@@ -97,6 +144,25 @@ def backend_views() -> list[BackendView]:
     ]  # fmt: skip
 
 
+MODEL_KEY = "media.model.{product_id}"  # the model an admin chose for a product (ADR-0097, MV6)
+
+
+class ModelOption(BaseModel):
+    id: str
+    title: str
+    can: list[str]  # the capabilities it binds: what the product's screens can do with it
+
+
+class ProductModels(BaseModel):
+    product_id: str
+    models: list[ModelOption]
+    chosen: str  # the model its jobs use when a request names none: the admin's, else the first
+
+
+class ModelChoiceIn(BaseModel):
+    model: str
+
+
 class MediaAccess:
     def __init__(
         self,
@@ -106,7 +172,14 @@ class MediaAccess:
         local_url: str,
         http: httpx.AsyncClient | None = None,
         video_local_url: str = "",
+        checks: SettingsStore | None = None,
+        changed: Callable[[str], Awaitable[None]] | None = None,
+        models: Callable[[], dict[str, list[ModelOption]]] | None = None,
     ):
+        self._read_models = models or dict
+        self._models_read: dict[str, list[ModelOption]] | None = None
+        self._checks = checks
+        self._changed = changed  # where the API runs a row itself (`AdminProviders.changed`)
         self._store = store
         self._box = box
         self._capabilities = capabilities
@@ -114,32 +187,104 @@ class MediaAccess:
         self._video_local_url = video_local_url
         self._http = http
 
+    # ---- which model each product uses (ADR-0097, MV6) ----------------------------------------
+
+    def _models(self) -> dict[str, list[ModelOption]]:
+        """The products' models, read once: product.yaml does not change while the API runs."""
+        if self._models_read is None:
+            self._models_read = self._read_models()
+        return self._models_read
+
+    async def chosen_model(self, product_id: str) -> str | None:
+        """The model an admin chose for `product_id`, while the product still offers it."""
+        offered = {m.id for m in self._models().get(product_id, [])}
+        saved = (
+            await self._checks.get(MODEL_KEY.format(product_id=product_id))
+            if self._checks is not None
+            else None
+        )
+        return saved if isinstance(saved, str) and saved in offered else None
+
+    async def model_choices(self) -> list[ProductModels]:
+        out = []
+        for product_id, models in sorted(self._models().items()):
+            if models:
+                chosen = await self.chosen_model(product_id) or models[0].id
+                out.append(ProductModels(product_id=product_id, models=models, chosen=chosen))
+        return out
+
+    async def choose_model(self, product_id: str, model: str, by: str) -> ProductModels:
+        models = self._models().get(product_id) or []
+        if model not in {m.id for m in models}:
+            raise MediaAccessError(f"{product_id} does not offer the model {model!r}")
+        if self._checks is None:
+            raise MediaAccessError("the model choice cannot be kept here")
+        await self._checks.put(MODEL_KEY.format(product_id=product_id), model, by)
+        return ProductModels(product_id=product_id, models=models, chosen=model)
+
     def _find(self, product_id: str, capability: str) -> MediaCapability:
         for c in self._capabilities():
             if (c.product_id, c.capability) == (product_id, capability):
                 return c
         raise MediaAccessError(f"{product_id} has no media capability {capability!r}")
 
-    def _view(self, cap: MediaCapability, b: MediaBinding | None) -> MediaView:
+    async def _all_checks(self) -> dict[str, Any]:
+        saved = await self._checks.get(CHECKS) if self._checks is not None else None
+        return dict(saved) if isinstance(saved, dict) else {}
+
+    async def _note(self, tenant_id: str, product_id: str, capability: str, out: Any) -> None:
+        if self._checks is None:
+            return
+        rows = await self._all_checks()
+        name = f"{tenant_id}/{product_id}/{capability}"
+        if out is None:
+            rows.pop(name, None)
+        else:
+            rows[name] = {"ok": out.ok, "message": out.message, "at": time.time()}
+        await self._checks.put(CHECKS, rows, "admin")
+
+    def _view(
+        self, cap: MediaCapability, b: MediaBinding | None, check: dict[str, Any] | None = None
+    ) -> MediaView:
         return MediaView(
             product_id=cap.product_id, capability=cap.capability, workflow=cap.workflow,
-            backend=b.backend if b else DEFAULT_BACKEND, source="custom" if b else "default",
+            backend=b.backend if b else default_backend(cap.capability),
+            source="custom" if b else "default",
             config={k: str(v) for k, v in (b.config if b else {}).items()},
             key_set=bool(b and b.key_set),
             allowed_backends=[s.id for s in backends_for(cap.capability)],
             updated_by=b.updated_by if b else None, updated_at=b.updated_at if b else None,
+            check=CheckView(**check) if b and check else None,
         )  # fmt: skip
 
     async def list(self, tenant_id: str) -> MediaList:
         saved = {(b.product_id, b.capability): b for b in await self._store.list(tenant_id)}
+        checks = await self._all_checks()
         items = [
-            self._view(c, saved.get((c.product_id, c.capability))) for c in self._capabilities()
-        ]
+            self._view(
+                c, saved.get((c.product_id, c.capability)),
+                checks.get(f"{tenant_id}/{c.product_id}/{c.capability}"),
+            )
+            for c in self._capabilities()
+        ]  # fmt: skip
         return MediaList(items=items, backends=backend_views(), secrets_ready=self._box.ready)
 
     async def get(self, tenant_id: str, product_id: str, capability: str) -> MediaView:
         cap = self._find(product_id, capability)
-        return self._view(cap, await self._store.get(tenant_id, product_id, capability))
+        checks = await self._all_checks()
+        return self._view(
+            cap, await self._store.get(tenant_id, product_id, capability),
+            checks.get(f"{tenant_id}/{product_id}/{capability}"),
+        )  # fmt: skip
+
+    async def _borrowed(self, tenant_id: str, key_from: str, backend: str) -> tuple[str, bool]:
+        """The encrypted key of the row `key_from` ("<product>/<capability>"), which must run on
+        the same backend: "Use the key saved for …". The key is copied inside the store."""
+        product_id, _, capability = key_from.partition("/")
+        source = await self._store.get(tenant_id, product_id, capability)
+        if source is None or source.backend != backend or source.secret_enc is None:
+            raise MediaAccessError("That row has no key saved for this service.")
+        return source.secret_enc, True
 
     async def set(
         self, tenant_id: str, product_id: str, capability: str, new: MediaBindingIn, actor: str
@@ -148,24 +293,39 @@ class MediaAccess:
         saved = await self._store.get(tenant_id, product_id, capability)
         keep = saved is not None and saved.backend == new.backend and saved.key_set
         api_key = (new.api_key or "").strip() or None
+        borrowed: str | None = None
+        if new.key_from and not api_key:
+            borrowed, keep = await self._borrowed(tenant_id, new.key_from, new.backend)
         try:
             config = validate_config(new.backend, capability, new.config, api_key, keep)
         except InvalidBackendConfig as exc:
             raise MediaAccessError(str(exc)) from exc
-        if api_key:
+        _check_model(new.backend, capability, config)
+        if borrowed is not None:
+            secret: str | None = borrowed
+        elif api_key:
             try:
-                secret: str | None = self._box.encrypt(api_key)
+                secret = self._box.encrypt(api_key)
             except SecretsUnavailable as exc:
                 raise MediaAccessError(str(exc)) from exc
         else:
             secret = saved.secret_enc if keep and saved else None  # same backend: keep the old key
         binding = MediaBinding(product_id, capability, new.backend, config, secret, actor)
         await self._store.put(tenant_id, binding)
+        if secret != (saved.secret_enc if saved else None) or new.backend != (
+            saved.backend if saved else None
+        ):
+            await self._note(tenant_id, product_id, capability, None)  # a new key: not tested yet
+        if self._changed is not None:
+            await self._changed(tenant_id)
         return await self.get(tenant_id, cap.product_id, cap.capability)
 
     async def reset(self, tenant_id: str, product_id: str, capability: str) -> MediaView:
         self._find(product_id, capability)
         await self._store.delete(tenant_id, product_id, capability)
+        await self._note(tenant_id, product_id, capability, None)
+        if self._changed is not None:
+            await self._changed(tenant_id)
         return await self.get(tenant_id, product_id, capability)
 
     async def test(
@@ -175,26 +335,38 @@ class MediaAccess:
         self._find(product_id, capability)
         saved = await self._store.get(tenant_id, product_id, capability)
         if proposed is None:
-            backend, config = (saved.backend, saved.config) if saved else (DEFAULT_BACKEND, {})
+            backend, config = (
+                (saved.backend, saved.config) if saved else (default_backend(capability), {})
+            )
             key = self._saved_key(saved)
         else:
             api_key = (proposed.api_key or "").strip() or None
             same = saved is not None and saved.backend == proposed.backend and saved.key_set
+            if proposed.key_from and not api_key:
+                enc, _ = await self._borrowed(tenant_id, proposed.key_from, proposed.backend)
+                api_key = self._decrypt(enc)
             try:
                 config = validate_config(
                     proposed.backend, capability, proposed.config, api_key, same
                 )
             except InvalidBackendConfig as exc:
                 raise MediaAccessError(str(exc)) from exc
+            _check_model(proposed.backend, capability, config)
             backend, key = proposed.backend, api_key or (self._saved_key(saved) if same else None)
         url = self._video_local_url if capability.startswith("video.") else ""
-        return await check_backend(backend, config, key, url or self._local_url, self._http)
+        out = await check_backend(backend, config, key, url or self._local_url, self._http)
+        if proposed is None and saved is not None:  # the saved row: its state in the table
+            await self._note(tenant_id, product_id, capability, out)
+        return out
 
     def _saved_key(self, saved: MediaBinding | None) -> str | None:
         if saved is None or saved.secret_enc is None:
             return None
+        return self._decrypt(saved.secret_enc)
+
+    def _decrypt(self, token: str) -> str:
         try:
-            return self._box.decrypt(saved.secret_enc)
+            return self._box.decrypt(token)
         except SecretsUnavailable as exc:
             raise MediaAccessError(str(exc)) from exc
 
@@ -210,11 +382,41 @@ def media_capabilities_from(registry: Any, products_dir: Any, env: str) -> list[
         except Exception:
             log.exception("could not read the config of %s", product_id)
             continue
-        for name, binding in config.capabilities.items():
+        bound = list(config.capabilities.items())
+        first = config.model(None)  # a product with several models (ADR-0097): its default one
+        if first is not None:
+            bound += list(first.capabilities.items())
+        for name, binding in bound:
             if binding.provider == "comfyui" and family(name) in {"image", "music", "video"}:
                 out.append(
                     MediaCapability(
                         product_id=product_id, capability=name, workflow=binding.workflow
                     )
                 )
+    products = set(registry.products())
+    out += [MediaCapability(product_id=p, capability=c) for p, c in API_ROWS if p in products]
+    return out
+
+
+def media_models_from(registry: Any, products_dir: Any, env: str) -> dict[str, list[ModelOption]]:
+    """Each product's models (`models:` in product.yaml) with their catalogue titles, in order."""
+    from pathlib import Path
+
+    from wasifyai_platform_sdk import load_product_config
+
+    from wasifyai_api.desktop_models import load_catalogue
+
+    out: dict[str, list[ModelOption]] = {}
+    for product_id in registry.products():
+        try:
+            config = load_product_config(products_dir, product_id, env=env)
+            titles = {e.id: e.title for e in load_catalogue(Path(products_dir), [product_id])}
+        except Exception:
+            log.exception("could not read the models of %s", product_id)
+            continue
+        if config.models:
+            out[product_id] = [
+                ModelOption(id=m.id, title=titles.get(m.id, m.id), can=sorted(m.capabilities))
+                for m in config.models
+            ]
     return out

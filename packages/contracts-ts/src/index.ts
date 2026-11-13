@@ -33,7 +33,9 @@ export type MediaView = components["schemas"]["MediaView"];
 export type MediaBackend = components["schemas"]["BackendView"];
 export type MediaField = components["schemas"]["FieldView"];
 export type MediaTestOutcome = components["schemas"]["MediaTestOutcome"];
-export type SafeguardsStatus = components["schemas"]["SafeguardsStatus"];
+// the model each product with several models uses (ADR-0097, MV6)
+export type ProductModels = components["schemas"]["ProductModels"];
+export type ModelOption = components["schemas"]["ModelOption"];
 
 // wasifyai-image's read API and the upload endpoint
 export type ImageSummary = components["schemas"]["ImageSummary"];

@@ -9,20 +9,27 @@ Action: `video.generate`
 
 ## What it is for
 
-Make a short video clip (2 or 5 seconds) from a description.
+Make a short video clip (5 or 8 seconds) from a description.
 
 ## Steps in the app
 
 1. Open **Video › Create**.
 2. Describe what happens.
-3. Choose the shape and the length.
-4. Choose Create. It takes minutes; you can leave the screen.
+3. Choose the length and the shape.
+4. Choose **Make the video**. It takes minutes; you can leave the screen, and the clip plays where it appears
+   when it is done. Under it are your recent videos; **Extend this** carries a clip on.
+
+## My looks
+
+If you taught the video model a look or a motion (under **Train models**, in the Video model training card), the screen shows **My looks**: choose up to two and a strength for each (1.5 is a good start; above 2 can look rough). The app adds each look's magic word to your prompt if it is missing. A look made for another model does not work here; looks are made for LTX-Video 2B only.
 
 ## Fields
 
 - `prompt`: What happens in the clip.
 - `shape`: landscape, portrait or square.
-- `seconds`: 2 or 5.
+- `seconds`: 5 or 8 (5 unless you say otherwise).
+- `model`: which video model makes it, by its id (for example `wan2.2-14b`); left out, the default. A model
+  that cannot do this is refused ("This model cannot ...").
 
 ## Limits
 
@@ -40,4 +47,4 @@ Make a short video clip (2 or 5 seconds) from a description.
 ## Problems
 
 - **You already have a video being made** Wait for it to finish.
-- **Not set up** Open **Models** and set up the video engine.
+- **Not set up** Open **Model hub** and set up the video engine.

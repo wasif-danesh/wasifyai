@@ -1,12 +1,13 @@
 "use client";
 
 import { type VideoSummary, type VideosApi, clipLength, when } from "@wasifyai/client";
-import { Save, Search, Sparkles } from "lucide-react";
+import { Maximize2, Save, Search, Sparkles } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
+import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 
 export type VideoLibraryProps = {
   videos: VideosApi;
@@ -22,6 +23,8 @@ export type VideoLibraryProps = {
   className?: string;
   /** How often to look again while a clip is being made (milliseconds). */
   pollMs?: number;
+  /** "Extend this" on a finished clip: the app opens Extend with it chosen. */
+  onExtend?: (video: VideoSummary) => void;
 };
 
 /** Everything the person made, newest first, with search, save and delete; clips being made show up too. */
@@ -33,9 +36,11 @@ export function VideoLibrary({
   subtitle = "Every clip you made on this computer.",
   className,
   pollMs = 5000,
+  onExtend,
 }: VideoLibraryProps) {
   const [items, setItems] = useState<VideoSummary[] | null>(null);
   const [next, setNext] = useState<string | null>(null);
+  const saveCopy = useSaveCopy();
   const [query, setQuery] = useState("");
   const [searched, setSearched] = useState<string | null>(null);
   const [open, setOpen] = useState<VideoSummary | null>(null);
@@ -96,8 +101,11 @@ export function VideoLibrary({
     setError(null);
     setMessage(null);
     try {
-      const done = await api.exportCopy(video.id);
-      setMessage(`Saved as ${done.name} in Downloads.`);
+      const done = await saveCopy({
+        name: fileNameFor(video.prompt, extensionOf(video.video_url ?? "", "mp4"), "video"),
+        copy: (path) => api.exportCopy(video.id, path),
+      });
+      if (done) setMessage(savedText(done));
     } catch (e) {
       setError(e instanceof Error ? e.message : "The video could not be saved.");
     }
@@ -241,11 +249,22 @@ export function VideoLibrary({
             )}
             <p>{open.prompt}</p>
             <p className="text-muted-foreground text-sm">
-              {open.mode === "image" ? "From a picture" : "From text"} · {clipLength(open.seconds)}
+              {{
+                image: "From a picture",
+                extend: "Carried on",
+                import: "Added from your computer",
+                text: "From text",
+              }[open.mode] ?? "From text"}{" "}
+              · {clipLength(open.seconds)}
               {open.width && open.height ? ` · ${open.width}×${open.height}` : ""} ·{" "}
               {when(open.created_at)}
             </p>
             <div className="flex flex-wrap gap-2">
+              {onExtend && open.status === "done" ? (
+                <Button type="button" onClick={() => onExtend(open)}>
+                  <Maximize2 className="size-4" /> Extend this
+                </Button>
+              ) : null}
               {canSave && open.status === "done" ? (
                 <Button type="button" variant="outline" onClick={() => void save(open)}>
                   <Save className="size-4" /> Save a copy

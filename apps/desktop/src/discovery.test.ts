@@ -14,7 +14,6 @@ const model = (over: Partial<FoundModel>): FoundModel => ({
   path: "/x",
   tool: "ollama",
   tool_title: "Ollama",
-  licence: "",
   state: "later",
   reason: "",
   use_root: null,

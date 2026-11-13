@@ -1,22 +1,18 @@
 # Runbook: notebooks and speech on the web profile
 
 For staging and production (a cloud GPU host, models from a hosted provider; decisions of 2026-10-18 in
-`docs/phase3-web-parity-plan.md`). Both products are **off** until switched on in the Helm values.
+`docs/phase3-web-parity-plan.md`). Both products are **always on** (no switches, owner 2026-10-21): the API serves them, the web app shows them, and the chart
+runs the notebooks worker.
 
 ## What each needs
 
 | | Notebooks | Speech (voice) |
 |---|---|---|
-| Switch | `notebooks.enabled=true` | `voice.enabled=true` |
 | Needs | Postgres with pgvector, object storage, the **worker** (`<registry>/wasifyai-notebooks`), the gateway alias `creation-embedder` | Postgres, object storage, the gateway aliases `voice-speak` and `voice-transcribe` |
 | Pods | API, web, **notebooks-worker** | API, web |
 | Sends to a third party | the text of sources, to the embedder and the chat model the aliases point at | the text to speak and the recordings to read, to the speech provider |
 
-The chart passes `NOTEBOOKS_ENABLED` and `VOICE_ENABLED` to the API **and** the web app (the web app uses them for the
-menu and for sending the older speech pages to the new ones). Setting them on only one of the two gives a menu that
-lies; the chart cannot do that, a hand-made deployment can.
-
-## Switching on
+## Setting up
 
 1. Check the images exist: `api`, `web` and `wasifyai-notebooks` (CI builds all three; the worker image is the large one
    because it holds the document reader and its models: about 3 GB).
@@ -25,16 +21,14 @@ lies; the chart cannot do that, a hand-made deployment can.
    test (it speaks a word, and reads a second of silence). `creation-embedder` must be a 1024-dimension multilingual
    embedder (the default is bge-m3). If it changes dimension, set `notebooks.embedDimension`; stored vectors of another
    size are not searched.
-3. Put both on in the environment's values and sync:
+3. Turn the safeguards on for a public deployment (quotas on notebooks apply only while they are on) and sync:
 
    ```yaml
-   notebooks: { enabled: true }
-   voice: { enabled: true }
-   safeguards: { forceOn: true }   # quotas on notebooks (sources, bytes) apply only while safeguards are on
+   safeguards: { forceOn: true }
    ```
 
 4. Check: the API log says nothing about "is not installed"; `kubectl get deploy -l app.kubernetes.io/component=notebooks-worker`
-   is ready; in the web app the Notebook and Voice menu items open (not "Soon"); add a small PDF to a notebook and see it
+   is ready; in the web app the Notebook and Voice menu items open (a voice screen is linked when a ready model can do it, so until the aliases are bound only the screens the models allow show); add a small PDF to a notebook and see it
    go from reading to ready; speak a sentence.
 
 ## Running it
@@ -70,6 +64,13 @@ Set the switch to false and sync. The data stays (schemas `notebooks` and `voice
 prefix); the menu items return to "Soon" and the older speech pages stop redirecting. Do not drop a schema to "reset":
 people's notebooks and speeches are in it.
 
+## Getting a model onto a worker from the web (P5)
+
+Sign in as an admin and open Admin > Workers. Each worker lists the speech models it knows and whether they are on its disk;
+"Get ... (size)" has the worker download and check the files and shows how far it is. The lip sync engine is set up from the same
+page. Anyone can then choose the model with "Select ... model" on the Voice, Listening, Music or Lip sync screen. The worker does
+one job at a time, so a big download makes other jobs wait. `scripts/worker.sh models <id>` does the same from a terminal.
+
 ## The web app on a Mac with the local models (development and testing)
 
 Music, splitting, voice change, speech edit, dubbing, the audiobook and lip sync run on the machine that has the
@@ -89,3 +90,53 @@ Everything made is kept in Postgres and the containers' object storage, not in t
 
 The cloud GPU host itself (the local models above are for development; a deployment with `VOICE_ENGINE=local` needs a
 machine with them and their memory), moderation and quotas for speech, and a load test.
+
+
+## The engine worker: Music, Voices, Change a voice, Edit speech, Dub, Audiobook, Split and Lip sync (ADR-0087)
+
+Hosted models give the web Text to speech and Speech to text. The rest of the voice menu runs on an **engine worker**: the
+desktop engine's speech runtime behind a job loop. A screen is linked in the web menu when a live worker lists a *ready* model for it.
+
+**On a Mac (development, a home lab).** `make dev` starts the workers in the background when the desktop app's data folder exists
+(`make worker` runs the engine worker in a terminal; `scripts/worker.sh stop|logs`). It uses the models and the speech runtime the desktop app set
+up, so quit the desktop app while the worker makes something. `WORKER_DATA_DIR` picks another folder.
+
+**Getting a model onto the worker's machine** (until the admin screen of stage P5 exists):
+
+```bash
+scripts/worker.sh models                 # every speech model, its state here and its size
+scripts/worker.sh models htdemucs        # fetch one (the same code and checks as the desktop app's Models page)
+```
+
+The web menu shows the new screens within a few seconds of a model becoming ready (the API reads the worker list every 3 seconds).
+
+**Checking.** `GET /products/wasifyai-voice/models` lists what the workers list, with their state; the worker's log says
+`worker <name>: ... ready models: [...]` at start and one line per job. If nothing is listed, the worker is not running or cannot
+reach Redis (`REDIS_URL`) or storage (`STORAGE_*`).
+
+**Not here yet:** a worker on a Linux GPU host and its Helm values (stage P7), and the lip sync engine's own environment, which is
+set up in the desktop app for now.
+
+**Lip sync on fal.ai, without a GPU worker (2026-11-12).** In Admin › Media, edit the row `wasifyai-voice` / `speech.lipsync`,
+choose fal.ai, and give one of `veed/fabric-1.0/fast` (quickest), `fal-ai/kling-video/ai-avatar/v2/standard`,
+`fal-ai/bytedance/omnihuman/v1.5` or `fal-ai/infinitalk` (another name is refused), with a key or "Use the key saved for …".
+The API runs it (`KeyedSpeechEngine` over `AdminProviders`), so Lip sync appears in the menu for everyone at once, with the
+model named "Fabric 1.0 Fast · fal.ai", its price on the picker and its time and cost on the screen. The picture and the voice
+go to fal.ai's file store first. Reset sends it back to the engine workers. A run the API was making when it restarted is not
+picked up again.
+
+**Music and sound effects on fal.ai (2026-11-12).** The same, with the rows `speech.music` (`fal-ai/minimax-music/v2.6`, songs
+with lyrics or words it writes; or `fal-ai/elevenlabs/music`, 3 s to 10 min) and `speech.sfx`
+(`fal-ai/elevenlabs/sound-effects/v2`, 0.5 to 22 s). Both show on Create music, before the workers' models; sound effects are
+its Sound effects mode. A row takes only its own kind of model (the cloud catalogue's, `own_keys_catalogue.py`).
+
+
+### Images and video on a Mac: the media worker (the same pattern)
+
+The stack's own `media-worker` container makes placeholder pictures unless it can reach a ComfyUI. On a Mac, `scripts/worker.sh start`
+(and `make dev`) starts a **native media worker** with `COMFYUI_MODE=sidecar`: it starts the ComfyUI the desktop app installed
+(`<data folder>/engine/comfyui`), reads the model folders the desktop app saved (its Models page: the app's own folder and, for
+example, `~/ComfyUI-Shared/models`), and takes the jobs from the same queue. It stops the container worker so the two do not compete.
+Create, Edit, Inpaint, Reference, Make a video, Animate and Extend then run on the real engine. Check with
+`uv run python scripts/web_media_check.py` (images in about two minutes, each clip in minutes). The two workers share one GPU and one
+memory; quit the desktop app while they run jobs.

@@ -18,6 +18,17 @@ class ActionHost(Protocol):
         `done` or `error`."""
         ...
 
+    async def run_state(self, tenant_id: str, run_id: str) -> dict[str, Any]:
+        """How a product run stands (a job follows it after a restart, stage J3): `status` is
+        `running`, `waiting_job`, `waiting_input`, `done`, `error`, `cancelled` or `unknown`
+        (no such run, or one that ended with an engine that closed), and `end` its last event
+        once it has ended."""
+        ...
+
+    async def cancel_run(self, tenant_id: str, run_id: str) -> bool:
+        """Stop a product run and the work it is waiting on. False when it had ended."""
+        ...
+
     async def search_creations(self, query: str, limit: int = 6) -> list[dict[str, Any]]: ...
 
     async def search_notebooks(self, query: str, limit: int = 5) -> list[dict[str, Any]]: ...

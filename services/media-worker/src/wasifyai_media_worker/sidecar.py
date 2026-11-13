@@ -1,7 +1,7 @@
 """ComfyUI as a sidecar of the desktop engine (ADR-0059).
 
 `ComfySidecar` starts and supervises one ComfyUI process that the app installed itself (the
-shell's installer put it under `<app data>/engine/comfyui`), on loopback with a free port.
+engine's installer put it under `<app data>/engine/comfyui`), on loopback with a free port.
 `SidecarRunner` is the job runner that uses it: it checks the model files are there, makes sure
 the process is running, and runs the job with the model kept loaded. The slot manager
 (wasifyai_platform_sdk.slots) decides when the model is unloaded again.
@@ -41,6 +41,7 @@ MODEL_FOLDERS = (
     "loras",
     "controlnet",
     "upscale_models",
+    "latent_upscale_models",  # LTX-2.5's latent upscaler
     "embeddings",
 )
 # which workflow input names a model file, and the folders that file may be in
@@ -50,7 +51,9 @@ LOADER_FIELDS: dict[str, tuple[str, ...]] = {
     "vae_name": ("vae",),
     "lora_name": ("loras",),
     "ckpt_name": ("checkpoints",),
+    "model_name": ("latent_upscale_models", "upscale_models"),
 }
+BOOT = Path(__file__).with_name("comfy_boot.py")
 # folders ComfyUI needs to exist in its base directory (it stops at start-up without custom_nodes)
 BASE_FOLDERS = ("models", "input", "output", "temp", "user", "custom_nodes")
 
@@ -202,7 +205,9 @@ class ComfySidecar:
         try:
             self._proc = await asyncio.create_subprocess_exec(
                 str(self.venv_python),
-                "main.py",
+                "-P",
+                str(BOOT),  # ends ComfyUI when this engine ends, even killed (comfy_boot.py)
+                str(os.getpid()),
                 "--listen", "127.0.0.1",
                 "--port", str(port),
                 "--disable-auto-launch",

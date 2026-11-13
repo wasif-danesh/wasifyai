@@ -3,9 +3,9 @@ on SQLite (the desktop's engine): a connection pool whose connections look at th
 schema first, and a small wrapper that lets code written with `?` parameters and `fetchone()` rows
 run on it.
 
-A product that does this keeps one store class: the SQL is shared and the few differences between
-the databases are hooks. Examples: the notebooks (`wasifyai_notebooks.pgstore`) and the voice
-product (`wasifyai_voice.pgstore`)."""
+A product that does this keeps one store class over `wasifyai_platform_sdk.sqlstore` (stage J2),
+which uses these: the SQL is shared and the few differences between the databases are branches on
+`db.dialect` (the notebooks' passages and vectors, a counting key)."""
 
 import re
 from collections.abc import Sequence

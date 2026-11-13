@@ -1,5 +1,4 @@
 workflow: ace-step-1.5-turbo.json
-licence: MIT per the ACE-Step 1.5 model card (ADR-0012)
 notes: 'Copied from the workflows of the first music product (since removed) (ComfyUI 0.39 to 0.41, the all-in-one checkpoint, 8 steps,
   cfg 1, euler/simple, shift 3). The desktop changes only the last node: PreviewAudio keeps the result in ComfyUI''s
   temporary folder, where SaveAudioMP3 would leave a file in its output folder. Timesignature is mapped here too.'

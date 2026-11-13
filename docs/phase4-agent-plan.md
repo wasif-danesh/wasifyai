@@ -79,7 +79,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   the executor with a fake engine produces the documented result; `destroy` and `needs_consent` cannot be set to
   auto; usage and audit entries exist; no change visible to the person yet.
 
-### Stage A2. The assistant guides and proposes (M) — first thing the owner sees
+### Stage A2. The assistant guides and proposes (M) — first thing the owner sees — **first slice built 2026-10-27** (ADR-0071, "Built 2026-10-27")
 
 > **Note (2026-10-19, ADR-0082):** the chat UI moves to assistant-ui. Build A2's backend (help corpus, `propose_action`, `confirm_action`) as planned, but write its **cards as assistant-ui tool UIs** after chat stage CU1 (`docs/chat-ui-migration-plan.md`), not as new `ToolCard` code.
 > **Update (2026-10-20, CU1 built behind Labs):** tool UIs are registered by tool name in `packages/ui/src/chat/thread/tool-uis/index.tsx`
@@ -96,7 +96,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   computer is missing; "make it say hello world in a calm voice" shows the card with the text filled in; Run makes
   the speech and the card turns into a player; the same flow works for an image, a song, a transcript.
 
-### Stage A3. The assistant evaluation, and the gate (S to M)
+### Stage A3. The assistant evaluation, and the gate (S to M) — **built and run 2026-10-27** (`docs/spikes/assistant-a3.md`)
 
 - `guide`, `action`, `status`, `safety` and `tool-count` cases (60 to 150), scored for three model tiers.
 - Acceptance thresholds, fixed **before** A2 is declared done: no regression on the existing 11; at least 90
@@ -105,7 +105,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   ADR.
 - Runs on demand and in the release checklist.
 
-### Stage M1. The MCP server, make-only (M)
+### Stage M1. The MCP server, make-only (M) — **built 2026-10-27** (ADR-0069, "Built 2026-10-27"; `docs/desktop/connections.md`)
 
 - The endpoint in the engine on the `mcp` SDK; the `wasify-mcp` launcher; the runtime file `engine.json`.
 - Settings > Connections: the switch, the first connection, the secret, "Copy for Claude Code / Codex /
@@ -117,7 +117,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   makes a picture and a speech file, finds the job when it takes longer than its timeout, and a request that needs
   approval shows a card in the app and waits. Conformance suite green for each protocol revision we claim.
 
-### Stage M2. The rest of the tools, and files (M to L)
+### Stage M2. The rest of the tools, and files (M to L) — **built 2026-10-27** (ADR-0069, "Built 2026-10-27 (stage M2)")
 
 - `library` (search, list, get, **export** to allowed folders), `notebooks`, `voices` (design, clone with
   consent), `audio` tools, `dub`, `audiobook`, `lipsync` (consent), `admin` (rename, delete).
@@ -126,7 +126,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
 - **Acceptance:** an agent can transcribe a file under its allowed folder and cannot read outside it; delete and
   clone need the window; a library search is refused unless the scope has it; the 20 hostile-path test passes.
 
-### Stage M3. Hardening and reach (M)
+### Stage M3. Hardening and reach (M) — built 2026-10-27 (ADR-0069 "Built"; the review is `docs/mcp-security-review.md`)
 
 - Rate limits and per-connection quotas; a visible "from Codex" label on jobs and creations; notifications for
   background approvals.
@@ -134,7 +134,7 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
   generated skill file and example prompts for Claude Code; Windows and Linux launchers (after the Mac ships).
 - A security review against the checklist below.
 
-### Stage C1. The MCP client, read-only (M)
+### Stage C1. The MCP client, read-only (M) — built 2026-10-27 (ADR-0070 "Built"; OAuth left)
 
 - Engine module on the SDK; Settings > "Tools from other apps"; HTTP (https and loopback) and stdio; keychain;
   OAuth 2.1 with CIMD; `tools/list` caching; activity log; the `external_tools` and `call_external` meta-tools.
@@ -142,13 +142,13 @@ Each spike answers one question with a measurement, written to `docs/spikes/`. N
 - **Acceptance:** a real remote server (read-only) works through the assistant; a malicious fake server (huge
   result, hidden instructions, redirects, lying annotations, slow) cannot make the app act or leak.
 
-### Stage C2. Taint rule, trust, evaluation (M)
+### Stage C2. Taint rule, trust, evaluation (M) — built 2026-10-27 (ADR-0070 "Built"; `docs/spikes/assistant-c2.md`)
 
 - The taint rule with provenance on cards; `Trusted read-only`; stdio confirm dialog and minimal environment.
 - Evaluation: external-tool selection with 5 and 40 remote tools; the per-tier decision on whether remote tools
   are offered to local models.
 
-### Stage C3. Reach (S to M)
+### Stage C3. Reach (S to M) — built 2026-10-27 (ADR-0070 "Built"; the tasks extension and the sandbox left)
 
 - Resources attached to a message; prompts as templates; elicitation forms; the tasks extension; import from
   other clients' configs; sandbox for stdio if S5 says yes.

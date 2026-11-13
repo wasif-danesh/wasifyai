@@ -83,3 +83,55 @@ outputs:
     await caps.video.generate(duration_s=45)
     job = sink.submitted[0]
     assert job.prompt["14"]["inputs"]["seconds"] == 45 and job.prompt["3"]["inputs"]["seed"] == 45
+
+
+def two_models(products):
+    """The demo product with two image models (ADR-0097): `big` does generate and edit, `small`
+    only generate, each on its own workflow."""
+    d = products / "demo"
+    (d / "workflows" / "other.json").write_text((d / "workflows" / "tiny.json").read_text())
+    (d / "workflows" / "other.map.yaml").write_text(
+        (d / "workflows" / "tiny.map.yaml").read_text().replace("tiny.json", "other.json")
+    )
+    (d / "product.yaml").write_text(
+        """
+id: demo
+capabilities:
+  text.chat: { provider: fake }
+models:
+  - id: big
+    capabilities:
+      image.generate: { provider: comfyui, workflow: tiny }
+      image.edit:     { provider: comfyui, workflow: tiny }
+  - id: small
+    capabilities:
+      image.generate: { provider: comfyui, workflow: other, defaults: { duration_s: 5 } }
+    settings: { frames_per_second: 16 }
+"""
+    )
+    return build(products)
+
+
+async def test_a_request_names_its_model_and_gets_that_models_workflow(products, ctx):
+    caps, _, sink = two_models(products)
+    await caps.image.generate(lyrics="a", seed=1)  # no model: the first
+    await caps.image.generate(lyrics="b", seed=1, model="small")
+    first, second = sink.submitted
+    assert first.prompt["14"]["inputs"]["seconds"] == 30  # tiny, no defaults
+    assert second.prompt["14"]["inputs"]["seconds"] == 5  # other, with its own defaults
+    assert caps.image.models() == {"big": ["edit", "generate"], "small": ["generate"]}
+
+
+async def test_a_model_that_cannot_do_a_thing_or_is_not_offered_says_so(products, ctx):
+    caps, _, _ = two_models(products)
+    with pytest.raises(CapabilityNotConfigured, match="'image.edit' of model 'small'"):
+        await caps.image.edit(lyrics="x", model="small")
+    with pytest.raises(CapabilityNotConfigured, match="model 'nope' is not offered"):
+        await caps.image.generate(lyrics="x", model="nope")
+
+
+def test_a_model_says_what_a_graph_needs_to_know_and_the_first_answers_for_none(products):
+    caps, _, _ = two_models(products)
+    assert caps.image.setting("small", "frames_per_second") == 16
+    assert caps.image.setting(None, "frames_per_second", 24) == 24  # `big`, the first, says nothing
+    assert caps.image.setting("nope", "frames_per_second", 24) == 24

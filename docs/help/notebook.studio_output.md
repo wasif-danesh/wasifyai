@@ -13,7 +13,7 @@ Make a report, study guide, flashcards, quiz, mind map, Word or PDF file, slides
 
 ## Steps in the app
 
-1. Open **Notebook › View Notebooks** and choose the notebook.
+1. Open **Notebook › View notebooks** and choose the notebook.
 2. In Studio choose the kind of output.
 3. Add a focus if you want one and Make.
 

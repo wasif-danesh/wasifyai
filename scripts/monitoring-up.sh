@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the monitoring stack (ADR-0048): Prometheus, Alertmanager and Grafana, Loki and Promtail, in the
+# Install the monitoring stack (ADR-0048): Prometheus, Alertmanager and Grafana, Loki and Promtail, Tempo, in the
 # `monitoring` namespace of the current cluster, alerting to Telegram with an outside heartbeat.
 # Only production sends: with ALERT_NOTIFICATIONS=on it reads TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and
 # HEALTHCHECKS_PING_URL from .env (values are never printed). Without it (the default) alerts still fire and show in
@@ -11,7 +11,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 cd "$ROOT"
 NS=monitoring; APP_NS="${APP_NS:-wasifyai}"
-KPS_VERSION=92.3.0; LOKI_VERSION=2.10.3
+KPS_VERSION=92.3.0; LOKI_VERSION=2.10.3; TEMPO_VERSION=1.24.4
 
 NOTIFY="${ALERT_NOTIFICATIONS:-$(env_value ALERT_NOTIFICATIONS || true)}"
 step "Checking the settings"
@@ -63,6 +63,11 @@ helm upgrade --install monitoring prometheus-community/kube-prometheus-stack -n 
 step "Installing Loki and Promtail"
 helm upgrade --install loki grafana/loki-stack -n "$NS" --version "$LOKI_VERSION" \
   -f deploy/monitoring/loki-stack.values.yaml --wait --timeout 10m
+
+step "Installing Tempo (traces)"
+helm upgrade --install tempo grafana/tempo -n "$NS" --version "$TEMPO_VERSION" \
+  -f deploy/monitoring/tempo.values.yaml --wait --timeout 10m
+ok "traces: set tracing.otlpEndpoint=http://tempo.$NS:4318 on the application chart"
 
 # The application chart creates its scrape target, alerts and dashboard only once the CRDs exist.
 if helm status wasifyai -n "$APP_NS" >/dev/null 2>&1; then

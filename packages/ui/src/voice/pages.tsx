@@ -2,6 +2,8 @@
 
 import type { AudioSource, ParsedEvent, VoiceApi } from "@wasifyai/client";
 import { type ReactNode, useRef, useState } from "react";
+import { FRAME } from "../components/make-screen";
+import { TopBarSlot } from "../window-bar";
 import { AudioToolWorkspace } from "./AudioToolWorkspace";
 import { AudiobookWorkspace } from "./AudiobookWorkspace";
 import { DubbingWorkspace } from "./DubbingWorkspace";
@@ -50,13 +52,26 @@ export type VoicePageProps = {
 
 function Frame({ title, lead, children }: { title: string; lead: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid gap-6 px-6 pt-10 pb-16">
-      <header className="mx-auto w-full max-w-3xl">
-        <h1 className="font-semibold text-2xl">{title}</h1>
-        <p className="text-muted-foreground">{lead}</p>
-      </header>
-      {children}
-    </div>
+    <TopBarSlot>
+      <div className="grid gap-6 px-6 pt-10 pb-16">
+        <header className="mx-auto w-full max-w-3xl">
+          <h1 className="font-semibold text-2xl">{title}</h1>
+          <p className="text-muted-foreground">{lead}</p>
+        </header>
+        {children}
+      </div>
+    </TopBarSlot>
+  );
+}
+
+/** A screen on the one make screen (ADR-0093): the frame fills the window under the top bar. */
+function MakeFrame({ children }: { children: ReactNode }) {
+  return (
+    <TopBarSlot>
+      <div data-workspace className={FRAME}>
+        {children}
+      </div>
+    </TopBarSlot>
   );
 }
 
@@ -84,6 +99,11 @@ export function sendToTool(r: Remembered, source: AudioSource) {
   r.set(SOURCE, `${source.kind}:${source.id}`);
 }
 
+/** Open Create music with a track: change it (`edit`), make it again with its seed (`again`) or a new one (`take`). */
+export function openInMusic(r: Remembered, kind: "edit" | "again" | "take", trackId: string) {
+  r.set(OPEN, `${kind}:${trackId}`);
+}
+
 function takeSource(r: Remembered): AudioSource | null {
   const m = /^(track|speech):([A-Za-z0-9-]{1,64})$/.exec(take(r, SOURCE) ?? "");
   return m ? { kind: m[1] as "track" | "speech", id: m[2] as string } : null;
@@ -101,44 +121,44 @@ export function SpeakPage(p: VoicePageProps) {
   const [voice] = useState(() => take(p.remembered, USE_VOICE));
   const key = "wasifyai.voice.model.speak";
   return (
-    <Frame
-      title="Text to speech"
-      lead={device(
-        p,
-        "Type something and hear it. It is made on this computer; nothing is sent away.",
-        "Type something and hear it. The speech is kept in your account. A model marked Hosted sends the text to its provider.",
-      )}
-    >
+    <MakeFrame>
       <SpeakWorkspace
         api={p.api}
         runs={p.runs}
+        lead={device(
+          p,
+          "Type something and hear it. It is made on this computer; nothing is sent away.",
+          "Type something and hear it. The speech is kept in your account. A model marked Hosted sends the text to its provider.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
         initialSavedVoice={voice}
+        onTool={(speech, tool) => {
+          sendToTool(p.remembered, { kind: "speech", id: speech.id });
+          p.go(tool === "convert" ? "convert" : "speechedit");
+        }}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
 export function TranscribePage(p: VoicePageProps) {
   const key = "wasifyai.voice.model.transcribe";
   return (
-    <Frame
-      title="Speech to text"
-      lead={device(
-        p,
-        "Turn a recording into text with times. It is read on this computer; nothing is sent away.",
-        "Turn a recording into text with times. The text is kept in your account; the recording is not. A model marked Hosted sends the recording to its provider.",
-      )}
-    >
+    <MakeFrame>
       <TranscribeWorkspace
         api={p.api}
+        lead={device(
+          p,
+          "Turn a recording into text with times. It is read on this computer; nothing is sent away.",
+          "Turn a recording into text with times. The text is kept in your account; the recording is not. A model marked Hosted sends the recording to its provider.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
@@ -169,24 +189,27 @@ export function MusicPage(p: VoicePageProps) {
   const [action] = useState(() => takeAction(p.remembered));
   const key = "wasifyai.music.model";
   return (
-    <Frame
-      title="Create music"
-      lead={device(
-        p,
-        "Songs, instrumentals and sound effects, made on this computer. Pick the model; what the form asks for follows from it.",
-        "Songs, instrumentals and sound effects. Pick the model; what the form asks for follows from it.",
-      )}
-    >
+    <MakeFrame>
       <MusicWorkspace
         api={p.api}
         runs={p.runs}
+        lead={device(
+          p,
+          "Songs, instrumentals and sound effects, made on this computer.",
+          "Songs, instrumentals and sound effects.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
         initialLyrics={lyrics}
         initialAction={action}
+        onOpenLibrary={() => p.go("tracks")}
+        onSplit={(t) => {
+          sendToTool(p.remembered, { kind: "track", id: t.id });
+          p.go("separate");
+        }}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
@@ -204,7 +227,7 @@ export function TracksPage(p: VoicePageProps) {
     }
   };
   const open = (kind: "edit" | "again" | "take", id: string) => {
-    p.remembered.set(OPEN, `${kind}:${id}`);
+    openInMusic(p.remembered, kind, id);
     p.go("music");
   };
   return (
@@ -314,12 +337,14 @@ export function ToolPage({ tool, ...p }: VoicePageProps & { tool: AudioToolName 
   const key = `wasifyai.tool.model.${tool}`;
   const [source] = useState(() => takeSource(p.remembered));
   return (
-    <Frame title={text.title} lead={device(p, text.device, text.service)}>
+    <MakeFrame>
       <AudioToolWorkspace
         key={tool}
         api={p.api}
         runs={p.runs}
         tool={tool}
+        title={text.title}
+        lead={device(p, text.device, text.service)}
         initialSource={source}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
@@ -327,70 +352,64 @@ export function ToolPage({ tool, ...p }: VoicePageProps & { tool: AudioToolName 
         onOpenLibrary={() => p.go("tracks")}
         onOpenVoices={() => p.go("voices")}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
 export function DubPage(p: VoicePageProps) {
   const key = "wasifyai.dub.model";
   return (
-    <Frame
-      title="Dub a recording"
-      lead="Hear a recording in another language, in the speaker's voice or one you choose. The result is kept in Your music."
-    >
+    <MakeFrame>
       <DubbingWorkspace
         api={p.api}
         runs={p.runs}
+        lead="Hear a recording in another language, in the speaker's voice or one you choose. The result is kept in Your music."
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
         onOpenLibrary={() => p.go("tracks")}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
 export function AudiobookPage(p: VoicePageProps) {
   const key = "wasifyai.audiobook.model";
   return (
-    <Frame
-      title="Audiobook"
-      lead={device(
-        p,
-        "Read a long text aloud, chapter by chapter, in a voice you choose. It runs on this computer.",
-        "Read a long text aloud, chapter by chapter, in a voice you choose. Every chapter is kept in Your music as it is done.",
-      )}
-    >
+    <MakeFrame>
       <AudiobookWorkspace
         api={p.api}
         runs={p.runs}
+        lead={device(
+          p,
+          "Read a long text aloud, chapter by chapter, in a voice you choose. It runs on this computer.",
+          "Read a long text aloud, chapter by chapter, in a voice you choose. Every chapter is kept in Your music as it is done.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
         onOpenLibrary={() => p.go("tracks")}
       />
-    </Frame>
+    </MakeFrame>
   );
 }
 
 export function LipSyncPage(p: VoicePageProps) {
   const key = "wasifyai.lipsync.model";
   return (
-    <Frame
-      title="Lip sync"
-      lead={device(
-        p,
-        "Make the face in a picture say your words or a recording. It runs on this computer, and every video is marked as AI-generated.",
-        "Make the face in a picture say your words or a recording. Every video is marked as AI-generated.",
-      )}
-    >
+    <MakeFrame>
       <LipSyncWorkspace
         api={p.api}
         runs={p.runs}
+        lead={device(
+          p,
+          "Make the face in a picture say your words or a recording. It runs on this computer.",
+          "Make the face in a picture say your words or a recording.",
+        )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
       />
-    </Frame>
+    </MakeFrame>
   );
 }

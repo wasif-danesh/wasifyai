@@ -1,0 +1,20 @@
+workflow: minimax-h3-t2v.json
+notes: >
+  Text to video with sound with MiniMax-H3 (pruned, int8). ComfyUI's template video_minimax_h3_t2v (ComfyUI 0.44.2)
+  written out by hand with its turbo switch on: the 8-step turbo LoRA, res_multistep, no CFG. The text encoder is the
+  Qwen3-VL 32B int8 copy, not the template's nvfp4 (that needs an NVIDIA card). 24 frames a second, a count of
+  17n + 5: 124 frames make 5 s.
+models:
+  - diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors
+  - loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors
+  - text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors
+  - vae/minimax_h3_video_vae_fp16.safetensors
+  - vae/minimax_h3_audio_vae_fp32.safetensors
+inputs:
+  prompt: { node: "12", field: prompt }
+  seed: { node: "8", field: noise_seed }
+  width: { node: "12", field: width }
+  height: { node: "12", field: height }
+  length: { node: "12", field: length }
+outputs:
+  video: { node: "1", type: video }

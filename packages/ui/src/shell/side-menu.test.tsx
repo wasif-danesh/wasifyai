@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Shield } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 import { SideMenu } from "./SideMenu";
-import { type ItemResolver, MENU_GROUPS } from "./menu";
+import { type ItemResolver, MENU_GROUPS, placesOf, titleOf } from "./menu";
 
 const none: ItemResolver = () => undefined;
 
@@ -18,10 +18,14 @@ describe("the menu definition", () => {
       "Music",
     ]);
     const items = (id: string) => MENU_GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
-    expect(items("notebook")).toEqual(["Create", "View Notebooks"]);
-    expect(items("video")).toEqual(["Create", "Animate an image", "Extend video", "Your videos"]);
-    expect(items("music")).toEqual(["Create", "Your music", "Lyrics", "Split into parts"]);
-    expect(items("voice")).toHaveLength(8);
+    expect(items("notebook")).toEqual(["Create", "View notebooks"]);
+    // the "Your …" pages are the one Library now (ADR-0093, U8)
+    // Lip sync makes a video, so it is with video (owner, 2026-11-12)
+    expect(items("video")).toEqual(["Create", "Animate an image", "Lip sync", "Extend video"]);
+    expect(items("music")).toEqual(["Create", "Lyrics", "Split into parts"]);
+    expect(items("images")).toEqual(["Create", "Edit", "Inpaint", "Reference"]);
+    expect(items("voice")).toHaveLength(7);
+    expect(items("voice")).not.toContain("Lip sync");
     const ids = MENU_GROUPS.flatMap((g) => g.items.map((i) => i.id));
     expect(new Set(ids).size).toBe(ids.length); // every id is unique
   });
@@ -42,42 +46,42 @@ describe("SideMenu", () => {
     const user = userEvent.setup();
     render(<SideMenu resolve={none} />);
     await user.click(screen.getByRole("button", { name: /^Images/ }));
-    expect(screen.getByRole("button", { name: /Your images/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Inpaint/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Music/ }));
-    expect(screen.queryByRole("button", { name: /Your images/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Your music/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Inpaint/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Lyrics/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Music/ }));
-    expect(screen.queryByRole("button", { name: /Your music/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Lyrics/ })).toBeNull();
   });
 
   it("keeps the group of the current page open and marks the page", () => {
     const resolve: ItemResolver = (id) =>
-      id === "video.library" ? { href: "/video/library", current: true } : undefined;
+      id === "video.extend" ? { href: "/video/extend", current: true } : undefined;
     render(<SideMenu resolve={resolve} />);
-    const here = screen.getByRole("link", { name: /Your videos/ });
-    expect(here).toHaveAttribute("href", "/video/library");
+    const here = screen.getByRole("link", { name: /Extend video/ });
+    expect(here).toHaveAttribute("href", "/video/extend");
     expect(here).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("button", { name: /^Video/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Video" })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("lets a person open another group while on a page, and follows them to the next page", async () => {
     const user = userEvent.setup();
-    let page = "video.library";
+    let page = "video.extend";
     const resolve: ItemResolver = (id) =>
       id === page ? { href: `/${id}`, current: true } : id.startsWith("music.") ? {} : undefined;
     const { rerender } = render(<SideMenu resolve={resolve} />);
-    expect(screen.getByRole("link", { name: /Your videos/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Extend video/ })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Music/ }));
-    expect(screen.getByRole("button", { name: /Your music/ })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Your videos/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /Lyrics/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Extend video/ })).toBeNull();
     // opening a page of another group opens that group again
-    page = "images.library";
+    page = "images.inpaint";
     rerender(<SideMenu resolve={resolve} />);
-    expect(screen.getByRole("link", { name: /Your images/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Your music/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /Inpaint/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Lyrics/ })).toBeNull();
     // and the group of the current page can be closed
     await user.click(screen.getByRole("button", { name: /^Images/ }));
-    expect(screen.queryByRole("link", { name: /Your images/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Inpaint/ })).toBeNull();
   });
 
   it("runs what an item does and leaves hidden items out", async () => {
@@ -96,7 +100,7 @@ describe("SideMenu", () => {
     expect(chat).toHaveAttribute("aria-current", "page");
     await user.click(chat);
     expect(onSelect).toHaveBeenCalledOnce();
-    expect(screen.queryByText("Models")).toBeNull();
+    expect(screen.queryByText("Model hub")).toBeNull();
     expect(screen.getByRole("link", { name: /Library/ })).toHaveAttribute("href", "/creations");
     expect(screen.getByRole("button", { name: /Train/ })).toBeDisabled();
   });
@@ -120,25 +124,20 @@ describe("SideMenu", () => {
     expect(screen.getByRole("link", { name: "Wasify AI, home" })).toHaveAttribute("href", "/");
   });
 
-  it("shows recents, the search button, extra items and the footer only when given", async () => {
+  it("shows recents, extra items and the footer only when given", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<SideMenu resolve={none} />);
     expect(screen.queryByText("Recents")).toBeNull();
-    expect(screen.queryByRole("button", { name: /search my creations/i })).toBeNull();
 
     const open = vi.fn();
-    const search = vi.fn();
     rerender(
       <SideMenu
         resolve={none}
-        onSearch={search}
         recents={{ items: [{ id: "c1", title: "Fox poem", current: true, onSelect: open }] }}
         extra={[{ id: "admin", label: "Admin", icon: Shield, href: "/admin" }]}
         footer={<p>Signed in as Sam</p>}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /search my creations/i }));
-    expect(search).toHaveBeenCalled();
     const chat = screen.getByRole("button", { name: "Fox poem" });
     expect(chat).toHaveAttribute("aria-current", "page");
     await user.click(chat);
@@ -148,5 +147,23 @@ describe("SideMenu", () => {
 
     rerender(<SideMenu resolve={none} recents={{ items: [] }} />);
     expect(screen.getByText("No chats yet")).toBeInTheDocument();
+  });
+});
+
+describe("the bar's words for the menu", () => {
+  it("names the group a person is in, and lists every served tool for the search", () => {
+    const at =
+      (current: string): ItemResolver =>
+      (id) =>
+        id === "models" ? { hidden: true } : { href: `/${id}`, current: id === current };
+    expect(titleOf(at("images.edit"))).toBe("Images");
+    expect(titleOf(at("voice.dub"))).toBe("Voice");
+    expect(titleOf(at("train"))).toBe("Train models");
+    expect(titleOf(at("chat"))).toBe("Chat");
+    expect(titleOf(() => undefined)).toBeNull();
+    const places = placesOf(at("chat"));
+    expect(places.map((p) => p.label)).toContain("Images: Edit");
+    expect(places.map((p) => p.label)).toContain("Motion graphics");
+    expect(places.some((p) => p.id === "models")).toBe(false); // hidden on purpose: not offered
   });
 });

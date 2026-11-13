@@ -1,7 +1,7 @@
 """llama.cpp's `llama-server` as a child of the desktop engine (stage D of phase 2, step D1).
 
-The shell's installer puts a pinned release under `<app data>/engine/llamacpp/<release>/` and writes
-`engine/llamacpp/state.json` (apps/desktop/src-tauri/src/llamacpp.rs). This module finds it and runs
+The engine's installer puts a pinned release in `<app data>/engine/llamacpp/<release>/` and writes
+`engine/llamacpp/state.json` (`wasifyai_api/components/llamacpp.py`). This module finds it and runs
 one server at a time on loopback with a free port, for one model file. The server speaks the OpenAI
 chat API, so the text provider (D2) only needs the base URL.
 

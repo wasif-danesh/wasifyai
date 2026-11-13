@@ -141,7 +141,6 @@ pub struct FileEntry {
 /// The optional ComfyUI component's files in the bundle: a hashed lock per platform it supports.
 #[derive(Debug, Deserialize)]
 pub struct ComfyBundle {
-    pub version: String,
     /// keyed by Rust target triple
     pub locks: std::collections::BTreeMap<String, FileEntry>,
 }

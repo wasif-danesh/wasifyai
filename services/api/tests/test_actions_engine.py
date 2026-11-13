@@ -25,7 +25,7 @@ class Engine:
         self.client = client
         me = client.get("/me", headers=auth()).json()
         self.me = Identity(me["tenant_id"], me["user_id"])
-        self.executor = client.app.state.actions  # type: ignore[attr-defined]
+        self.executor = client.app.state.services.actions  # type: ignore[attr-defined]
 
     def run(self, action_id: str, params: dict | None = None, origin="window", **kw):
         return self.client.portal.call(  # type: ignore[union-attr]
@@ -34,7 +34,7 @@ class Engine:
 
     def sql(self, query: str, **params):
         async def go():
-            async with self.client.app.state.engine.connect() as conn:  # type: ignore[attr-defined]
+            async with self.client.app.state.services.engine.connect() as conn:  # type: ignore[attr-defined]
                 return [dict(r._mapping) for r in await conn.execute(text(query), params)]
 
         return self.client.portal.call(go)  # type: ignore[union-attr]
@@ -128,7 +128,8 @@ def test_what_this_computer_can_do_says_what_is_missing(engine):
     assert states["library.search"]["state"] == "ready"
     speak = states["speech.speak"]
     assert speak["state"] == "needs_setup" and speak["step"]  # no speech model on a fresh install
-    assert "speech.speak" in r.text
+    # the words list the first few, in order, and say how many more
+    assert "audiobook.make" in r.text and "more." in r.text
     assert "disk_free_bytes" in r.output["facts"]
     setup = engine.run("speech.speak", {"text": "Hello"})
     assert setup.status == "needs_setup" and setup.setup.ui == "models"  # type: ignore[union-attr]
@@ -156,3 +157,44 @@ def test_the_assistant_origin_only_reaches_what_the_action_offers(engine):
     assert audit[-1]["origin"] == "assistant"
     nope = engine.run("image.generate", {"prompt": "a fox"}, origin="mcp:Codex")
     assert nope.status == "needs_approval"  # the default asks; nothing runs behind a connection
+
+
+def test_styles_are_listed_used_in_a_picture_and_deleted_only_with_a_yes(engine, data_dir):  # noqa: F811
+    """ADR-0091 S4: the assistant lists the styles, makes a picture with one (the recipe keeps its
+    id and checksum), and deleting one always asks."""
+    from tests.test_desktop_styles import lora
+
+    folder = data_dir / "models" / "loras"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "ink.safetensors").write_bytes(lora(meta={"trigger": "inkwash"}))
+    (folder / "nine.safetensors").write_bytes(lora(4096, 8, 24))
+
+    listed = engine.run("styles.list", origin="assistant")
+    assert listed.ok, listed.text
+    rows = {r["title"]: r for r in listed.output["styles"]}
+    ink, nine = rows["ink"], rows["nine"]
+    assert ink["usable"] and ink["word"] == "inkwash" and not nine["usable"]
+    assert "inkwash" in listed.text and ink["style_id"] in listed.text
+
+    made = engine.run(
+        "image.generate",
+        {"prompt": "a fox, inkwash", "styles": [{"id": ink["style_id"], "strength": 0.8}]},
+        origin="assistant", policy=OPEN,
+    )  # fmt: skip
+    assert made.ok, made.text
+    recipe = engine.client.get(
+        f"/products/wasifyai-image/images/{made.output['image_id']}", headers=auth()
+    ).json()["recipe"]
+    assert recipe["styles"][0]["id"] == ink["style_id"] and recipe["styles"][0]["sha256"]
+
+    wrong = engine.run(
+        "image.generate", {"prompt": "a fox", "styles": [{"id": nine["style_id"]}]},
+        origin="assistant", policy=OPEN,
+    )  # fmt: skip
+    assert not wrong.ok and "another model" in wrong.text
+
+    asked = engine.run(
+        "styles.remove", {"style_id": ink["style_id"]}, origin="assistant", policy=OPEN
+    )
+    assert asked.status == "needs_approval"  # destroy always asks, whatever the setting
+    assert (folder / "ink.safetensors").is_file()

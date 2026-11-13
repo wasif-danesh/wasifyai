@@ -12,7 +12,9 @@ async def test_a_notebook_is_listed_with_its_title_and_source_names(tmp_path):
     try:
         src = notebook_index_source(engine)
         assert await src.page(None, 10) == []  # no notebooks file yet: nothing to list
-        store = NotebookStore(tmp_path / "notebooks", dimension=SPEC.dimension, embedder_id=SPEC.id)
+        store = NotebookStore.in_folder(
+            tmp_path / "notebooks", dimension=SPEC.dimension, embedder_id=SPEC.id
+        )
         a = store.create_notebook("t1", "u1", "Q3 planning")
         b = store.create_notebook("t1", "u2", "Thesis reading")
         store.add_file(

@@ -12,6 +12,7 @@ class RunContext:
     user_id: str
     run_id: str | None = None
     thread_id: str | None = None
+    role: str = "user"  # the person's role (ADR-0030): an admin's jobs are not held to the limit
 
 
 _current: ContextVar[RunContext | None] = ContextVar("wasifyai_run_context", default=None)

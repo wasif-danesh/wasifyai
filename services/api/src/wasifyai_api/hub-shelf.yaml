@@ -1,6 +1,6 @@
 # The curated shelf of the model hub (ADR-0064): models worth starting with, shown before any search
 # and without a network request. Each one was checked on Hugging Face: a GGUF repository with its chat
-# template in the file, an open licence and a size a normal computer can run. Data, not code; review it
+# template in the file and a size a normal computer can run. Data, not code; review it
 # like the catalogue. `repo` is the Hugging Face repository; the files are listed when it is opened.
 version: 1
 models:
@@ -20,7 +20,7 @@ models:
   - repo: bartowski/Llama-3.2-3B-Instruct-GGUF
     title: Llama 3.2 3B Instruct
     capability: language
-    note: "Good for plain chat. As the assistant it uses its tools too eagerly (6 of 11: it makes pictures and searches when only a reply was wanted). Meta's Llama 3.2 licence applies."
+    note: "Good for plain chat. As the assistant it uses its tools too eagerly (6 of 11: it makes pictures and searches when only a reply was wanted)."
   - repo: unsloth/gemma-3-4b-it-GGUF
     title: Gemma 3 4B
     capability: language

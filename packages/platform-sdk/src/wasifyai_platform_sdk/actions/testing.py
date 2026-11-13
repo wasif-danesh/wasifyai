@@ -33,6 +33,9 @@ class FakeActionHost:
         self._deps = deps
         self._scripts: dict[str, Script] = {}
         self._readiness: dict[str, Readiness] = {}
+        # product runs as a restarted engine would find them: run id -> {"status", "end"}
+        self.run_states: dict[str, dict[str, Any]] = {}
+        self.cancelled_runs: list[str] = []
 
     def script(self, product_id: str, events: Script) -> None:
         self._scripts[product_id] = events
@@ -57,6 +60,17 @@ class FakeActionHost:
         script = self._scripts.get(product_id, [])
         for ev in script(graph_input) if callable(script) else script:
             yield ev
+
+    async def run_state(self, tenant_id: str, run_id: str) -> dict[str, Any]:
+        return self.run_states.get(run_id, {"status": "unknown"})
+
+    async def cancel_run(self, tenant_id: str, run_id: str) -> bool:
+        self.cancelled_runs.append(run_id)
+        state = self.run_states.get(run_id)
+        if state is not None and state.get("status") in ("done", "error", "cancelled"):
+            return False
+        self.run_states[run_id] = {"status": "cancelled"}
+        return True
 
     async def search_creations(self, query: str, limit: int = 6) -> list[dict[str, Any]]:
         self.searches.append(query)

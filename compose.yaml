@@ -71,6 +71,12 @@ services:
     # media flow works without ComfyUI or a GPU. Set COMFYUI_MODE=real to use ComfyUI at
     # COMFYUI_BASE_URL (native ComfyUI on the host: http://host.containers.internal:8188).
     depends_on: [redis, postgres, seaweedfs]
+  # Reads the sources people add to notebooks and makes their Studio outputs (ADR-0065). Notebooks are always on, so this
+  # always runs. The image holds the document reader and its models (about 1.5 GB, fetched while building).
+  notebooks-worker:
+    build: { context: ., dockerfile: products/wasifyai-notebooks/Containerfile }
+    env_file: .env
+    depends_on: [postgres, litellm, seaweedfs]
   web:
     build: { context: ., dockerfile: apps/web/Containerfile }
     env_file: .env

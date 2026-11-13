@@ -12,7 +12,7 @@ WSL2, Linux) slow or impossible.
 
 ## Decision
 
-Use **Gemma 4 E4B** (`gemma4:e4b` on Ollama, Apache 2.0, text and image input, 128K context) as
+Use **Gemma 4 E4B** (`gemma4:e4b` on Ollama, text and image input, 128K context) as
 the default for every chat alias (`default-chat`, `lyrics-writer`, `moderator`) during the
 prototype. Around 8 GB of RAM is enough, so every supported platform can run the stack.
 

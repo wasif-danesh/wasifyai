@@ -15,7 +15,8 @@ Write song lyrics from an idea. Nothing is saved; use them in Music › Create.
 
 1. Open **Music › Lyrics**.
 2. Say what the song is about and the style.
-3. Choose Write.
+3. Choose **Write the lyrics**. The same writer is in **Music › Create** as **Write them for me** in the Lyrics
+   panel.
 
 ## Fields
 

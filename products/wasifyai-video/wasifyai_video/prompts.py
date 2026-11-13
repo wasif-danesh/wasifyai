@@ -3,7 +3,10 @@
 from pathlib import Path
 from string import Template
 
-PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
+# Inside the package when installed from a wheel (the build copies `prompts/` in), else beside it in
+# a source checkout.
+_HERE = Path(__file__).resolve().parent
+PROMPTS_DIR = _HERE / "prompts" if (_HERE / "prompts").is_dir() else _HERE.parent / "prompts"
 
 
 def load(name: str) -> str:

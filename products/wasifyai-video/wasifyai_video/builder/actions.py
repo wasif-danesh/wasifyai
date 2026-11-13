@@ -1,0 +1,1225 @@
+"""What Motion graphics can do, for the action catalogue (ADR-0068, ADR-0079): write a video from a
+template, check it, make it, change it, and the compositions as a kind of creation in the library.
+
+`motion.make` is the plain-words front door (ADR-0079): the assistant or an agent maps "a lower
+third for Maya Chen, Head of Design" onto a template and its fields, and the words go in verbatim;
+no model retypes them, and the exact-text check refuses a page that does not say them.
+
+`motion.write_scenes` and the `motion.*_scene` actions work on a project of scenes (ADR-0096). The
+editor's assistant uses them, so one change is one version that `motion.undo` brings back."""
+
+import asyncio
+import json
+import math
+import tempfile
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from wasifyai_platform_sdk.actions import (
+    Action,
+    ActionContext,
+    ActionRefused,
+    ActionResult,
+    CallBinding,
+    LibraryItem,
+    LibraryKind,
+    Outcome,
+    need_product,
+    need_runtime,
+)
+from wasifyai_platform_sdk.actions.helpers import need_deps
+
+from wasifyai_video.builder import brand, editor, make, media, scenes, starts, templates
+from wasifyai_video.builder.routes import delete_composition
+from wasifyai_video.builder.runtime import (
+    NotFound,
+    Refused,
+    engine_for,
+    index_composition,
+    manager_for,
+    store_for,
+)
+from wasifyai_video.builder.store import NothingToUndo
+
+PRODUCT_ID = "wasifyai-video"
+BUILDER = need_runtime("video-builder")
+SAMPLE_ID = "0b7c1f9e000040008000000000000000"
+SAMPLE_SCENE = "1f2e3d4c"
+TemplateId = Literal["title", "quote", "chart", "lower_third", "end_card", "captions"]
+Format = Literal["mp4", "webm", "mov"]
+Shape = Literal["landscape", "portrait", "square", "feed"]
+Font = Literal["sans", "serif"]
+Transition = Literal["none", "fade", "slide"]
+
+
+def _fields_help() -> str:
+    """For a model: each template, its fields and its limits, from the templates themselves."""
+    parts = []
+    for t in templates.TEMPLATES.values():
+        fields = []
+        for f in t.fields:
+            if f.kind in ("text", "longtext"):
+                need = ", required" if f.required else ""
+                what = f"{f.id} (text, up to {f.max_chars} characters{need})"
+            elif f.kind == "lines":
+                what = f"{f.id} (one caption per line, up to {f.maximum} lines)"
+            elif f.kind == "rows":
+                what = f"{f.id} (lines like 'Sales, 120', up to {f.maximum})"
+            elif f.kind == "choice":
+                what = f"{f.id} ({'/'.join(v for v, _ in f.choices)})"
+            else:
+                what = f"{f.id} (seconds, {f.minimum} to {f.maximum})"
+            fields.append(what)
+        parts.append(f"{t.id}: {t.description} Fields: {'; '.join(fields)}.")
+    return " ".join(parts)
+
+
+class Strict(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class CreateIn(Strict):
+    template: TemplateId = Field("title", description="Which template.")
+    fields: dict[str, Any] = Field(
+        description="The words and settings of the template, exactly as they should be shown."
+    )
+
+
+class CompositionOut(BaseModel):
+    composition_id: str
+    product_id: str
+    uri: str
+    title: str
+    template: str
+    seconds: int
+
+
+class CompositionIn(Strict):
+    composition_id: str = Field(
+        min_length=32, max_length=32, pattern="^[0-9a-f]{32}$",
+        description="The video project, as returned when it was created.",
+    )  # fmt: skip
+
+
+class RenderIn(CompositionIn):
+    format: Format = Field(
+        "mp4",
+        description="mp4, or webm or mov (transparent) for a lower third or captions.",
+    )
+    quality: Literal["draft", "standard", "high"] | None = Field(
+        None, description="draft is fastest, high is best. standard if not given."
+    )
+    shapes: list[Shape] | None = Field(
+        None, max_length=4,
+        description=(
+            "To make one video for each of these shapes from the one project, one after another: "
+            "landscape, portrait, square, feed (4:5). The project's own shape if not given."
+        ),
+    )  # fmt: skip
+
+
+class Finding(BaseModel):
+    file: str
+    line: int
+    code: str
+    message: str
+
+
+class LintOut(BaseModel):
+    composition_id: str
+    ok: bool
+    findings: list[Finding]
+
+
+class ShapeMade(BaseModel):
+    shape: str
+    video_id: str | None = None
+    uri: str | None = None
+    error: str | None = None
+
+
+class RenderOut(BaseModel):
+    composition_id: str
+    render_id: str
+    video_id: str
+    product_id: str
+    uri: str
+    seconds: int
+    format: str
+    checked: bool
+    shapes: list[ShapeMade] = []
+
+
+class BrandIn(Strict):
+    name: str = Field("", max_length=60, description="The brand's name.")
+    background: str = Field(
+        "#0b1220", pattern="^#[0-9a-fA-F]{6}$", description="Background colour."
+    )
+    second: str = Field(
+        "#1c2b4a",
+        pattern="^#[0-9a-fA-F]{6}$",
+        description="Second colour, the background fades to.",
+    )
+    text: str = Field("#f5f7fb", pattern="^#[0-9a-fA-F]{6}$", description="Colour of the words.")
+    accent: str = Field("#4f8cff", pattern="^#[0-9a-fA-F]{6}$", description="Accent colour.")
+    font: Font = Field("sans", description="The letters.")
+    action: str = Field("", max_length=60, description="The end card's call to action.")
+    address: str = Field("", max_length=80, description="The end card's web address or place.")
+    logo_on_scenes: bool = Field(True, description="Show the logo in the corner of every scene.")
+
+
+class BrandOut(BaseModel):
+    kit: dict[str, Any] | None
+    message: str = ""
+
+
+class UseBrandIn(CompositionIn):
+    use: bool = Field(True, description="True puts the person's brand on, false takes it off.")
+
+
+class StartFromIn(Strict):
+    start: Literal[
+        "promo", "launch", "offer", "customer", "explainer", "before_after", "social"
+    ] = Field(description="Which starting point.")
+    shape: Shape = Field("portrait", description="The shape of the whole video.")
+    name: str = Field("", max_length=80, description="The project's name.")
+
+
+class MakeIn(Strict):
+    template: TemplateId = Field(description="Which template.")
+    fields: dict[str, Any] = Field(
+        description="The words and settings of the template, exactly as they should be shown."
+    )
+    format: Format = Field("mp4", description="mp4, or webm or mov (transparent) for overlays.")
+    render: bool = Field(True, description="False to write the project without making the video.")
+
+
+class ReviseIn(CompositionIn):
+    fields: dict[str, Any] = Field(description="Only the fields to change.")
+    format: Format = Field("mp4", description="mp4, or webm or mov (transparent) for overlays.")
+    render: bool = Field(True, description="False to change the project without making the video.")
+
+
+class MotionOut(BaseModel):
+    composition_id: str
+    product_id: str
+    uri: str
+    title: str
+    template: str
+    seconds: int
+    video_id: str | None
+    video_uri: str | None
+    checked: bool
+
+
+def _into_fields(known: set[str], raw: Any) -> Any:
+    """A scene's words and settings, wherever a small model put them: its fields beside `fields`,
+    and what belongs to the scene inside it. Anything that is neither is still refused by name when
+    the scene is checked."""
+    if not isinstance(raw, dict):
+        return raw
+    inside = raw.get("fields")
+    fields: dict[str, Any] = inside if isinstance(inside, dict) else {}
+    kept = {k: v for k, v in raw.items() if k in known and k != "fields"}
+    beside = {k: v for k, v in raw.items() if k not in known}
+    merged = {**beside, **fields}
+    # the shape and the letters are the whole project's: a scene that names them changes nothing
+    out = {k: v for k, v in merged.items() if k not in known and k not in ("shape", "font")}
+    return {**{k: v for k, v in merged.items() if k in known}, **kept, "fields": out}
+
+
+class SceneIn(Strict):
+    kind: TemplateId = Field(description="What the scene is: one of the five templates.")
+    name: str = Field("", max_length=60, description="A short name for the scene.")
+    caption: str = Field("", max_length=140, description="Words along the bottom of the scene.")
+    transition: Transition = Field("fade", description="How the scene starts.")
+    arrange: dict[str, dict[str, float]] | None = Field(
+        None, description="Where the scene's parts go: part -> x, y, w (percent) and scale."
+    )
+    background: dict[str, Any] | None = Field(
+        None,
+        description="A file behind the scene: asset, fit (cover, contain), x, y, trim, volume.",
+    )
+    images: list[dict[str, Any]] | None = Field(
+        None, description="Pictures on the scene: [{asset}]. Placed with arrange as image-0 and on."
+    )
+    sound: dict[str, Any] | None = Field(
+        None, description="A sound during the scene: asset, volume (0 to 1), loop."
+    )
+    fields: dict[str, Any] = Field(
+        description=(
+            "The template's words and settings, exactly as they should be shown, without shape and "
+            "font (those are set for the whole project). `seconds` is 5 if not given."
+        )
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _gather(cls, raw: Any) -> Any:
+        return _into_fields(set(cls.model_fields), raw)
+
+
+class WriteScenesIn(Strict):
+    name: str = Field("", max_length=80, description="The project's name.")
+    shape: Shape = Field("landscape", description="The shape of the whole video.")
+    font: Font = Field("sans", description="The letters of the whole video.")
+    scenes: list[SceneIn] = Field(
+        min_length=1, max_length=templates.MAX_SCENES, description="The scenes, in order."
+    )
+
+
+class AddSceneIn(CompositionIn, SceneIn):
+    position: int | None = Field(
+        None, ge=0, description="Where it goes, from 0. At the end if not given."
+    )
+
+
+class SceneRefIn(CompositionIn):
+    scene_id: str = Field(
+        min_length=8, max_length=8, pattern="^[0-9a-f]{8}$",
+        description="The scene, as listed by the project.",
+    )  # fmt: skip
+
+
+class ChangeSceneIn(SceneRefIn):
+    fields: dict[str, Any] = Field(
+        default_factory=dict, description="Only the fields of this scene that change."
+    )
+    name: str | None = Field(None, max_length=60, description="A new name for the scene.")
+    caption: str | None = Field(None, max_length=140, description="Words along the bottom.")
+    transition: Transition | None = Field(None, description="How the scene starts.")
+    arrange: dict[str, dict[str, float]] | None = Field(
+        None,
+        description=(
+            "Where the scene's parts go: part -> x, y, w (percent of the picture) and scale. "
+            "Empty puts them back where they were designed."
+        ),
+    )
+    background: dict[str, Any] | None = Field(
+        None,
+        description="A file behind the scene: asset, fit (cover, contain), x, y, trim, volume.",
+    )
+    images: list[dict[str, Any]] | None = Field(
+        None, description="Pictures on the scene: [{asset}]. Placed with arrange as image-0 and on."
+    )
+    sound: dict[str, Any] | None = Field(
+        None, description="A sound during the scene: asset, volume (0 to 1), loop."
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _gather(cls, raw: Any) -> Any:
+        return _into_fields(set(cls.model_fields), raw)
+
+
+class MoveSceneIn(SceneRefIn):
+    position: int = Field(ge=0, description="Where it goes, from 0.")
+
+
+class SetProjectIn(CompositionIn):
+    name: str | None = Field(None, max_length=80, description="The project's name.")
+    shape: Shape | None = Field(None, description="The shape of the whole video.")
+    font: Font | None = Field(None, description="The letters of the whole video.")
+    soundtrack: dict[str, Any] | None = Field(
+        None, description="Music for the whole video: asset, volume, start, loop."
+    )
+    scenes: list[SceneIn] | None = Field(
+        None, max_length=templates.MAX_SCENES,
+        description="All the scenes, in order, replacing the ones there now.",
+    )  # fmt: skip
+
+
+class MakeFileIn(CompositionIn):
+    what: Literal["picture", "clip", "speech", "music"] = Field(description="What to make.")
+    text: str = Field(
+        min_length=1, max_length=2000,
+        description=(
+            "picture or clip: what it shows, in English. speech: the exact words to say. music: "
+            "the style and mood, in English."
+        ),
+    )  # fmt: skip
+    seconds: float = Field(30, ge=1, le=240, description="clip or music: about how long.")
+    voice: str | None = Field(None, max_length=64, description="speech: a saved voice's id.")
+    use: Literal["none", "background", "place", "sound", "soundtrack"] = Field(
+        "none", description="What to do with it: nothing, or where it goes in the project."
+    )
+    scene_id: str | None = Field(
+        None,
+        pattern="^[0-9a-f]{8}$",
+        description="The scene it is for, for background, place, sound.",
+    )
+    captions: bool = Field(False, description="speech: show the words as captions, in time.")
+
+
+class MakeFileOut(BaseModel):
+    composition_id: str
+    asset: dict[str, Any]
+    assets: list[dict[str, Any]]
+    cues: list[dict[str, Any]] = []
+    uri: str
+    message: str = ""
+
+
+class ReadProjectIn(CompositionIn):
+    scene_id: str | None = Field(
+        None, pattern="^[0-9a-f]{8}$", description="The scene the person is on, if any."
+    )
+
+
+class ReadProjectOut(BaseModel):
+    composition_id: str
+    title: str
+    brief: str
+    actions: list[str]
+
+
+class SceneOut(BaseModel):
+    id: str
+    name: str
+    kind: str
+    seconds: int
+
+
+class ScenesOut(BaseModel):
+    composition_id: str
+    product_id: str
+    uri: str
+    title: str
+    shape: str
+    seconds: int
+    scenes: list[SceneOut]
+    scene_id: str | None = None
+
+
+def _store(ctx: ActionContext):  # noqa: ANN202
+    return store_for(need_deps(ctx).state)
+
+
+def _found(ctx: ActionContext, cid: str) -> dict[str, Any]:
+    try:
+        return _store(ctx).get_composition(ctx.actor.tenant_id, ctx.actor.user_id, cid)
+    except NotFound:
+        raise ActionRefused("not_found", "That video project does not exist.") from None
+
+
+async def _check_composition(p: CompositionIn, ctx: ActionContext) -> None:
+    _found(ctx, p.composition_id)
+
+
+def _created(found: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "composition_id": found["id"], "product_id": PRODUCT_ID,
+        "uri": f"wasify://creation/composition/{found['id']}", "title": found["title"],
+        "template": found["template"], "seconds": int(found["slots"]["seconds"]),
+    }  # fmt: skip
+
+
+async def _create_project(ctx: ActionContext, template: str, fields: dict[str, Any]):  # noqa: ANN202
+    deps = need_deps(ctx)
+    slots = templates.normalize_slots(template, fields)
+    found = await asyncio.to_thread(
+        store_for(deps.state).add_composition, ctx.actor.tenant_id, ctx.actor.user_id,
+        title=templates.title_of(template, slots), template=template, slots=slots,
+    )  # fmt: skip
+    await index_composition(deps, ctx.actor, found)
+    return found
+
+
+async def _create(p: CreateIn, ctx: ActionContext) -> Outcome:
+    try:
+        found = await _create_project(ctx, p.template, p.fields)
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    return Outcome.ok(
+        _created(found),
+        f'The video project "{found["title"]}" was created ({found["slots"]["seconds"]} seconds). '
+        "Nothing has been made yet: use video_builder.render to make the video.",
+    )
+
+
+async def _lint(p: CompositionIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    found = _found(ctx, p.composition_id)
+    with tempfile.TemporaryDirectory(prefix="lint-") as tmp:
+        (Path(tmp) / "index.html").write_text(
+            templates.render_html(found["template"], found["slots"])
+        )
+        findings = await asyncio.to_thread(engine_for(deps.state).lint, Path(tmp))
+    words = (
+        "The video reaches nothing outside its own folder."
+        if not findings
+        else f"{len(findings)} thing(s) in the video reach outside its own folder."
+    )
+    return Outcome.ok(
+        {"composition_id": found["id"], "ok": not findings, "findings": findings}, words
+    )
+
+
+async def _made(
+    ctx: ActionContext, cid: str, fmt: str, quality: str | None = None
+) -> tuple[Outcome | None, dict[str, Any] | None]:
+    """Make the video of a project: (what to return if it did not work, the finished render)."""
+    deps = need_deps(ctx)
+    manager = manager_for(deps)
+    try:
+        row = await manager.start(ctx.actor, cid, fmt, quality)
+    except Refused as e:
+        return Outcome.refused(e.message, e.code), None
+    try:
+        await manager.wait(row["id"])
+    except asyncio.CancelledError:
+        await manager.cancel(ctx.actor, row["id"])
+        raise
+    done = store_for(deps.state).get_render(ctx.actor.tenant_id, ctx.actor.user_id, row["id"])
+    if done["status"] != "done" or not done["video_id"]:
+        code = "check_failed" if done["check"] and not done["check"]["ok"] else "render_failed"
+        return Outcome.error(done["error"] or "The video could not be made.", code), None
+    return None, done
+
+
+async def _render_shapes(p: RenderIn, ctx: ActionContext) -> Outcome:
+    """One project as a video for each shape. Each says for itself how it went: a line that fits
+    one shape can be too wide for another."""
+    deps = need_deps(ctx)
+    manager, store = manager_for(deps), store_for(deps.state)
+    try:
+        rows = await manager.start_shapes(
+            ctx.actor, p.composition_id, list(p.shapes or []), p.format, p.quality
+        )
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    try:
+        await manager.wait(rows[0]["id"])
+    except asyncio.CancelledError:
+        await manager.cancel(ctx.actor, rows[0]["id"])
+        raise
+    done = [store.get_render(ctx.actor.tenant_id, ctx.actor.user_id, r["id"]) for r in rows]
+    made = [
+        {
+            "shape": r["settings"]["shape"], "video_id": r["video_id"],
+            "uri": f"wasify://creation/video/{r['video_id']}" if r["video_id"] else None,
+            "error": None if r["status"] == "done" else r["error"] or "It was not made.",
+        }
+        for r in done
+    ]  # fmt: skip
+    first = next((r for r in done if r["status"] == "done" and r["video_id"]), None)
+    if first is None:
+        why = "; ".join(f"{m['shape']}: {m['error']}" for m in made)
+        return Outcome.error(f"No video was made. {why}", "render_failed")
+    found = _found(ctx, p.composition_id)
+    seconds = int(found["slots"]["seconds"])
+    words = "; ".join(
+        f"{m['shape']}: saved" if not m["error"] else f"{m['shape']}: not made, {m['error']}"
+        for m in made
+    )
+    return Outcome.ok(
+        {
+            "composition_id": found["id"], "render_id": first["id"], "video_id": first["video_id"],
+            "product_id": PRODUCT_ID, "uri": f"wasify://creation/video/{first['video_id']}",
+            "seconds": seconds, "format": p.format, "checked": True, "shapes": made,
+        },
+        f'Videos of "{found["title"]}" ({seconds} seconds). {words}.',
+    )  # fmt: skip
+
+
+async def _render(p: RenderIn, ctx: ActionContext) -> Outcome:
+    if p.shapes:
+        return await _render_shapes(p, ctx)
+    failed, done = await _made(ctx, p.composition_id, p.format, p.quality)
+    if failed is not None or done is None:
+        return failed or Outcome.error("The video could not be made.", "render_failed")
+    found = _found(ctx, p.composition_id)
+    seconds = int(found["slots"]["seconds"])
+    return Outcome.ok(
+        {
+            "composition_id": found["id"], "render_id": done["id"], "video_id": done["video_id"],
+            "product_id": PRODUCT_ID, "uri": f"wasify://creation/video/{done['video_id']}",
+            "seconds": seconds, "format": p.format, "checked": bool(done["check"]["ok"]),
+        },
+        f'The video "{found["title"]}" was made ({seconds} seconds, {p.format}), checked '
+        "word for word, and saved to the library.",
+    )  # fmt: skip
+
+
+def _motion(found: dict[str, Any], done: dict[str, Any] | None) -> dict[str, Any]:
+    video = done["video_id"] if done else None
+    return {
+        **_created(found), "video_id": video,
+        "video_uri": f"wasify://creation/video/{video}" if video else None,
+        "checked": bool(done and done["check"] and done["check"]["ok"]),
+    }  # fmt: skip
+
+
+async def _make(p: MakeIn, ctx: ActionContext) -> Outcome:
+    try:
+        found = await _create_project(ctx, p.template, p.fields)
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    if not p.render:
+        return Outcome.ok(_motion(found, None), f'The project "{found["title"]}" was written.')
+    failed, done = await _made(ctx, found["id"], p.format)
+    if failed is not None or done is None:
+        text = (failed.text if failed else "The video could not be made.") + (
+            " The project was kept; change the words and try again."
+        )
+        return Outcome.error(text, failed.code if failed else "render_failed")
+    return Outcome.ok(
+        _motion(found, done),
+        f'"{found["title"]}" was made with the {templates.get(found["template"]).title.lower()} '
+        f"template ({found['slots']['seconds']} seconds, {p.format}); the words on the screen were "
+        "checked against what was given and it is saved to the library.",
+    )
+
+
+async def _revise(p: ReviseIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    current = _found(ctx, p.composition_id)
+    try:
+        slots = templates.normalize_slots(current["template"], {**current["slots"], **p.fields})
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    found = await asyncio.to_thread(
+        store_for(deps.state).update_composition, ctx.actor.tenant_id, ctx.actor.user_id,
+        current["id"], title=templates.title_of(current["template"], slots), slots=slots,
+    )  # fmt: skip
+    await index_composition(deps, ctx.actor, found)
+    if not p.render:
+        return Outcome.ok(_motion(found, None), f'The project "{found["title"]}" was changed.')
+    failed, done = await _made(ctx, found["id"], p.format)
+    if failed is not None or done is None:
+        text = (failed.text if failed else "The video could not be made.") + (
+            " The change was kept; you can undo it on the Motion graphics screen."
+        )
+        return Outcome.error(text, failed.code if failed else "render_failed")
+    return Outcome.ok(
+        _motion(found, done),
+        f'"{found["title"]}" was changed and made again ({p.format}); the words on the screen were '
+        "checked against what was given.",
+    )
+
+
+# ---- a project of scenes (ADR-0096) --------------------------------------------------------------
+
+
+def _scenes_out(found: dict[str, Any], scene_id: str | None = None) -> dict[str, Any]:
+    document = templates.as_scenes(found["template"], found["slots"])
+    return {
+        "composition_id": found["id"], "product_id": PRODUCT_ID,
+        "uri": f"wasify://creation/composition/{found['id']}", "title": found["title"],
+        "shape": document["shape"], "seconds": document["seconds"], "scene_id": scene_id,
+        "scenes": [
+            {"id": s["id"], "name": s["name"], "kind": s["kind"], "seconds": s["fields"]["seconds"]}
+            for s in document["scenes"]
+        ],
+    }  # fmt: skip
+
+
+def _owner(ctx: ActionContext) -> tuple[str, str, str]:
+    return (ctx.actor.tenant_id, PRODUCT_ID, ctx.actor.user_id)
+
+
+async def _with_brand(ctx: ActionContext, found: dict[str, Any]) -> dict[str, Any]:
+    return await brand.on_new_project(need_deps(ctx), _store(ctx), _owner(ctx), found)
+
+
+async def _read_brand(p: Strict, ctx: ActionContext) -> Outcome:
+    kit = await asyncio.to_thread(_store(ctx).get_brand, ctx.actor.tenant_id, ctx.actor.user_id)
+    return Outcome.ok(
+        {"kit": kit, "message": "" if kit else "No brand has been set up yet."},
+        json.dumps(kit, ensure_ascii=False) if kit else "No brand has been set up yet.",
+    )
+
+
+async def _set_brand(p: BrandIn, ctx: ActionContext) -> Outcome:
+    """The kit, in words and colours: the logo is a file the person adds on the screen."""
+    store = _store(ctx)
+    try:
+        kit = brand.normalize_kit(p.model_dump())
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    before = await asyncio.to_thread(store.get_brand, ctx.actor.tenant_id, ctx.actor.user_id)
+    kit["logo_asset"] = (before or {}).get("logo_asset")
+    await asyncio.to_thread(store.set_brand, ctx.actor.tenant_id, ctx.actor.user_id, kit)
+    return Outcome.ok(
+        {"kit": kit, "message": "The brand was saved."},
+        "The brand was saved. New projects start with it; use motion.use_brand for one already "
+        "started.",
+    )
+
+
+async def _use_brand(p: UseBrandIn, ctx: ActionContext) -> Outcome:
+    """On or off for one project, one Undo step, like any change to it."""
+    deps = need_deps(ctx)
+    found = _found(ctx, p.composition_id)
+    if not p.use:
+        return await _edit(
+            ctx, found["id"], "The brand was taken off this project.",
+            lambda d: templates.normalize_slots(templates.SCENES, {**d, "brand": None}),
+        )  # fmt: skip
+    kit = await asyncio.to_thread(_store(ctx).get_brand, ctx.actor.tenant_id, ctx.actor.user_id)
+    if kit is None:
+        return Outcome.refused("Set up the brand first, with its colours.", "no_brand")
+    if found["template"] != templates.SCENES:
+        return Outcome.refused("Add more scenes first.", "not_scenes")
+    document = await brand.use_on(deps, _store(ctx), _owner(ctx), found, kit)
+    return await _edit(
+        ctx, found["id"], "The brand's colours, letters and logo are on this project.",
+        lambda d: templates.normalize_slots(
+            templates.SCENES,
+            {**d, "brand": document["brand"], "font": document["font"],
+             "assets": document["assets"]},
+        ),
+    )  # fmt: skip
+
+
+async def _start_from(p: StartFromIn, ctx: ActionContext) -> Outcome:
+    """A set of scenes with words to replace: the same document as any other."""
+    deps = need_deps(ctx)
+    try:
+        document = templates.normalize_slots(
+            templates.SCENES, starts.document_of(p.start, p.shape, p.name)
+        )
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    found = await asyncio.to_thread(
+        store_for(deps.state).add_composition, ctx.actor.tenant_id, ctx.actor.user_id,
+        title=templates.title_of(templates.SCENES, document), template=templates.SCENES,
+        slots=document,
+    )  # fmt: skip
+    found = await _with_brand(ctx, found)
+    await index_composition(deps, ctx.actor, found)
+    return Outcome.ok(
+        _scenes_out(found),
+        f'The project "{found["title"]}" was started with {len(document["scenes"])} scenes. Their '
+        "words are there to be replaced. Nothing has been made yet.",
+    )
+
+
+async def _write_scenes(p: WriteScenesIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    try:
+        document = templates.normalize_slots(templates.SCENES, p.model_dump())
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    found = await asyncio.to_thread(
+        store_for(deps.state).add_composition, ctx.actor.tenant_id, ctx.actor.user_id,
+        title=templates.title_of(templates.SCENES, document), template=templates.SCENES,
+        slots=document,
+    )  # fmt: skip
+    found = await _with_brand(ctx, found)
+    await index_composition(deps, ctx.actor, found)
+    return Outcome.ok(
+        _scenes_out(found),
+        f'The project "{found["title"]}" was written: {len(document["scenes"])} scenes, '
+        f"{document['seconds']} seconds. Nothing has been made yet: use video_builder.render to "
+        "make the video.",
+    )
+
+
+async def _edit(
+    ctx: ActionContext, cid: str, words: str, change: Callable[[dict[str, Any]], Any]
+) -> Outcome:
+    """One change to a project's scenes: one version. `change` gives the new document, or the new
+    document and a scene's id. A project made from a template becomes a project of scenes here."""
+    deps = need_deps(ctx)
+    current = _found(ctx, cid)
+    try:
+        made = change(templates.as_scenes(current["template"], current["slots"]))
+    except templates.SlotError as e:
+        return Outcome.refused(str(e), "bad_slot")
+    document, scene_id = made if isinstance(made, tuple) else (made, None)
+    found = await asyncio.to_thread(
+        store_for(deps.state).update_composition, ctx.actor.tenant_id, ctx.actor.user_id, cid,
+        title=templates.title_of(templates.SCENES, document), slots=document,
+        template=templates.SCENES,
+    )  # fmt: skip
+    await index_composition(deps, ctx.actor, found)
+    return Outcome.ok(
+        _scenes_out(found, scene_id),
+        f"{words} The video is now {document['seconds']} seconds, with "
+        f"{len(document['scenes'])} scenes. This can be undone.",
+    )
+
+
+async def _add_scene(p: AddSceneIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was added.",
+        lambda d: scenes.add(
+            d, p.kind, p.fields, p.name, p.position,
+            {
+                "caption": p.caption, "transition": p.transition, "arrange": p.arrange,
+                "background": p.background, "images": p.images, "sound": p.sound,
+            },
+        ),
+    )  # fmt: skip
+
+
+async def _change_scene(p: ChangeSceneIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was changed.",
+        lambda d: scenes.change(
+            d, p.scene_id, p.fields, p.name,
+            caption=p.caption, transition=p.transition, arrange=p.arrange,
+            background=p.background, images=p.images, sound=p.sound,
+        ),
+    )  # fmt: skip
+
+
+async def _move_scene(p: MoveSceneIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was moved.",
+        lambda d: scenes.move(d, p.scene_id, p.position),
+    )  # fmt: skip
+
+
+async def _duplicate_scene(p: SceneRefIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was copied.", lambda d: scenes.duplicate(d, p.scene_id)
+    )
+
+
+async def _remove_scene(p: SceneRefIn, ctx: ActionContext) -> Outcome:
+    return await _edit(
+        ctx, p.composition_id, "The scene was removed.", lambda d: scenes.remove(d, p.scene_id)
+    )
+
+
+async def _set_project(p: SetProjectIn, ctx: ActionContext) -> Outcome:
+    def change(d: dict[str, Any]) -> dict[str, Any]:
+        given = p.model_dump(exclude={"composition_id"}, exclude_none=True)
+        return templates.normalize_slots(templates.SCENES, {**d, **given})
+
+    return await _edit(ctx, p.composition_id, "The project was changed.", change)
+
+
+def _not_done(result: ActionResult) -> Outcome:
+    """Why a product's action did not make it, in its own words."""
+    text = result.setup.step if result.setup else result.text
+    return Outcome.refused(text or "That could not be made.", result.code or "not_made")
+
+
+async def _make_file(p: MakeFileIn, ctx: ActionContext) -> Outcome:
+    """Made by the product's own action, kept in the Library as usual, and copied into the project.
+    It runs as the person who was asked, or who pressed the button: this action's own approval."""
+    deps = need_deps(ctx)
+    current = _found(ctx, p.composition_id)
+    if current["template"] != templates.SCENES:
+        return Outcome.refused("Add more scenes first.", "not_scenes")
+    document = current["slots"]
+    if p.use in ("background", "place", "sound") and p.scene_id is None:
+        return Outcome.refused("Say which scene it is for.", "bad_slot")
+    action, params = make.inner_call(p.what, p.text, document["shape"], p.seconds, p.voice)
+    done = await ctx.executor.run_action(
+        action, params, "window", actor=ctx.actor, person_approved=True
+    )
+    if done.status != "ok":
+        return _not_done(done)
+    item = make.made_item(p.what, done.output)
+    kind = ctx.executor.library.get(item[0]) if item else None
+    data = await kind.read(ctx, item[1]) if item and kind and kind.read else None
+    if data is None or item is None:
+        return Outcome.error("It was made, but could not be brought here. It is in your Library.")
+    try:
+        checked = await asyncio.to_thread(media.check_upload, data, make.file_name(p.what, p.text))
+    except media.MediaError as e:
+        return Outcome.error(f"It was made, but could not be used here: {e}")
+    await deps.storage.put_for(
+        (ctx.actor.tenant_id, PRODUCT_ID, ctx.actor.user_id),
+        media.rel_path(current["id"], checked.asset["file"]),
+        checked.data,
+        media.MEDIA_TYPES.get(Path(checked.asset["file"]).suffix, "application/octet-stream"),
+    )
+    store = _store(ctx)
+    latest = store.get_composition(ctx.actor.tenant_id, ctx.actor.user_id, current["id"])
+    assets = [*(latest["slots"].get("assets") or []), checked.asset]
+    await asyncio.to_thread(
+        store.set_assets, ctx.actor.tenant_id, ctx.actor.user_id, current["id"], assets
+    )
+    cues: list[dict[str, Any]] = []
+    if p.what == "speech" and p.captions:
+        heard = await ctx.executor.run_action(
+            "speech.transcribe", {"source_kind": "speech", "source_id": item[1]}, "window",
+            actor=ctx.actor, person_approved=True,
+        )  # fmt: skip
+        # no speech to text here: the lines are timed by how far through the words they are
+        segments = heard.output.get("segments", []) if heard.status == "ok" else []
+        cues = make.timed_lines(p.text, segments, checked.asset["seconds"])
+    if p.use != "none":
+        placed = await _use_file(ctx, latest["id"], checked.asset, p, cues)
+        if placed is not None:
+            return placed
+    return Outcome.ok(
+        {
+            "composition_id": current["id"], "asset": checked.asset, "assets": assets, "cues": cues,
+            "uri": f"wasify://creation/composition/{current['id']}",
+            "message": f"{checked.asset['name']} is in the project.",
+        },
+        f"It was made and added to the project as {checked.asset['name']}. This can be undone.",
+    )  # fmt: skip
+
+
+async def _use_file(
+    ctx: ActionContext, cid: str, asset: dict[str, Any], p: MakeFileIn, cues: list[dict[str, Any]]
+) -> Outcome | None:
+    """Put what was just made where the assistant was asked to. None when that worked."""
+
+    def change(d: dict[str, Any]) -> dict[str, Any]:
+        if p.use == "soundtrack":
+            track = {"asset": asset["id"], "volume": 0.4, "loop": True}
+            return templates.normalize_slots(templates.SCENES, {**d, "soundtrack": track})
+        scene = d["scenes"][scenes.find(d, str(p.scene_id))]
+        if p.use == "background":
+            return scenes.change(d, scene["id"], {}, background={"asset": asset["id"]})
+        if p.use == "place":
+            pictures = [*scene.get("images", []), {"asset": asset["id"]}]
+            return scenes.change(d, scene["id"], {}, images=pictures)
+        longer = {}
+        if "seconds" in scene["fields"] and asset["seconds"] > scene["fields"]["seconds"]:
+            longest = next(
+                f.maximum for f in templates.TEMPLATES[scene["kind"]].fields if f.kind == "seconds"
+            )
+            longer = {"seconds": min(math.ceil(asset["seconds"]), longest)}
+        return scenes.change(
+            d, scene["id"], longer,
+            sound={"asset": asset["id"], "volume": 1, "loop": False},
+            cues=cues or None,
+        )  # fmt: skip
+
+    edited = await _edit(ctx, cid, "It was put in the project.", change)
+    return edited if edited.status != "ok" else None
+
+
+async def _read_project(p: ReadProjectIn, ctx: ActionContext) -> Outcome:
+    found = _found(ctx, p.composition_id)
+    document = templates.as_scenes(found["template"], found["slots"])
+    return Outcome.ok(
+        {
+            "composition_id": found["id"], "title": found["title"],
+            "brief": editor.brief(document, p.scene_id, _fields_help()),
+            "actions": list(editor.ACTIONS),
+        },
+        f'This is the project "{found["title"]}".',
+    )  # fmt: skip
+
+
+async def _undo(p: CompositionIn, ctx: ActionContext) -> Outcome:
+    deps = need_deps(ctx)
+    try:
+        found = await asyncio.to_thread(
+            store_for(deps.state).undo_composition,
+            ctx.actor.tenant_id, ctx.actor.user_id, p.composition_id,
+        )  # fmt: skip
+    except NothingToUndo:
+        return Outcome.refused("There is nothing to undo.", "nothing_to_undo")
+    await index_composition(deps, ctx.actor, found)
+    return Outcome.ok(_scenes_out(found), f'The last change to "{found["title"]}" was undone.')
+
+
+def _scene_action(
+    action_id: str, title: str, summary: str, description: str, given: type[BaseModel],
+    example: dict[str, Any], call: Callable[..., Any],
+) -> Action:  # fmt: skip
+    """A change to a project of scenes: nothing is drawn, so it needs only the product."""
+    return Action(
+        id=action_id, title=title, summary=summary, description=description, input=given,
+        output=ScenesOut, examples=(example,), effect="change",
+        requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+        bind=CallBinding(call, check=_check_composition), ui="motion",
+    )  # fmt: skip
+
+
+def actions() -> list[Action]:
+    return [
+        Action(
+            id="motion.write_scenes", title="Write a video of several scenes",
+            summary="Start a video from a list of scenes, without making it yet.",
+            description=(
+                "Create a Motion graphics project of several scenes, one after another, for a "
+                "promotion, an advert or a social post. Each scene is one of the five templates. "
+                "The words are shown exactly as given. Nothing is rendered; call "
+                "video_builder.render to make the video. " + _fields_help()
+            ),
+            input=WriteScenesIn, output=ScenesOut,
+            examples=({"name": "Northbean launch", "shape": "portrait", "scenes": [
+                {"kind": "title", "name": "Hook", "fields": {"title": "Mornings are hard."}},
+                {"kind": "quote", "fields": {"quote": "Smooth, not bitter.", "seconds": 6}},
+            ]},),
+            effect="make", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_write_scenes), ui="motion",
+        ),
+        Action(
+            id="motion.read_brand", title="Read the brand",
+            summary="Read the person's brand: name, colours, letters, end card words.",
+            description=(
+                "Read the person's brand kit, used in their Motion graphics projects: its name, "
+                "colours, letters, whether it has a logo, and the words of its end card."
+            ),
+            input=Strict, output=BrandOut, examples=({},), effect="read",
+            requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_read_brand), ui="motion",
+        ),
+        Action(
+            id="motion.set_brand", title="Set the brand",
+            summary="Save the person's brand: name, colours, letters, end card words.",
+            description=(
+                "Save the person's brand kit for their Motion graphics projects: name, colours as "
+                "#rrggbb, letters, the end card's call to action and address. New projects start "
+                "with it. The logo is added on the screen."
+            ),
+            input=BrandIn, output=BrandOut,
+            examples=({"name": "Northbean", "background": "#10261c", "second": "#1f4d3a",
+                       "text": "#f7f3e9", "accent": "#e0a458", "action": "Try it today",
+                       "address": "northbean.example"},),
+            effect="change", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_set_brand), ui="motion",
+        ),
+        Action(
+            id="motion.use_brand", title="Use the brand on a video project",
+            summary="Put the person's brand on a video project, or take it off.",
+            description=(
+                "Put the person's brand on a Motion graphics project of scenes: its colours on "
+                "every scene, its letters and its logo. It can be undone, and with use false it "
+                "comes off and the scenes' own looks show again."
+            ),
+            input=UseBrandIn, output=ScenesOut, examples=({"composition_id": SAMPLE_ID},),
+            effect="change", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_use_brand, check=_check_composition), ui="motion",
+        ),
+        Action(
+            id="motion.start_from", title="Start a video from a starting point",
+            summary="Start a marketing video from a ready set of scenes with words to replace.",
+            description=(
+                "Start a Motion graphics project from a set of scenes: a product promo, launch "
+                "announcement, sale or offer, customer words, feature explainer, before and after, "
+                "or social post. The words are there to be replaced. Nothing is rendered."
+            ),
+            input=StartFromIn, output=ScenesOut,
+            examples=({"start": "promo", "shape": "portrait"},),
+            effect="make", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_start_from), ui="motion",
+        ),
+        Action(
+            id="motion.make_file", title="Make something for a video project",
+            summary="Make a picture, clip, voiceover or music and add it to a video project.",
+            description=(
+                "Make a picture, a clip, speech or music with the app's own models and add it to "
+                "a Motion graphics project; it is also kept in the library. `use` says where it "
+                "goes. For a voiceover, `captions` shows the words in time with the speech."
+            ),
+            input=MakeFileIn, output=MakeFileOut,
+            examples=({"composition_id": SAMPLE_ID, "what": "speech", "text": "Try it today.",
+                       "use": "sound", "scene_id": SAMPLE_SCENE, "captions": True},),
+            effect="make", flags=("costly",), requires=(need_product(PRODUCT_ID),),
+            long=True, product=PRODUCT_ID,
+            bind=CallBinding(_make_file, check=_check_composition), ui="motion",
+        ),
+        Action(
+            id="motion.read_project", title="Read a video project",
+            summary="What a video project's scenes say, for working on it.",
+            description=(
+                "Read a Motion graphics project: its shape, length and each scene's id, kind, "
+                "words, length and look. The editor's assistant works from this."
+            ),
+            input=ReadProjectIn, output=ReadProjectOut, examples=({"composition_id": SAMPLE_ID},),
+            effect="read", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_read_project, check=_check_composition), ui="motion",
+        ),
+        _scene_action(
+            "motion.set_project", "Change the whole project",
+            "Change the name or shape of a video project, or write all its scenes.",
+            "Change a Motion graphics project's name, shape or letters, or replace all its scenes "
+            "at once, as when turning a brief into a first version. Give only what changes. "
+            "Nothing is rendered. " + _fields_help(),
+            SetProjectIn,
+            {"composition_id": SAMPLE_ID, "shape": "square"},
+            _set_project,
+        ),
+        _scene_action(
+            "motion.add_scene", "Add a scene",
+            "Add a scene to a video project.",
+            "Add one scene to a Motion graphics project, at the end or at a position. A project "
+            "made from one template becomes a project of scenes. Nothing is rendered.",
+            AddSceneIn,
+            {"composition_id": SAMPLE_ID, "kind": "title", "fields": {"title": "Try Northbean."}},
+            _add_scene,
+        ),
+        _scene_action(
+            "motion.change_scene", "Change a scene",
+            "Change the words, length or look of one scene.",
+            (
+                "Change one scene of a Motion graphics project: give only the fields that change. "
+                "The other scenes stay as they are. Nothing is rendered."
+            ),
+            ChangeSceneIn,
+            {"composition_id": SAMPLE_ID, "scene_id": SAMPLE_SCENE, "fields": {"seconds": 4}},
+            _change_scene,
+        ),
+        _scene_action(
+            "motion.move_scene", "Move a scene",
+            "Move a scene earlier or later in a video project.",
+            "Move one scene of a Motion graphics project to a position, from 0.",
+            MoveSceneIn,
+            {"composition_id": SAMPLE_ID, "scene_id": SAMPLE_SCENE, "position": 0},
+            _move_scene,
+        ),
+        _scene_action(
+            "motion.duplicate_scene", "Copy a scene",
+            "Copy a scene, right after itself.",
+            "Copy one scene of a Motion graphics project, right after itself.",
+            SceneRefIn, {"composition_id": SAMPLE_ID, "scene_id": SAMPLE_SCENE}, _duplicate_scene,
+        ),
+        _scene_action(
+            "motion.remove_scene", "Remove a scene",
+            "Take a scene out of a video project.",
+            (
+                "Remove one scene of a Motion graphics project. A project keeps at least one "
+                "scene, and motion.undo brings a removed scene back."
+            ),
+            SceneRefIn, {"composition_id": SAMPLE_ID, "scene_id": SAMPLE_SCENE}, _remove_scene,
+        ),
+        _scene_action(
+            "motion.undo", "Undo the last change",
+            "Bring back a video project as it was before the last change.",
+            (
+                "Undo the last change to a Motion graphics project. Twenty earlier versions are "
+                "kept, so it can be used again to go further back."
+            ),
+            CompositionIn, {"composition_id": SAMPLE_ID}, _undo,
+        ),
+        Action(
+            id="video_builder.create", title="Write a video project",
+            summary="Start a video from a template, without making it yet.",
+            description=(
+                "Create a Motion graphics project from one of five templates and keep it in the "
+                "library. Nothing is rendered; call video_builder.render to make the video, or use "
+                "motion.make to do both at once. The words are shown exactly as given. "
+                + _fields_help()
+            ),
+            input=CreateIn, output=CompositionOut,
+            examples=({"template": "title", "fields": {"title": "Launch day",
+                                                      "subtitle": "Wasify AI is here"}},),
+            effect="make", requires=(need_product(PRODUCT_ID),), product=PRODUCT_ID,
+            bind=CallBinding(_create), ui="motion",
+        ),
+        Action(
+            id="video_builder.lint", title="Check a video project",
+            summary="Check that a video project reaches nothing outside its own folder.",
+            description=(
+                "Check a Motion graphics project before rendering: the page must not load anything "
+                "from the internet or from other folders. Returns the findings, if any."
+            ),
+            input=CompositionIn, output=LintOut, examples=({"composition_id": SAMPLE_ID},),
+            effect="read", requires=(need_product(PRODUCT_ID), BUILDER), product=PRODUCT_ID,
+            bind=CallBinding(_lint, check=_check_composition), ui="motion",
+        ),
+        Action(
+            id="video_builder.render", title="Make the video",
+            summary="Render a video project to a video in the library.",
+            description=(
+                "Render a Motion graphics project and save it to the library (Your videos). "
+                "The words on the screen are checked against what was typed first; a page that "
+                "does not say them is not rendered. It runs in a sandbox, takes seconds to a "
+                "minute, and only one video is made at a time. Returns a job handle when it is not "
+                "done within the wait. Lower thirds and captions can be made transparent (webm or "
+                "mov). `shapes` makes one video for each shape from the one project."
+            ),
+            input=RenderIn, output=RenderOut, examples=({"composition_id": SAMPLE_ID},),
+            effect="make", flags=("costly",), requires=(need_product(PRODUCT_ID), BUILDER),
+            long=True, product=PRODUCT_ID,
+            bind=CallBinding(_render, check=_check_composition), ui="motion",
+        ),
+        Action(
+            id="motion.make", title="Make a motion graphic",
+            summary="Make an animated title, quote, chart, lower third or captions.",
+            description=(
+                "Make a finished animated graphic in one step: pick the template that fits the "
+                "request and give its fields, with the person's words and numbers exactly as they "
+                "typed them (never rewrite, correct or translate them). The page is built from a "
+                "vetted template, the words on the screen are checked against what was given, and "
+                "the video is saved to the library with the project, which stays editable. For "
+                "overlays on footage use lower_third or captions with format webm (transparent). "
+                "Use image.generate or video.generate for pictures of things. " + _fields_help()
+            ),
+            input=MakeIn, output=MotionOut,
+            examples=(
+                {"template": "lower_third",
+                 "fields": {"name": "Maya Chen", "role": "Head of Design"}, "format": "webm"},
+                {"template": "chart", "fields": {"title": "Sales by region",
+                                                 "data": "North, 120\nSouth, 95\nEast, 150"}},
+            ),
+            effect="make", requires=(need_product(PRODUCT_ID), BUILDER), long=True,
+            product=PRODUCT_ID, bind=CallBinding(_make), ui="motion",
+        ),
+        Action(
+            id="motion.revise", title="Change a motion graphic",
+            summary="Change the words or the look of a motion graphic and make it again.",
+            description=(
+                "Change an existing Motion graphics project: give only the fields that change (the "
+                "rest stay), and it is made again and checked. The earlier version can be brought "
+                "back on the Motion graphics screen. Use for requests like 'make the text bigger' "
+                "(change the length or shape), 'use the forest look', or 'fix the typo'."
+            ),
+            input=ReviseIn, output=MotionOut,
+            examples=({"composition_id": SAMPLE_ID, "fields": {"theme": "forest"}},),
+            effect="change", requires=(need_product(PRODUCT_ID), BUILDER), long=True,
+            product=PRODUCT_ID,
+            bind=CallBinding(_revise, check=_check_composition), ui="motion",
+        ),
+    ]  # fmt: skip
+
+
+# ---- the library's compositions ---------------------------------------------------------------
+
+
+def _item(c: dict[str, Any]) -> LibraryItem:
+    slots = c["slots"]
+    return LibraryItem(
+        kind="composition", id=c["id"], title=c["title"][:120], created_at=c["created_at"],
+        detail={"seconds": slots.get("seconds"), "shape": slots.get("shape"),
+                "template": c["template"]},
+    )  # fmt: skip
+
+
+async def _list(ctx: ActionContext, limit: int) -> list[LibraryItem]:
+    rows = await asyncio.to_thread(
+        _store(ctx).list_compositions, ctx.actor.tenant_id, ctx.actor.user_id, None, limit
+    )
+    return [_item(c) for c in rows]
+
+
+async def _get(ctx: ActionContext, item_id: str) -> LibraryItem | None:
+    try:
+        return _item(_store(ctx).get_composition(ctx.actor.tenant_id, ctx.actor.user_id, item_id))
+    except NotFound:
+        return None
+
+
+async def _delete(ctx: ActionContext, item_id: str) -> bool:
+    return await delete_composition(need_deps(ctx), ctx.actor, item_id)
+
+
+async def _rename(ctx: ActionContext, item_id: str, name: str) -> bool:
+    deps = need_deps(ctx)
+    try:
+        found = _store(ctx).get_composition(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
+        primary = templates.get(found["template"]).primary
+        if primary is None:
+            return False
+        slots = templates.normalize_slots(found["template"], {**found["slots"], primary: name})
+    except (NotFound, templates.SlotError):
+        return False
+    updated = _store(ctx).update_composition(
+        ctx.actor.tenant_id, ctx.actor.user_id, item_id,
+        title=templates.title_of(found["template"], slots), slots=slots,
+    )  # fmt: skip
+    await index_composition(deps, ctx.actor, updated)
+    return True
+
+
+def library_kinds() -> list[LibraryKind]:
+    return [LibraryKind("composition", PRODUCT_ID, "video project", _list, _get, _delete, _rename)]
+
+
+__all__ = ["actions", "library_kinds"]

@@ -9,6 +9,7 @@ from wasifyai_platform_sdk import RunRecord
 
 from wasifyai_api.identity import Identity, get_identity
 from wasifyai_api.runs import RunIdTaken
+from wasifyai_api.services import services_of
 
 router = APIRouter()
 HEARTBEAT_S = 15
@@ -17,7 +18,7 @@ SSE_HEADERS = {"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "
 
 
 def _state(request: Request) -> Any:
-    return request.app.state
+    return services_of(request)
 
 
 async def _stream(st: Any, rec: RunRecord, after: int) -> AsyncIterator[str]:
@@ -79,6 +80,7 @@ async def start_run(
             body.thread_id,
             body.input,
             body.run_id,
+            role=identity.role,
         )
     except RunIdTaken:
         raise HTTPException(409, "that run id is already in use") from None

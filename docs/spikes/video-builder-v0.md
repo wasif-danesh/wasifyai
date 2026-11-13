@@ -226,7 +226,7 @@ the installed Chrome (`channel: 'chrome'`); it needs only `playwright-core` and 
 the Playwright route is not needed and nothing outside HyperFrames' sandbox is added. The ADR-0079 fallback is unnecessary for this part. Not tested: playback
 in OBS, Premiere, Safari (HEVC alpha is a separate encode described in the pack's `delivery.md`), or ProRes in Final Cut.
 
-## 5. Motion Graphics: two skills adapted, and the exact-text readback
+## 5. Motion graphics: two skills adapted, and the exact-text readback
 
 **Source read.** `iart-ai/lower-thirds-skills` at commit `aa8ef7ed9fa59d0a79fc57701e493cfd8197b5d8` and
 `iart-ai/kinetic-typography-skills` at `fccc94bd325d824235ee9e715e65abde57b6513a`, both MIT, Copyright (c) 2026 iart.ai. Fetched

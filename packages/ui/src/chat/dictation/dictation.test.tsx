@@ -8,7 +8,6 @@ import type { AssistantApi, ImagesApi, OnEvent } from "@wasifyai/client";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatScreen } from "../ChatScreen";
-import { ChatScreenNext } from "../ChatScreenNext";
 import { useComposerOptions } from "../composer-options";
 import { MicError, micProblem } from "./recorder";
 import { type MicControl, clock, joinDictation } from "./use-dictation";
@@ -130,18 +129,18 @@ describe("a failure to open the microphone", () => {
 
 describe("useComposerOptions", () => {
   it("has a Mic only where the engine can write words down", () => {
-    expect(renderHook(() => useComposerOptions(null, {})).result.current.bar).toEqual([]);
+    const ids = (bar: { id: string }[]) => bar.map((o) => o.id).filter((id) => id !== "approval");
+    expect(ids(renderHook(() => useComposerOptions(null, {})).result.current.bar)).toEqual([]);
     const { result } = renderHook(() => useComposerOptions(null, { mic: fakeMic().control }));
-    expect(result.current.bar.map((o) => o.id)).toEqual(["mic"]);
-    expect(result.current.bar[0]).toMatchObject({ label: "Mic", pressed: false, disabled: false });
+    expect(ids(result.current.bar)).toEqual(["mic"]);
+    const mic = result.current.bar.find((o) => o.id === "mic");
+    expect(mic).toMatchObject({ label: "Mic", pressed: false, disabled: false });
     expect(result.current.runInput).toEqual({}); // the microphone changes nothing about the message that is sent
   });
 });
 
-describe.each([
-  ["the usual chat", ChatScreen],
-  ["the new chat", ChatScreenNext],
-])("%s", (_name, Screen) => {
+describe("the chat", () => {
+  const Screen = ChatScreen;
   const box = () => screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
   const open = (mic: MicControl | undefined, run = runs()) => {
     render(<Screen runs={run} assistant={assistant} images={images} composerOptions={{ mic }} />);
@@ -309,7 +308,6 @@ describe.each([
           : {
               setup: {
                 title: "Parakeet TDT 0.6B v3",
-                licence: "CC-BY-4.0",
                 from: "huggingface.co",
                 bytes: 955_000_000,
                 run: async (onProgress) => {
@@ -333,7 +331,7 @@ describe.each([
     await user.click(screen.getByRole("button", { name: /^Mic/ }));
     const card = await screen.findByRole("region", { name: "Set up dictation" });
     expect(card).toHaveTextContent("Parakeet TDT 0.6B v3");
-    expect(card).toHaveTextContent("CC-BY-4.0");
+    expect(card).not.toHaveTextContent("CC-BY");
     expect(card).toHaveTextContent("huggingface.co");
     expect(card).toHaveTextContent("955 MB");
     expect(screen.queryByText(/Listening/)).toBeNull(); // nothing was recorded
@@ -347,7 +345,6 @@ describe.each([
     const { control } = fakeMic({
       setup: {
         title: "Parakeet",
-        licence: "CC-BY-4.0",
         from: "",
         bytes: 1e9,
         run: async () => Promise.reject(new Error("There is not enough disk space.")),

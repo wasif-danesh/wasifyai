@@ -1,0 +1,10 @@
+id: wasifyai-training
+# Teach the app something of the person's own (ADR-0073): today a character, a style or an object from nothing but
+# pictures (ADR-0076). The trainer and its models run on this computer and belong to the engine;
+# this product keeps the datasets, the runs and the trained models, and asks the engine to train.
+# The two language capabilities are the captions (ADR-0076 decision 2) and the judge that says
+# whether a trained model looks like the pictures it learnt from (ADR-0073 decision 10): the app writes the
+# description of every picture, so the person only uploads pictures.
+capabilities:
+  text.describe_image: { provider: litellm, model: multimodal, inputs: [text, image] }
+  text.judge_image: { provider: litellm, model: multimodal, inputs: [text, image] }

@@ -1,9 +1,11 @@
-// @vitest-environment jsdom
-import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AssistantApi, ImagesApi } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ModelChoicesProvider, useChoicesChanged } from "../models";
 import { AssistantHome, greeting } from "./AssistantHome";
+// @vitest-environment jsdom
+import { moreOptions } from "./options-testing";
 import { conversationsChanged, useConversations } from "./use-conversations";
 
 const runs = { startRun: vi.fn(async () => {}), watchRun: vi.fn(async () => {}) };
@@ -68,11 +70,47 @@ describe("AssistantHome", () => {
         />,
       );
       await screen.findByRole("heading", { level: 1 });
-      await waitFor(() =>
-        expect(screen.queryAllByRole("button", { name: /^Thinking/ })).toHaveLength(can ? 1 : 0),
+      // Thinking is in the box's "+" menu (ADR-0093 U9)
+      await waitFor(async () =>
+        expect((await moreOptions()).some((t) => t.startsWith("Thinking"))).toBe(can),
       );
     },
   );
+
+  it("asks again what the box can do when another model is chosen", async () => {
+    let can = false;
+    const options = vi.fn(async () => ({ thinking: can }));
+    function Choose() {
+      const changed = useChoicesChanged();
+      return (
+        <button type="button" onClick={changed}>
+          model chosen
+        </button>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <ModelChoicesProvider source={() => null}>
+        <Choose />
+        <AssistantHome
+          runs={runs}
+          assistant={fakeAssistant({ options })}
+          images={images}
+          conversationId={null}
+          onAdopt={() => {}}
+          onNewChat={() => {}}
+        />
+      </ModelChoicesProvider>,
+    );
+    await screen.findByRole("heading", { level: 1 });
+    expect((await moreOptions()).some((t) => t.startsWith("Thinking"))).toBe(false);
+    can = true; // the model the person chose can think
+    await user.click(screen.getByRole("button", { name: "model chosen" }));
+    await waitFor(async () =>
+      expect((await moreOptions()).some((t) => t.startsWith("Thinking"))).toBe(true),
+    );
+    expect(options).toHaveBeenCalledTimes(2);
+  });
 
   it("greets a new chat and offers examples, with no title bar", async () => {
     render(
@@ -90,9 +128,15 @@ describe("AssistantHome", () => {
     expect(screen.queryByRole("button", { name: /rename this chat/i })).toBeNull();
   });
 
-  it("shows a saved chat's title and renames it", async () => {
-    const assistant = fakeAssistant();
-    vi.spyOn(window, "prompt").mockReturnValue("Renamed");
+  it("shows a saved chat's title and renames it in the app's own box", async () => {
+    let stored = "Fox poem"; // the engine keeps the name: the list reads it back
+    const assistant = fakeAssistant({
+      list: vi.fn(async () => [{ id: "c1", title: stored, created_at: "", updated_at: "" }]),
+      rename: vi.fn(async (id: string, title: string) => {
+        stored = title;
+        return { id, title, created_at: "", updated_at: "" };
+      }),
+    });
     const changed = vi.fn();
     window.addEventListener("wasifyai:conversations-changed", changed);
     const user = userEvent.setup();
@@ -108,7 +152,12 @@ describe("AssistantHome", () => {
     );
     expect(await screen.findByText("Fox poem")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /rename this chat/i }));
-    expect(assistant.rename).toHaveBeenCalledWith("c1", "Renamed");
+    const box = screen.getByRole("dialog", { name: "Rename this chat" });
+    const name = within(box).getByLabelText("Name");
+    await user.clear(name);
+    await user.type(name, "Renamed");
+    await user.click(within(box).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(assistant.rename).toHaveBeenCalledWith("c1", "Renamed"));
     expect(await screen.findByText("Renamed")).toBeInTheDocument();
     expect(changed).toHaveBeenCalled();
     window.removeEventListener("wasifyai:conversations-changed", changed);
@@ -117,10 +166,6 @@ describe("AssistantHome", () => {
   it("deletes the chat after asking, then goes to a new one", async () => {
     const assistant = fakeAssistant();
     const onNewChat = vi.fn();
-    const confirm = vi
-      .spyOn(window, "confirm")
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true);
     const user = userEvent.setup();
     render(
       <AssistantHome
@@ -134,9 +179,18 @@ describe("AssistantHome", () => {
     );
     const del = await screen.findByRole("button", { name: /delete this chat/i });
     await user.click(del);
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Delete this chat?" })).getByRole("button", {
+        name: "Cancel",
+      }),
+    );
     expect(assistant.remove).not.toHaveBeenCalled(); // asked, and the answer was no
     await user.click(del);
-    expect(confirm).toHaveBeenCalledTimes(2);
+    await user.click(
+      within(screen.getByRole("dialog", { name: "Delete this chat?" })).getByRole("button", {
+        name: "Delete",
+      }),
+    );
     await waitFor(() => expect(assistant.remove).toHaveBeenCalledWith("c1"));
     expect(onNewChat).toHaveBeenCalled();
   });

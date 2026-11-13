@@ -2,6 +2,7 @@
 
 - **Status:** Accepted (2026-10-18, by the owner), together with the components it names. Labelled **experimental** in the app. **Renamed from "Compose" to "Video Builder" on 2026-10-18** (working name, chosen by the
   owner; "Compose" clashed with Compose Multiplatform and `docker compose`). Action names are `video_builder.*`.
+- **Superseded in part:** by ADR-0096 (2026-10-31): the visual editor in "Not in v1" is now planned.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0068 (action catalogue), ADR-0069 (our MCP server), ADR-0072 (the agent), ADR-0066 (speech,
   music, transcripts), ADR-0059 and ADR-0037 (images and generated video), ADR-0041 (searchable), ADR-0047, ADR-0061
@@ -10,7 +11,7 @@
 
 ## Context
 
-The owner wants "something like HyperFrames (experimental)". **HyperFrames** (HeyGen, Apache-2.0, read 2026-10-18)
+The owner wants "something like HyperFrames (experimental)". **HyperFrames** (HeyGen, read 2026-10-18)
 renders **HTML, CSS, media and seekable animations into deterministic MP4**: a composition is a plain HTML file
 (a root with `data-composition-id`, `data-width`, `data-height`; clips with `data-start`, `data-duration`,
 `data-track-index`; animations as GSAP timelines on `window.__timelines`), the renderer seeks each frame in
@@ -30,11 +31,7 @@ Constraints that matter:
   engine. That is an execution risk, unlike every other creation in the app.
 - **Dependencies.** A headless Chrome (a large download), Node.js 22, FFmpeg (the app already ships one through
   `imageio-ffmpeg`). The desktop app is a Tauri shell with a Python engine; neither provides Chrome or Node.
-- **GSAP licence.** HyperFrames' animations use GSAP. GSAP's "Standard No Charge" licence (Webflow, read 2026-10-18)
-  allows commercial use but **forbids tools that let people build visual animations without code and help build a
-  Webflow competitor**, and one copy says that if **end users are charged a fee** a paid "Business" membership is
-  required. A video-composition product is near enough to be read both ways; it needs an actual licence decision,
-  not an assumption. An alternative that avoids GSAP exists in principle (the Web Animations API, CSS animations,
+- **GSAP.** HyperFrames' animations use GSAP. An alternative that avoids GSAP exists in principle (the Web Animations API, CSS animations,
   Anime.js), at the cost of leaving HyperFrames' conventions.
 - **No GPU needed to render**, but CPU time is real: Chrome per frame plus encoding. Speed on a Mac is unmeasured.
 
@@ -47,8 +44,8 @@ Constraints that matter:
    the **assistant or the agent write it** (decision 5).
 2. **Adopt HyperFrames as the render engine for v1; do not build our own renderer yet.** The seam is an interface
    `VideoBuilderEngine` (create project, lint, preview, render, list assets) so another engine can replace it. We adopt
-   because a deterministic browser-to-MP4 renderer is hard to get right and the project is Apache-2.0 and
-   agent-oriented. Adopting is gated on: the GSAP licence read (decision 8), a measured render speed (V0), and a
+   because a deterministic browser-to-MP4 renderer is hard to get right and the project is
+   agent-oriented. Adopting is gated on: a measured render speed (V0), and a
    headless browser that is safe to ship (decision 4). If the gate fails, the fallback is our own engine on the
    same composition idea with the Web Animations API, which is a larger project and a new ADR.
 3. **Installed as a managed component on request, like ComfyUI and the notebooks' reader:** the size, source and
@@ -79,11 +76,8 @@ Constraints that matter:
    captions), **Slides to video** (a document or a notebook summary), **Report video** (a report from the agent
    with charts), **Social vertical** (9:16 captions), **Lyric or caption video**. A template is a HyperFrames
    project with slots our actions fill.
-8. **Licence work before code (a gate, not a footnote).** Read the GSAP Standard No Charge licence as it stands,
-   decide whether Video Builder is a "Prohibited Use" and whether a paid Business membership is needed if the app ever
-   charges, and ask GSAP (it invites the question). If the answer is no or unclear, Video Builder ships on the Web
-   Animations API or Anime.js and the HyperFrames conventions are followed only where they do not require GSAP.
-   Likewise check the licences of the browser build, Node.js, fonts and any template asset (rule 12).
+8. **Fallback without GSAP.** If GSAP does not work out, Video Builder ships on the Web Animations API or Anime.js
+   and the HyperFrames conventions are followed only where they do not require GSAP.
 9. **Outputs are creations (ADR-0041).** A composition (project folder, kind `composition`) and its renders (kind
    `video`, with a link to the composition and the render settings) are in My creations, searchable by their text
    (script, scene text, captions). A render records its determinism inputs (project hash, engine versions) so the
@@ -99,15 +93,13 @@ Constraints that matter:
 - A new component stack (Node, a browser, a render engine) and a new kind of risk (running composed code); the
   sandbox is the product's responsibility, not an afterthought.
 - Depends on an external project that is young; pinned, wrapped and replaceable.
-- The licence gate may change the engine. That is why it comes before code.
 
 ## Alternatives considered
 
 - **Build our own renderer in Rust on the system webview.** The shell's webview cannot be driven frame by frame
   deterministically as far as we know (not tested); worth one spike (V0) before we rule it out, since it would
   remove the Chrome download. Not v1.
-- **Remotion** (React-based; its licence is source-available with terms that depend on the size of the company, to
-  be read before any use). Not adopted: React-only authoring and a licence we have not cleared.
+- **Remotion** (React-based). Not adopted: React-only authoring.
 - **FFmpeg filter graphs and Python (MoviePy)** for compositing. Fine for slideshows; no HTML layout, charts,
   or animation timelines. Kept for simple slideshow renders if the engine is unavailable.
 - **Generate everything with video models.** They make seconds of footage, not a script-driven video with text and
@@ -122,20 +114,13 @@ Constraints that matter:
    the Chrome component can be dropped.
 3. Which HyperFrames features we need beyond the renderer (its Studio, its skills, its catalogue) versus our own
    screen.
-4. Fonts: shipping a small set of open fonts (licences checked) so renders look the same on every machine.
+4. Fonts: shipping a small set of open fonts so renders look the same on every machine.
 5. The web deployment: rendering arbitrary code in a server needs a real sandbox; desktop only in v1.
 
 ## Not in v1
 
 A visual timeline editor; live collaboration; rendering in the cloud; importing compositions from the web;
 embedding third-party scripts; audio recording in the composition; the web deployment.
-
-## Owner's answers (2026-10-18)
-
-- **The desktop app will be open source and free**, so the **GSAP gate (decision 8) is cleared for the desktop**:
-  no one is charged for it. It is not a free pass for everything: GSAP's terms (read earlier) bar using it to build a
-  tool that competes with Webflow's visual animation builders, which Video Builder is not, and a **paid or hosted web
-  version of Video Builder would need the question asked again**. The Web Animations API fallback stays as the plan B.
 
 ## Amendment after spike V0 (2026-10-19; `docs/spikes/video-builder-v0.md`)
 
@@ -164,3 +149,54 @@ milestone changed to the sandboxed render path.**
   decoder drops the alpha). Fonts must be shipped with templates: system fonts differ per machine.
 - **Not measured:** another Mac or 16 and 32 GB with a model resident, Docker, Windows and Linux, audio and video inputs,
   4K, HyperFrames Studio, CPU-time limits, WebRTC and service-worker escapes.
+
+## Amendment after V1a and V1b (2026-10-20; `docs/spikes/video-builder-v1.md`)
+
+The component and the sandboxed render path are built (engine side only; no screen, no render route yet: that is V1c).
+
+- **Decision 4 is met without forking HyperFrames.** The V0 open question ("can the producer's launch be replaced?") is answered: HyperFrames
+  starts the file named by `HYPERFRAMES_BROWSER_PATH`, so a **launcher script** drops the weakening flags (`--no-sandbox`, popup blocking off) and adds the
+  lock-down, and **refuses to start without a network filter**. The filter is a loopback proxy that forwards to one place, the render's own file server
+  (the first loopback port the browser asks for, which a composition cannot choose); everything else is closed and counted. A guard kills the whole process
+  tree on a wall-time limit, a stall limit, a memory limit or a cancel. With the real browser, every hostile case of V0 is stopped, a service on loopback hears
+  nothing (the localhost gap V0 left open is closed), and a normal render is byte-identical to the unsandboxed one. The OS-profile wrapper (option b) is not needed.
+- **Decision 3 (a managed component):** `<app data>/components/video-builder/` holds a pinned Node.js 22.23.1 (50 MB download), the pinned Chrome headless shell
+  152.0.7977.30 (97.5 MB) and the 126 npm packages of a lock with integrity hashes (`hyperframes` 0.8.171, `gsap` 3.15.0; no install scripts). The person sees
+  **288 MB** before the click; about 510 MB is used after. Telemetry and the skills download are off, the environment starts empty, `HOME` is inside the component.
+  The installed Chrome is not offered (owner, 2026-10-20: the plan's default).
+- **Decision 8 (GSAP):** GSAP is vendored into each project from the component's copy, never from a CDN, and the lint refuses any non-local URL before
+  HyperFrames' compiler (which downloads CDN scripts in Node) sees it.
+- **Still open for V1c and later:** the memory limit from the fit check; a quarantine flag inside the packaged app; WebRTC and service-worker escapes; Windows and Linux; a model
+  resident on small Macs. The browser's popup stays open until the render ends (behind the filter).
+
+## Amendment after V1c (2026-10-20; `docs/spikes/video-builder-v1.md`, `docs/desktop-profile.md`)
+
+The engine, the projects and the experimental screen are built; the first working Video Builder is one template (an animated title).
+
+- **Where it lives:** not a separate product package. It is a part of the **video product** (`products/wasifyai-video/wasifyai_video/builder/`), because what it makes
+  are videos: a render is a clip of Your videos (`mode = "composition"`), so listing, saving a copy, deleting and search needed nothing new. A project is its own
+  library kind, `composition`. A separate package can be split off later without changing the routes or the actions.
+- **One render at a time, a fit check first** (ADR-0063: a render needs about 3 GB; `too_big` refuses before anything starts), run through the sandbox of V1b, with
+  progress, a cancel that kills the whole tree, and a plain sentence for every way it can end. A render left running when the app closes is marked failed at the next start.
+- **The words are exact by construction (ADR-0079 decision 7, template path):** the title and the line go into the page as escaped text, never as markup and never inside
+  the script (a test parses the page with every hostile string and compares the title's text with what was typed). The page reads no clock and loads nothing from outside.
+- **ADR-0041 checklist:** index text (title and line), indexed on create, on change and rename, removed on delete (and its clips with it), one index source for clips and
+  compositions, an `ids=` filter on the list route, `composition` in `CreationKind` and the library kinds, a row in the search corpus (not run: it needs the stack).
+  **Not built:** a card and a filter in the web `/creations` page, because the feature is desktop only and the desktop has no creations page yet.
+- **Deletion** (the library action always asks): stops a render in progress, deletes the clips made from the project (files, rows, search), its folder and its row.
+- **Measured on the owner's Mac (M5 Pro, 64 GB):** setup 25 s; a 5 s 720p title previews in 4.3 s and renders in 7 to 9 s at about 2.3 GB; 12 s at 1080x1080 renders in
+  8 s; the numbers did not change with a 14 GB process holding memory beside it (64 GB is not a small Mac: 16 and 32 GB are still unmeasured).
+- **Not in V1c:** the moderation of slot text when safeguards are on (decision 9 of ADR-0079), shipped fonts and the other four templates (MG1), the `preview_frame` action
+  (MG1), the web, and the check of macOS quarantine inside the packaged app.
+
+## Amendment: no Labs switch (2026-10-21, owner)
+
+Decision 10's "behind a Labs switch" is withdrawn for Video Builder (and so for Motion graphics in ADR-0079). **Video › Video Builder**
+is always in the desktop menu; the screen keeps its "experimental" label and nothing is released before the owner's own testing. The
+key `wasifyai.labs.video-builder` is no longer read.
+
+## Amendment: Motion graphics is its own menu item (2026-10-24, owner)
+
+The screen is not a video model, so it no longer sits under Video. The side menu shows one item, **Motion graphics**
+(id `motion`), after Music and before Library, Models and Train. Action ids (`video_builder.*`, `motion.*`), the route
+(`/video/builder`) and the engine are unchanged; only the menu item and the screen's name changed.

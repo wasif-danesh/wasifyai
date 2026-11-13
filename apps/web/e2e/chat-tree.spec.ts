@@ -5,13 +5,11 @@ import { mockApi } from "./mock-api";
 // real browser. The engine is the mock of mock-api.ts; the saved conversation below is a tree with a second version of an
 // answer, or with a parked card. `@layout` cases run in CI; the pictures (`@visual`) are kept per operating system.
 
-const KEY = "wasifyai.labs.chat-next";
 const ID = "0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80";
 const RUN = "5b6c1c1e-0000-4000-8000-000000000009";
 
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
-  await page.addInitScript((k) => localStorage.setItem(k, "1"), KEY);
 });
 
 const row = (id: string, seq: number, role: string, parent: string | null, parts: object[]) => ({
@@ -116,7 +114,12 @@ const CARD = [
   row("u1", 1, "user", null, text("Draw a fox.")),
   row("a1", 2, "assistant", "u1", [
     { type: "text", text: "Let me draw it." },
-    { type: "tool_call", id: "t1", name: "generate_image", arguments: { prompt: "a fox" } },
+    {
+      type: "tool_call",
+      id: "t1",
+      name: "propose_action",
+      arguments: { action_id: "image.generate", params: { prompt: "a fox" } },
+    },
   ]),
   row("t", 3, "tool", "a1", [
     {
@@ -128,6 +131,7 @@ const CARD = [
       run_id: RUN,
       title: "Make a picture",
       summary: "Make a picture",
+      effect: "make",
       params: { prompt: "a fox in the snow", size: "square" },
     },
   ]),
@@ -148,9 +152,9 @@ test("a parked card is shown after a reload, answers the run and the turn goes o
       body:
         f(5, "tool_result", {
           id: "t1",
-          name: "generate_image",
+          name: "propose_action",
           status: "error",
-          output: { message: "No engine in this test." },
+          output: { action_id: "image.generate", message: "No engine in this test." },
         }) +
         f(6, "token", { node: "agent", text: "I could not make it." }) +
         f(7, "done", { outputs: { status: "done", conversation_id: ID, title: "T" } }),
@@ -161,7 +165,7 @@ test("a parked card is shown after a reload, answers the run and the turn goes o
   await expect(card).toBeVisible();
   await expect(card).toContainText("a fox in the snow");
   await noSideScroll(page);
-  await page.getByRole("button", { name: "Go ahead" }).click();
+  await card.getByRole("button", { name: "Make it" }).click();
   await expect(page.getByText("I could not make it.", { exact: true })).toBeVisible();
   expect(resumed).toEqual([{ value: { approved: true } }]);
   await expect(page.getByText("Let me draw it.", { exact: true })).toHaveCount(1); // the same message

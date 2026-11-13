@@ -28,6 +28,7 @@ from wasifyai_platform_sdk.usage import record_safely
 
 from wasifyai_api.identity import Identity, get_identity
 from wasifyai_api.metrics import UPLOADS
+from wasifyai_api.services import services_of
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["uploads"])
@@ -64,7 +65,7 @@ async def read_capped(request: Request, limit: int) -> bytes:
 async def upload_image(
     product_id: str, request: Request, identity: Identity = Depends(get_identity)
 ) -> UploadResult:
-    state: Any = request.app.state
+    state: Any = services_of(request)
     rule = state.upload_rules(product_id)
     if rule is None:
         raise HTTPException(404, "this product does not accept uploads")
@@ -117,7 +118,7 @@ async def upload_media(
 ) -> MediaUploadResult:
     """A recording or a video file (ADR-0043): checked by its first bytes, decoded to a clean
     16 kHz mono WAV (no video, no tags) in a limited child process, and stored in its place."""
-    state: Any = request.app.state
+    state: Any = services_of(request)
     rule = state.upload_rules(product_id, "audio")
     if rule is None:
         raise HTTPException(404, "this product does not accept recordings")
@@ -163,7 +164,7 @@ async def delete_upload(
     identity: Identity = Depends(get_identity),
 ) -> None:
     """Remove the caller's own unused upload (the user took the file back, ADR-0039)."""
-    state: Any = request.app.state
+    state: Any = services_of(request)
     try:
         uid = UUID(upload_id)
     except ValueError:

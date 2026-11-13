@@ -13,20 +13,22 @@ from wasifyai_platform_sdk import Identity, RunError
 
 from wasifyai_api.desktop_fit import assess_fit, need_of_language
 from wasifyai_api.desktop_language import CONTEXTS, DEFAULT_CONTEXT, LanguageService
+from wasifyai_api.desktop_models import DownloadError
 from wasifyai_api.identity import get_identity
+from wasifyai_api.services import services_of
 
 router = APIRouter(prefix="/desktop", tags=["desktop"])
 
 
 def _server(request: Request) -> Any:
-    server = getattr(request.app.state, "llama_server", None)
+    server = services_of(request).llama_server
     if server is None:
         raise HTTPException(404, "not available in this deployment")
     return server
 
 
 def _language(request: Request) -> LanguageService:
-    svc = getattr(request.app.state, "desktop_language", None)
+    svc = services_of(request).desktop_language
     if svc is None:
         raise HTTPException(404, "not available in this deployment")
     return svc
@@ -134,6 +136,35 @@ async def choose_language(
     if not discovery.running:
         asyncio.create_task(discovery.scan())  # the list shows what is chosen
     return {"selected": svc.selected.public() if svc.selected else None}
+
+
+def _vision(request: Request) -> Any:
+    svc = services_of(request).desktop_vision
+    if svc is None:
+        raise HTTPException(404, "not available in this deployment")
+    return svc
+
+
+class VisionStart(BaseModel):
+    """What the person was shown and agreed to: how many bytes will be fetched."""
+
+    bytes: int
+
+
+@router.get("/vision")
+async def vision_status(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+    """Can the chosen model read pictures, and if not, can the app get its picture reader?"""
+    return {"vision": await _vision(request).status()}
+
+
+@router.post("/vision/download")
+async def vision_download(
+    body: VisionStart, request: Request, _: Identity = Depends(get_identity)
+) -> dict[str, Any]:
+    try:
+        return await _vision(request).start(body.bytes)
+    except DownloadError as exc:
+        raise HTTPException(409, str(exc)) from None
 
 
 class TryIt(BaseModel):

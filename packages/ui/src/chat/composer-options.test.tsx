@@ -5,8 +5,8 @@ import userEvent from "@testing-library/user-event";
 import type { AssistantApi, ImagesApi, OnEvent, ParsedEvent } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatScreen } from "./ChatScreen";
-import { ChatScreenNext } from "./ChatScreenNext";
 import { useComposerOptions } from "./composer-options";
+import { chooseOption, moreOptions } from "./options-testing";
 
 const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
   ({ event, data: { run_id: "r1", seq: 1, ...data } }) as unknown as ParsedEvent;
@@ -71,12 +71,33 @@ beforeEach(() => {
 describe("useComposerOptions", () => {
   it("offers Thinking only when the model can think, and starts with it off", () => {
     const none = renderHook(() => useComposerOptions(null, {}));
-    expect(none.result.current.bar).toEqual([]);
+    expect(none.result.current.bar.map((o) => o.id)).toEqual(["approval"]); // the ask setting is always there
     expect(none.result.current.runInput).toEqual({});
     const can = renderHook(() => useComposerOptions(null, { thinking: true }));
-    expect(can.result.current.bar.map((o) => o.id)).toEqual(["thinking"]);
+    expect(can.result.current.bar.map((o) => o.id)).toEqual(["thinking", "approval"]);
     expect(can.result.current.thinking).toBe(false);
     expect(can.result.current.runInput).toEqual({});
+  });
+
+  it("shows Servers only once a server is connected", async () => {
+    const control = (servers: { id: string; name: string }[]) => ({
+      servers: async () => servers,
+      resources: async () => [],
+      attachResource: async () => {
+        throw new Error("unused");
+      },
+      prompts: async () => [],
+      promptText: async () => "",
+    });
+    const none = renderHook(() => useComposerOptions(null, { external: control([]) }));
+    await act(async () => {});
+    expect(none.result.current.bar.map((o) => o.id)).toEqual(["approval"]);
+    const one = renderHook(() =>
+      useComposerOptions(null, { external: control([{ id: "s1", name: "GitHub" }]) }),
+    );
+    await waitFor(() =>
+      expect(one.result.current.bar.map((o) => o.id)).toEqual(["approval", "servers"]),
+    );
   });
 
   it("turns Thinking on for the next message, remembered per conversation", async () => {
@@ -109,6 +130,30 @@ describe("useComposerOptions", () => {
     await waitFor(() => expect(result.current.thinking).toBe(true)); // it was written under the new id
   });
 
+  it("cycles the ask setting (ADR-0071 decision 5), sends it when it is not the default, and remembers it", async () => {
+    const { result, rerender } = renderHook(({ id }) => useComposerOptions(id, {}), {
+      initialProps: { id: "a" as string | null },
+    });
+    const ask = () => result.current.bar.find((o) => o.id === "approval");
+    expect(ask()?.label).toBe("Ask me first");
+    expect(ask()?.pressed).toBe(false);
+    expect(result.current.runInput).toEqual({});
+    act(() => ask()?.onPress());
+    expect(ask()?.label).toBe("Ask for big things");
+    expect(result.current.runInput).toEqual({ approval: "ask_costly" });
+    act(() => ask()?.onPress());
+    expect(ask()?.label).toBe("Just do it");
+    expect(ask()?.pressed).toBe(true);
+    expect(result.current.runInput).toEqual({ approval: "auto" });
+    act(() => ask()?.onPress());
+    expect(result.current.approval).toBe("ask");
+    act(() => result.current.setApproval("auto")); // the card's "Don't ask again in this chat"
+    rerender({ id: "b" });
+    await waitFor(() => expect(result.current.approval).toBe("ask"));
+    rerender({ id: "a" });
+    await waitFor(() => expect(result.current.approval).toBe("auto"));
+  });
+
   it("does not turn on for a model that cannot think, whatever was remembered", () => {
     localStorage.setItem("wasifyai.composer.options", JSON.stringify({ new: { thinking: true } }));
     const { result } = renderHook(() => useComposerOptions(null, {}));
@@ -117,13 +162,12 @@ describe("useComposerOptions", () => {
   });
 });
 
-describe.each([
-  ["the usual chat", ChatScreen],
-  ["the new chat", ChatScreenNext],
-])("%s", (_name, Screen) => {
-  it("has no Thinking button for a model that cannot think", () => {
+describe("the chat", () => {
+  const Screen = ChatScreen;
+  it("has no Thinking for a model that cannot think", async () => {
     render(<Screen runs={runsThat([])} assistant={assistant} images={images} />);
     expect(screen.queryByRole("button", { name: /^Thinking/ })).toBeNull();
+    expect((await moreOptions()).some((t) => t.startsWith("Thinking"))).toBe(false);
   });
 
   it("sends nothing about thinking while it is off, and asks for it once it is on", async () => {
@@ -138,13 +182,13 @@ describe.each([
         composerOptions={{ thinking: true }}
       />,
     );
-    const button = screen.getByRole("button", { name: /^Thinking/ });
-    expect(button).toHaveAttribute("aria-pressed", "false");
+    // off, Thinking waits in the "+" menu (ADR-0093 U9)
+    expect(screen.queryByRole("button", { name: /^Thinking/ })).toBeNull();
     await user.type(screen.getByRole("textbox", { name: "Message" }), "one{Enter}");
     await waitFor(() => expect(inputs).toHaveLength(1));
     expect(inputs[0]).not.toHaveProperty("thinking");
 
-    await user.click(screen.getByRole("button", { name: /^Thinking/ }));
+    await chooseOption(/^Thinking/);
     expect(screen.getByRole("button", { name: /^Thinking/ })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -204,7 +248,7 @@ describe.each([
         composerOptions={{ thinking: true }}
       />,
     );
-    await user.click(screen.getByRole("button", { name: /^Thinking/ }));
+    await chooseOption(/^Thinking/);
     await user.type(screen.getByRole("textbox", { name: "Message" }), "hi{Enter}");
     expect(await screen.findByText(/takes longer than usual/)).toBeInTheDocument();
     release();

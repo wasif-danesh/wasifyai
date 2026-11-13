@@ -11,7 +11,6 @@ import type {
 } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatScreen } from "../ChatScreen";
-import { ChatScreenNext } from "../ChatScreenNext";
 import { createPlayer } from "./player";
 import { type ReadAloudControl, languageNames } from "./use-read-aloud";
 
@@ -90,7 +89,7 @@ function control(over: Partial<ReadAloudControl> = {}) {
   return { c, speak, ...fp };
 }
 
-type Screen = typeof ChatScreen | typeof ChatScreenNext;
+type Screen = typeof ChatScreen;
 async function shown(S: Screen, c: ReadAloudControl | undefined, ...replies: string[]) {
   const runs = runsReplying(...(replies.length ? replies : [REPLY]));
   const user = userEvent.setup();
@@ -111,10 +110,8 @@ async function ask(user: ReturnType<typeof userEvent.setup>, words = "Hi") {
 
 beforeEach(() => localStorage.clear());
 
-describe.each([
-  ["classic", ChatScreen],
-  ["next", ChatScreenNext],
-] as const)("read aloud on the %s chat", (_name, S) => {
+describe("read aloud on the chat", () => {
+  const S = ChatScreen;
   it("has no button where the engine has no voice to offer", async () => {
     const { user } = await shown(S, undefined);
     await ask(user);
@@ -283,7 +280,6 @@ describe.each([
     const k = control({
       setup: {
         title: "Kokoro 82M",
-        licence: "Apache-2.0",
         from: "huggingface.co",
         bytes: 189_549_408,
         languages: ["en-US", "en-GB"],
@@ -295,7 +291,7 @@ describe.each([
     await user.click(await screen.findByRole("button", { name: "Read this reply aloud" }));
     const card = await screen.findByRole("region", { name: "Set up read aloud" });
     expect(card).toHaveTextContent("Kokoro 82M");
-    expect(card).toHaveTextContent("Apache-2.0");
+    expect(card).not.toHaveTextContent("Apache");
     expect(card).toHaveTextContent("huggingface.co");
     expect(card).toHaveTextContent("190 MB");
     expect(card).toHaveTextContent(/English/);
@@ -317,7 +313,6 @@ describe.each([
     const k = control({
       setup: {
         title: "Kokoro 82M",
-        licence: "Apache-2.0",
         from: "",
         bytes: 1,
         run: async () => {

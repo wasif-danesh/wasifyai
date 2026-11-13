@@ -3,6 +3,7 @@
 - **Status:** Accepted (2026-10-16). The E0 gate (spike S1 to S6, `docs/spikes/surfsense-investigation.md`
   section 9) **passed the same day**: decisions 7, 8 and 9 are confirmed and decision 10 was corrected by the
   measurements (below). Supersedes ADR-0060.
+- **Superseded in part:** by ADR-0094 (2026-10-29): the notebook size limits are removed.
 - **Date:** 2026-10-16
 - **Depends on:** ADR-0017 (storage), ADR-0035 (upload hardening), ADR-0041 (creations are searchable), ADR-0056
   (one engine, two shells; slot manager), ADR-0057 (assistant), ADR-0061 (how outside code enters),
@@ -23,9 +24,8 @@ The investigation (read, not run; details and counts in the spike document) foun
 - SurfSense's **desktop app** is already a local, offline NotebookLM-style product on the same stack shape as ours:
   one SQLite file with FTS5 and sqlite-vec, Docling parsing, a bge-small embedder on onnxruntime, llama.cpp for
   text, a window with Sources, Chat with citations and Studio (twelve output formats).
-- It is **Apache-2.0** except two directories (`surfsense_backend/app/proprietary/`,
-  `plugins/remote/proprietary/`) that are not part of the desktop app. Its offline licence module sells paid
-  plugins and is not needed.
+- Two of its directories (`surfsense_backend/app/proprietary/`, `plugins/remote/proprietary/`) are not part of
+  the desktop app.
 - Its code is separable. In the pipeline areas we would take, 80 to 90 percent of files do not import its model
   layer; the coupled files reach the model through one seam, which maps to our `ProviderDeps.text_provider` and
   the slot manager.
@@ -40,7 +40,7 @@ The investigation (read, not run; details and counts in the spike document) foun
 1. **A product `wasifyai-notebooks`** on the same engine (ADR-0056). The user-facing name is **Notebook**: a named
    container of sources, chats, notes and generated outputs. SurfSense's word is "workspace"; ours is "notebook".
    One chat history per notebook, many conversations.
-2. **Take SurfSense code by import, own it, record it** (ADR-0061 decision 3): Apache-2.0 files are copied
+2. **Take SurfSense code by import, own it, record it** (ADR-0061 decision 3): files are copied
    area by area into `products/wasifyai-notebooks/`, each area with a `PROVENANCE.md` (source path, commit
    `622c1ded8`, date, what changed), the original headers kept, and a `NOTICE` entry. The reference clone stays
    outside the repository and is not tracked for upstream changes except security fixes.
@@ -49,7 +49,7 @@ The investigation (read, not run; details and counts in the spike document) foun
    (prompts by model tier, budget, citations); the Studio structured formats and their builders; the podcast
    script writer; PDF tools when a feature needs them.
 4. **What is not taken in v1:** the agent and opencode, plugins and MCP, the model/runtime layer (`modules/llm`),
-   the licence and cloud-import modules, the Electron shell, and the script-running office paths (PPTX and
+   the cloud-import module, the Electron shell, and the script-running office paths (PPTX and
    XLSX as model-written Python). Each is a later, separate decision.
 5. **One datastore file for the product: `notebooks.db`** next to `wasifyai.db` (desktop). SQLite with WAL, FTS5
    and sqlite-vec, behind a store interface. Reasons: the extension loading and the write pattern of ingest stay
@@ -97,7 +97,7 @@ The investigation (read, not run; details and counts in the spike document) foun
     indexed for My creations search, with an `IndexSource`, list filter and corpus row. Multilingual: v1 is
     English only (owner's decision); nothing in the data model or UI assumes it.
 13. **The interface** follows `docs/phase2-stage-e-plan.md`: one expandable **Notebook** entry in the side menu
-    with *Create* and *View Notebooks* (the same pattern as *Images*; the empty *Projects* placeholder is
+    with *Create* and *View notebooks* (the same pattern as *Images*; the empty *Projects* placeholder is
     removed), a notebooks list, an add-sources screen for a new notebook (upload files, copied text; websites
     and Drive later) and a notebook page of three panes (Sources, Chat, Studio). Model use goes through the slot
     manager and the existing model chip; a notebook never loads a model by itself.
@@ -113,10 +113,10 @@ The investigation (read, not run; details and counts in the spike document) foun
 - New: product `wasifyai-notebooks`, a SQLite store with its migrations, a reader component and an embedder
   component, ingestion graph and routes, a grounded-chat graph, Studio builders, an SSE addition (`sources`,
   `citations`), notebook screens in `packages/ui` and `apps/desktop`.
-- Roughly 20 to 25k lines of Apache-2.0 Python enter with provenance, and a UI of about 8 to 10k lines is
+- Roughly 20 to 25k lines of Python enter with provenance, and a UI of about 8 to 10k lines is
   re-implemented. Tests are copied with the code where they exist.
 - The Unsloth `rag` import of ADR-0060/0062 is **not done**: SurfSense's pipeline is more complete (folders,
-  figures, citations, Studio) and Apache-2.0 rather than AGPL. The Unsloth measurements stay as the comparison for
+  figures, citations, Studio). The Unsloth measurements stay as the comparison for
   S2.
 - A notebook's chat and the assistant are two chat surfaces. They share the model chip, the slot manager and the
   stream contract, not the graph.
@@ -143,7 +143,7 @@ The investigation (read, not run; details and counts in the spike document) foun
 
 - **Decision 13 (E3):** built as decided. Three differences: Studio's tiles are shown and not available (E4);
   the source viewer shows a source's text, not its pages (a PDF viewer needs `pdfjs-dist`, which is still to be
-  approved); My creations search finds a notebook from View Notebooks (the desktop Library lists images only).
+  approved); My creations search finds a notebook from View notebooks (the desktop Library lists images only).
 
 - **Decision 11 (E4):** the first-release formats are built (report, study guide, flashcards, quiz, mind map, Word,
   PDF) on the builder rule. **ReportLab** was added for PDF with the owner's approval (2026-10-16); python-docx and
@@ -173,8 +173,7 @@ The investigation (read, not run; details and counts in the spike document) foun
 Python: `docling` (component, with torch CPU), `chonkie`, `sqlite-vec`, `onnxruntime`, `tokenizers`,
 `markdown-it-py`, `python-docx`, `python-pptx`, `openpyxl`, `pypdfium2`, `pypdf`, `matplotlib` (chart blocks,
 second wave). UI: `markmap-lib` and `markmap-view`, `pdfjs-dist`, `docx-preview`, a Markdown renderer that can
-carry citation pills. Models: bge-small-en-v1.5 (MIT), Docling layout and table weights, RapidOCR (licences
-confirmed in S5 before adoption). A new SSE event type changes the contract and needs the owner's approval
+carry citation pills. Models: bge-small-en-v1.5, Docling layout and table weights, RapidOCR. A new SSE event type changes the contract and needs the owner's approval
 (`docs/contracts/sse-events.md`).
 
 ## Not in this version
@@ -186,7 +185,7 @@ and Hindi; a reranker; video overview; scanned non-Latin text.
 ## Alternatives considered
 
 - **Keep ADR-0060 on Unsloth's `rag`.** Rejected: it is a document store with no notebook, no Studio, no
-  citations UI, and it is AGPL; SurfSense is the closer match to the new requirement.
+  citations UI; SurfSense is the closer match to the new requirement.
 - **Run SurfSense's backend unchanged as a sidecar.** Rejected: it brings its own process model, Huey, model
   layer and a second SQLite world next to ours (two chat model managers, two download systems, two sets of
   settings). The valuable part is a few thousand lines of pipeline, not the app shell.
@@ -207,13 +206,15 @@ and Hindi; a reranker; video overview; scanned non-Latin text.
 4. **Audio overview voice:** our TTS product.
 5. **Embedder download:** with the first notebook, one confirm.
 6. **Google Docs:** export to `.docx` or `.pdf` in v1; a Drive connector later.
-7. **Dependencies:** the list above is approved (rule 12), subject to the licence check in S5.
+7. **Dependencies:** the list above is approved (rule 12).
 8. **Create:** opens a draft stored after the first source.
 
 ## Amendment 2026-10-18: the web profile's store (docs/phase3-web-parity-plan.md, W4 step 1)
 
 The notebooks store has a Postgres form, `PostgresNotebookStore` (`pgstore.py`), the "adapter written when the web
-product needs it" of decision 5. It is the same class of store: every method and its ownership rule runs the same SQL
+product needs it" of decision 5. (Since stage J2, 2026-10-29, it is not a subclass: `NotebookStore.on_postgres(...)` and
+`NotebookStore.in_folder(...)` are one class over `wasifyai_platform_sdk.sqlstore`, and the hooks below are its branches
+on `db.dialect`.) It is the same class of store: every method and its ownership rule runs the same SQL
 through a thin connection (`PgDb`); the few differences are hooks (`_INTEGRITY`, `_guard` for a savepoint, `_replace_chunks`).
 The tables are in their own schema (`notebooks`), created and checked by the store on start under an advisory lock
 (the product owns its schema, as above), with `chunks.embedding vector(N)` in the passage row and the passage's terms in
@@ -246,8 +247,9 @@ Postgres (CI has the Postgres service; a machine without one skips the Postgres 
   with the document reader (still a program of its own), cuts, embeds and indexes it, and writes the result. A source a worker
   lost is failed after 30 minutes untouched (a reading may take 15), by whichever worker notices; the desktop, with one
   reader, still fails every interrupted source at start.
-- **Switch.** `NOTEBOOKS_ENABLED=true` (web profile only; off by default) lets the engine serve notebooks from Postgres and object
-  storage. Off, the routes answer 503 as before, so nothing is offered whose worker is not running. The worker takes the same
+- **Switch (removed 2026-10-21, owner: no feature switches).** The web profile always serves notebooks from Postgres and object
+  storage; the worker is part of the stack (`compose.yaml`, the Helm chart). The first design had `NOTEBOOKS_ENABLED=true` (off by
+  default, routes answering 503) so nothing was offered whose worker was not running. The worker takes the same
   database and storage settings as the engine, plus `NOTEBOOKS_MODELS_DIR` and `NOTEBOOKS_READER_DIR` on its machine.
 - The tests of the routes, the studio files and the reading run against both homes (the routes tests also against folders and
   objects); the web setup is tested end to end on Postgres and in-memory storage (stored by the engine's program, read by a
@@ -259,7 +261,7 @@ Not done: the worker's image and its Helm release (W7), the search model through
 ## Amendment 2026-10-18 (3): the search model through the gateway, and limits (W4 step 3)
 
 - **Search model.** On the web the embedder is the platform's, asked through the gateway by alias (rule 5):
-  `GatewayEmbedder` calls `/v1/embeddings` for `creation-embedder` (bge-m3, multilingual, 1024 dimensions, MIT) in batches of 32, tries a
+  `GatewayEmbedder` calls `/v1/embeddings` for `creation-embedder` (bge-m3, multilingual, 1024 dimensions) in batches of 32, tries a
   busy gateway (429 or 5xx) again with a growing wait, does not repeat a refusal, and checks the dimension. It needs no
   model files on the engine's or the worker's machine. `GatewayComponents` sizes a passage in characters (1500, a few
   hundred tokens in any script) because the desktop's whitespace-style counting cuts nothing in a language written without spaces;

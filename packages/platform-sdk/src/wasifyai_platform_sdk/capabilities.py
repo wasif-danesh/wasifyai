@@ -6,7 +6,7 @@ key = await caps.storage.put("songs/42/audio.mp3", data)
 """
 
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -144,10 +144,26 @@ class MediaCapabilities:
         family: str,
         bound: dict[str, tuple[CapabilityBinding, MediaProvider]],
         product: str = "",
+        models: dict[str, dict[str, tuple[CapabilityBinding, MediaProvider]]] | None = None,
+        settings: dict[str, dict[str, Any]] | None = None,
     ):
         self._family = family
-        self._bound = bound
+        self._bound = bound  # the first model's, or the product's own when it lists no models
         self._product = product
+        # model id -> verb -> binding (ADR-0097); a request names one with `model=`
+        self._models = models or {}
+        self._settings = settings or {}  # model id -> its `settings` in product.yaml
+
+    def models(self) -> dict[str, list[str]]:
+        """Each model this product offers in this family, with the verbs it can do."""
+        return {m: sorted(b) for m, b in self._models.items() if b}
+
+    def setting(self, model: str | None, name: str, default: Any = None) -> Any:
+        """A model's setting (`frames_per_second`, say); the first model's when `model` is None,
+        and `default` when the model does not say or the product lists no models."""
+        if model is None:
+            model = next(iter(self._models), None)
+        return self._settings.get(model or "", {}).get(name, default)
 
     async def generate(self, **inputs: Any) -> JobHandle:
         return await self._run("generate", inputs)
@@ -156,17 +172,40 @@ class MediaCapabilities:
         """Change a picture the user uploaded: pass its storage key as `image_key`."""
         return await self._run("edit", inputs)
 
+    async def reference(self, **inputs: Any) -> JobHandle:
+        """Make a new picture from two the user uploaded (`image_key`, `image2_key`), at a size."""
+        return await self._run("reference", inputs)
+
+    async def inpaint(self, **inputs: Any) -> JobHandle:
+        """Change only a painted area of a picture: `image_key` and `mask_key` (white = change)."""
+        return await self._run("inpaint", inputs)
+
     async def animate(self, **inputs: Any) -> JobHandle:
         """Make a clip from a picture the user uploaded: pass its storage key as `image_key`."""
         return await self._run("animate", inputs)
 
+    async def extend(self, **inputs: Any) -> JobHandle:
+        """Carry on a clip: pass its copy in the user's uploads as `video_key`."""
+        return await self._run("extend", inputs)
+
     async def _run(self, verb: str, inputs: dict[str, Any]) -> JobHandle:
         name = f"{self._family}.{verb}"
+        model = inputs.pop(
+            "model", None
+        )  # which of the product's models (ADR-0097); None: the first
+        bound = self._bound
+        if model is not None:
+            if model not in self._models:
+                raise CapabilityNotConfigured(
+                    f"model {model!r} is not offered by product {self._product!r}"
+                )
+            bound = self._models[model]
         try:
-            binding, provider = self._bound[verb]
+            binding, provider = bound[verb]
         except KeyError:
+            what = f"capability {name!r}" + (f" of model {model!r}" if model else "")
             raise CapabilityNotConfigured(
-                f"capability {name!r} is not configured for product {self._product!r}"
+                f"{what} is not configured for product {self._product!r}"
             ) from None
         return await provider.generate(name, binding, inputs)
 
@@ -178,18 +217,11 @@ class Capabilities:
     video: MediaCapabilities
     storage: ScopedStorage | None = None
     rag: RagStore | None = None
-    config: ProductConfig | None = None  # this product's validated config (quotas, settings)
+    config: ProductConfig | None = None  # this product's validated config (uploads, settings)
     db: AsyncEngine | None = None  # the shared database, for product tables and usage queries
     usage: UsageRecorder | None = None
     indexer: Any = None  # CreationIndexer: makes a creation searchable (ADR-0041); None in tests
-    # Says whether the safeguards are on (ADR-0047). None (tests, tools) means on.
-    safeguards: Callable[[], Awaitable[bool]] | None = None
     extras: dict[str, Any] = field(default_factory=dict)
-
-    async def safeguards_on(self) -> bool:
-        """Whether the safeguards (content moderation and per-user quotas) apply right now. Graphs
-        call this when checking, never once at start-up: an admin can flip it at any time."""
-        return True if self.safeguards is None else await self.safeguards()
 
     async def index_creation(self, kind: str, item_id: str, text: str) -> None:
         """Make a saved creation searchable (ADR-0041): call this when a creation is saved. It never

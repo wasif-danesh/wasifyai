@@ -6,15 +6,15 @@ import threading
 import pytest
 from notebooks_rig import SPEC, pg_dsn
 from wasifyai_notebooks.chunking import Passage
-from wasifyai_notebooks.pgstore import PostgresNotebookStore
 from wasifyai_notebooks.retrieval import retrieve
+from wasifyai_notebooks.store import NotebookStore
 from wasifyai_platform_sdk.pg import translate, vector_text
 
 
 def test_the_schema_name_is_checked_before_it_is_used_in_sql():
     for bad in ("Notebooks", "a;drop table x", "", "1abc", 'a"b'):
         with pytest.raises(ValueError, match="schema name"):
-            PostgresNotebookStore("postgresql://x", dimension=4, embedder_id="e", schema=bad)
+            NotebookStore.on_postgres("postgresql://x", dimension=4, embedder_id="e", schema=bad)
 
 
 def test_sql_parameters_are_translated_and_percent_signs_kept():
@@ -30,12 +30,12 @@ def test_several_replicas_can_start_on_a_new_schema_at_once(new_store):
         pytest.skip("Postgres only")
     first = new_store(dimension=SPEC.dimension, embedder_id=SPEC.id, name="shared")
     errors: list[BaseException] = []
-    started: list[PostgresNotebookStore] = []
+    started: list[NotebookStore] = []
 
     def start():
         try:
             started.append(
-                PostgresNotebookStore(
+                NotebookStore.on_postgres(
                     pg_dsn(), dimension=SPEC.dimension, embedder_id=SPEC.id, schema=first.schema
                 )
             )
@@ -97,3 +97,36 @@ def test_a_passage_and_its_vector_go_together_and_a_search_stays_in_its_notebook
     store.delete_notebook("t", "u", one["id"])
     with store.connect() as db:
         assert db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] == 1
+
+
+def test_the_vector_extension_goes_in_public_where_the_migrations_look_for_it():
+    """The API can start before the migrations (a fresh cluster): the store's search path begins
+    with its own schema, and an extension made there made the migrations fail with `type "vector"
+    does not exist`. A database of its own, so the test sees the extension being created."""
+    import uuid
+
+    import psycopg
+    from psycopg import sql
+    from psycopg.conninfo import make_conninfo
+
+    base = pg_dsn()
+    name = f"vec_{uuid.uuid4().hex[:10]}"
+    with psycopg.connect(base, autocommit=True) as admin:
+        admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+    try:
+        dsn = make_conninfo(base, dbname=name)
+        store = NotebookStore.on_postgres(dsn, dimension=4, embedder_id="e", schema="nbt_vec")
+        store.close()
+        with psycopg.connect(dsn) as conn:
+            where = conn.execute(
+                "SELECT n.nspname FROM pg_extension e "
+                "JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'vector'"
+            ).fetchone()
+            # and a migration's `vector(768)` resolves on a connection that knows only `public`
+            conn.execute("CREATE TABLE t (embedding vector(768))")
+        assert where == ("public",)
+    finally:
+        with psycopg.connect(base, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
+            )

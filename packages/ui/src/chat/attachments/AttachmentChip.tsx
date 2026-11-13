@@ -12,6 +12,8 @@ export type ChipData = AttachmentInfo & {
   state?: ChipState;
   /** a short line under the name: "12 pages", "Only the start is used" */
   detail?: string;
+  /** a document longer than the model is given: the person can use a notebook for all of it */
+  cut?: boolean;
   error?: string;
 };
 
@@ -31,10 +33,13 @@ export function detailOf(file: {
 export function AttachmentChip({
   file,
   onRemove,
+  onNotebook,
 }: {
   file: ChipData;
   /** the box can take it back; a sent message cannot */
   onRemove?: () => void;
+  /** where a notebook is made (only offered for a document that is cut) */
+  onNotebook?: () => void;
 }) {
   const failed = file.state === "failed";
   const working = file.state === "uploading";
@@ -91,6 +96,15 @@ export function AttachmentChip({
         >
           {failed ? file.error : working ? "Reading" : file.detail}
         </span>
+        {file.cut && onNotebook && !failed && !working ? (
+          <button
+            type="button"
+            onClick={onNotebook}
+            className="block text-start text-xs underline underline-offset-4"
+          >
+            Add it to a notebook to use all of it
+          </button>
+        ) : null}
       </span>
       {remove}
     </li>

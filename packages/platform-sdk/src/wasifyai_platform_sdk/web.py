@@ -47,8 +47,8 @@ AD_HOSTS = ("bing.com/aclick", "duckduckgo.com/y.js", "googleadservices.com", "d
 
 class WebError(Exception):
     """A search or a read that could not be done. `message` is a sentence for the person and the
-    model; `code` is one of: needs_key, bad_key, limit, search_busy, search_failed, blocked_url,
-    read_refused, not_text, unreadable, read_failed."""
+    model; `code` is one of: needs_key, bad_key, limit, search_busy, search_failed,
+    search_unreliable, blocked_url, read_refused, not_text, unreadable, read_failed."""
 
     def __init__(self, code: str, message: str):
         super().__init__(f"{code}: {message}")
@@ -139,6 +139,12 @@ class DuckDuckGoProvider:
 
     id = "duckduckgo"
     title = "DuckDuckGo"
+    # after this many failures in a row the message stops saying wait and names another service
+    UNRELIABLE_AFTER = 3
+    UNRELIABLE = (
+        "DuckDuckGo has not answered from this computer the last few times. Add a search key in "
+        "Settings to use another service."
+    )
     BUSY = (
         "DuckDuckGo gave no results. If searches were made a moment ago it may be limiting them "
         "from this computer: wait a few minutes, or add a search key in Settings."
@@ -159,6 +165,7 @@ class DuckDuckGoProvider:
         self._sleep = sleep
         self._clock = clock
         self._lock = asyncio.Lock()
+        self._failures = 0
         self._last = -1e9
 
     def _ddgs(self, query: str, n: int) -> list[dict[str, Any]]:
@@ -167,6 +174,13 @@ class DuckDuckGoProvider:
         return DDGS(timeout=15).text(
             query, region=self._region, safesearch="moderate", max_results=n, backend="duckduckgo"
         )
+
+    def _fail(self, code: str, message: str) -> WebError:
+        """A failure, counted: the third one in a row says DuckDuckGo is not working from here."""
+        self._failures += 1
+        if self._failures >= self.UNRELIABLE_AFTER:
+            return WebError("search_unreliable", self.UNRELIABLE)
+        return WebError(code, message)
 
     async def search(self, query: str, max_results: int) -> list[SearchResult]:
         async with self._lock:  # one at a time, and not in a burst
@@ -178,8 +192,8 @@ class DuckDuckGoProvider:
             except Exception as exc:
                 self._last = self._clock()
                 if "No results" in str(exc):
-                    raise WebError("search_busy", self.BUSY) from None
-                raise WebError(
+                    raise self._fail("search_busy", self.BUSY) from None
+                raise self._fail(
                     "search_failed",
                     "DuckDuckGo could not be reached. If it keeps failing, add a search key in "
                     "Settings to use another service.",
@@ -191,7 +205,8 @@ class DuckDuckGoProvider:
         if rows and not found:
             # measured 2026-10-20: when DuckDuckGo answers with its bot challenge, `ddgs` hands back
             # one row with every field empty instead of an error
-            raise WebError("search_busy", self.BUSY)
+            raise self._fail("search_busy", self.BUSY)
+        self._failures = 0  # it worked: the count starts again
         return found
 
 

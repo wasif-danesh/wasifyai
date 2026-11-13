@@ -1,7 +1,7 @@
 // A person's finished images, from the product's read routes (`/products/wasifyai-image/images`):
 // list, search, open, favourite, save a copy, delete. The same routes serve the web app and the
 // desktop window; only the transport differs.
-import type { Mode } from "./image-flow";
+import type { ImageMode } from "./image-flow";
 import { HttpError, type Transport, errorMessage } from "./transport";
 
 export const IMAGE_PRODUCT_ID = "wasifyai-image";
@@ -12,7 +12,7 @@ export type LoraChoice = { name: string; weight: number };
 /** What made an image (versioned). `size` is null for an edit: it keeps the picture's own size. */
 export type ImageRecipe = {
   v: number;
-  mode: Mode;
+  mode: ImageMode;
   prompt: string;
   size: string | null;
   width: number;
@@ -20,12 +20,18 @@ export type ImageRecipe = {
   seed: number;
   /** absent on images made before styles existed */
   loras?: LoraChoice[];
+  /** the desktop's styles by id, with checksum and title (ADR-0091): what "Make it again" chooses again */
+  styles?: { id: string; strength: number; sha256?: string; title?: string }[];
+  /** sampling steps, when the person set them (Advanced) */
+  steps?: number;
+  /** the width and height were the person's own, not the named shape's */
+  own_size?: boolean;
 };
 
 export type ImageSummary = {
   id: string;
   prompt: string;
-  mode: Mode;
+  mode: ImageMode;
   width: number;
   height: number;
   created_at: string;
@@ -34,21 +40,32 @@ export type ImageSummary = {
   /** null on images made before recipes existed */
   recipe: ImageRecipe | null;
   favourite: boolean;
+  /** the picture of the library this one was made from (Edit, Inpaint, Reference), or null (ADR-0093, U8) */
+  source_id?: string | null;
 };
 
 export type ImagePage = { images: ImageSummary[]; next_before: string | null };
 
-export type ListOptions = { limit?: number; before?: string | null; favourites?: boolean };
+export type ListOptions = {
+  limit?: number;
+  before?: string | null;
+  favourites?: boolean;
+  /** only the pictures made from this one */
+  source?: string;
+};
 
 export type ImagesApi = {
   list(options?: ListOptions): Promise<ImagePage>;
   /** Images whose words or meaning match `q`, best first (My creations search, ADR-0041). */
   search(q: string): Promise<ImageSummary[]>;
   get(id: string): Promise<ImageSummary>;
+  /** Add a picture of the person's own to their library. */
+  importImage(file: File): Promise<ImageSummary>;
   remove(id: string): Promise<void>;
   setFavourite(id: string, favourite: boolean): Promise<ImageSummary>;
   /** Save a copy into the person's folder; only the desktop engine offers it. */
-  exportCopy(id: string): Promise<{ name: string; path: string }>;
+  /** Save a copy: at `path` (chosen in the system's Save As box), or into the engine's export folder. */
+  exportCopy(id: string, path?: string): Promise<{ name: string; path: string }>;
 };
 
 export function createImagesApi(transport: Transport, product = IMAGE_PRODUCT_ID): ImagesApi {
@@ -64,10 +81,11 @@ export function createImagesApi(transport: Transport, product = IMAGE_PRODUCT_ID
   const JSON_HEADERS = { "content-type": "application/json" };
 
   return {
-    list({ limit = 24, before, favourites } = {}) {
+    list({ limit = 24, before, favourites, source } = {}) {
       const q = new URLSearchParams({ limit: String(limit) });
       if (before) q.set("before", before);
       if (favourites) q.set("favourites", "true");
+      if (source) q.set("source", source);
       return json<ImagePage>(`${base}?${q}`);
     },
 
@@ -82,6 +100,11 @@ export function createImagesApi(transport: Transport, product = IMAGE_PRODUCT_ID
     },
 
     get: (id) => json<ImageSummary>(`${base}/${encodeURIComponent(id)}`),
+    importImage(file) {
+      const form = new FormData();
+      form.append("file", file);
+      return json<ImageSummary>(`${base}/import`, { method: "POST", body: form });
+    },
 
     async remove(id) {
       const res = await transport.fetch(`${base}/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -98,9 +121,10 @@ export function createImagesApi(transport: Transport, product = IMAGE_PRODUCT_ID
         body: JSON.stringify({ favourite }),
       }),
 
-    exportCopy: (id) =>
+    exportCopy: (id, path) =>
       json<{ name: string; path: string }>(`${base}/${encodeURIComponent(id)}/export`, {
         method: "POST",
+        ...(path ? { headers: JSON_HEADERS, body: JSON.stringify({ path }) } : {}),
       }),
   };
 }

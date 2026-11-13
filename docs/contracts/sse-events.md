@@ -19,7 +19,8 @@ this doc describes them. TypeScript types are generated into `packages/contracts
 - `POST /runs/{run_id}/cancel` stops a run (the chat's Stop button) and answers `{"run_id", "status"}`: `cancelled`, or the
   state the run had if it was over already (`done`, `error`), so a Stop that arrives late is not an error. A stopped run
   ends with an `error` event with the code `cancelled` (`retryable: false`). The graph stops where it is, and the assistant
-  keeps the text it had written; a media job it started is not recalled. A stop that reaches another replica is noticed by
+  keeps the text it had written; a media job it is waiting for is stopped (the media worker never starts it, or interrupts
+  it) and its place in the line is given back (ADR-0088). A stop that reaches another replica is noticed by
   the replica running the graph within a second. Not the owner's run, or no such run: 404.
 - The Next.js BFF passes the upstream stream through unchanged: return the upstream
   `ReadableStream`, disable compression and buffering.
@@ -55,12 +56,15 @@ Every `data` object includes:
 | `tool_call` | The assistant calls a tool (ADR-0057) | `id`, `name`, `arguments` (object) |
 | `tool_result` | A tool call finished | `id` (same as its `tool_call`), `name`, `status` (`ok` \| `refused` \| `error`), `output` (a small reference: an image id, search hits; never a file) |
 | `job_progress` | Media job state changes | `job_id`, `capability`, `status` (`queued` \| `running` \| `completed` \| `failed`), `queue_position?`, `progress?` (0–1), `preview_url?`, `tool_call_id?` (the assistant's `tool_call` this job belongs to; without it a client gives the progress to the last tool still running) |
-| `error` | Recoverable or fatal error | `code`, `message` (user-safe), `retryable` (bool), `job_id?` |
+| `error` | Recoverable or fatal error | `code`, `message` (user-safe), `retryable` (bool), `job_id?`. `busy` (retryable): the person already has as many jobs in the line as they may (ADR-0088), and the message names the job in the way |
 | `done` | Run finished | `outputs` (product-specific, e.g. `{title, lyrics, audio_url, cover_url}`) |
 
 Rules:
 
 - `done` and fatal `error` are terminal; the server closes the stream after them.
+- A run's terminal event is in its log before its stored state says it has finished. The stream also
+  stops when it finds the run finished and nothing new in the log, so this order makes the terminal
+  event always reach the client (a Stop sets `cancelled` first, so other replicas notice it at once).
 - Asset fields are always URLs (pre-signed or served by the API), never bytes.
 - `message` fields never contain stack traces or internal hostnames.
 - New optional fields may be added without an ADR. Renaming or removing fields, or adding
@@ -146,7 +150,10 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   (the hardened upload; answers `upload_id`), a document through `POST /products/wasifyai-assistant/attachments` (body = the file, `x-file-name` = its name, percent-encoded; answers `{id, kind, name, chars,
   pages, truncated}`; text, Markdown, CSV and HTML, and PDF and Office when the document reader is installed). The user message is stored with `attachment` parts `{kind, id, key, name, bytes}` and the
   uploads are consumed; a conversation read adds a short-lived `url` to a picture part. A picture for a model that cannot read pictures ends the run with `refused`, code `no_vision`, and stores nothing.
-  Attachments are untrusted text (see the next point). `GET .../options` also answers `attach: {available, images, documents, images_note}`.
+  Attachments are untrusted text (see the next point). `GET .../options` also answers `attach: {available, images, documents, images_note, picture_reader}`; `picture_reader`
+  `{state: "available" | "downloading", title, licence, from, bytes, download?}` appears when the chosen file model has no vision projector and the app can fetch one (desktop):
+  `GET /desktop/vision` answers `{vision: {state: "ready" | "unavailable" | "available" | "downloading", ...}}` and `POST /desktop/vision/download {bytes}` (the size the person was shown; `409` otherwise)
+  fetches it. A message may have attachments and no `text`; the chat is then named after the first file. A failed `web_search` / `web_read` result's `output` carries `{message, code}`.
 - **Read aloud (ADR-0083, CU3) is not a stream and not a run.** `POST /products/wasifyai-voice/read-aloud` takes JSON `{text, part}` (`text`: a reply as the model wrote it, 1 to 40,000
   characters; `part`: 0 to 7, default 0; unknown fields are refused) and answers one **passage** of it spoken: `{audio, part, parts, truncated, seconds, model, displaced}`. The engine turns the text into
   plain words (code blocks, addresses, tags, citations like `[1]`, table rules, control and bidirectional characters dropped; the text of links, headings and emphasis kept), cuts it at the ends of
@@ -159,9 +166,20 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   the `message`. It is not an action (`docs/actions.md`, "Not actions").
 - **Cards that wait for the person (ADR-0071).** Run input **`approvals`** (bool): this client shows a card and sends the answer back. Only then does an action that
   needs the person's yes (after the web was read, a picture or a song; a `destroy` action) park the turn. Without it that action is refused in words, as before.
-  The turn emits `interrupt` with `kind: "confirm_action"` and `payload {kind, tool_call_id, title, summary, params}` (`params`: a few short parameters, plain text),
-  stores a `tool` row with a part `{type: "interrupt", kind, status: "pending", tool_call_id, approval_id, run_id, title, summary, params}` so a reload shows the card,
-  and waits (`waiting_input`). **`POST /runs/{run_id}/resume {"value": {"approved": true}}`** answers it; anything but a literal `true` is a no. `{"approved": false,
-  "expired": true}` is "the person went on without answering": the turn closes without another model call. The part becomes `approved` or `declined`; the tool's
-  `tool_result` follows in the same row and the stream goes on in the same message. A second answer is `409`. The window's click is the only way an approval is
-  decided: no action exposes it.
+  The turn emits `interrupt` with `kind: "confirm_action"` and `payload {kind, tool_call_id, title, summary, params, action_id, effect, badges, consent, fields,
+  screen}` (`params`: a few short parameters, plain text; `fields`: one row per field of the action's input, drawn from its schema: `{name, label, kind: text |
+  long_text | number | bool | choice, required, description?, choices?, min?, max?, max_length?, value?}`; `badges`: short words such as "leaves this computer";
+  `consent`: the statement a `needs_consent` action needs ticked; `screen`: the menu item that does the same thing; stage A2 of ADR-0071), stores a `tool` row with
+  a part `{type: "interrupt", kind, status: "pending", tool_call_id, approval_id, run_id, ...the same}` so a reload shows the card, and waits (`waiting_input`).
+  **`POST /runs/{run_id}/resume {"value": {"approved": true}}`** answers it; anything but a literal `true` is a no. `{"approved": true, "params": {...}}` is a yes
+  with the fields as the person edited them: the action runs with those (the stored part keeps them in `params`), and an action on the floor (delete, consent)
+  shows a second card for the edited request. `{"approved": false, "expired": true}` is "the person went on without answering": the turn closes without another
+  model call. The part becomes `approved` or `declined`; the tool's `tool_result` follows in the same row and the stream goes on in the same message. A second
+  answer is `409`. The window's click is the only way an approval is decided: no action exposes it.
+- **When the assistant asks (ADR-0071 decision 5).** Run input **`approval`**: `ask` (the default: a card before every make), `ask_costly` (a card only
+  for what takes a while or leaves this computer) or `auto` (no card). The box's Ask button and the card's "Don't ask again in this chat" set it per
+  conversation. Deleting and anything that needs the person's word still ask, and after the web or a file is in the chat everything that is not a read
+  asks (the taint rule). The card also carries `estimate {seconds, runs}` (the median of this person's last runs of the action, from the audit log; absent
+  until one ran), `pauses_chat` (on the desktop: the action takes the one memory slot, so the chat model pauses) and, when outside text is in
+  the chat, `provenance` (why it asks: "after reading a result from github", "after reading the web"; ADR-0070 decision 5). A tool of an
+  outside server the person marked trusted read-only, which the server says only reads, runs without a card, taint or not (decision 4).

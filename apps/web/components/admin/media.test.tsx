@@ -129,6 +129,7 @@ describe("submitMedia (the server action)", () => {
         backend: "comfy-api",
         config: { base_url: "https://c.example" }, // blank settings are not sent
         api_key: KEY,
+        key_from: null,
       },
     );
     expect(out.status).toBe("tested");
@@ -169,6 +170,35 @@ describe("submitMedia (the server action)", () => {
         form({ intent: "save", backend: "x" }),
       )) as { message: string },
     ).toMatchObject({ message: expect.stringContaining("Only admins") });
+  });
+
+  it("sends the row whose key is used, and nothing when none is chosen", async () => {
+    apiSend.mockResolvedValue({ status: 200, data: {} });
+    const { submitMedia } = await import("../../app/(site)/admin/media/actions");
+    await submitMedia(
+      "wasifyai-voice",
+      "speech.speak",
+      { status: "idle" },
+      form({
+        intent: "save",
+        backend: "fal",
+        cfg_model: "fal-ai/kokoro",
+        key_from: "wasifyai-image/image.generate",
+      }),
+    );
+    expect(apiSend.mock.calls[0][2]).toEqual({
+      backend: "fal",
+      config: { model: "fal-ai/kokoro" },
+      api_key: null,
+      key_from: "wasifyai-image/image.generate",
+    });
+    await submitMedia(
+      "wasifyai-voice",
+      "speech.speak",
+      { status: "idle" },
+      form({ intent: "save", backend: "fal", cfg_model: "m", api_key: "k", key_from: "none" }),
+    );
+    expect(apiSend.mock.calls[1][2]).toMatchObject({ api_key: "k", key_from: null });
   });
 
   it("resets without a body and refuses odd names before calling the API", async () => {
@@ -220,6 +250,26 @@ describe("MediaForm", () => {
     expect(key).toHaveValue("");
     expect(key).toHaveAttribute("placeholder", expect.stringContaining("Leave empty to keep"));
     expect(screen.getByRole("button", { name: "Reset to default" })).toBeInTheDocument();
+  });
+
+  it("offers the key of another row on the same service, and then needs none typed", async () => {
+    const { MediaForm } = await import("./MediaForm");
+    render(
+      <MediaForm
+        item={item({ capability: "image.edit", backend: "comfy-api" })}
+        backends={backends}
+        secretsReady
+        keyRows={[
+          { id: "p/image.generate", backend: "comfy-api", label: "p · image.generate" },
+          { id: "q/music.generate", backend: "comfyui-local", label: "q · music.generate" },
+        ]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("combobox", { name: "Or use a key already saved" }));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual(["No, use the key above", "Use the key saved for p · image.generate"]);
+    await userEvent.click(screen.getByRole("option", { name: /p · image.generate/ }));
+    expect(screen.getByLabelText(/API key/)).toBeDisabled();
   });
 
   it("disables the key box until the encryption key exists", async () => {

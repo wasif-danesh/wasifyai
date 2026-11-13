@@ -1,5 +1,5 @@
 """A stand-in for the lip sync server (`wasifyai_api/lipsync_server/server.py`), to test the sidecar
-without torch or MuseTalk. A picture of `noface` is refused with 422, `boom` fails with 500, `slow`
+without torch or EchoMimic. A picture of `noface` is refused with 422, `boom` fails with 500, `slow`
 never answers; every answer records what it was sent in `last.json`."""
 
 import asyncio
@@ -25,7 +25,7 @@ def mp4(w: int, h: int) -> bytes:
 def health() -> dict:
     return {
         "ok": True, "device": "cpu", "loaded": state["loaded"],
-        "dir": os.environ.get("MUSETALK_DIR"), "torch_home": os.environ.get("TORCH_HOME"),
+        "dir": os.environ.get("ECHOMIMIC_DIR"), "weights": os.environ.get("LIPSYNC_WEIGHTS"),
     }  # fmt: skip
 
 
@@ -34,16 +34,17 @@ async def lipsync(
     image: UploadFile = File(...),  # noqa: B008
     audio: UploadFile = File(...),  # noqa: B008
     fps: int = Form(25),
-    mark: str = Form(""),
+    width: int = Form(0),
+    height: int = Form(0),
 ) -> Response:
     pic, voice = await image.read(), await audio.read()
     if pic == b"noface":
-        raise HTTPException(422, "no face found in the picture")
+        raise HTTPException(422, "the picture could not be read")
     if pic == b"boom":
         raise HTTPException(500, "the lip sync could not be made")
     if pic == b"slow":
         await asyncio.sleep(60)
-    note = {"fps": fps, "mark": mark, "pic": len(pic), "voice": len(voice)}
+    note = {"fps": fps, "pic": len(pic), "voice": len(voice), "width": width, "height": height}
     await asyncio.to_thread(Path("last.json").write_text, json.dumps(note))
     state["loaded"] = True
-    return Response(mp4(640, 480), media_type="video/mp4")
+    return Response(mp4(width or 640, height or 480), media_type="video/mp4")

@@ -62,6 +62,8 @@ class AttachOptions(BaseModel):
     images: bool | None = False  # the model reads pictures (None: not known, so try)
     documents: bool = False  # text, Markdown, CSV and HTML always; PDF and Office with the reader
     images_note: str = ""  # why a picture will not work, in words, when it will not
+    # the app can fetch the model's picture reader: what it is and how big (None: nothing to offer)
+    picture_reader: dict[str, Any] | None = None
 
 
 class ChatOptions(BaseModel):
@@ -127,7 +129,7 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
         """Which options of the box work with the model in use: on the desktop the model the person
         chose (its chat template takes the thinking switch); on the web the chat alias, when its
         settings say how to switch thinking (`thinking_options`)."""
-        language = getattr(deps.state, "desktop_language", None)
+        language = deps.state.desktop_language
         if language is not None:
             chosen = language.selected
             thinking = bool(chosen and chosen.thinking)
@@ -139,7 +141,7 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
                 "mmproj, kept next to the model). None was found for this model."
             )
         else:
-            caps = (getattr(deps.state, "caps", None) or {}).get(PRODUCT_ID)
+            caps = (deps.state.caps or {}).get(PRODUCT_ID)
             try:
                 binding = caps.text._bound["chat"][0] if caps is not None else None
             except (AttributeError, KeyError):
@@ -147,19 +149,29 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
             thinking = bool(binding and binding.defaults.get("thinking_options"))
             images = bool(binding and "image" in getattr(binding, "inputs", []))
             why = "" if images else "The chat model in use does not read pictures."
-        stored = getattr(deps.state, "uploads", None) is not None and deps.storage is not None
+        stored = deps.state.uploads is not None and deps.storage is not None
+        reader = None
+        vision = deps.state.desktop_vision
+        if stored and images is False and vision is not None:
+            found = await vision.status()
+            if found and found.get("state") in ("available", "downloading"):
+                reader = found
         attach = AttachOptions(
-            available=stored, images=images if stored else False, documents=stored, images_note=why
+            available=stored,
+            images=images if stored else False,
+            documents=stored,
+            images_note=why,
+            picture_reader=reader,
         )
-        return ChatOptions(thinking=thinking, search=await search_options(), attach=attach)
+        return ChatOptions(thinking=thinking, search=await search_options(identity), attach=attach)
 
-    async def search_options() -> SearchOptions:
-        web = getattr(deps.state, "web", None)
+    async def search_options(identity: Identity) -> SearchOptions:
+        web = deps.state.web
         if web is None:
             return SearchOptions()
-        st = await web.status()
+        st = await web.status(identity)
         chosen = next(p for p in st["providers"] if p["id"] == st["provider"])
-        ready = (await web.readiness()).state == "ready"
+        ready = (await web.readiness(identity)).state == "ready"
         return SearchOptions(
             available=True,
             consented=st["consented"],
@@ -174,24 +186,29 @@ def build_routes(deps: RouteDeps, store: ConversationStore | None = None) -> API
     async def search_status(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
         """The web search settings: which service, whether the person allowed it, which keys are
         saved (never the keys)."""
-        web = getattr(deps.state, "web", None)
+        web = deps.state.web
         if web is None:
             raise HTTPException(404, "Web search is not available here.")
-        return await web.status()
+        return await web.status(identity)
 
     @router.put("/search", response_model=SearchStatus)
     async def search_update(
         body: SearchUpdate, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
-        web = getattr(deps.state, "web", None)
+        web = deps.state.web
         if web is None:
             raise HTTPException(404, "Web search is not available here.")
+        # on a service the admins choose the search service and keep its keys; anyone may allow it
+        if getattr(web, "per_person", False) and identity.role != "admin":
+            if body.provider is not None or body.key is not None or body.remove_key is not None:
+                raise HTTPException(403, "An admin chooses the search service and keeps its keys.")
         try:
             return await web.update(
                 provider=body.provider,
                 consent=body.consent,
                 key=(body.key.provider, body.key.value) if body.key else None,
                 remove_key=body.remove_key,
+                who=identity,
             )
         except ValueError as e:
             raise HTTPException(422, str(e)) from None

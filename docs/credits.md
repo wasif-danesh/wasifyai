@@ -91,7 +91,7 @@ These are the places where a licence asks for more than "keep the notice". Items
 | Auth.js | `nextauthjs/next-auth` | ISC | Sign-in on the web |
 | Vite | `vitejs/vite` | MIT | The desktop window's build |
 | openapi-typescript | `openapi-ts/openapi-typescript` | MIT | Generates the TypeScript API types |
-| assistant-ui | `assistant-ui/assistant-ui` | MIT | The chat thread runtime and primitives (ADR-0082; Built in CU1, behind a Labs switch) |
+| assistant-ui | `assistant-ui/assistant-ui` | MIT | The chat thread runtime and primitives (ADR-0082) |
 | streamdown and plugins | `vercel/streamdown` | Apache-2.0 (npm; GitHub shows "Other") | Streaming markdown in the new chat, hardened (ADR-0082) |
 | KaTeX, Mermaid, Shiki | `KaTeX/KaTeX`, `mermaid-js/mermaid`, `shikijs/shiki` | MIT | Math, diagrams and code highlighting, loaded lazily |
 
@@ -113,8 +113,7 @@ These are the places where a licence asks for more than "keep the notice". Items
 | ComfyUI | `Comfy-Org/ComfyUI` | GPL-3.0 | The image and video engine, as a sidecar process (section 1) |
 | llama.cpp | `ggml-org/llama.cpp` | MIT | The local language engine (a pinned prebuilt release, run as a managed process) |
 | audio.cpp | `0xShug0/audio.cpp` | Apache-2.0 per ADR-0066 (GitHub shows "Other") | Speech, music and audio tools runtime |
-| MuseTalk | `TMElyralab/MuseTalk` | MIT (GitHub shows "Other") | Lip sync, an optional component |
-| mflux | `mflux-community/mflux` | MIT | Image LoRA training on the Mac (a spike; planned in ADR-0076) |
+| EchoMimic v3 | `antgroup/echomimic_v3` | Apache-2.0 | Lip sync, an optional component |
 
 ## 7. Models in the catalogue (Built) and their projects
 
@@ -134,7 +133,7 @@ Weights have their own licences, recorded per model in `products/*/models.yaml` 
 | Tone Color VC | `myshell-ai/OpenVoice` | MIT | Change a voice |
 | MeanVC2 | `ASLP-lab/MeanVC2` | Apache-2.0 | Change a voice |
 | dots.tts Edit | `dots-studio/dots.tts.edit` | Apache-2.0 project, the weights card says "other" | Edit speech; conditional |
-| MuseTalk 1.5 | `TMElyralab/MuseTalk` | MIT | Lip sync |
+| EchoMimic v3 flash, with the Wan2.1-Fun 1.3B VAE and CLIP and chinese-wav2vec2-base | `BadToBest/EchoMimicV3`, `alibaba-pai/Wan2.1-Fun-V1.1-1.3B-InP`, `TencentGameMate/chinese-wav2vec2-base` | Apache-2.0 (chinese-wav2vec2-base: MIT) | Lip sync |
 | bge-small-en-v1.5 (ONNX) | `FlagOpen/FlagEmbedding` | MIT | Notebook and help search |
 
 ## 8. Adapted, or the model for our own build
@@ -149,17 +148,18 @@ Weights have their own licences, recorded per model in `products/*/models.yaml` 
 
 | Project | Repository | Licence | Use (ADR) |
 |---|---|---|---|
-| Hermes Agent | `NousResearch/hermes-agent` | MIT | The agent engine behind our `AgentEngine` interface (0072) |
 | MCP Python SDK | `modelcontextprotocol/python-sdk` | MIT | Our MCP server and client (0069, 0070) |
 | Claude Code, Codex, OpenCode | Anthropic (closed), `openai/codex`, `anomalyco/opencode` | Apache-2.0, MIT | MCP clients tested in spike S1; not dependencies |
 | HyperFrames | `heygen-com/hyperframes` | Apache-2.0 | Video Builder's render engine (0077) |
-| motion-skills (iart.ai) | `iart-ai/motion-skills` and its packs | MIT (one pack has no licence and is excluded) | Reviewed, pinned, adapted content for Motion Graphics (0079) |
+| motion-skills (iart.ai) | `iart-ai/motion-skills` and its packs | MIT (one pack has no licence and is excluded) | Reviewed, pinned, adapted content for Motion graphics (0079) |
 | Pixal3D | `TencentARC/Pixal3D` | MIT | Text and image to 3D (0080) |
 | pixal3d.cpp, trellis.cpp | `raven38/pixal3d.cpp`, `pwilkin/trellis.cpp` | MIT | The native runtime that runs Pixal3D (0080) |
 | TRELLIS.2 | `microsoft/TRELLIS.2` | MIT | The backbone Pixal3D builds on; not offered in v1 |
 | BiRefNet, MoGe-2 | `ZhengPeng7/BiRefNet`, `microsoft/MoGe` | MIT | Background removal and camera estimate inside the 3D runtime |
 | DINOv3 | `facebookresearch/dinov3` | Meta's DINOv3 licence (section 1) | The image encoder carried in the 3D weights |
-| Laya (and Cloudflare's Clef) | `NandhaKishorM/laya`, Hugging Face `Cloudflare/clef-flash` | Apache-2.0 declared (Laya has no licence file; T0) | "Teach it to sort" decision models (0075) |
+| Laya (and Cloudflare's Clef) | `NandhaKishorM/laya` (the `laya` package on PyPI, 0.4.15), Hugging Face `convaiinnovations/laya`, `Cloudflare/clef-flash` | Apache-2.0 (the package ships a `LICENSE`; the weights repository declares it in its card and has no licence file; T0). Clef is not used | "Teach it to decide" decision models (0075): the trainer and runtime, in an environment of its own |
+| PyTorch | `pytorch/pytorch` | BSD-3-Clause | Runs Laya on the Mac's graphics chip (MPS) in the decision trainer's environment (0075), and the video trainer's (0073) |
+| diffusers, peft, accelerate | `huggingface/diffusers` (0.42.0), `huggingface/peft` (0.21.2), `huggingface/accelerate` | Apache-2.0 | "Make my own look or motion for video": the trainer for the video model, with PyTorch, in an environment of its own (0073, video amendment) |
 | mlx, mlx-lm | `ml-explore/mlx`, `ml-explore/mlx-lm` | MIT | The Mac training and serving backends behind Unsloth |
 | Hugging Face Transformers | `huggingface/transformers` | Apache-2.0 | Behind the training component |
 | Qwen3.5-9B | Qwen (Hugging Face) | Apache-2.0 | The planned default chat and agent model (0078) |
@@ -180,7 +180,7 @@ Weights have their own licences, recorded per model in `products/*/models.yaml` 
 |---|---|---|---|
 | Open WebUI | `open-webui/open-webui` | Custom (BSD-3 with a branding clause) | A whole product with its own server |
 | LibreChat | `LibreChat-AI/LibreChat` | MIT | Same |
-| Ostris AI Toolkit | `ostris/ai-toolkit` | MIT | Kept as an optional NVIDIA training engine; not on the Mac |
+| Ostris AI Toolkit | `ostris/ai-toolkit` | MIT | The picture trainer on every platform: Apple silicon and NVIDIA (ADR-0073, 2026-11-07) |
 | Kohya, SimpleTuner, OneTrainer | `bmaltais/kohya_ss`, `bghira/SimpleTuner`, `Nerogar/OneTrainer` | Apache-2.0, AGPL-3.0, AGPL-3.0 | NVIDIA trainers with no Mac path; the last two are AGPL |
 | stable-diffusion.cpp, whisper.cpp | `leejet/stable-diffusion.cpp`, `ggml-org/whisper.cpp` | MIT | Measured against ComfyUI and audio.cpp; kept as fallbacks |
 | Remotion | `remotion-dev/remotion` | Custom (free for individuals and up to 3 employees; paid beyond) | A paid licence for larger companies |

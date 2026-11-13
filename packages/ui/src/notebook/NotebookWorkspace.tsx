@@ -10,12 +10,20 @@ import type {
 } from "@wasifyai/client";
 import { isWorking } from "@wasifyai/client";
 import { Plus } from "lucide-react";
-import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { useChatNext } from "../chat/labs";
+import {
+  type CSSProperties,
+  type ReactNode,
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
+import { PageHeader } from "../window-bar";
 import { AddSources } from "./AddSources";
-import { NotebookChat } from "./NotebookChat";
 import { SourceGuide } from "./SourceGuide";
 import { type Highlight, SourceViewer } from "./SourceViewer";
 import { SourcesPane } from "./SourcesPane";
@@ -24,10 +32,11 @@ import { noReadySourceReason, scopeIds, scopeLabel } from "./scope";
 import { useGuide } from "./use-guide";
 import { useNotebookChat } from "./use-notebook-chat";
 import { useNotebookSources } from "./use-notebook-sources";
+import { useStudioWidth } from "./use-studio-width";
 
-// the chat on assistant-ui (ADR-0082, CU4), a separate chunk fetched only when Labs has it on
-const NotebookChatNext = lazy(() =>
-  import("./NotebookChatNext").then((m) => ({ default: m.NotebookChatNext })),
+// the chat on assistant-ui (ADR-0082) is a separate chunk, so the notebook's lists and sources show before it arrives
+const NotebookChat = lazy(() =>
+  import("./NotebookChat").then((m) => ({ default: m.NotebookChat })),
 );
 
 type PaneName = "sources" | "chat" | "studio";
@@ -54,6 +63,8 @@ export type NotebookWorkspaceProps = {
   onBack?: () => void;
   /** A fresh link to a picture of the image product (an infographic). */
   imageUrl?: (id: string) => Promise<string>;
+  /** Save a picture of the library into the person's folder (the desktop window; the web leaves it out). */
+  saveImage?: (imageId: string, path?: string) => Promise<{ name: string; path?: string }>;
 };
 
 /**
@@ -72,10 +83,9 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<NotebookConversationSummary[]>([]);
   const [draftTitle, setDraftTitle] = useState(title);
+  const studio = useStudioWidth();
   useEffect(() => setDraftTitle(title), [title]);
 
-  const [chatNext] = useChatNext(); // Settings, Labs: the new chat is off until asked for
-  const ChatView = chatNext ? NotebookChatNext : NotebookChat;
   const chat = useNotebookChat({
     runs,
     api,
@@ -227,15 +237,9 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header
-        data-tauri-drag-region
-        className="flex h-14 shrink-0 items-center gap-3 border-b px-5 pt-1 [[data-menu-collapsed=true]_&]:ps-32"
-      >
-        {props.onBack ? (
-          <Button type="button" variant="ghost" size="sm" onClick={props.onBack}>
-            Notebooks
-          </Button>
-        ) : null}
+      <PageHeader className="flex h-14 shrink-0 items-center gap-3 border-b px-5 pt-1" title>
+        {/* the page's heading is the notebook's name; the box beside it is where it is changed */}
+        <h1 className="sr-only">{title}</h1>
         <input
           aria-label="Notebook name"
           value={draftTitle}
@@ -252,15 +256,24 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
           className="min-w-0 flex-1 truncate rounded-md bg-transparent px-2 py-1 font-medium text-lg outline-none hover:bg-accent focus:bg-accent"
         />
         <span className="hidden text-muted-foreground text-sm sm:inline">{label}</span>
-      </header>
+      </PageHeader>
 
-      <div className="flex shrink-0 gap-1 border-b p-2 lg:hidden" role="tablist" aria-label="Panes">
+      <fieldset className="m-0 flex min-w-0 shrink-0 gap-1 border-0 border-b p-2 lg:hidden">
+        <legend className="sr-only">Panes</legend>
         {tab("sources", "Sources")}
         {tab("chat", "Chat")}
         {tab("studio", "Studio")}
-      </div>
+      </fieldset>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] lg:grid-cols-[19rem_minmax(0,1fr)_17rem] xl:grid-cols-[21rem_minmax(0,1fr)_19rem]">
+      <div
+        ref={studio.grid}
+        className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] lg:grid-cols-[19rem_minmax(0,1fr)_var(--studio-width,17rem)] xl:grid-cols-[21rem_minmax(0,1fr)_var(--studio-width,19rem)]"
+        style={
+          studio.width === null
+            ? undefined
+            : ({ "--studio-width": `${studio.width}px` } as CSSProperties)
+        }
+      >
         <div className={cn("min-h-0 border-e", pane !== "sources" && "hidden lg:block")}>
           {viewing && notebookId ? (
             <SourceViewer
@@ -308,7 +321,7 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
             </div>
           ) : null}
           <Suspense fallback={null}>
-            <ChatView
+            <NotebookChat
               state={chat.state}
               onSend={(text) => void chat.send(text, scope)}
               onStop={chat.stop}
@@ -382,7 +395,23 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
           ) : null}
         </div>
 
-        <div className={cn("min-h-0 border-s", pane !== "studio" && "hidden lg:block")}>
+        <div
+          ref={studio.column}
+          className={cn("relative min-h-0 border-s", pane !== "studio" && "hidden lg:block")}
+        >
+          {/* drag this edge, or use the arrow keys, to make the Studio wider or narrower */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the Studio"
+            aria-valuemin={studio.min}
+            aria-valuemax={studio.max()}
+            aria-valuenow={Math.round(studio.width ?? studio.shown())}
+            tabIndex={0}
+            title="Drag to resize; double-click to widen"
+            className="absolute inset-y-0 -start-1 z-20 hidden w-2 cursor-col-resize touch-none outline-none hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:ring-2 focus-visible:ring-ring lg:block"
+            {...studio.handle}
+          />
           <StudioPane
             api={api}
             runs={runs}
@@ -391,6 +420,9 @@ export function NotebookWorkspace(props: NotebookWorkspaceProps) {
             scopeLabel={label}
             blockedReason={studioBlocked}
             imageUrl={props.imageUrl}
+            saveImage={props.saveImage}
+            wide={studio.wide}
+            onToggleWide={studio.toggleWide}
           />
         </div>
       </div>

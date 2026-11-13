@@ -25,6 +25,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             {{- include "wasifyai.dbEnv" . | nindent 12 }}
+            {{- include "wasifyai.tracingEnv" (dict "root" . "service" "wasifyai-media-worker") | nindent 12 }}
             - { name: REDIS_URL, value: "redis://{{ .Release.Name }}-redis:6379/0" }
             - { name: COMFYUI_MODE, value: {{ .Values.mediaWorker.comfyuiMode | quote }} }
             - { name: COMFYUI_BASE_URL, value: {{ include "wasifyai.comfyuiUrl" . | quote }} }

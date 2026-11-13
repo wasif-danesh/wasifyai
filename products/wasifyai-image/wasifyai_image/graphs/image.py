@@ -1,6 +1,6 @@
 # pyright: reportTypedDictNotRequiredAccess=false
 # (Graph state is filled in node by node; a node only reads keys that earlier nodes have set.)
-"""The image graph: guardrail, one job, finish.
+"""The image graph: a check of the request, one job, finish.
 
     check_request -> start_job -> await_job -> finalise
         |
@@ -8,14 +8,16 @@
       refuse
 
 Two modes: `text` (a description and a size) and `image` (an uploaded picture and an instruction).
-Graph code names capabilities (`text.moderate`, `text.moderate_image`, `image.generate`,
-`image.edit`), never models or workflow node IDs. The job is two nodes: one enqueues, one waits,
-because a paused node re-runs from its start on resume.
+Graph code names capabilities (`image.generate`, `image.edit`), never models or workflow node IDs.
+The job is two nodes: one enqueues, one waits, because a paused node re-runs from its start on
+resume.
 
 The uploaded picture is deleted as soon as it is no longer needed: when the request is refused,
 when the job fails, and when the image is saved.
 """
 
+import asyncio
+import io
 import logging
 import re
 import secrets
@@ -24,11 +26,11 @@ from uuid import uuid4
 
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
+from PIL import Image
 from wasifyai_platform_sdk import (
     Capabilities,
     InMemoryUploadStore,
     JobFailed,
-    RunError,
     UploadRecord,
     UploadStore,
     await_job,
@@ -36,19 +38,17 @@ from wasifyai_platform_sdk import (
     upload_store,
 )
 
-from wasifyai_image import guardrail
+from wasifyai_image.caption import write_caption
 from wasifyai_image.images import (
     IMAGE_CREATED,
     ImageRecord,
     ImageStore,
     InMemoryImageStore,
-    Quota,
-    UsageQuota,
     image_store,
     thumbnail_of,
 )
 from wasifyai_image.index import index_text
-from wasifyai_image.schemas import DEFAULT_SIZE, MAX_PROMPT_CHARS, SIZES
+from wasifyai_image.schemas import DEFAULT_SIZE, MAX_PROMPT_CHARS, MODES, SIZES
 
 log = logging.getLogger(__name__)
 
@@ -60,9 +60,28 @@ class ImageState(TypedDict, total=False):
     mode: str
     prompt: str
     size: str
-    image_key: str
+    image_key: str  # the picture to change, or the first reference
+    image2_key: str  # the second reference (reference mode)
+    mask_key: str  # the painted area, white on black (inpaint mode)
     seed: int  # optional in the request; always set once the request is checked
     loras: list[dict[str, Any]]  # [{name, weight}], checked: at most MAX_LORAS
+    # on the desktop: [{id, strength}] of the person's styles (ADR-0091); turned into `loras`
+    styles: list[dict[str, Any]]
+    # Advanced (ADR-0091 decision 10): sampling steps, and a size of the person's own instead of a
+    # named shape (text and reference); absent, the workflow's own steps and the named size
+    steps: int
+    width: int
+    height: int
+    lora_files: dict[
+        str, str
+    ]  # on the web: the storage key of each style, which is the person's own
+    # which of the product's models makes the picture (ADR-0097); absent: the first in product.yaml
+    model: str
+    # what the job is sent instead of the prompt: a prompt writer's caption (Ideogram 4)
+    job_prompt: str
+    # the picture of the library the change starts from, when the person chose one there
+    # (not a file they added)
+    source_id: str
     # job and result
     job_id: str
     result_key: str
@@ -77,11 +96,24 @@ class ImageState(TypedDict, total=False):
     refusal: dict[str, str]
 
 
+# The uploads each mode takes, as the state's key fields.
+PICTURE_KEYS: dict[str, tuple[str, ...]] = {
+    "text": (),
+    "image": ("image_key",),
+    "reference": ("image_key", "image2_key"),
+    "inpaint": ("image_key", "mask_key"),
+}
+# What the model is told for an inpaint: there is no inpainting model for klein, so the painted area
+# is filled white on the copy it sees and named in words (docs/spikes/image-ir0.md).
+INPAINT_INSTRUCTION = "Fill the white area with: {prompt}. Keep everything else exactly the same."
+MIN_PAINTED, MAX_PAINTED = 0.001, 0.98  # the share of the picture a mask may cover
 MAX_SEED = 2**31 - 1
 RECIPE_VERSION = 1
-MAX_LORAS = 3
+MAX_LORAS = 8  # ADR-0091 decision 7
 LORA_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()/-]{0,200}\.safetensors$")
-MIN_WEIGHT, MAX_WEIGHT = 0.1, 2.0
+MIN_WEIGHT, MAX_WEIGHT = 0.05, 2.0
+MIN_STEPS, MAX_STEPS = 1, 50
+MIN_SIDE, MAX_SIDE = 256, 2048  # a size of one's own: multiples of 16 (FLUX.2's grid)
 
 
 def check_loras(raw: object) -> tuple[list[dict[str, Any]], str]:
@@ -111,19 +143,97 @@ def check_loras(raw: object) -> tuple[list[dict[str, Any]], str]:
     return out, ""
 
 
+STYLE_ID = re.compile(r"^[a-f0-9]{6,32}$")
+
+
+def check_styles(raw: object) -> tuple[list[dict[str, Any]], str]:
+    """The styles of a request as `[{id, strength}]`, or why they are refused. An id names a record
+    the engine keeps; the request never names a file."""
+    if not isinstance(raw, list):
+        return [], "Please choose the styles from the list."
+    if len(raw) > MAX_LORAS:
+        return [], f"Please use at most {MAX_LORAS} styles."
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        sid = item.get("id") if isinstance(item, dict) else None
+        strength = item.get("strength", 1.0) if isinstance(item, dict) else None
+        if not isinstance(sid, str) or not STYLE_ID.match(sid):
+            return [], "Please choose the styles from the list."
+        if isinstance(strength, bool) or not isinstance(strength, int | float):
+            return [], "A style's strength must be a number."
+        if not MIN_WEIGHT <= float(strength) <= MAX_WEIGHT:
+            return [], f"A style's strength must be between {MIN_WEIGHT} and {MAX_WEIGHT}."
+        if any(o["id"] == sid for o in out):
+            return [], "Each style can be used once."
+        out.append({"id": sid, "strength": round(float(strength), 2)})
+    return out, ""
+
+
+# the capability verb of each mode, and what a model that lacks it cannot do (ADR-0097)
+VERBS = {"text": "generate", "image": "edit", "reference": "reference", "inpaint": "inpaint"}
+CANNOT = {
+    "text": "make a picture from words",
+    "image": "change a picture",
+    "reference": "combine two pictures",
+    "inpaint": "change a painted area",
+}
+
+
+def check_advanced(state: dict[str, Any], sized: bool) -> tuple[dict[str, int], str]:
+    """Steps and a size of one's own, or why they are refused."""
+    out: dict[str, int] = {}
+    steps = state.get("steps")
+    if steps is not None:
+        if (
+            isinstance(steps, bool)
+            or not isinstance(steps, int)
+            or not (MIN_STEPS <= steps <= MAX_STEPS)
+        ):
+            return {}, f"Steps must be a whole number from {MIN_STEPS} to {MAX_STEPS}."
+        out["steps"] = steps
+    width, height = state.get("width"), state.get("height")
+    if width is None and height is None:
+        return out, ""
+    if not sized:
+        return {}, "This kind of change keeps the picture's own size."
+    for side in (width, height):
+        if isinstance(side, bool) or not isinstance(side, int):
+            return {}, "Give the width and the height as whole numbers."
+        if not MIN_SIDE <= side <= MAX_SIDE or side % 16:
+            return {}, (
+                f"Width and height must be between {MIN_SIDE} and {MAX_SIDE}, in steps of 16."
+            )
+    out["width"], out["height"] = int(width), int(height)  # type: ignore[arg-type]
+    return out, ""
+
+
+def size_of(state: ImageState) -> tuple[int, int]:
+    """The picture's width and height: one's own, or the named shape's."""
+    if state.get("width") and state.get("height"):
+        return state["width"], state["height"]
+    return SIZES[state["size"]]
+
+
 def recipe_of(state: ImageState, width: int, height: int) -> dict[str, Any]:
-    """What made the image, in the shape the window shows and "run again" reads. The model is not
-    named: the graph asks for a capability, not a model (see docs/phase2-stage-b-plan.md)."""
-    text_mode = state["mode"] == "text"
+    """What made the image, in the shape the window shows and "run again" reads. The model is named
+    by its catalogue id when the person chose one (ADR-0097), so "Make it again" uses it too."""
+    sized = state["mode"] in ("text", "reference")  # the others take their shape from the picture
+    styles = {"styles": state["styles"]} if state.get("styles") else {}
+    advanced: dict[str, Any] = {"steps": state["steps"]} if state.get("steps") else {}
+    if sized and state.get("width"):  # a size of one's own, not the named shape
+        advanced["own_size"] = True
     return {
         "v": RECIPE_VERSION,
         "mode": state["mode"],
         "prompt": state["prompt"],
-        "size": state["size"] if text_mode else None,
+        "size": state["size"] if sized else None,
         "width": width,
         "height": height,
         "seed": state["seed"],
         "loras": state.get("loras") or [],
+        **styles,  # by id, strength, checksum and title: "Make it again" finds them (ADR-0091)
+        **advanced,
+        **({"model": state["model"]} if state.get("model") else {}),
     }
 
 
@@ -136,8 +246,7 @@ def build_image(caps: Capabilities, checkpointer: Any):
     """Registry entry point: wires the production stores from the capabilities."""
     images: ImageStore = image_store(caps.db) if caps.db is not None else InMemoryImageStore()
     uploads: UploadStore = upload_store(caps.db) if caps.db is not None else InMemoryUploadStore()
-    quota: Quota | None = UsageQuota(caps.db) if caps.db is not None else None
-    return build_image_graph(caps, checkpointer, images, uploads, quota)
+    return build_image_graph(caps, checkpointer, images, uploads)
 
 
 def build_image_graph(
@@ -145,18 +254,7 @@ def build_image_graph(
     checkpointer: Any,
     images: ImageStore,
     uploads: UploadStore,
-    quota: Quota | None,
 ):
-    limit = (caps.config.quotas.get("images_per_user_per_day") if caps.config else None) or None
-
-    async def over_quota() -> bool:
-        if not await caps.safeguards_on():  # ADR-0047: quotas apply only with safeguards
-            return False
-        return bool(limit and quota and await quota.used_today(require_context()) >= limit)
-
-    def quota_message() -> str:
-        return f"You've reached today's limit of {limit} images. Please try again tomorrow."
-
     def refuse_with(code: str, message: str) -> ImageState:
         return {"status": "refused", "refusal": {"code": code, "message": message}}
 
@@ -178,7 +276,45 @@ def build_image_graph(
             pass
         await uploads.consume(record)
 
-    # ---- guardrail ----------------------------------------------------------------------
+    async def discard_all(state: ImageState) -> None:
+        """Delete every picture of the request (the second reference and the mask too)."""
+        for field in PICTURE_KEYS.get(state.get("mode", ""), ("image_key",)):
+            await discard_upload(state.get(field))  # type: ignore[misc]
+
+    async def check_mask(source_key: str, mask_key: str) -> str:
+        """Why a painted area cannot be used, or an empty string: it covers something, not nearly
+        all of the picture, and has the picture's shape."""
+        assert caps.storage is not None
+        source, mask = await caps.storage.get(source_key), await caps.storage.get(mask_key)
+
+        def look() -> str:
+            try:
+                with Image.open(io.BytesIO(source)) as s, Image.open(io.BytesIO(mask)) as m:
+                    (sw, sh), (mw, mh) = s.size, m.size
+                    painted = sum(m.convert("L").histogram()[128:]) / (mw * mh)
+            except (OSError, ValueError):
+                return "That painted area could not be read. Please paint it again."
+            if abs(sw / sh - mw / mh) > 0.02 * (sw / sh):
+                return "The painted area does not fit the picture. Please paint it again."
+            if painted < MIN_PAINTED:
+                return "Paint the part of the picture you want to change."
+            if painted > MAX_PAINTED:
+                return "Leave part of the picture unpainted, or use Change a picture instead."
+            return ""
+
+        return await asyncio.to_thread(look)
+
+    # ---- the request ----------------------------------------------------------------------
+
+    async def source_of(state: ImageState, mode: str) -> str:
+        """The picture of the person's library this one starts from: kept only when it is theirs
+        and the mode changes a picture (a file they added has none)."""
+        wanted = str(state.get("source_id") or "")
+        if mode == "text" or not wanted:
+            return ""
+        ctx = require_context()
+        found = await images.get(ctx.tenant_id, ctx.user_id, wanted)
+        return found.id if found is not None else ""
 
     async def check_request(state: ImageState) -> ImageState:
         write = get_stream_writer()
@@ -191,59 +327,134 @@ def build_image_graph(
             }
         )
         mode = state.get("mode")
-        if mode not in ("text", "image"):
-            return refuse_with("invalid_request", "Please choose text to image or image to image.")
+        if mode not in MODES:
+            return refuse_with("invalid_request", "Please choose what kind of picture to make.")
         prompt = _clean(state.get("prompt"), MAX_PROMPT_CHARS + 1)
         if not prompt:
-            what = "describe the image" if mode == "text" else "say what to change"
+            what = {
+                "text": "describe the image",
+                "image": "say what to change",
+                "reference": "describe the new picture",
+                "inpaint": "say what to put in the painted area",
+            }[mode]
             return refuse_with("invalid_request", f"Please {what} you would like.")
         if len(prompt) > MAX_PROMPT_CHARS:
             return refuse_with(
                 "invalid_request", f"Please keep it under {MAX_PROMPT_CHARS} characters."
             )
-        key = str(state.get("image_key") or "")
-        if mode == "text" and (state.get("size") or DEFAULT_SIZE) not in SIZES:
-            return refuse_with("invalid_request", "Please choose one of the image sizes.")
-        if mode == "image" and (not key or await find_upload(key) is None):
-            return refuse_with("invalid_request", "Please upload your picture again.")
+        # the uploads this mode takes: every one is deleted on every way out
+        keys = {field: str(state.get(field) or "") for field in PICTURE_KEYS[mode]}
+        picked: ImageState = {"mode": mode, **keys}  # type: ignore[typeddict-item]
+
+        async def refused(code: str, message: str) -> ImageState:
+            await discard_all(picked)
+            return refuse_with(code, message)
+
+        model = state.get("model")
+        chosen_by_admin = caps.extras.get("chosen_model")  # the web: an admin's choice (MV6)
+        if model is None and chosen_by_admin is not None:
+            admin_pick = await chosen_by_admin()
+            if admin_pick and VERBS[mode] in caps.image.models().get(admin_pick, ()):
+                model = admin_pick  # used when it can do this; otherwise the product's first model
+        if model is not None:  # one of this product's models, and one that can do this (ADR-0097)
+            offered = caps.image.models()
+            if not isinstance(model, str) or model not in offered:
+                return await refused("invalid_request", "Please choose one of the image models.")
+            if VERBS[mode] not in offered[model]:
+                return await refused("invalid_request", f"This model cannot {CANNOT[mode]}.")
+        sized = mode in ("text", "reference")
+        if sized and (state.get("size") or DEFAULT_SIZE) not in SIZES:
+            return await refused("invalid_request", "Please choose one of the image sizes.")
+        advanced, why = check_advanced(dict(state), sized)
+        if why:
+            return await refused("invalid_request", why)
+        for key in keys.values():
+            if not key or await find_upload(key) is None:
+                again = "picture" if len(keys) == 1 else "pictures"
+                return await refused("invalid_request", f"Please upload your {again} again.")
+        if mode == "inpaint" and (why_mask := await check_mask(*keys.values())):
+            return await refused("invalid_mask", why_mask)
         seed = state.get("seed")
         if seed is None:  # a new picture each time, unless the person asked for this one again
             seed = secrets.randbelow(MAX_SEED + 1)
         elif isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= MAX_SEED:
-            return refuse_with("invalid_request", "That seed is not valid.")
-        loras, why = check_loras(state.get("loras"))
+            return await refused("invalid_request", "That seed is not valid.")
+        wanted = state.get("styles")
+        styles: list[dict[str, Any]] = []
+        raw_loras = state.get("loras")
+        if wanted:
+            to_files = caps.extras.get("styles")  # the desktop: style ids to the files it keeps
+            styles, why = check_styles(wanted)
+            if to_files is None:
+                why = why or "Styles cannot be used here."
+            if why or to_files is None:
+                return await refused("invalid_request", why)
+            raw_loras, why = await to_files(styles)
+            if why:
+                return await refused("invalid_request", why)
+            # what each style was, kept with the picture: "Make it again" can say which is missing
+            styles = [
+                {**s, **{k: r[k] for k in ("sha256", "title") if k in r}}
+                for s, r in zip(styles, raw_loras, strict=False)
+            ]
+        loras, why = check_loras(raw_loras)
         if why:
-            await discard_upload(key if mode == "image" else None)
-            return refuse_with("invalid_request", why)
+            return await refused("invalid_request", why)
+        # the web: a style an admin added is fetched by its storage key (the resolver says it)
+        lora_files: dict[str, str] = {
+            str(r["name"]): str(r["key"])
+            for r in (raw_loras if isinstance(raw_loras, list) else [])
+            if isinstance(r, dict) and r.get("key")
+        }
+        resolve_looks = caps.extras.get(
+            "person_looks"
+        )  # the web keeps each person's styles in storage
+        own = [x["name"] for x in loras if x["name"] not in lora_files]
+        if own and resolve_looks is not None:
+            ctx = require_context()
+            found = await resolve_looks(ctx.tenant_id, ctx.user_id, own)
+            if found is None:
+                return await refused(
+                    "invalid_request", "One of those styles is not yours any more."
+                )
+            lora_files = {**lora_files, **found}
         out: ImageState = {
             "mode": mode,
             "prompt": prompt,
             "size": str(state.get("size") or DEFAULT_SIZE),
-            "image_key": key if mode == "image" else "",
+            "image_key": keys.get("image_key", ""),
+            "image2_key": keys.get("image2_key", ""),
+            "mask_key": keys.get("mask_key", ""),
             "seed": seed,
             "loras": loras,
+            "styles": styles,
+            "lora_files": lora_files,
+            "source_id": await source_of(state, mode),
             "status": "working",
         }
-
-        async def refused(code: str, message: str) -> ImageState:
-            await discard_upload(key if mode == "image" else None)
-            return refuse_with(code, message)
-
-        if await over_quota():  # before any LLM or GPU work
-            return await refused("quota_exceeded", quota_message())
-
-        if not await caps.safeguards_on():  # ADR-0047: no moderation while they are off
-            return out
-        kind = "image description" if mode == "text" else "edit instruction"
-        verdict = await guardrail.judge_text(caps, kind, prompt)
-        if not verdict.allowed:
-            return await refused(verdict.category, guardrail.refusal_message(verdict.category))
-        if mode == "image":
-            assert caps.storage is not None
-            picture = await caps.storage.get(key)
-            verdict = await guardrail.judge_picture(caps, prompt, picture)
-            if not verdict.allowed:
-                return await refused(verdict.category, guardrail.refusal_message(verdict.category))
+        if "steps" in advanced:
+            out["steps"] = advanced["steps"]
+        if model is not None:
+            out["model"] = model
+        if "width" in advanced:
+            out["width"], out["height"] = advanced["width"], advanced["height"]
+        writer = str(caps.image.setting(model, "prompt_writer", "")) if mode == "text" else ""
+        if writer:  # this model reads a structured caption, written from the person's words
+            write({"type": "node", "node": "write_caption", "status": "started",
+                   "label": "Writing the picture's caption"})  # fmt: skip
+            width, height = size_of(out)
+            try:
+                caption = await write_caption(caps, writer, prompt, width, height)
+            except Exception:
+                log.exception("the prompt writer failed")
+                caption = None
+            if caption is None:
+                return await refused(
+                    "model_unavailable",
+                    "This model needs the text model to write its caption, and it could not. "
+                    "Please try again, or choose another image model.",
+                )
+            out["job_prompt"] = caption
         return out
 
     def after_check(state: ImageState) -> str:
@@ -255,29 +466,48 @@ def build_image_graph(
     # ---- the job ------------------------------------------------------------------------
 
     async def start_job(state: ImageState) -> ImageState:
-        if await over_quota():  # again, right before the GPU is used
-            await discard_upload(state.get("image_key"))
-            raise RunError("quota_exceeded", quota_message())
         write = get_stream_writer()
-        edit = state["mode"] == "image"
+        mode = state["mode"]
         write(
             {
                 "type": "node",
                 "node": "generate_image",
                 "status": "started",
-                "label": "Changing your picture" if edit else "Painting your image",
+                "label": {
+                    "image": "Changing your picture",
+                    "reference": "Combining your pictures",
+                    "inpaint": "Changing the painted area",
+                }.get(mode, "Painting your image"),
             }
         )
         seed = state["seed"]
         extra: dict[str, Any] = {"loras": state["loras"]} if state.get("loras") else {}
-        if edit:
+        if state.get("steps"):
+            extra["steps"] = state["steps"]
+        if state.get("lora_files"):
+            extra["lora_files"] = state["lora_files"]
+        if state.get("model"):
+            extra["model"] = state["model"]
+        prompt = state.get("job_prompt") or state["prompt"]
+        if mode == "image":
             handle = await caps.image.edit(
-                prompt=state["prompt"], image_key=state["image_key"], seed=seed, **extra
+                prompt=prompt, image_key=state["image_key"], seed=seed, **extra
             )
+        elif mode == "reference":
+            width, height = size_of(state)
+            handle = await caps.image.reference(
+                prompt=prompt, image_key=state["image_key"], image2_key=state["image2_key"],
+                width=width, height=height, seed=seed, **extra,
+            )  # fmt: skip
+        elif mode == "inpaint":
+            handle = await caps.image.inpaint(
+                prompt=INPAINT_INSTRUCTION.format(prompt=prompt), image_key=state["image_key"],
+                mask_key=state["mask_key"], seed=seed, **extra,
+            )  # fmt: skip
         else:
-            width, height = SIZES[state["size"]]
+            width, height = size_of(state)
             handle = await caps.image.generate(
-                prompt=state["prompt"], width=width, height=height, seed=seed, **extra
+                prompt=prompt, width=width, height=height, seed=seed, **extra
             )
         return {"job_id": handle.job_id}
 
@@ -285,8 +515,8 @@ def build_image_graph(
         try:
             result = await_job(state["job_id"])
         except JobFailed:
-            # Nothing was made: do not keep the user's picture around.
-            await discard_upload(state.get("image_key"))
+            # Nothing was made: do not keep the user's pictures around.
+            await discard_all(state)
             raise
         return {"result_key": result.outputs["image"].key}
 
@@ -319,9 +549,10 @@ def build_image_graph(
                 image_key=image_key,
                 thumb_key=thumb_key,
                 recipe=recipe_of(state, width, height),
+                source_id=state.get("source_id") or None,
             )
         )
-        await discard_upload(state.get("image_key"))  # the user's original is not kept
+        await discard_all(state)  # the user's originals are not kept
         await caps.index_creation("image", image_id, index_text(state["prompt"]))  # ADR-0041
         await caps.record_usage(IMAGE_CREATED, 1, "images", image_id=image_id, mode=state["mode"])
         return {

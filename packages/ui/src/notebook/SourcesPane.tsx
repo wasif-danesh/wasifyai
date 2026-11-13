@@ -18,6 +18,7 @@ import {
 import { useMemo, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
+import { ConfirmDialog, NameDialog } from "../components/dialog";
 import { sourcesUnder, tickOf, toggle } from "./scope";
 import { reading } from "./use-notebook-sources";
 
@@ -95,6 +96,14 @@ export function SourcesPane(props: SourcesPaneProps) {
   const [moving, setMoving] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
   const [folderName, setFolderName] = useState("");
+  // a question to the person: the app window cannot show window.confirm or window.prompt
+  const [asking, setAsking] = useState<
+    | { kind: "rename-source"; source: NotebookSource }
+    | { kind: "remove-source"; source: NotebookSource }
+    | { kind: "rename-folder"; folder: NotebookFolder }
+    | { kind: "remove-folder"; folder: NotebookFolder; count: number }
+    | null
+  >(null);
 
   const q = filter.trim().toLowerCase();
   const shown = useMemo(
@@ -161,10 +170,8 @@ export function SourcesPane(props: SourcesPaneProps) {
               variant="ghost"
               size="icon-xs"
               aria-label={`Rename ${s.title}`}
-              onClick={() => {
-                const next = window.prompt("Name this source", s.title)?.trim();
-                if (next && next !== s.title) props.onRename(s, next);
-              }}
+              title="Rename"
+              onClick={() => setAsking({ kind: "rename-source", source: s })}
             >
               <Pencil />
             </Button>
@@ -185,9 +192,8 @@ export function SourcesPane(props: SourcesPaneProps) {
                 variant="ghost"
                 size="icon-xs"
                 aria-label={`Remove ${s.title}`}
-                onClick={() => {
-                  if (window.confirm(`Remove “${s.title}” from this notebook?`)) props.onRemove(s);
-                }}
+                title="Remove"
+                onClick={() => setAsking({ kind: "remove-source", source: s })}
               >
                 <Trash2 />
               </Button>
@@ -270,10 +276,8 @@ export function SourcesPane(props: SourcesPaneProps) {
               variant="ghost"
               size="icon-xs"
               aria-label={`Rename ${f.name}`}
-              onClick={() => {
-                const next = window.prompt("Name this folder", f.name)?.trim();
-                if (next && next !== f.name) props.onRenameFolder(f, next);
-              }}
+              title="Rename"
+              onClick={() => setAsking({ kind: "rename-folder", folder: f })}
             >
               <Pencil />
             </Button>
@@ -282,12 +286,8 @@ export function SourcesPane(props: SourcesPaneProps) {
               variant="ghost"
               size="icon-xs"
               aria-label={`Remove folder ${f.name}`}
-              onClick={() => {
-                const n = under.length;
-                const what = n ? ` and the ${n} source${n === 1 ? "" : "s"} in it` : "";
-                if (window.confirm(`Remove the folder “${f.name}”${what}?`))
-                  props.onRemoveFolder(f);
-              }}
+              title="Remove"
+              onClick={() => setAsking({ kind: "remove-folder", folder: f, count: under.length })}
             >
               <Trash2 />
             </Button>
@@ -372,6 +372,58 @@ export function SourcesPane(props: SourcesPaneProps) {
           {top.map((s) => row(s, 0))}
         </ul>
       )}
+      {asking?.kind === "rename-source" ? (
+        <NameDialog
+          title="Rename this source"
+          label="Name"
+          initial={asking.source.title}
+          onSubmit={(name) => {
+            props.onRename(asking.source, name);
+            setAsking(null);
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
+      {asking?.kind === "rename-folder" ? (
+        <NameDialog
+          title="Rename this folder"
+          label="Name"
+          initial={asking.folder.name}
+          onSubmit={(name) => {
+            props.onRenameFolder(asking.folder, name);
+            setAsking(null);
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
+      {asking?.kind === "remove-source" ? (
+        <ConfirmDialog
+          title="Remove this source?"
+          message={`“${asking.source.title}” will be removed from this notebook.`}
+          confirmLabel="Remove"
+          onConfirm={() => {
+            props.onRemove(asking.source);
+            setAsking(null);
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
+      {asking?.kind === "remove-folder" ? (
+        <ConfirmDialog
+          title="Remove this folder?"
+          message={`The folder “${asking.folder.name}”${
+            asking.count
+              ? ` and the ${asking.count} source${asking.count === 1 ? "" : "s"} in it`
+              : ""
+          } will be removed.`}
+          confirmLabel="Remove"
+          onConfirm={() => {
+            props.onRemoveFolder(asking.folder);
+            setAsking(null);
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
     </section>
   );
 }

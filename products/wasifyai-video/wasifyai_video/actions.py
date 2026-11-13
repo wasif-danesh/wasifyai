@@ -1,15 +1,19 @@
 """What the video product can do, for the action catalogue (ADR-0068): make a clip from words,
-make a picture of the library move, and the library's clips as a kind of creation."""
+make a picture of the library move, carry on a clip of the library, and the library's clips as a
+kind of creation."""
 
 import asyncio
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk.actions import (
     Action,
     ActionContext,
     ActionRefused,
+    CallBinding,
     LibraryItem,
     LibraryKind,
     Outcome,
@@ -18,9 +22,13 @@ from wasifyai_platform_sdk.actions import (
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps, stage_picture
 
-from wasifyai_video.routes import file_name, save_copy
-from wasifyai_video.schemas import MAX_PROMPT_CHARS
-from wasifyai_video.videos import VideoRecord, video_store
+from wasifyai_video.builder.actions import actions as builder_actions
+from wasifyai_video.builder.actions import library_kinds as builder_library_kinds
+from wasifyai_video.builder.runtime import add_to_search
+from wasifyai_video.index import index_text
+from wasifyai_video.routes import extension_of, file_name, save_copy
+from wasifyai_video.schemas import MAX_PROMPT_CHARS, Quality
+from wasifyai_video.videos import PosterError, VideoRecord, poster_of, video_store
 
 PRODUCT_ID = "wasifyai-video"
 Shape = Literal["landscape", "portrait", "square"]
@@ -30,13 +38,27 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+def model_field() -> Any:
+    """The optional `model` of a video action (ADR-0097)."""
+    return Field(
+        None, pattern=r"^[a-z0-9][a-z0-9.-]{0,63}$",
+        description="Which video model makes it, by its id (as the Models page names it, for "
+        "example wan2.2-14b); leave it out for the default model.",
+    )  # fmt: skip
+
+
+def _chosen(p: Any) -> dict:
+    return {"model": p.model} if p.model else {}
+
+
 class GenerateIn(Strict):
     prompt: str = Field(
         min_length=1, max_length=MAX_PROMPT_CHARS,
         description="What happens in the clip, in clear concrete words, in English.",
     )  # fmt: skip
     shape: Shape = Field("landscape", description="The shape of the picture.")
-    seconds: Literal[2, 5] = Field(2, description="How long the clip is.")
+    seconds: Literal[5, 8] = Field(5, description="How long the clip is.")
+    model: str | None = model_field()
 
 
 class AnimateIn(Strict):
@@ -44,7 +66,28 @@ class AnimateIn(Strict):
     prompt: str = Field(
         min_length=1, max_length=MAX_PROMPT_CHARS, description="What should move, in English."
     )
-    seconds: Literal[2, 5] = Field(2, description="How long the clip is.")
+    seconds: Literal[5, 8] = Field(5, description="How long the clip is.")
+    quality: Quality = Field(
+        "final",
+        description=(
+            "final, or draft: about four times as quick and softer, to see the motion before "
+            "making it well."
+        ),
+    )
+    model: str | None = model_field()
+
+
+class ExtendIn(Strict):
+    video_id: str = Field(min_length=1, max_length=64, description="The video to carry on.")
+    prompt: str = Field(
+        min_length=1, max_length=MAX_PROMPT_CHARS,
+        description=(
+            "What should keep happening, in English. The motion in the last second of the video "
+            "carries on whatever this says: it describes, it does not change the action."
+        ),
+    )  # fmt: skip
+    seconds: Literal[5, 8] = Field(5, description="How much is added: about 5 or about 8 seconds.")
+    model: str | None = model_field()
 
 
 class VideoOut(BaseModel):
@@ -74,7 +117,9 @@ def _made(outputs: dict, prompt: str) -> Outcome | None:
 
 
 def _generate_input(p: GenerateIn, ctx: ActionContext) -> dict:
-    return {"mode": "text", "prompt": p.prompt, "shape": p.shape, "seconds": p.seconds}
+    return {
+        "mode": "text", "prompt": p.prompt, "shape": p.shape, "seconds": p.seconds, **_chosen(p)
+    }  # fmt: skip
 
 
 def _generate_result(outputs: dict, p: GenerateIn) -> Outcome | None:
@@ -96,11 +141,110 @@ async def _animate_check(p: AnimateIn, ctx: ActionContext) -> None:
 
 async def _animate_input(p: AnimateIn, ctx: ActionContext) -> dict:
     key = await stage_picture(ctx, PRODUCT_ID, await _picture_data(ctx, p.image_id))
-    return {"mode": "image", "prompt": p.prompt, "image_key": key, "seconds": p.seconds}
+    return {
+        "mode": "image", "prompt": p.prompt, "image_key": key, "seconds": p.seconds,
+        "source_image_id": p.image_id, "quality": p.quality, **_chosen(p),
+    }  # fmt: skip
 
 
 def _animate_result(outputs: dict, p: AnimateIn) -> Outcome | None:
     return _made(outputs, p.prompt)
+
+
+async def _source(ctx: ActionContext, video_id: str) -> VideoRecord:
+    found = await video_store(need_deps(ctx).engine).get(
+        ctx.actor.tenant_id, ctx.actor.user_id, video_id
+    )
+    if found is None or found.status != "done" or not found.video_key:
+        raise ActionRefused("not_found", "That video is not in the library.")
+    return found
+
+
+async def _extend_check(p: ExtendIn, ctx: ActionContext) -> None:
+    await _source(ctx, p.video_id)
+
+
+def _extend_input(p: ExtendIn, ctx: ActionContext) -> dict:
+    return {
+        "mode": "extend", "prompt": p.prompt, "source_id": p.video_id, "seconds": p.seconds,
+        **_chosen(p),
+    }  # fmt: skip
+
+
+def _extend_result(outputs: dict, p: ExtendIn) -> Outcome | None:
+    return _made(outputs, p.prompt)
+
+
+MAX_KEEP_BYTES = 2 * 2**30
+
+
+class KeepIn(Strict):
+    from_kind: str = Field(
+        min_length=1, max_length=40, pattern=r"^[a-z0-9_]+$",
+        description="The kind of creation whose video it is, such as creative_project.",
+    )  # fmt: skip
+    from_id: str = Field(min_length=1, max_length=64, description="Its id.")
+    title: str = Field(min_length=1, max_length=120, description="What the video is called.")
+
+
+async def _keep(p: KeepIn, ctx: ActionContext) -> Outcome:
+    """A finished video made by another product (a cut of Creative Studio) becomes a video of the
+    library, laid out as the product's own: a new file every time."""
+    deps = need_deps(ctx)
+    kind = ctx.library.get(p.from_kind)
+    data = await kind.read(ctx, p.from_id) if kind and kind.read else None
+    if not data:
+        return Outcome.refused("There is no finished video there yet.", "not_found")
+    if len(data) > MAX_KEEP_BYTES:
+        return Outcome.refused("That video is too large to keep.", "too_large")
+    try:
+        width, height, poster = await poster_of(data)
+    except PosterError:
+        return Outcome.refused("That is not a video that can be played.", "invalid_input")
+    video_id = str(uuid.uuid4())
+    store = video_store(deps.engine)
+    seconds = max(1, round(float(mp4_seconds(data))))
+    await store.add(
+        VideoRecord(
+            id=video_id, tenant_id=ctx.actor.tenant_id, product_id=PRODUCT_ID,
+            user_id=ctx.actor.user_id, thread_id=None, run_id=None, mode="kept", status="working",
+            prompt=p.title, seconds=seconds, frames=seconds * 24, fps=24,
+            created_at=datetime.now(UTC),
+        )
+    )  # fmt: skip
+    try:
+        with deps.acting_as(ctx.actor, PRODUCT_ID):
+            video_key, poster_key = f"{video_id}/video.mp4", f"{video_id}/poster.jpg"
+            await deps.storage.put(video_key, data, "video/mp4")
+            await deps.storage.put(poster_key, poster, "image/jpeg")
+        await store.finish(ctx.actor.tenant_id, video_id, width, height, video_key, poster_key)
+    except Exception:
+        await store.fail(ctx.actor.tenant_id, video_id, "The video could not be saved.")
+        raise
+    await add_to_search(deps.state, ctx.actor, "video", video_id, index_text(p.title))
+    return Outcome.ok(
+        {
+            "video_id": video_id, "product_id": PRODUCT_ID, "prompt": p.title,
+            "uri": f"wasify://creation/video/{video_id}", "seconds": seconds,
+            "width": width, "height": height,
+        },
+        f'"{p.title}" is saved to your videos ({seconds} seconds, {width}x{height}).',
+    )  # fmt: skip
+
+
+def mp4_seconds(mp4: bytes) -> float:
+    """The length an MP4 says it has, from its movie header; 0 when it cannot be read."""
+    at = mp4.find(b"mvhd")
+    if at < 0:
+        return 0.0
+    version = mp4[at + 4]
+    if version == 1:
+        scale = int.from_bytes(mp4[at + 24 : at + 28], "big")
+        length = int.from_bytes(mp4[at + 28 : at + 36], "big")
+    else:
+        scale = int.from_bytes(mp4[at + 16 : at + 20], "big")
+        length = int.from_bytes(mp4[at + 20 : at + 24], "big")
+    return length / scale if scale else 0.0
 
 
 def actions() -> list[Action]:
@@ -109,7 +253,7 @@ def actions() -> list[Action]:
             id="video.generate", title="Make a video",
             summary="Make a short video clip from a description.",
             description=(
-                "Make a short video clip (2 or 5 seconds) from a description and save it to the "
+                "Make a short video clip (5 or 8 seconds) from a description and save it to the "
                 "person's library. It takes minutes on this computer and only one clip is made "
                 "at a time, so it returns a job handle when it is not done within the wait. To "
                 "set a picture moving, use video.animate."
@@ -127,7 +271,7 @@ def actions() -> list[Action]:
             id="video.animate", title="Animate a picture",
             summary="Make a picture of the library move.",
             description=(
-                "Turn a picture the person has in the library into a short clip (2 or 5 seconds) "
+                "Turn a picture the person has in the library into a short clip (5 or 8 seconds) "
                 "by saying what should move. Takes minutes; returns a job handle when it is not "
                 "done within the wait."
             ),
@@ -140,6 +284,42 @@ def actions() -> list[Action]:
                             check=_animate_check),
             ui="video.animate",
         ),
+        Action(
+            id="video.keep", title="Keep a finished video",
+            summary="Save a finished video made by another tool to your videos.",
+            description=(
+                "Save the finished video of another creation, such as a Creative Studio project, "
+                "to the person's videos as a new file. It takes a few seconds."
+            ),
+            input=KeepIn, output=VideoOut,
+            examples=(
+                {"from_kind": "creative_project", "from_id": "0" * 32, "title": "Dawn drive"},
+            ),
+            effect="make", flags=("private",), requires=(need_product(PRODUCT_ID),),
+            product=PRODUCT_ID, bind=CallBinding(_keep), ui="creative",
+        ),
+        Action(
+            id="video.extend", title="Extend a video",
+            summary="Carry on a video of the library for about 5 or 8 more seconds.",
+            description=(
+                "Make a video of the library longer: its last second starts a new part, which is "
+                "joined on, so the motion carries on (about 5 or 8 seconds more, saved as a new "
+                "video; the original stays). It works on a video of any length, and its picture "
+                "gets a little softer each time it is carried on, so two or three rounds is a "
+                "sensible stop. What the prompt "
+                "says steers only weakly: describe what keeps happening, not a change of "
+                "action. Takes minutes; returns a job handle when it is not done within the wait."
+            ),
+            input=ExtendIn, output=VideoOut,
+            examples=({"video_id": "0b7c1f9e-0000-4000-8000-000000000000",
+                       "prompt": "the fox keeps walking through the snow"},),
+            effect="make", flags=("costly",), requires=(need_product(PRODUCT_ID),), long=True,
+            product=PRODUCT_ID,
+            bind=RunBinding(PRODUCT_ID, "video", _extend_input, _extend_result,
+                            check=_extend_check),
+            ui="video.extend",
+        ),
+        *builder_actions(),  # Motion graphics (ADR-0077): videos written as HTML
     ]  # fmt: skip
 
 
@@ -189,6 +369,19 @@ async def _delete(ctx: ActionContext, item_id: str) -> bool:
     return True
 
 
+async def _read(ctx: ActionContext, item_id: str) -> bytes | None:
+    """A clip's bytes, for what brings it somewhere else (a project of scenes, ADR-0096)."""
+    deps = need_deps(ctx)
+    clip = await video_store(deps.engine).get(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
+    if clip is None or not clip.video_key:
+        return None
+    with deps.acting_as(ctx.actor, PRODUCT_ID):
+        try:
+            return await deps.storage.get(clip.video_key)
+        except FileNotFoundError:
+            return None
+
+
 async def _export(ctx: ActionContext, item_id: str, folder: Path) -> Path | None:
     deps = need_deps(ctx)
     video = await video_store(deps.engine).get(ctx.actor.tenant_id, ctx.actor.user_id, item_id)
@@ -199,11 +392,16 @@ async def _export(ctx: ActionContext, item_id: str, folder: Path) -> Path | None
             data = await deps.storage.get(video.video_key)
         except FileNotFoundError:
             return None
-    return await asyncio.to_thread(save_copy, folder, file_name(video.prompt, ""), "mp4", data)
+    return await asyncio.to_thread(
+        save_copy, folder, file_name(video.prompt, ""), extension_of(video.video_key), data
+    )
 
 
 def library_kinds() -> list[LibraryKind]:
-    return [LibraryKind("video", PRODUCT_ID, "video", _list, _get, _delete, None, _export)]
+    return [
+        LibraryKind("video", PRODUCT_ID, "video", _list, _get, _delete, None, _export, _read),
+        *builder_library_kinds(),
+    ]
 
 
 __all__ = ["actions", "library_kinds"]

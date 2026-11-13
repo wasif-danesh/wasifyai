@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { PageHero, page } from "@wasifyai/ui";
+import { ModelChoicesProvider, PageHero, SaveAsProvider, page } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { Shell } from "./Shell";
 import { transport } from "./api";
+import { choicesSource } from "./choices";
 import { COMFYUI, type EngineStatus, LLAMACPP, engineStatus, onEngineStatus } from "./engine";
 import { EngineState } from "./parts";
+import { saveAs } from "./save-as";
 import { runComponentSmoke, runSmoke, smokeComponent, smokeEnabled } from "./smoke";
 
 export function App() {
@@ -43,7 +45,15 @@ export function App() {
       .catch(() => {});
   }, [status.state]);
 
-  if (status.state === "ready") return <Shell />;
+  if (status.state === "ready") {
+    return (
+      <SaveAsProvider value={saveAs}>
+        <ModelChoicesProvider source={choicesSource}>
+          <Shell />
+        </ModelChoicesProvider>
+      </SaveAsProvider>
+    );
+  }
   return (
     <main id="main" className={page}>
       <PageHero title="Wasify AI" />

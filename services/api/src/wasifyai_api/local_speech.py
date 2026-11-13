@@ -25,7 +25,7 @@ from wasifyai_api.audio_runtime import AudioEngine, AudioInstaller, AudioServer
 from wasifyai_api.config import Settings
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
-from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.settings_store import InMemorySettingsStore
 
 HOSTED = "remote"  # the `engine` of a hosted model's descriptor
 
@@ -95,6 +95,10 @@ class CombinedSpeechEngine:
 
     async def close(self) -> None:
         await self.hosted.stop()
+        local_close = getattr(self.local, "close", None)
+        if local_close is not None:  # a remote engine closes itself
+            await local_close()
+            return
         await self.local.server.close()
         if self.local.lipsync_sidecar is not None:
             await self.local.lipsync_sidecar.close()

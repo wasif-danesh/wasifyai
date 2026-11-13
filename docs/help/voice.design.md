@@ -13,7 +13,7 @@ Save a voice described in words (age, tone, pace) to use again. No recording is 
 
 ## Steps in the app
 
-1. Open **Voice › Voices**.
+1. Open **Voice › Voices**, or choose **Make a voice** under the voice list in **Voice › Text to speech**.
 2. Choose to describe a voice.
 3. Give it a name and a description.
 4. Save.

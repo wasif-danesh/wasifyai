@@ -19,7 +19,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk import SecretBox, SecretsUnavailable, UsageRecorder, require_context
+from wasifyai_platform_sdk import (
+    SecretBox,
+    SecretStore,
+    SecretsUnavailable,
+    UsageRecorder,
+    require_context,
+)
 from wasifyai_platform_sdk.actions import Readiness
 from wasifyai_platform_sdk.usage import UsageEvent, record_safely
 from wasifyai_platform_sdk.web import (
@@ -35,7 +41,7 @@ from wasifyai_platform_sdk.web import (
     make_provider,
 )
 
-from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 
@@ -61,8 +67,13 @@ def load_or_create_key(path: Path) -> str:
     return key
 
 
-def consent_text(provider_id: str) -> str:
+def consent_text(provider_id: str, hosted: bool = False) -> str:
     info = next(p for p in PROVIDERS if p.id == provider_id)
+    if hosted:
+        return (
+            f"Searching the web sends your question to {info.sends_to}, from this service. The "
+            "results are read by the assistant. You can turn this off with the Search button."
+        )
     return (
         f"Searching the web sends your question to {info.sends_to}. The results are read by the "
         "assistant on this computer. You can turn this off in Settings."
@@ -73,14 +84,22 @@ class WebService:
     def __init__(
         self,
         store: SettingsStore,
-        box: SecretBox | None = None,
+        secrets: SecretStore | None = None,
         usage: UsageRecorder | None = None,
         *,
         reader: WebReader | None = None,
         duckduckgo: DuckDuckGoProvider | None = None,
+        per_person: bool = False,
+        legacy_box: SecretBox | None = None,
     ) -> None:
+        # on a service (`per_person`) an admin chooses the service and keeps the keys, and each
+        # person allows searching for themself; on the desktop the one person does all of it.
+        # Keys live in the secret store as `web.search.<service>` (ADR-0092); `legacy_box` reads
+        # the ones saved inside the settings row before the store existed, once, to move them.
+        self.per_person = per_person
         self._store = store
-        self._box = box
+        self._secrets = secrets
+        self._legacy_box = legacy_box
         self.usage = usage
         self._ddg = duckduckgo or DuckDuckGoProvider()  # one object: its spacing is per computer
         self.caps = WebCapabilities(self._provider, reader or WebReader())
@@ -88,28 +107,77 @@ class WebService:
 
     # ---- what the person chose ------------------------------------------------------------
 
+    @staticmethod
+    def _who_key(who: Any) -> str | None:
+        """Who a consent belongs to: the identity given, or the person whose run this is."""
+        if who is None:
+            try:
+                who = require_context()
+            except RuntimeError:
+                return None
+        return f"{KEY}.consent:{who.tenant_id}:{who.user_id}"
+
+    async def _consented_for(self, s: dict[str, Any], who: Any) -> str | None:
+        if not self.per_person:
+            return s["consented_for"]
+        key = self._who_key(who)
+        saved = await self._store.get(key) if key else None
+        value = saved.get("provider") if isinstance(saved, dict) else None
+        return value if value in PROVIDER_IDS else None
+
+    @staticmethod
+    def _secret(provider_id: str) -> str:
+        return f"{KEY}.{provider_id}"
+
+    async def _key_ids(self) -> set[str]:
+        """The services whose key is in the store. Never the keys."""
+        if self._secrets is None:
+            return set()
+        prefix = KEY + "."
+        names = await self._secrets.names()
+        return {n[len(prefix) :] for n in names if n.startswith(prefix)} & set(PROVIDER_IDS)
+
+    async def _move_legacy(self, s: dict[str, Any]) -> None:
+        """Keys saved inside the settings row before the secret store existed move into it,
+        once. One that cannot be read with the current key is dropped: enter it again."""
+        legacy = s.get("keys")
+        if not isinstance(legacy, dict) or not legacy:
+            return
+        if self._secrets is None or not self._secrets.ready or self._legacy_box is None:
+            return
+        for kid, token in legacy.items():
+            if kid in PROVIDER_IDS and isinstance(token, str):
+                try:
+                    await self._secrets.put(self._secret(kid), self._legacy_box.decrypt(token))
+                except SecretsUnavailable:
+                    log.warning("a saved %s key could not be moved to the secret store", kid)
+        await self._store.put(KEY, {k: v for k, v in s.items() if k != "keys"}, "window")
+
     async def _state(self) -> dict[str, Any]:
         saved = await self._store.get(KEY)
         s = saved if isinstance(saved, dict) else {}
+        await self._move_legacy(s)
         provider = s.get("provider") if s.get("provider") in PROVIDER_IDS else DEFAULT_PROVIDER
-        raw_keys = s.get("keys")
-        keys: dict[str, Any] = raw_keys if isinstance(raw_keys, dict) else {}
         return {
             "provider": provider,
             "consented_for": s.get("consented_for")
             if s.get("consented_for") in PROVIDER_IDS
             else None,
-            "keys": {k: v for k, v in keys.items() if k in PROVIDER_IDS and isinstance(v, str)},
+            "keys": await self._key_ids(),
         }
 
-    async def status(self) -> dict[str, Any]:
+    def _row(self, s: dict[str, Any]) -> dict[str, Any]:
+        """What the settings row keeps: the choices, never a key."""
+        return {"provider": s["provider"], "consented_for": s["consented_for"]}
+
+    async def status(self, who: Any = None) -> dict[str, Any]:
         """What Settings and the chat box show. Never a key, only whether one is saved."""
         s = await self._state()
         return {
             "provider": s["provider"],
-            "consented": s["consented_for"] == s["provider"],
-            "consent_text": consent_text(s["provider"]),
-            "can_save_keys": bool(self._box and self._box.ready),
+            "consented": await self._consented_for(s, who) == s["provider"],
+            "consent_text": consent_text(s["provider"], self.per_person),
+            "can_save_keys": bool(self._secrets and self._secrets.ready),
             "providers": [
                 {
                     "id": p.id,
@@ -131,6 +199,7 @@ class WebService:
         consent: bool | None = None,
         key: tuple[str, str] | None = None,
         remove_key: str | None = None,
+        who: Any = None,
     ) -> dict[str, Any]:
         """Change one or more settings; answers the new status. A different provider asks for
         consent again; a key that is not usable is refused in words."""
@@ -150,27 +219,41 @@ class WebService:
                     raise ValueError(
                         "That does not look like a key: no spaces, 8 to 300 characters."
                     )
-                if self._box is None or not self._box.ready:
+                if self._secrets is None or not self._secrets.ready:
                     raise ValueError("Keys cannot be saved on this computer.")
-                s["keys"][kid] = self._box.encrypt(value)
-            if remove_key is not None:
-                s["keys"].pop(remove_key, None)
+                await self._secrets.put(self._secret(kid), value)
+                s["keys"].add(kid)
+            if remove_key is not None and remove_key in s["keys"] and self._secrets is not None:
+                await self._secrets.delete(self._secret(remove_key))
+                s["keys"].discard(remove_key)
             if consent is not None:
-                s["consented_for"] = s["provider"] if consent else None
-            await self._store.put(KEY, s, "window")
-        return await self.status()
+                if self.per_person:
+                    mine = self._who_key(who)
+                    if mine is None:
+                        raise ValueError("Sign in to allow web search.")
+                    await self._store.put(
+                        mine, {"provider": s["provider"] if consent else None}, "person"
+                    )
+                else:
+                    s["consented_for"] = s["provider"] if consent else None
+            await self._store.put(KEY, self._row(s), "window")
+        return await self.status(who)
 
-    async def readiness(self) -> Readiness:
+    async def readiness(self, who: Any = None) -> Readiness:
         """Can a search or a read go ahead: allowed by the person, and the service has its key."""
         s = await self._state()
         info = next(p for p in PROVIDERS if p.id == s["provider"])
-        if s["consented_for"] != s["provider"]:
+        if await self._consented_for(s, who) != s["provider"]:
             return Readiness.needs_setup(
-                "Web search is off. The person can allow it with the Search button in the chat box "
-                "or in Settings."
+                "Web search is off. The person can allow it with the Search button in the chat box"
+                + ("." if self.per_person else " or in Settings.")
             )
         if info.needs_key and info.id not in s["keys"]:
-            return Readiness.needs_setup(f"Add the {info.title} key in Settings.")
+            return Readiness.needs_setup(
+                f"An admin needs to add the {info.title} key (Admin > Search)."
+                if self.per_person
+                else f"Add the {info.title} key in Settings."
+            )
         return Readiness.ready()
 
     # ---- the capability -------------------------------------------------------------------
@@ -178,9 +261,9 @@ class WebService:
     async def _provider(self) -> SearchProvider:
         s = await self._state()
         key = ""
-        if s["provider"] in s["keys"]:
+        if s["provider"] in s["keys"] and self._secrets is not None:
             try:
-                key = self._box.decrypt(s["keys"][s["provider"]]) if self._box else ""
+                key = await self._secrets.get(self._secret(s["provider"])) or ""
             except SecretsUnavailable:
                 raise WebError(
                     "needs_key",

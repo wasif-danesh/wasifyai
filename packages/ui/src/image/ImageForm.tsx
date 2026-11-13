@@ -141,7 +141,7 @@ export function ImageForm({
           <div className={chips}>
             {SIZES.map((s) => (
               <Chip key={s.id} aria-pressed={size === s.id} onClick={() => setSize(s.id)}>
-                {s.label} <span className="opacity-70">{s.hint}</span>
+                {s.label} <span className="opacity-85">{s.hint}</span>
               </Chip>
             ))}
           </div>

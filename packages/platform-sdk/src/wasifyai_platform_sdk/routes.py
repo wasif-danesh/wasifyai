@@ -21,7 +21,6 @@ and user.
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
@@ -29,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from wasifyai_platform_sdk.context import RunContext, reset_context, set_context
 from wasifyai_platform_sdk.identity import Identity
+from wasifyai_platform_sdk.services import EngineServices
 from wasifyai_platform_sdk.storage import ScopedStorage
 
 MAX_IDS = 50
@@ -52,16 +52,19 @@ def parse_ids(raw: str | None) -> list[str] | None:
 
 @dataclass
 class RouteDeps:
-    """What a product's routes can use. `state` is the app's state: the engine and storage are
-    created when the app starts, so they are read at request time, not when routes are built."""
+    """What a product's routes can use. `state` is the engine's services (stage F1): one object made
+    with the app and filled in when it starts, so what a route uses is read at request time, not
+    when routes are built."""
 
-    state: Any
+    state: EngineServices
     identity: Callable[
         ..., Identity | Awaitable[Identity]
     ]  # a FastAPI dependency: Depends(deps.identity)
 
     @property
     def engine(self) -> AsyncEngine:
+        if self.state.engine is None:  # only before the app has started
+            raise RuntimeError("the engine has not started yet")
         return self.state.engine
 
     @property
@@ -71,7 +74,7 @@ class RouteDeps:
     async def unindex(self, identity: Identity, product_id: str, item_id: str) -> None:
         """Take a deleted creation out of search (ADR-0041). Best effort: the background indexer
         also removes rows whose item is gone."""
-        index = getattr(self.state, "creation_index", None)
+        index = self.state.creation_index
         if index is None:
             return
         try:

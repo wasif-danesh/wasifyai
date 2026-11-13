@@ -1,8 +1,8 @@
+import { HttpError, type Transport, errorMessage } from "./transport";
 // A person's finished videos, from the product's read routes (`/products/wasifyai-video/videos`):
 // list, search, open, save a copy, delete. The same routes serve the web app and the desktop window;
 // only the transport differs.
-import type { Mode } from "./image-flow";
-import { HttpError, type Transport, errorMessage } from "./transport";
+import type { VideoMode } from "./video-flow";
 
 export const VIDEO_PRODUCT_ID = "wasifyai-video";
 
@@ -11,7 +11,7 @@ export type VideoStatus = "working" | "done" | "failed";
 export type VideoSummary = {
   id: string;
   prompt: string;
-  mode: Mode;
+  mode: VideoMode;
   status: VideoStatus;
   seconds: number;
   created_at: string;
@@ -22,11 +22,20 @@ export type VideoSummary = {
   /** only when the clip is done */
   video_url: string | null;
   poster_url: string | null;
+  /** what it was made from: the clip it carries on (mode "extend") or the picture it animates (mode "image"),
+   * or null (ADR-0093, U8) */
+  source_id?: string | null;
 };
 
 export type VideoPage = { videos: VideoSummary[]; next_before: string | null };
 
-export type VideoListOptions = { limit?: number; before?: string | null; status?: VideoStatus };
+export type VideoListOptions = {
+  limit?: number;
+  before?: string | null;
+  status?: VideoStatus;
+  /** only the clips made from this clip or picture */
+  source?: string;
+};
 
 export type VideosApi = {
   list(options?: VideoListOptions): Promise<VideoPage>;
@@ -35,7 +44,12 @@ export type VideosApi = {
   get(id: string): Promise<VideoSummary>;
   remove(id: string): Promise<void>;
   /** Save a copy into the person's folder; only the desktop engine offers it. */
-  exportCopy(id: string): Promise<{ name: string; path: string }>;
+  exportCopy(id: string, path?: string): Promise<{ name: string; path: string }>;
+  /**
+   * Add a video file from the person's computer to their videos. The engine makes it fit the model (size,
+   * 24 frames a second, up to 30 seconds, no sound) and answers with the new video.
+   */
+  importVideo(file: File): Promise<VideoSummary>;
 };
 
 export function createVideosApi(transport: Transport, product = VIDEO_PRODUCT_ID): VideosApi {
@@ -49,10 +63,11 @@ export function createVideosApi(transport: Transport, product = VIDEO_PRODUCT_ID
   }
 
   return {
-    list({ limit = 24, before, status } = {}) {
+    list({ limit = 24, before, status, source } = {}) {
       const q = new URLSearchParams({ limit: String(limit) });
       if (before) q.set("before", before);
       if (status) q.set("status", status);
+      if (source) q.set("source", source);
       return json<VideoPage>(`${base}?${q}`);
     },
 
@@ -76,14 +91,23 @@ export function createVideosApi(transport: Transport, product = VIDEO_PRODUCT_ID
       }
     },
 
-    exportCopy: (id) =>
+    exportCopy: (id, path) =>
       json<{ name: string; path: string }>(`${base}/${encodeURIComponent(id)}/export`, {
         method: "POST",
+        ...(path
+          ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ path }) }
+          : {}),
       }),
+
+    importVideo(file) {
+      const form = new FormData();
+      form.append("file", file);
+      return json<VideoSummary>(`${base}/import`, { method: "POST", body: form });
+    },
   };
 }
 
-/** The clip's length for a card: "2 s" or "5 s". */
+/** The clip's length for a card: "5 s". */
 export function clipLength(seconds: number): string {
   return `${seconds} s`;
 }

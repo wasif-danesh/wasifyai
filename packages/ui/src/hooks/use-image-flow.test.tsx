@@ -51,6 +51,16 @@ describe("useImageFlow", () => {
     });
   });
 
+  it("sends the model the person chose (ADR-0097)", async () => {
+    fetchMock.mockResolvedValueOnce(sse([node("check_request"), result]));
+    const { result: hook } = renderHook(() => useImageFlow(client));
+    act(() => hook.current.start({ mode: "text", prompt: "a cat", model: "z-image-turbo" }));
+    await waitFor(() => expect(hook.current.state.phase).toBe("done"));
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      input: { mode: "text", prompt: "a cat", model: "z-image-turbo" },
+    });
+  });
+
   it("asks for a picture in picture mode", async () => {
     const { result: hook } = renderHook(() => useImageFlow(client));
     act(() => hook.current.start({ mode: "image", prompt: "blue" }));

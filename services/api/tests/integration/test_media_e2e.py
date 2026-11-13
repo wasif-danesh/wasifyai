@@ -10,6 +10,7 @@ import urllib.request
 import httpx
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
+from wasifyai_api.assemble import Injected
 from wasifyai_api.graphs.media_demo import build_media_demo
 from wasifyai_api.main import create_app
 from wasifyai_media_worker.comfy import ComfyClient
@@ -52,16 +53,18 @@ class Pipeline:
         registry = GraphRegistry()
         registry.register("media-demo", build_media_demo)
         self.app = create_app(
-            registry,
-            products_dir,
-            InMemorySaver(),
-            InMemoryUsageRecorder(),
-            ScopedStorage(self.raw),
-            heartbeat_s=0.1,
-            event_log=log,
-            run_store=RedisRunStore(redis_conn),
-            job_sink=RedisJobSink(redis_conn, log),
-            redis=redis_conn,
+            Injected(
+                registry=registry,
+                products_dir=products_dir,
+                checkpointer=InMemorySaver(),
+                usage=InMemoryUsageRecorder(),
+                storage=ScopedStorage(self.raw),
+                heartbeat_s=0.1,
+                event_log=log,
+                run_store=RedisRunStore(redis_conn),
+                job_sink=RedisJobSink(redis_conn, log),
+                redis=redis_conn,
+            )
         )
         settings = WorkerSettings(ollama_base_url="", job_timeout_s=60)
         processor = JobProcessor(
@@ -92,7 +95,10 @@ async def test_run_queues_a_job_the_worker_runs_and_the_graph_finishes(redis_con
     names = [e for e, _ in events]
     assert names[-1] == "done" and "interrupt" not in names and "error" not in names
     jobs = [d for e, d in events if e == "job_progress"]
-    assert [j["status"] for j in jobs][0] == "queued" and jobs[0]["queue_position"] == 1
+    # a fast worker can claim the job before the stream's first read: queued or already running
+    assert [j["status"] for j in jobs][0] in ("queued", "running")
+    if jobs[0]["status"] == "queued":
+        assert jobs[0]["queue_position"] == 1
     assert [j["status"] for j in jobs][-1] == "completed" and jobs[-1]["progress"] == 1.0
     running = [j["progress"] for j in jobs if j["status"] == "running"]
     assert running[0] == 0.0 and running == sorted(running)

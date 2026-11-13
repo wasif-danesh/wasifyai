@@ -4,7 +4,8 @@ ADR-0068. Everything the product can do for a person or an agent is described on
 run by one **executor**. The assistant's tools (ADR-0071) and the MCP tools (ADR-0069) are read from it; nothing
 is exposed that is not in it. `docs/contracts/actions.json` is the catalogue as one file, so a reviewer can read
 everything an agent can do in one place. Stage A1 (this document) built the catalogue and executor and moved the
-assistant's four tools onto it; nothing else is wired yet, so nothing changed for the person.
+assistant's tools onto it; stage A2 (2026-10-27) gave the assistant its meta-tools, so any action a product
+declares can be proposed in the chat and run from its card (ADR-0071).
 
 ## What is where
 
@@ -13,9 +14,12 @@ assistant's four tools onto it; nothing else is wired yet, so nothing changed fo
 | `Action`, `ActionRegistry`, `ActionExecutor`, `ActionResult`, approvals policy, audit and approval stores, job handles | `packages/platform-sdk/src/wasifyai_platform_sdk/actions/` |
 | `library.*`, `app.status`, `job.*` (they belong to no product) | `actions/builtin.py` |
 | `models.*` (the desktop's model library), the catalogue of this engine, the export | `services/api/src/wasifyai_api/actions_engine.py` |
+| `styles.*` (the image screens' styles, ADR-0091) | `services/api/src/wasifyai_api/styles_actions.py` |
+| `external.call` (a tool of an outside MCP server, ADR-0070) | `services/api/src/wasifyai_api/mcp_client/actions.py` |
 | `image.*`, `video.*`, `speech.*`, `voice.*`, `music.*`, `dub.*`, `audiobook.*`, `lipsync.*`, `notebook.*` | `actions.py` of the product that owns them |
 | The engine's side (readiness, stores, child runs) | `ApiToolHost` in `services/api/src/wasifyai_api/tool_host.py` |
 | Help for each action | `docs/help/<action id>.md` |
+| The assistant's list of screens (interim, ADR-0071) | `wasifyai_api/assistant_features.py` writes `products/wasifyai-assistant/wasifyai_assistant/features.json`; rerun `--write` after a menu or action change |
 | Audit and approvals tables | Postgres: Alembic `0020_actions`; desktop: created on first use by `SqlAuditStore` and `SqlApprovalStore` |
 
 ## Adding an action (one file, plus its help)
@@ -30,7 +34,7 @@ assistant's four tools onto it; nothing else is wired yet, so nothing changed fo
      `needs_consent` (then `consent` carries the statement the person agrees to);
    - `requires`: what must be ready (`need_product`, `need_model`, `need_runtime`, `NOTEBOOKS`, `CHAT`);
    - `long=True` if it can take more than a few seconds (it can then be a job with a handle);
-   - `bind`: a `RunBinding` (a child run of the product's graph: its checks, safeguards, quotas and queue are
+   - `bind`: a `RunBinding` (a child run of the product's graph: its checks and queue are
      the screens' own) or a `CallBinding` (a direct function on the product's store);
    - `ui`: the menu item that does the same thing (`voice.speak`), or `ui_exempt` with the reason there is none;
    - `surfaces`: where it may be offered, `assistant` and/or `mcp`. Nothing appears on a surface by accident.
@@ -54,9 +58,13 @@ files and its registration line and changes nothing else.
 ## How a call is run
 
 `ActionExecutor.run_action(action_id, params, origin, ...)` is the only way a surface other than the window does
-anything. `origin` is `window`, `assistant` or `mcp:<connection>`. In order it:
+anything. `origin` is `window`, `assistant` or `mcp:<connection>`. `actor` may be an `Identity` (the
+person) or a `Principal` (ADR-0092: a connection or an API key with scopes; it acts as the person who made it). In
+order it:
 
-1. finds the action and checks that the surface may be offered it (`not_offered`);
+1. finds the action and checks that the surface may be offered it (`not_offered`), and that the principal's scopes
+   cover it (`not_offered`, with the missing scope in the sentence; `scope_of(action)`: the domain's group for
+   `library`, `notebook`, `voice` and `models`, else `read` for a read and `make` for the rest);
 2. validates `params` against the input model and answers in words what to fix (`invalid_input`);
 3. resolves `requires`: `needs_setup` (with the step that fixes it and the screen) or `refused` with code
    `unavailable` (with the reason);
@@ -89,10 +97,22 @@ parameters when decided. `person_approved=True` exists for the window only, for 
 ### Jobs
 
 A `long` action called with `wait_seconds` waits at most that long (never more than 50) and then answers
-`running` with a `job_id`. `job.status`, `job.wait` and `job.cancel` follow it. A job that is a direct function
-can be stopped; a child run of a product graph cannot once it started (the engine has no way to stop a run), and
-`job.cancel` says so. The job book is in memory; after a restart `job.status` answers from the audit log how the job
-ended.
+`running` with a `job_id`. `job.status`, `job.wait` and `job.cancel` follow it.
+
+Every job is kept in the `action_jobs` table (stage J3: `SqlJobStore`, Alembic 0027 on Postgres, created on first use on
+SQLite) with the product run it started, its parameters and, once it has ended, its result. After a restart
+`job.status` and `job.wait` answer from that record: a job whose product run is still going (a picture or clip the
+media worker is making) is followed until the run ends, and its result is read from the run's last event; work that
+ran in the engine's own process, or a run that ended with the engine, says it stopped when the app closed. Any job
+can be stopped: `job.cancel` stops the job and its product run, and with it the work (the speech runtime restarts on
+the desktop, an engine worker is told to stop its job, and the media worker stops a picture or clip where it is and
+interrupts ComfyUI). After a restart only one API replica follows each 3D or Motion graphics job it resumes. A graph
+that holds something for a run (a clip's "being made" row) declares an
+`on_cancel` the run manager calls with the run's last state. Jobs that started before the table existed are
+answered from the audit log as before.
+
+On the web a person has at most `MAX_JOBS_PER_USER` jobs in the line (ADR-0088): an action that would start another
+answers an error with the code `busy` and the words that name the job in the way. Admins and the desktop are not limited.
 
 ## Results are references
 

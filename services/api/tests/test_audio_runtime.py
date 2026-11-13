@@ -13,6 +13,7 @@ from pathlib import Path
 import httpx
 import pytest
 from wasifyai_api import audio_runtime as ar
+from wasifyai_api.components.manifest import part_pins
 from wasifyai_api.desktop_models import load_catalogue
 from wasifyai_platform_sdk import VoiceEngineError, check_music
 
@@ -68,17 +69,27 @@ async def finished(installer: ar.AudioInstaller):
 # ---- pins ----------------------------------------------------------------------------------
 
 
-def test_the_shipped_pins_are_complete_and_https():
-    pins = ar.load_pins()
-    assert pins.tag.startswith("v0.9.0") and "darwin-arm64" in pins.assets
-    for pin in pins.assets.values():
-        assert pin.url.startswith("https://github.com/unslothai/audio.cpp/releases/download/")
-        assert len(pin.sha256) == 64 and pin.size > 1_000_000
-    assert [p.platform for p in pins.assets.values() if p.measured] == ["darwin-arm64"]
+PLATFORMS = ("darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "windows-x64")
+
+
+def test_the_shipped_pins_are_complete_and_https(tmp_path):
+    """Each platform's manifest pins its own build (read here whatever computer runs the test)."""
+    measured = []
+    for key in PLATFORMS:
+        path = tmp_path / f"{key}.json"
+        path.write_text(json.dumps(part_pins("audiocpp", platform=key)))
+        pins = ar.load_pins(path)
+        assert pins.tag.startswith("v0.9.0") and list(pins.assets) == [key], key
+        for pin in pins.assets.values():
+            assert pin.url.startswith("https://github.com/unslothai/audio.cpp/releases/download/")
+            assert len(pin.sha256) == 64 and pin.size > 1_000_000
+            measured += [pin.platform] if pin.measured else []
+    assert measured == ["darwin-arm64"]
+    assert list(ar.load_pins().assets) == [ar.platform_key()]  # this computer reads its own
 
 
 def test_a_pin_without_a_sha_is_refused(tmp_path):
-    raw = json.loads(ar.PINS_FILE.read_text())
+    raw = part_pins("audiocpp", platform="darwin-arm64")
     raw["assets"]["darwin-arm64"]["sha256"] = "abc"
     bad = tmp_path / "pins.json"
     bad.write_text(json.dumps(raw))
@@ -215,7 +226,7 @@ def test_models_by_task_with_their_state(tmp_path, monkeypatch):
     assert speak["kokoro-82m"]["state"] == "ready" and speak["kokoro-82m"]["bytes_missing"] == 0
     assert speak["voxcpm2"]["state"] == "can_install" and speak["voxcpm2"]["bytes_missing"] > 2e9
     assert [m["id"] for m in eng.models("transcribe")] == ["parakeet-tdt-0.6b-v3"]
-    assert speak["kokoro-82m"]["commercial_use"] == "yes"
+    assert "commercial_use" not in speak["kokoro-82m"]
     eng2, _ = make_engine(tmp_path, monkeypatch, present={"kokoro-82m-q8_0.gguf"}, install=False)
     assert {m["state"] for m in eng2.models("speak")} == {"needs_runtime", "can_install"}
 
@@ -225,7 +236,7 @@ def test_resolve_names_what_to_do(tmp_path, monkeypatch):
     assert eng.resolve("speak", None).id == "kokoro-82m"  # the recommended, ready one
     with pytest.raises(VoiceEngineError) as e:
         eng.resolve("speak", "voxcpm2")
-    assert e.value.code == "model_missing" and "Models" in e.value.message
+    assert e.value.code == "model_missing" and "Model hub" in e.value.message
     with pytest.raises(VoiceEngineError) as e:
         eng.resolve("speak", "parakeet-tdt-0.6b-v3")
     assert e.value.code == "unknown_model"
@@ -236,6 +247,18 @@ def test_resolve_names_what_to_do(tmp_path, monkeypatch):
     with pytest.raises(VoiceEngineError) as e:
         eng2.resolve("speak", None)
     assert e.value.code == "runtime_missing"
+
+
+def test_resolve_prefers_an_installed_model_that_can_do_it(tmp_path, monkeypatch):
+    # the recommended designer is not here, VoxCPM2 is and can design: it is used
+    eng, _ = make_engine(tmp_path, monkeypatch, present={"voxcpm2-q8_0.gguf"})
+    assert eng.resolve("design", None).id == "voxcpm2"
+    assert eng.resolve("clone", None).id == "voxcpm2"
+    # nothing that can design is here: the recommended one is named
+    eng2, _ = make_engine(tmp_path, monkeypatch, present={"kokoro-82m-q8_0.gguf"})
+    with pytest.raises(VoiceEngineError) as e:
+        eng2.resolve("design", None)
+    assert e.value.code == "model_missing" and "VoiceDesign" in e.value.message
 
 
 async def test_speak_runs_the_model_and_reports_the_load(engine):
@@ -509,7 +532,7 @@ async def test_music_can_come_back_as_raw_audio_and_failures_are_friendly(engine
     assert e.value.code == "wrong_task"
 
 
-def test_the_music_models_are_listed_with_their_licence(tmp_path, monkeypatch):
+def test_the_music_models_are_listed(tmp_path, monkeypatch):
     eng, _ = make_engine(tmp_path, monkeypatch, present={"ace-step-1.5-turbo-q8_0.gguf"})
     got = {m["id"]: m for m in eng.models("music")}
     assert set(got) == {
@@ -521,7 +544,6 @@ def test_the_music_models_are_listed_with_their_licence(tmp_path, monkeypatch):
     assert got["ace-step-1.5-turbo"]["state"] == "ready" and got["ace-step-1.5-turbo"][
         "recommended"
     ] == ["music"]
-    assert got["stable-audio-3-small-music"]["commercial_use"] == "conditional"
     assert got["stable-audio-3-small-music"]["recommended"] == []
     assert got["stable-audio-3-small-sfx"]["state"] == "can_install"
 

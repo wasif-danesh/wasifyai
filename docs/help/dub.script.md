@@ -15,7 +15,7 @@ The first step of a dub: write down what is said and translate it line by line, 
 
 1. Open **Voice › Dub a recording**.
 2. Choose the recording and the language to dub into.
-3. Choose to write the script and read the lines.
+3. Choose **Write the script**. The lines appear on the right with their times, to read and change.
 
 ## Fields
 

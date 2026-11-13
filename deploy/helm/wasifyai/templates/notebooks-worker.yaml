@@ -1,4 +1,3 @@
-{{- if .Values.notebooks.enabled }}
 # Reads the sources people add to notebooks and makes their Studio outputs (ADR-0065).
 # Only this pod carries the document reader; the API does not.
 apiVersion: apps/v1
@@ -40,4 +39,3 @@ spec:
           # a worker that cannot reach the database or the storage exits at start and is restarted
           securityContext: { allowPrivilegeEscalation: false, runAsNonRoot: true }
           resources: {{- toYaml .Values.notebooks.worker.resources | nindent 12 }}
-{{- end }}

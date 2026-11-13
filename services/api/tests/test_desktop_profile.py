@@ -2,6 +2,7 @@
 the shell's token. The image product runs with the stub image engine, so no GPU or model is needed.
 """
 
+import contextlib
 import json
 import time
 from collections.abc import Iterator
@@ -75,9 +76,12 @@ def test_an_image_is_made_end_to_end_on_the_desktop_profile(data_dir):
         names = [e for e, _ in events]
         assert names[-1] == "done" and "error" not in names
 
-        # the job went through the queue and the worker, and its progress reached the stream
+        # the job went through the queue and the worker, and its progress reached the stream.
+        # A fast worker (a Windows runner) can claim the job before the stream's first read,
+        # so the first status seen is queued or running.
         jobs = [d for e, d in events if e == "job_progress"]
-        assert [j["status"] for j in jobs][0] == "queued" and jobs[-1]["status"] == "completed"
+        statuses = [j["status"] for j in jobs]
+        assert statuses[0] in ("queued", "running") and statuses[-1] == "completed"
         assert [d["seq"] for _, d in events] == sorted(d["seq"] for _, d in events)
 
         done = events[-1][1]["outputs"]
@@ -107,6 +111,34 @@ def test_an_image_is_made_end_to_end_on_the_desktop_profile(data_dir):
         again = c.get(f"/runs/{run_id}/events", headers={**auth(), "last-event-id": "1"})
         replay = parse(again.text)
         assert replay[0][1]["seq"] == 2 and replay[-1][0] == "done"
+
+
+def test_a_picture_that_names_no_model_is_made_by_the_one_the_person_chose(data_dir):
+    """Creative's stills, the assistant and other apps name no model: the one chosen on the Image
+    screen makes their pictures, as an admin's choice does on the web (ADR-0097)."""
+    with TestClient(create_app()) as c:
+        assert c.get("/desktop/models/chosen", headers=auth()).json()["wasifyai-image"] is None
+        r = c.put(
+            "/desktop/models/chosen/wasifyai-image", json={"model_id": "nope"}, headers=auth()
+        )
+        assert r.status_code == 422
+        r = c.put(
+            "/desktop/models/chosen/wasifyai-image",
+            json={"model_id": "flux2-klein-9b"},
+            headers=auth(),
+        )
+        assert r.status_code == 200, r.text
+        assert c.get("/desktop/models/chosen", headers=auth()).json()["wasifyai-image"] == (
+            "flux2-klein-9b"
+        )
+        events = make_image(c)
+        done = events[-1][1]["outputs"]
+        assert events[-1][0] == "done" and done["model"] == "flux2-klein-9b"
+        image = c.get(f"/products/wasifyai-image/images/{done['image_id']}", headers=auth())
+        assert image.json()["recipe"]["model"] == "flux2-klein-9b"  # and the recipe says so
+        assert c.put(
+            "/desktop/models/chosen/wasifyai-image", json={"model_id": "x"}
+        ).status_code in (401, 403)  # the shell's token, as on every route
 
 
 def test_recipes_favourites_and_saving_a_copy_on_the_desktop_profile(data_dir, monkeypatch):
@@ -227,6 +259,35 @@ def test_styles_the_image_engine_can_apply_are_listed_and_one_click_away(data_di
                 break
             time.sleep(0.05)
         assert [r["name"] for r in ready] == ["ink.safetensors"]
+
+
+def test_a_look_taught_for_the_video_model_is_found_but_not_offered_as_a_picture_style(data_dir):
+    import struct
+
+    home = data_dir.parent / "home"
+    tensors = [
+        "transformer_blocks.0.attn1.to_q.lora_A.weight",
+        "transformer_blocks.0.attn2.to_q.lora_B.weight",
+    ]
+    head = json.dumps(
+        {n: {"dtype": "BF16", "shape": [1], "data_offsets": [0, 2]} for n in tensors}
+    ).encode()
+    look = home / "ComfyUI-Shared" / "models" / "loras" / "wasify-video-ena-12345678.safetensors"
+    look.parent.mkdir(parents=True)
+    look.write_bytes(struct.pack("<Q", len(head)) + head + b"\0" * 2_000_000)
+
+    with TestClient(create_app()) as c:
+        c.post("/desktop/discovery/scan", headers=auth())
+        state: dict = {}
+        for _ in range(100):
+            state = c.get("/desktop/discovery", headers=auth()).json()
+            if state["scanned_at"] and not state["running"]:
+                break
+            time.sleep(0.05)
+        (one,) = [i for i in state["items"] if i["kind"] == "lora"]
+        assert one["family"] == "ltx-video" and "video engine" in one["reason"]
+        listing = c.get("/desktop/loras", headers=auth()).json()
+        assert listing == {"ready": [], "available": []}  # not offered as a style for pictures
 
 
 def test_the_engine_refuses_requests_without_the_shells_token(data_dir):
@@ -376,6 +437,24 @@ def test_the_launcher_starts_serves_and_exits_when_the_shell_goes(tmp_path):
         assert events[-1][0] == "done" and events[-1][1]["outputs"]["status"] == "done"
         assert httpx.get(f"{base}/products/wasifyai-image/images").status_code == 401
 
+        # the window holds its event stream open for as long as it lives: the engine must still stop
+        # on the first request, not wait for that stream (it did, until a second, forced stop)
+        import threading
+
+        opened = threading.Event()
+
+        def listen() -> None:
+            with (
+                contextlib.suppress(httpx.HTTPError),
+                httpx.stream(
+                    "GET", f"{base}/desktop/events", headers=auth(), timeout=None
+                ) as events,
+            ):
+                for _ in events.iter_text():
+                    opened.set()
+
+        threading.Thread(target=listen, daemon=True).start()
+        assert opened.wait(10)
         proc.stdin.close()  # type: ignore[union-attr]
         assert proc.wait(timeout=15) == 0
     finally:
@@ -420,7 +499,7 @@ def test_a_video_is_made_end_to_end_on_the_desktop_profile(data_dir):
         r = c.post(
             "/products/wasifyai-video/runs",
             json={
-                "input": {"mode": "text", "prompt": "a red fox walks through snow", "seconds": 2}
+                "input": {"mode": "text", "prompt": "a red fox walks through snow", "seconds": 5}
             },
             headers=auth(),
         )
@@ -428,7 +507,7 @@ def test_a_video_is_made_end_to_end_on_the_desktop_profile(data_dir):
         events = parse(r.text)
         assert [e for e, _ in events][-1] == "done", events[-1]
         done = events[-1][1]["outputs"]
-        assert done["status"] == "done" and done["seconds"] == 2
+        assert done["status"] == "done" and done["seconds"] == 5
 
         listing = c.get("/products/wasifyai-video/videos", headers=auth()).json()
         assert [v["id"] for v in listing["videos"]] == [done["video_id"]]
@@ -457,16 +536,21 @@ def test_the_video_model_is_in_the_catalogue_and_search_takes_every_kind(data_di
 def test_the_assistant_is_offered_the_tools_the_desktop_can_run(data_dir):
     app = create_app()
     with TestClient(app):
-        host = app.state.caps["wasifyai-assistant"].extras["tool_host"]
-        # the speech runtime, the notebooks and web search are served by the desktop engine (the
-        # assistant offers the two web tools to the model only while the person has Search on)
+        host = app.state.services.caps["wasifyai-assistant"].extras["tool_host"]
+        # the meta-tools of ADR-0071 always; the notebooks and web search are served by the desktop
+        # engine (the assistant offers the two web tools to the model only while Search is on);
+        # the outside-tools pair of ADR-0070 on the desktop, where the MCP client lives
         assert host.available_tools() == {
+            "how_to",
+            "app_status",
+            "propose_action",
+            "open_screen",
             "search_creations",
-            "generate_image",
-            "make_music",
             "search_notebooks",
             "web_search",
             "web_read",
+            "external_tools",
+            "call_external",
         }
 
 

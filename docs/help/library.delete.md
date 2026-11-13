@@ -13,8 +13,9 @@ Delete one creation and its files for good. It cannot be undone, so the app alwa
 
 ## Steps in the app
 
-1. Open **Library** and choose the creation.
-2. Choose Delete and confirm.
+1. Open **Library** and choose the creation; it opens large, with what it is.
+2. Choose **Delete** (under **More** when it is not shown) and confirm.
+3. To delete several at once, choose **Select**, tick them, then **Delete** and confirm.
 
 ## Fields
 

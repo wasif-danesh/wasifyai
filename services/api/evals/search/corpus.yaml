@@ -230,6 +230,33 @@ concepts:
       - { lang: fr, text: "la voix chantée seule, sans l'accompagnement" }
       - { lang: en, text: "only the singing from the song without the instruments" }
       - { lang: es, text: "solo la voz de la cantante, sin la música" }
+  - id: title-card-launch
+    items:
+      - { kind: composition, lang: en, text: "Launch day. A title card that says the app is ready, white words on a deep blue gradient that slide up into place" }
+      - { kind: video, lang: es, text: "Día del lanzamiento. Una tarjeta de título animada, las palabras suben suavemente sobre un fondo degradado azul oscuro" }
+      - { kind: image, lang: de, text: "Ein Titelbild für den Starttag der App, weiße Schrift auf tiefblauem Farbverlauf, sauberes minimalistisches Design" }
+    queries:
+      - { lang: fr, text: "carte de titre animée pour le jour du lancement" }
+      - { lang: en, text: "an animated title screen announcing the launch" }
+      - { lang: pt, text: "tela de título animada anunciando o lançamento do aplicativo" }
+  - id: frog-mug-model
+    items:
+      - { kind: model3d, lang: en, text: "A ceramic mug shaped like a cartoon frog, green glaze, smiling face, one handle" }
+      - { kind: image, lang: fr, text: "Une tasse en céramique en forme de grenouille de dessin animé, glaçure verte, visage souriant" }
+      - { kind: speech, lang: de, text: "Ich habe einen Becher in Form eines grünen Frosches gekauft" }
+    queries:
+      - { lang: es, text: "un modelo 3D de una taza con forma de rana verde" }
+      - { lang: en, text: "3D model of a frog coffee cup" }
+      - { lang: bn, text: "সবুজ ব্যাঙের আকারের কফি মগের থ্রিডি মডেল" }
+  - id: dawn-drive-video-plan
+    items:
+      - { kind: creative_project, lang: en, text: "Drive home at dawn. A music video plan. Mira drives a grey car along an empty coast road, stops at a petrol station, and reads an old letter as the sun comes up." }
+      - { kind: song, lang: es, text: "Conduciendo al amanecer. Balada de carretera. Vuelvo a casa por la costa vacía con una carta vieja." }
+      - { kind: image, lang: de, text: "Ein grauer Wagen auf einer leeren Küstenstraße im Morgengrauen, die Sonne geht über dem Meer auf" }
+    queries:
+      - { lang: en, text: "the music video plan about driving along the coast at sunrise" }
+      - { lang: fr, text: "le clip d'une femme qui conduit sur la côte à l'aube" }
+      - { lang: es, text: "plan de un videoclip de un viaje en coche al amanecer" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

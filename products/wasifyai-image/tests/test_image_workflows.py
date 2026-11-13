@@ -7,6 +7,7 @@ from wasifyai_platform_sdk import (
     CapabilityBinding,
     InMemoryJobSink,
     RunContext,
+    input_image_name,
     load_product_config,
     reset_context,
     set_context,
@@ -18,18 +19,56 @@ PRODUCTS = Path(__file__).resolve().parents[2]
 WORKFLOWS = PRODUCTS / "wasifyai-image" / "workflows"
 
 
-def test_the_product_config_loads_and_binds_both_modes():
+def test_the_product_config_loads_and_binds_every_mode():
     cfg = load_product_config(PRODUCTS, "wasifyai-image", environ={})
-    assert cfg.capabilities["image.generate"].workflow == "flux2-klein-4b"
-    assert cfg.capabilities["image.edit"].workflow == "flux2-klein-4b-edit"
-    assert cfg.capabilities["text.moderate"].model == "moderator"
-    picture = cfg.capabilities["text.moderate_image"]
-    assert picture.model == "multimodal" and picture.inputs == ["text", "image"]
-    assert cfg.quotas == {"images_per_user_per_day": 20}
+    klein = cfg.model(None)  # the first model answers a request that names none (ADR-0097)
+    assert klein is not None and klein.id == "flux2-klein-4b"
+    assert klein.capabilities["image.generate"].workflow == "flux2-klein-4b"
+    assert klein.capabilities["image.edit"].workflow == "flux2-klein-4b-edit"
+    assert klein.capabilities["image.reference"].workflow == "flux2-klein-4b-reference"
+    assert klein.capabilities["image.inpaint"].workflow == "flux2-klein-4b-inpaint"
+    assert "text.moderate" not in cfg.capabilities and "text.moderate_image" not in cfg.capabilities
     assert cfg.uploads["image"].max_bytes == 10 * 1024 * 1024
 
 
-@pytest.mark.parametrize("name", ["flux2-klein-4b", "flux2-klein-4b-edit"])
+ALL = [
+    "flux2-klein-4b",
+    "flux2-klein-4b-edit",
+    "flux2-klein-4b-reference",
+    "flux2-klein-4b-inpaint",
+    "qwen-image-2.1",
+    "qwen-image-2.1-edit",
+    "qwen-image-2.1-reference",
+    "z-image-turbo",
+    "ideogram-4",
+    "hidream-o1",
+]
+
+# what the image graph sends for each verb (graphs/image.py); `steps` is sent when a person sets it
+SENT = {
+    "generate": {"prompt", "seed", "steps", "width", "height"},
+    "edit": {"prompt", "seed", "steps", "image"},
+    "reference": {"prompt", "seed", "steps", "width", "height", "image", "image2"},
+    "inpaint": {"prompt", "seed", "steps", "image", "mask"},
+}
+
+
+def test_each_models_workflows_take_what_the_screen_sends_from_files_in_the_catalogue():
+    import yaml
+
+    cfg = load_product_config(PRODUCTS, "wasifyai-image", environ={})
+    catalogue = yaml.safe_load((PRODUCTS / "wasifyai-image" / "models.yaml").read_text())["models"]
+    files = {m["id"]: {f"{f['folder']}/{f['name']}" for f in m["files"]} for m in catalogue}
+    for model in cfg.models:
+        assert model.id in files, f"{model.id} is not in models.yaml"
+        for cap, binding in model.capabilities.items():
+            assert binding.workflow
+            wf = Workflow.load(WORKFLOWS, binding.workflow)
+            assert set(wf.map.inputs) == SENT[cap.split(".")[1]], (model.id, cap)
+            assert set(wf.map.models) <= files[model.id], (model.id, cap)
+
+
+@pytest.mark.parametrize("name", ALL)
 def test_every_mapped_node_exists_in_its_workflow(name):
     assert workflow_problems(WORKFLOWS, name) == []
 
@@ -41,6 +80,51 @@ def test_the_edit_workflow_takes_a_picture_and_no_size():
     loaders = [n for n in graph.values() if n["class_type"] == "LoadImage"]
     assert [n["inputs"]["image"] for n in loaders] == ["wasifyai-JOB.png"]
     assert wf.map.outputs["image"].type == "image"
+
+
+def test_the_reference_workflow_takes_two_pictures_and_a_size():
+    wf = Workflow.load(WORKFLOWS, "flux2-klein-4b-reference")
+    assert set(wf.map.inputs) == {"prompt", "seed", "steps", "width", "height", "image", "image2"}
+    graph = wf.fill(
+        {
+            "prompt": "x",
+            "seed": 5,
+            "width": 1344,
+            "height": 768,
+            "image": "a.png",
+            "image2": "b.png",
+        }
+    )
+    loaders = [n["inputs"]["image"] for n in graph.values() if n["class_type"] == "LoadImage"]
+    assert sorted(loaders) == ["a.png", "b.png"]
+    sizes = {
+        (n["inputs"]["width"], n["inputs"]["height"])
+        for n in graph.values()
+        if n["class_type"] in ("EmptyFlux2LatentImage", "Flux2Scheduler")
+    }
+    assert sizes == {(1344, 768)}
+    # both pictures reach both conditionings, one after the other (two reference latents each)
+    refs = [n for n in graph.values() if n["class_type"] == "ReferenceLatent"]
+    assert len(refs) == 4
+
+
+def test_the_inpaint_workflow_takes_a_picture_and_a_mask_and_pastes_the_result_back():
+    wf = Workflow.load(WORKFLOWS, "flux2-klein-4b-inpaint")
+    assert set(wf.map.inputs) == {"prompt", "seed", "steps", "image", "mask"}
+    graph = wf.fill({"prompt": "x", "seed": 5, "image": "a.png", "mask": "m.png"})
+    assert [n["inputs"]["image"] for n in graph.values() if n["class_type"] == "LoadImage"] == [
+        "a.png"
+    ]
+    assert [n["inputs"]["image"] for n in graph.values() if n["class_type"] == "LoadImageMask"] == [
+        "m.png"
+    ]
+    # what is saved is the picture with only the masked area replaced, not the model's own picture
+    saved = graph[wf.map.outputs["image"].node]["inputs"]["images"]
+    pasted = graph[saved[0]]
+    assert pasted["class_type"] == "ImageCompositeMasked"
+    decoded = graph[pasted["inputs"]["source"][0]]
+    assert decoded["class_type"] == "VAEDecode"
+    assert graph[pasted["inputs"]["destination"][0]]["class_type"] == "ImageScaleToTotalPixels"
 
 
 def test_the_text_workflow_takes_a_size():
@@ -92,14 +176,21 @@ async def test_a_workflow_without_a_picture_input_refuses_an_edit():
 
 
 @pytest.mark.parametrize(
-    ("name", "guider"), [("flux2-klein-4b", "10"), ("flux2-klein-4b-edit", "16")]
+    ("name", "guider"),
+    [
+        ("flux2-klein-4b", "10"),
+        ("flux2-klein-4b-edit", "16"),
+        ("flux2-klein-4b-reference", "20"),
+        ("flux2-klein-4b-inpaint", "26"),
+    ],
 )
 def test_a_lora_goes_between_the_model_and_the_guider(name, guider):
     wf = Workflow.load(WORKFLOWS, name)
     assert wf.accepts_loras
     values = {"prompt": "a fox", "seed": 1}
-    if name.endswith("edit"):
-        values["image"] = "wasifyai-JOB.png"
+    for slot in ("image", "image2", "mask"):
+        if slot in wf.map.inputs:
+            values[slot] = f"wasifyai-JOB-{slot}.png"
     plain = wf.fill(values)
     assert plain[guider]["inputs"]["model"] == ["1", 0]  # without LoRAs the graph is the original
 
@@ -119,8 +210,8 @@ def test_a_lora_goes_between_the_model_and_the_guider(name, guider):
 
 def test_too_many_loras_and_a_workflow_without_a_chain_are_refused():
     wf = Workflow.load(WORKFLOWS, "flux2-klein-4b")
-    with pytest.raises(ValueError, match="at most 3"):
-        wf.fill({"prompt": "x"}, [(f"{n}.safetensors", 1.0) for n in range(4)])
+    with pytest.raises(ValueError, match="at most 8"):
+        wf.fill({"prompt": "x"}, [(f"{n}.safetensors", 1.0) for n in range(9)])
 
 
 def test_a_chain_that_points_at_a_missing_node_is_a_problem(tmp_path):
@@ -150,3 +241,45 @@ async def test_the_provider_puts_loras_in_the_graph_and_in_the_job(ctx):
         await provider.generate(
             "image.generate", binding, {"prompt": "x", "loras": [{"weight": 1}]}
         )
+
+
+async def test_each_picture_of_a_job_is_named_by_its_slot_for_the_worker():
+    sink = InMemoryJobSink()
+    provider = ComfyUIProvider(WORKFLOWS, sink)
+    token = set_context(RunContext("t1", "wasifyai-image", "u1", "run-1", "th-1"))
+    try:
+        await provider.generate(
+            "image.reference",
+            CapabilityBinding(provider="comfyui", workflow="flux2-klein-4b-reference"),
+            {"prompt": "x", "seed": 1, "width": 1024, "height": 1024,
+             "image_key": "uploads/a.png", "image2_key": "uploads/b.png"},
+        )  # fmt: skip
+        await provider.generate(
+            "image.inpaint",
+            CapabilityBinding(provider="comfyui", workflow="flux2-klein-4b-inpaint"),
+            {"prompt": "x", "seed": 1, "image_key": "uploads/a.png", "mask_key": "uploads/m.png"},
+        )
+    finally:
+        reset_context(token)
+    ref, inp = sink.submitted
+    names = {n["inputs"]["image"] for n in ref.prompt.values() if n["class_type"] == "LoadImage"}
+    assert names == {input_image_name(ref.job_id), input_image_name(ref.job_id, "image2")}
+    assert ref.inputs["image2_key"] == "uploads/b.png"  # the keys are for the worker, not the graph
+    assert "image2_key" not in str(ref.prompt)
+    mask = [n for n in inp.prompt.values() if n["class_type"] == "LoadImageMask"]
+    assert mask[0]["inputs"]["image"] == input_image_name(inp.job_id, "mask")
+    assert "mask_key" not in str(inp.prompt)
+
+
+async def test_a_workflow_without_a_second_picture_input_refuses_one():
+    provider = ComfyUIProvider(WORKFLOWS, InMemoryJobSink())
+    binding = CapabilityBinding(provider="comfyui", workflow="flux2-klein-4b-edit")
+    token = set_context(RunContext("t1", "wasifyai-image", "u1"))
+    try:
+        with pytest.raises(ValueError, match="no picture input 'image2'"):
+            await provider.generate(
+                "image.reference", binding,
+                {"prompt": "x", "image_key": "uploads/a.png", "image2_key": "uploads/b.png"},
+            )  # fmt: skip
+    finally:
+        reset_context(token)

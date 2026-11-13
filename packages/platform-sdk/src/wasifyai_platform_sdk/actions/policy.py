@@ -12,6 +12,7 @@ a conversation may relax but never past the floor:
 
 The floor is not a field of the policy, so it cannot be written down, stored or sent."""
 
+from collections.abc import Mapping
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -32,7 +33,7 @@ class ApprovalPolicy(BaseModel):
     change: Literal["ask", "auto"] = "ask"
 
     @classmethod
-    def from_settings(cls, settings: dict[str, object]) -> "ApprovalPolicy":
+    def from_settings(cls, settings: Mapping[str, object]) -> "ApprovalPolicy":
         """A stored setting (a connection's, a conversation's). Refuses anything that would lower
         the floor, with the reason in words."""
         for key in ("read", "destroy", "needs_consent", "consent"):

@@ -42,7 +42,6 @@ const SCREENS = [
   { name: "voice-audiobook", path: "/voice/audiobook", ready: /audiobook/i },
   { name: "voice-lipsync", path: "/voice/lipsync", ready: /lip sync/i },
   { name: "music-create", path: "/voice/music", ready: /create music/i },
-  { name: "music-tracks", path: "/voice/tracks", ready: /your music/i },
   { name: "music-lyrics", path: "/voice/lyrics", ready: /lyrics/i },
   { name: "music-separate", path: "/voice/separate", ready: /split into parts/i },
   { name: "home", path: "/", ready: /good|hello/i },
@@ -51,12 +50,11 @@ const SCREENS = [
     path: "/chat/0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80",
     ready: /a poem about a fox/i,
   },
-  { name: "image-create", path: "/image", ready: /create images/i },
+  { name: "image-create", path: "/image", ready: /make a picture/i },
   { name: "image-edit", path: "/image/edit", ready: /edit a picture/i },
-  { name: "image-library", path: "/image/library", ready: /your images|library/i },
+  { name: "library", path: "/creations", ready: /^library$/i },
   { name: "video-create", path: "/video", ready: /make a video/i },
   { name: "video-animate", path: "/video/animate", ready: /animate a picture/i },
-  { name: "video-library", path: "/video/library", ready: /your videos/i },
 ] as const;
 
 for (const screen of SCREENS) {
@@ -70,6 +68,10 @@ for (const screen of SCREENS) {
       await expect(nav.getByRole("button", { name: group, exact: true })).toBeVisible();
     }
     await expect(nav.getByRole("link", { name: "Wasify AI, home" })).toBeVisible();
+    // one bar of one height on every screen (ADR-0093 decision 1)
+    const bar = page.locator('[data-slot="app-bar"]');
+    await expect(bar).toBeVisible();
+    expect((await bar.boundingBox())?.height).toBe(48);
   });
 
   test(`${screen.name} looks right @visual`, async ({ page }) => {
@@ -77,8 +79,14 @@ for (const screen of SCREENS) {
     await expect(page.getByRole("heading", { name: screen.ready }).first()).toBeVisible();
     if (screen.name === "chat")
       await expect(page.getByText(/footprints into the night/)).toBeVisible();
-    if (screen.name.endsWith("library")) {
-      await expect(page.getByRole("list", { name: /images|videos/i })).toBeVisible();
+    if (screen.name === "library") {
+      // the cards are there, and their pictures drawn
+      await expect(
+        page
+          .getByRole("main")
+          .getByRole("link", { name: /a lighthouse/i })
+          .first(),
+      ).toBeVisible();
     }
     await settle(page);
     await expect(page).toHaveScreenshot(`${screen.name}.png`, {
@@ -120,9 +128,9 @@ test("the menu offers the voice screens the service can run @layout", async ({ p
 });
 
 test("the menu marks the page and opens the group that holds it @layout", async ({ page }) => {
-  await page.goto("/video/library");
+  await page.goto("/video/extend");
   const nav = await menu(page);
-  await expect(nav.getByRole("link", { name: /Your videos/ })).toHaveAttribute(
+  await expect(nav.getByRole("link", { name: /Extend video/ })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -133,9 +141,9 @@ test("the menu marks the page and opens the group that holds it @layout", async 
   // another group can be opened by hand while on a page (retried: the click can land before the page is interactive)
   await expect(async () => {
     await nav.getByRole("button", { name: "Images", exact: true }).click();
-    await expect(nav.getByRole("link", { name: /Your images/ })).toHaveAttribute(
+    await expect(nav.getByRole("link", { name: /Inpaint/ })).toHaveAttribute(
       "href",
-      "/image/library",
+      "/image/inpaint",
       { timeout: 1000 },
     );
   }).toPass({ timeout: 10_000 });
@@ -144,7 +152,7 @@ test("the menu marks the page and opens the group that holds it @layout", async 
 test("a picture is made, and can be downloaded @layout", async ({ page }) => {
   await page.goto("/image");
   await page.getByRole("textbox").first().fill("A lighthouse on a cliff at sunrise");
-  await page.getByRole("button", { name: "Generate" }).click();
+  await page.getByRole("button", { name: "Make the picture" }).click();
   await expect(page.getByRole("link", { name: /download/i })).toHaveAttribute(
     "href",
     "/api/products/wasifyai-image/images/i1/download",
@@ -156,7 +164,7 @@ test("a picture is made, and can be downloaded @layout", async ({ page }) => {
 test("a video is made, and can be downloaded @layout", async ({ page }) => {
   await page.goto("/video");
   await page.getByRole("textbox").first().fill("A red fox walks through fresh snow at dawn");
-  await page.getByRole("button", { name: /make my video/i }).click();
+  await page.getByRole("button", { name: "Make the video" }).click();
   await expect(page.getByRole("link", { name: /download/i })).toHaveAttribute(
     "href",
     "/api/products/wasifyai-video/videos/v1/download",
@@ -164,20 +172,41 @@ test("a video is made, and can be downloaded @layout", async ({ page }) => {
   await noSideScroll(page);
 });
 
-test("the image library opens a picture with its recipe and download @layout", async ({ page }) => {
+test("Your images is the Library showing pictures, and a picture opens with its tools @layout", async ({
+  page,
+}) => {
   await page.goto("/image/library");
-  await page.getByRole("button", { name: /open: a lighthouse/i }).click();
+  await expect(page).toHaveURL(/\/creations\?show=images$/);
+  const nav = await menu(page);
+  await expect(nav.getByRole("link", { name: /^Library/ })).toHaveAttribute("aria-current", "page");
+  if ((page.viewportSize()?.width ?? 1280) < 768) await page.keyboard.press("Escape"); // the drawer
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: /a lighthouse/i })
+    .first()
+    .click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("link", { name: /download/i })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: /make it again/i })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /Edit this/ })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: /Animate this/ })).toBeVisible();
+  await expect(dialog.locator("dt", { hasText: /^Made$/ })).toBeVisible();
+  await settle(page);
   await noSideScroll(page);
+  // Edit this opens Edit with the picture chosen
+  await dialog.getByRole("button", { name: /Edit this/ }).click();
+  await expect(page).toHaveURL(/\/image\/edit$/);
 });
 
-test("the video library shows done, being made and failed clips @layout", async ({ page }) => {
+test("Your videos is the Library showing videos, being made and failed ones too @layout", async ({
+  page,
+}) => {
   await page.goto("/video/library");
-  await expect(page.getByText("Being made")).toBeVisible();
-  await page.getByRole("button", { name: /open: a paper boat/i }).click();
-  await expect(page.getByText(/took too long/i)).toBeVisible();
+  await expect(page).toHaveURL(/\/creations\?show=videos$/);
+  await expect(page.getByText(/Making your video/).first()).toBeVisible();
+  await page
+    .getByRole("link", { name: /a paper boat/i })
+    .first()
+    .click();
+  await expect(page.getByRole("dialog").getByText(/took too long/i)).toBeVisible();
 });
 
 test("the home page is the assistant; a first answer gives the chat its address @layout", async ({
@@ -186,11 +215,15 @@ test("the home page is the assistant; a first answer gives the chat its address 
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const box = page.getByRole("textbox");
+  // The first Enter can arrive before the page can use it, so the question is sent again, but only while it is not
+  // on the screen yet: a slow first answer must not turn into a second question and a second answer.
   await expect(async () => {
-    await box.fill("What is a fox?");
-    await box.press("Enter");
-    await expect(page.getByText(/small, quick wild dog/)).toBeVisible({ timeout: 1500 });
-  }).toPass({ timeout: 10_000 });
+    if ((await page.getByText("What is a fox?", { exact: true }).count()) === 0) {
+      await box.fill("What is a fox?");
+      await box.press("Enter");
+    }
+    await expect(page.getByText(/small, quick wild dog/).first()).toBeVisible({ timeout: 3000 });
+  }).toPass({ timeout: 30_000 });
   await expect(page).toHaveURL(/\/chat\/0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80$/);
   await noSideScroll(page);
 });
@@ -199,7 +232,7 @@ test("recent chats are in the menu and open their chat @layout", async ({ page }
   await page.goto("/");
   const nav = await menu(page);
   await expect(nav.getByRole("link", { name: /new chat/i })).toHaveAttribute("href", "/");
-  const recent = nav.getByRole("button", { name: "Plan for the launch" });
+  const recent = nav.getByRole("button", { name: "Plan for the launch", exact: true });
   await expect(recent).toBeVisible();
   await recent.click();
   await expect(page).toHaveURL(/\/chat\/1a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d$/);
@@ -216,7 +249,7 @@ test("the notebook list opens a notebook, and the menu marks it @layout", async 
   await page.goto("/notebooks");
   await expect(page.getByText("Thesis reading")).toBeVisible();
   const nav = await menu(page);
-  await expect(nav.getByRole("link", { name: /View Notebooks/ })).toHaveAttribute(
+  await expect(nav.getByRole("link", { name: /View notebooks/ })).toHaveAttribute(
     "aria-current",
     "page",
   );

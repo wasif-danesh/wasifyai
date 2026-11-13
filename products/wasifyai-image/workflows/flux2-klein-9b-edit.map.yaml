@@ -1,0 +1,28 @@
+workflow: flux2-klein-9b-edit.json
+notes: >
+  FLUX.2 klein 9B: the klein 4B workflow with the 9B model (bf16, black-forest-labs/FLUX.2-klein-9B; the
+  template's fp8 file does not load on a Mac) and its Qwen3 8B text encoder (fp8mixed, Comfy-Org/flux2-klein-9B).
+  Image to image: one reference picture and an instruction. Built from ComfyUI's official template
+  image_flux2_klein_image_edit_4b_distilled (single reference): the picture is scaled to about one
+  megapixel (in multiples of 16), encoded, and fed to both the positive and the negative conditioning
+  as a reference latent; the result has the picture's shape, so there is no size input. The worker
+  uploads the user's picture under a per-job name and the API writes that name into the LoadImage node.
+models:
+  - diffusion_models/flux-2-klein-9b.safetensors
+  - text_encoders/qwen_3_8b_fp8mixed.safetensors
+  - vae/flux2-vae.safetensors
+inputs:
+  prompt: { node: "4", field: text }
+  seed: { node: "15", field: noise_seed }
+  steps: { node: "10", field: steps }
+  image: { node: "6", field: image }
+outputs:
+  image: { node: "19", type: image }
+# LoRAs (ADR-0051): the diffusion model's output goes through up to eight model-only LoRA loaders (ADR-0091)
+# before the guider. A klein LoRA patches the diffusion model; the text encoder is not patched.
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 8
+  from: { node: "1", output: 0 }
+  to:
+    - { node: "16", field: model }

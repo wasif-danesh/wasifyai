@@ -26,7 +26,7 @@ SERVICES = [
     ),
     (
         "Admin area",
-        "users, models, media backends, safeguards, audit",
+        "users, models, media backends, audit",
         "http://localhost:3000/admin",
         None,
         "http://localhost:3000/admin",

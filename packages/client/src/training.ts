@@ -1,0 +1,848 @@
+// Training (ADR-0073, ADR-0076): a set of pictures, the descriptions the app writes, a run, and the models it
+// leaves. The same engine routes serve the desktop window; only the transport differs. A trained model is a
+// creation of its own kind, `lora`.
+import { HttpError, type Transport, errorMessage } from "./transport";
+
+export const TRAINING_PRODUCT_ID = "wasifyai-training";
+
+export type TrainKind = "character" | "style" | "object";
+
+/** What a set is for: pictures for the picture model, or pictures and short clips for the video model. */
+export type TrainFamily = "image" | "video";
+
+/** What a trained model is: pictures of one of the three kinds, or how a person writes. */
+export type TrainedKind = TrainKind | "writing" | "decision";
+
+export type TrainPreflight = {
+  ok: boolean;
+  /** why it cannot start now, in words (not enough disk, a flat battery) */
+  blockers: string[];
+  warnings: string[];
+  /** what waits while it runs */
+  pauses: string;
+};
+
+export type TrainStatus = {
+  ready: boolean;
+  problem: string | null;
+  /** the trainer is a preview: it runs the steps and learns nothing, and the screens say so */
+  preview: boolean;
+  engine: Record<string, unknown>;
+  fit: { verdict: "fits" | "tight" | "too_big"; reason: string } | null;
+  busy: boolean;
+  active_run: string | null;
+  /** What to know before a run starts: whether anything stops it, what to look out for (desktop). */
+  preflight?: TrainPreflight | null;
+  /** whether a run can be paused and picked up again (not on a worker) */
+  can_pause?: boolean;
+  place: "device" | "service";
+  min_pictures: number;
+  max_pictures: number;
+  kinds: TrainKind[];
+  base: string;
+  steps: Record<TrainKind, number>;
+  /** "About 25 minutes", by kind */
+  estimates: Record<TrainKind, string>;
+};
+
+/** Whether the video model can be taught on this computer, and what it still needs (desktop only). */
+export type VideoTrainStatus = {
+  ready: boolean;
+  problem: string | null;
+  /** what teaching also needs that setup does not fetch, such as the video model itself */
+  needs: { name: string; have: boolean; bytes: number; how: string }[];
+  fit: { verdict: "fits" | "tight" | "too_big"; reason: string } | null;
+  /** What to know before a run starts: whether anything stops it, what to look out for (desktop). */
+  preflight?: TrainPreflight | null;
+  busy: boolean;
+  active_run: string | null;
+  min_items: number;
+  window_frames: number;
+  windows_per_clip: number;
+  min_clip_seconds: number;
+  choices: TrainChoices;
+};
+
+export type TrainMethodId = "lora" | "qlora" | "full";
+
+/** One way of teaching a model, in words first; `can` false carries the reason. */
+export type TrainMethod = {
+  id: TrainMethodId;
+  title: string;
+  technical: string;
+  /** Advanced only: the screen shows it under "For experts" */
+  advanced: boolean;
+  can: boolean;
+  reason: string;
+};
+
+/** A model that may be taught, or one on this computer that cannot be (with the reason). */
+export type TrainBase = {
+  /** what this model is good for, and what a real run on this Mac measured (writing models) */
+  note?: string;
+  measured?: string;
+  /** empty for a model with no descriptor: it is listed, not offered */
+  id: string;
+  title: string;
+  engine: string;
+  recommended: boolean;
+  can_teach: boolean;
+  reason: string;
+  installed: boolean;
+  /** the size of the training files still to fetch before it can be taught (desktop); 0 = none */
+  fetch_bytes?: number;
+  methods: TrainMethod[];
+};
+
+/** Fetching a model's training files from Hugging Face (desktop only). */
+export type TrainHubState = {
+  state: "idle" | "fetching" | "done" | "error";
+  base?: string;
+  bytes_total?: number;
+  bytes_start?: number;
+  bytes_done?: number;
+  error?: string | null;
+};
+
+export type TrainChoices = {
+  family: string;
+  default_base: string;
+  default_method: TrainMethodId;
+  bases: TrainBase[];
+};
+
+/** The person's choice: leave a field out for the recommendation. */
+export type TrainChoice = { base?: string; method?: TrainMethodId };
+
+export type TrainPictureCheck = { code: string; level: "ok" | "warn"; message: string };
+
+export type CaptionState = "none" | "writing" | "done" | "edited" | "failed";
+
+export type TrainPicture = {
+  id: string;
+  /** a picture, or a short clip (a video set; the thumbnail is its middle frame) */
+  media?: "picture" | "clip";
+  /** how long a clip is, in seconds */
+  seconds?: number;
+  dataset_id: string;
+  name: string;
+  width: number;
+  height: number;
+  checks: TrainPictureCheck[];
+  caption: string;
+  caption_state: CaptionState;
+  caption_error: string | null;
+  /** a check found a problem: the screen suggests removing it */
+  suggest_remove: boolean;
+  created_at: string;
+};
+
+export type TrainDataset = {
+  id: string;
+  family?: TrainFamily;
+  kind: TrainKind;
+  name: string;
+  trigger_word: string;
+  created_at: string;
+  pictures: number;
+  /** a video set: how many of its items are clips */
+  clips?: number;
+  /** what is missing before a run, in the sentence to show; null when nothing is */
+  missing: string | null;
+  /** the descriptions are being written */
+  writing: boolean;
+  /** what teaching this set would take, by its own size: the steps and "About 40 minutes" */
+  steps?: number;
+  estimate?: string;
+  /** with the whole set: its pictures and three magic words */
+  items?: TrainPicture[];
+  suggestions?: string[];
+};
+
+export type TrainRun = {
+  id: string;
+  dataset_id: string;
+  status: "working" | "paused" | "done" | "failed" | "cancelled";
+  stage: string;
+  step: number;
+  steps: number;
+  progress: number;
+  error: string | null;
+  base: string;
+  /** the names of the sample pictures made so far */
+  samples: string[];
+  preview: boolean;
+  model_id: string | null;
+  elapsed_s: number | null;
+  estimate: string;
+  live: boolean;
+  created_at: string;
+  finished_at: string | null;
+};
+
+/** One picture of the check: what was drawn, and whether it looked like the pictures it learnt from. */
+export type CheckedPicture = {
+  id: string;
+  condition: "with_word" | "without_word" | "without_model";
+  prompt: string;
+  /** null: it could not be judged (no picture-reading model) */
+  same: boolean | null;
+  reason: string;
+};
+
+/** What "did it learn?" found, in words and a mark (ADR-0073 decision 10). `passed` null: not checked or not judged. */
+export type TrainEvaluation = {
+  passed: boolean | null;
+  note: string;
+  at?: string;
+  /** [pictures that looked the same, pictures judged], by kind of picture */
+  counts?: Partial<Record<CheckedPicture["condition"], [number, number]>>;
+  items?: CheckedPicture[];
+};
+
+/** A picture to draw for the check; `with_model` says whether the trained model is applied to it. */
+export type CheckStep = {
+  id: string;
+  scene: number;
+  condition: CheckedPicture["condition"];
+  prompt: string;
+  with_model: boolean;
+};
+
+/** One question put to the model before it was taught and after, side by side. */
+export type WritingAnswer = { question: string; before: string; after: string };
+
+export type WritingQuality = "quick" | "better";
+
+export type WritingExample = { ask: string; answer: string };
+
+export type WritingCheck = { level: "ok" | "warn" | "error"; code: string; message: string };
+
+/** What a run of a set would take, and what stops it, in words. */
+export type WritingPlan = {
+  examples: number;
+  dropped: string[];
+  checks: WritingCheck[];
+  steps: number;
+  estimate: string;
+  base: string;
+  base_title: string;
+  /** what this model is good for, one sentence */
+  base_note: string;
+  held_back: number;
+  missing: string | null;
+};
+
+export type WritingSet = {
+  id: string;
+  name: string;
+  quality: WritingQuality;
+  base: string;
+  created_at: string;
+  examples: number;
+  missing: string | null;
+  steps: number;
+  estimate: string;
+  /** with the whole set */
+  rows?: WritingExample[];
+  plan?: WritingPlan;
+};
+
+/** One thing the writing trainer can fetch for a base: its weights ("model") or the chat form of it ("chat"). */
+export type LanguagePart = {
+  have: boolean;
+  bytes: number;
+  title: string;
+  needs_free_bytes: number;
+  progress: {
+    state: "idle" | "installing" | "ready" | "failed";
+    message: string;
+    done_bytes: number;
+    total_bytes: number;
+  };
+};
+
+/** A base a writing model can be taught on, and what of it is on this computer. */
+export type LanguageBase = {
+  id: string;
+  title: string;
+  source: string;
+  /** set up with the trainer, not fetched on its own */
+  main: boolean;
+  problem: string | null;
+  model: LanguagePart;
+  chat: LanguagePart;
+};
+
+export type WritingStatus = {
+  ready: boolean;
+  problem: string | null;
+  engine: Record<string, unknown>;
+  fit: { verdict: "fits" | "tight" | "too_big"; reason: string } | null;
+  busy: boolean;
+  active_run: string | null;
+  place: "device" | "service";
+  min_examples: number;
+  good_examples: number;
+  qualities: WritingQuality[];
+  choices: TrainChoices;
+  /** the taught model chat answers with now, if any */
+  in_chat: string | null;
+  /** whether a taught model can be used in chat here (the desktop's chat engine; not on the web yet) */
+  can_chat?: boolean;
+  bases: LanguageBase[];
+};
+
+export type WritingAsk = { question: string; original: string; mine: string };
+
+// ---- "Teach it to decide" (ADR-0075) -------------------------------------------------------------
+
+export type DecisionKind = "yes_no" | "category" | "score";
+export type DecisionOption = { label: string; about: string };
+
+/** A text and its right answer: "yes" or "no", one of the categories, or a level as a number. */
+export type DecisionExample = { text: string; answer: string };
+
+/** What the model is asked about every text. */
+export type DecisionQuestion = {
+  kind: DecisionKind;
+  text: string;
+  levels: number;
+  low: string;
+  high: string;
+  options: DecisionOption[];
+};
+
+export type DecisionPlan = {
+  examples: number;
+  dropped: string[];
+  checks: WritingCheck[];
+  /** how many examples there are of each answer */
+  counts: Record<string, number>;
+  steps: number;
+  passes: number;
+  estimate: string;
+  base: string;
+  base_title: string;
+  base_note: string;
+  held_back: number;
+  missing: string | null;
+};
+
+export type DecisionSet = {
+  id: string;
+  name: string;
+  kind: DecisionKind;
+  question: string;
+  options: DecisionOption[];
+  levels: number;
+  low: string;
+  high: string;
+  quality: WritingQuality;
+  base: string;
+  created_at: string;
+  examples: number;
+  missing: string | null;
+  steps: number;
+  estimate: string;
+  /** with the whole set */
+  rows?: DecisionExample[];
+  plan?: DecisionPlan;
+  /** every answer it can give, in order */
+  answers?: string[];
+  /** what is wrong with the question itself, in words */
+  problem?: string | null;
+};
+
+export type DecisionPatch = {
+  name?: string;
+  kind?: DecisionKind;
+  question?: string;
+  options?: DecisionOption[];
+  levels?: number;
+  low?: string;
+  high?: string;
+  quality?: WritingQuality;
+  base?: string;
+};
+
+export type DecisionStatus = {
+  ready: boolean;
+  problem: string | null;
+  engine: Record<string, unknown>;
+  fit: { verdict: "fits" | "tight" | "too_big"; reason: string } | null;
+  busy: boolean;
+  active_run: string | null;
+  place: "device" | "service";
+  min_examples: number;
+  good_examples: number;
+  min_per_answer: number;
+  max_options: number;
+  /** the fewest, the most and the usual number of levels of a score */
+  levels: [number, number, number];
+  kinds: DecisionKind[];
+  qualities: WritingQuality[];
+  choices: TrainChoices;
+  bases: DecisionBase[];
+};
+
+/** A model a decision model can be taught on, and what of it is on this computer. */
+export type DecisionBase = {
+  id: string;
+  title: string;
+  source: string;
+  main: boolean;
+  problem: string | null;
+  model: LanguagePart;
+};
+
+/** An answer, how sure the model is (0 to 1) and its share for every answer. */
+export type Said = { answer: string; confidence: number; shares: Record<string, number> };
+
+export type DecisionReport = {
+  texts: number;
+  right: { before: number; after: number; word_counter: number; exactly: number };
+  percent: { before: number; after: number; word_counter: number };
+  per_answer: { answer: string; of: number; right: number }[];
+  mix_ups: { right: string; said: string; times: number }[];
+  confidence: { note: string; sure: number; sure_right: number };
+  wrong: { text: string; right: string; said: string; confidence: number }[];
+  passed: boolean | null;
+  note: string;
+};
+
+export type DecisionAsk = {
+  question: string;
+  kind: DecisionKind;
+  answers: string[];
+  mine: Said;
+  /** the model it started from, before it was taught */
+  original: Said | null;
+};
+
+export type DecisionSorted = {
+  question: string;
+  kind: DecisionKind;
+  answers: string[];
+  results: Said[];
+};
+
+export type TrainedModel = {
+  id: string;
+  run_id: string;
+  dataset_id: string | null;
+  name: string;
+  trigger_word: string;
+  kind: TrainedKind;
+  base: string;
+  preview: boolean;
+  adapter_bytes: number | null;
+  card: {
+    base_title: string;
+    engine: string;
+    preview: boolean;
+    note: string;
+    dataset: {
+      name: string;
+      kind: TrainedKind;
+      pictures?: number;
+      examples?: number;
+      hash: string;
+    };
+    /** a language model: the same questions asked before and after, and the loss on answers kept back */
+    answers?: WritingAnswer[];
+    loss?:
+      | {
+          first_held_back: number | null;
+          last_held_back: number | null;
+          last_train: number | null;
+        }
+      | number[];
+    /** a decision model: its question, the report on texts kept back and a few texts before and after */
+    question?: DecisionQuestion;
+    report?: DecisionReport;
+    peek?: { text: string; before: Said; after: Said }[];
+    steps: number;
+    seconds: number;
+    trigger_word: string;
+    /** The name the image or video engine gives it, once it is published there (else null). */
+    published?: { lora_name: string } | null;
+    /** a video model: "video"; pictures leave it out */
+    family?: TrainFamily;
+    evaluation: TrainEvaluation;
+    trained_at: string;
+  };
+  created_at: string;
+};
+
+/** One thing the setup fetches: what it is, how large, and from where. */
+export type TrainingSetupPart = {
+  name: string;
+  version: string;
+  bytes: number;
+  /** already on this computer: it is not fetched again */
+  have: boolean;
+  source: string;
+};
+
+/** The trainer's component on a desktop engine: what is there, what it would take, how an install goes. */
+export type TrainingSetupState = {
+  installed: boolean;
+  /** where the trainer is from: "managed" (this app's own), "env", "dev"; null when it is not there */
+  tool: string | null;
+  base: string | null;
+  problem: string | null;
+  plan: {
+    supported: boolean;
+    bytes: number;
+    needs_free_bytes: number;
+    parts: TrainingSetupPart[];
+    /** what teaching also needs and this setup does not fetch (the video trainer: the video model) */
+    needs?: { name: string; have: boolean; bytes: number; how: string }[];
+  };
+  progress: {
+    state: "idle" | "installing" | "ready" | "failed";
+    step: string | null;
+    steps: string[];
+    message: string;
+    done_bytes: number;
+    total_bytes: number;
+  };
+};
+
+export type TrainingApi = {
+  /** The pictures to draw to find out whether a model learnt, and how many references it keeps. */
+  checkPlan(modelId: string): Promise<{ items: CheckStep[]; refs: number }>;
+  /** One picture it drew: does it look like the ones it learnt from? */
+  judge(modelId: string, picture: Blob): Promise<{ same: boolean; reason: string }>;
+  /** Keep what the check found on the model's card. */
+  saveEvaluation(modelId: string, items: CheckedPicture[]): Promise<TrainedModel>;
+  /** The trainer's component (desktop only: the web's trainer lives on a worker). */
+  setup(): Promise<TrainingSetupState>;
+  /** Set it up; `confirmBytes` is the size the person was shown. */
+  installSetup(confirmBytes: number): Promise<TrainingSetupState>;
+  cancelSetup(): Promise<TrainingSetupState>;
+  removeSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
+  /** The writing trainer's component (ADR-0074), set up the same way. */
+  writingSetup(): Promise<TrainingSetupState>;
+  installWritingSetup(confirmBytes: number): Promise<TrainingSetupState>;
+  cancelWritingSetup(): Promise<TrainingSetupState>;
+  removeWritingSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
+  status(): Promise<TrainStatus>;
+  datasets(): Promise<TrainDataset[]>;
+  createDataset(kind: TrainKind, name?: string, family?: TrainFamily): Promise<TrainDataset>;
+  dataset(id: string): Promise<TrainDataset>;
+  updateDataset(
+    id: string,
+    change: Partial<Pick<TrainDataset, "kind" | "name" | "trigger_word">>,
+  ): Promise<TrainDataset>;
+  removeDataset(id: string): Promise<void>;
+  addPicture(datasetId: string, picture: Blob, name?: string): Promise<TrainPicture>;
+  removePicture(datasetId: string, pictureId: string): Promise<void>;
+  editCaption(datasetId: string, pictureId: string, caption: string): Promise<TrainPicture>;
+  /** Start writing the descriptions: of every picture without one, or (`again`) of all or some. */
+  writeCaptions(
+    datasetId: string,
+    options?: { again?: boolean; pictureIds?: string[] },
+  ): Promise<{ writing: number }>;
+  /** A picture of the set (`thumb` or `picture`) as an object URL. */
+  pictureUrl(datasetId: string, pictureId: string, which: "thumb" | "picture"): Promise<string>;
+  startRun(datasetId: string, choice?: TrainChoice): Promise<TrainRun>;
+  /** The models and methods that can be chosen for a kind of teaching. */
+  choices(kind: TrainKind, family?: TrainFamily): Promise<TrainChoices>;
+  /** A model's training files from Hugging Face (desktop only); `confirmBytes` is the size shown. */
+  hubState?(): Promise<TrainHubState>;
+  fetchHub?(baseId: string, confirmBytes: number): Promise<TrainHubState>;
+  cancelHub?(): Promise<TrainHubState>;
+  /** "Make my own look or motion for video": whether it can be taught here (desktop only). */
+  videoStatus(): Promise<VideoTrainStatus>;
+  /** The video trainer's component, set up the same way. */
+  videoSetup(): Promise<TrainingSetupState>;
+  installVideoSetup(confirmBytes: number): Promise<TrainingSetupState>;
+  cancelVideoSetup(): Promise<TrainingSetupState>;
+  removeVideoSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
+  runs(): Promise<TrainRun[]>;
+  run(id: string): Promise<TrainRun>;
+  /** Stop for now and keep the last checkpoint; `resumeRun` picks it up where it stopped. */
+  pauseRun(id: string): Promise<{ paused: boolean }>;
+  resumeRun(id: string): Promise<TrainRun>;
+  /** Stop a run that is going, or discard one that is paused. */
+  cancelRun(id: string): Promise<{ cancelled: boolean }>;
+  /** A sample picture of a run as an object URL. */
+  sampleUrl(runId: string, name: string): Promise<string>;
+  models(): Promise<TrainedModel[]>;
+  model(id: string): Promise<TrainedModel>;
+  renameModel(id: string, name: string): Promise<TrainedModel>;
+  removeModel(id: string): Promise<void>;
+  /** "Teach it from examples" (ADR-0074): sets of examples, a run, the side-by-side answers. */
+  writingStatus(): Promise<WritingStatus>;
+  writingSets(): Promise<WritingSet[]>;
+  createWritingSet(name?: string): Promise<WritingSet>;
+  writingSet(id: string): Promise<WritingSet>;
+  updateWritingSet(
+    id: string,
+    patch: { name?: string; quality?: WritingQuality; base?: string },
+  ): Promise<WritingSet>;
+  /** Replace the examples of a set with these rows. */
+  setExamples(id: string, rows: WritingExample[]): Promise<WritingSet>;
+  removeWritingSet(id: string): Promise<void>;
+  startWritingRun(setId: string): Promise<TrainRun>;
+  /** The same question to the original model and to the one taught. */
+  askWriting(modelId: string, question: string): Promise<WritingAsk>;
+  /** Chat with a taught writing model: the chat engine serves its base with the adapter on top. */
+  useWritingInChat(modelId: string): Promise<void>;
+  /** Back to the model chat used before. */
+  stopWritingInChat(): Promise<{ ended: boolean }>;
+  /** What is on this computer for each base a writing model can be taught on. */
+  languageBases(): Promise<LanguageBase[]>;
+  /** Get the weights of a base, or the chat form of it, after its size was shown. */
+  installLanguagePart(
+    baseId: string,
+    part: "model" | "chat",
+    confirmBytes: number,
+  ): Promise<LanguageBase[]>;
+  cancelLanguagePart(baseId: string, part: "model" | "chat"): Promise<LanguageBase[]>;
+  /** The decision trainer's component (ADR-0075), set up the same way. */
+  decisionSetup(): Promise<TrainingSetupState>;
+  installDecisionSetup(confirmBytes: number): Promise<TrainingSetupState>;
+  cancelDecisionSetup(): Promise<TrainingSetupState>;
+  removeDecisionSetup(): Promise<{ freed_bytes: number } & TrainingSetupState>;
+  /** "Teach it to decide": sets of texts with answers to one question, a run, the report. */
+  decisionStatus(): Promise<DecisionStatus>;
+  decisionSets(): Promise<DecisionSet[]>;
+  createDecisionSet(name?: string): Promise<DecisionSet>;
+  decisionSet(id: string): Promise<DecisionSet>;
+  updateDecisionSet(id: string, patch: DecisionPatch): Promise<DecisionSet>;
+  /** Replace the examples of a set with these rows. */
+  setDecisionExamples(id: string, rows: DecisionExample[]): Promise<DecisionSet>;
+  removeDecisionSet(id: string): Promise<void>;
+  startDecisionRun(setId: string): Promise<TrainRun>;
+  /** One text, to the model that was taught and to the one it started from. */
+  askDecision(modelId: string, text: string): Promise<DecisionAsk>;
+  /** Many texts, each with its answer. */
+  sortDecision(modelId: string, texts: string[]): Promise<DecisionSorted>;
+  /** What is on this computer for each model a decision model can be taught on. */
+  decisionBases(): Promise<DecisionBase[]>;
+  installDecisionBase(baseId: string, confirmBytes: number): Promise<DecisionBase[]>;
+  cancelDecisionBase(baseId: string): Promise<DecisionBase[]>;
+};
+
+export function createTrainingApi(
+  transport: Transport,
+  product: string = TRAINING_PRODUCT_ID,
+): TrainingApi {
+  const base = `/products/${product}/train`;
+  const enc = encodeURIComponent;
+
+  async function json<T>(path: string, init?: RequestInit): Promise<T> {
+    const res = await transport.fetch(path, init);
+    if (res.status === 401) transport.onUnauthorized?.();
+    if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
+    return (await res.json()) as T;
+  }
+
+  async function objectUrl(path: string): Promise<string> {
+    const res = await transport.fetch(path);
+    if (res.status === 401) transport.onUnauthorized?.();
+    if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
+    return URL.createObjectURL(await res.blob());
+  }
+
+  const send = (method: string, body?: unknown): RequestInit => ({
+    method,
+    headers: { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const del = async (path: string) => {
+    const res = await transport.fetch(path, { method: "DELETE" });
+    if (!res.ok && res.status !== 404) throw new HttpError(res.status, await errorMessage(res));
+  };
+
+  return {
+    status: () => json<TrainStatus>(`${base}/status`),
+    datasets: async () => (await json<{ datasets: TrainDataset[] }>(`${base}/datasets`)).datasets,
+    createDataset: (kind, name = "", family = "image") =>
+      json<TrainDataset>(
+        `${base}/datasets`,
+        send("POST", family === "video" ? { kind, name, family } : { kind, name }),
+      ),
+    dataset: (id) => json<TrainDataset>(`${base}/datasets/${enc(id)}`),
+    updateDataset: (id, change) =>
+      json<TrainDataset>(`${base}/datasets/${enc(id)}`, send("PATCH", change)),
+    removeDataset: (id) => del(`${base}/datasets/${enc(id)}`),
+    addPicture: (datasetId, picture, name = "") =>
+      json<TrainPicture>(`${base}/datasets/${enc(datasetId)}/items?name=${enc(name)}`, {
+        method: "POST",
+        headers: { "content-type": picture.type || "application/octet-stream" },
+        body: picture,
+      }),
+    removePicture: (datasetId, pictureId) =>
+      del(`${base}/datasets/${enc(datasetId)}/items/${enc(pictureId)}`),
+    editCaption: (datasetId, pictureId, caption) =>
+      json<TrainPicture>(
+        `${base}/datasets/${enc(datasetId)}/items/${enc(pictureId)}`,
+        send("PATCH", { caption }),
+      ),
+    writeCaptions: (datasetId, options = {}) =>
+      json<{ writing: number }>(
+        `${base}/datasets/${enc(datasetId)}/captions`,
+        send("POST", { again: options.again ?? false, item_ids: options.pictureIds ?? null }),
+      ),
+    pictureUrl: (datasetId, pictureId, which) =>
+      objectUrl(`${base}/datasets/${enc(datasetId)}/items/${enc(pictureId)}/${which}`),
+    startRun: (datasetId, choice) =>
+      json<TrainRun>(`${base}/runs`, send("POST", { dataset_id: datasetId, ...choice })),
+    choices: (kind, family = "image") =>
+      json<TrainChoices>(
+        `${base}/choices?kind=${enc(kind)}${family === "video" ? "&family=video" : ""}`,
+      ),
+    videoStatus: () => json<VideoTrainStatus>(`${base}/video/status`),
+    videoSetup: () => json<TrainingSetupState>("/desktop/video-trainer-setup"),
+    installVideoSetup: (confirmBytes) =>
+      json<TrainingSetupState>(
+        "/desktop/video-trainer-setup/install",
+        send("POST", { confirm_bytes: confirmBytes }),
+      ),
+    cancelVideoSetup: () =>
+      json<TrainingSetupState>("/desktop/video-trainer-setup/install/cancel", { method: "POST" }),
+    removeVideoSetup: () =>
+      json<{ freed_bytes: number } & TrainingSetupState>("/desktop/video-trainer-setup/uninstall", {
+        method: "POST",
+      }),
+    writingStatus: () => json<WritingStatus>(`${base}/writing/status`),
+    writingSets: async () => (await json<{ sets: WritingSet[] }>(`${base}/writing/sets`)).sets,
+    createWritingSet: (name = "") =>
+      json<WritingSet>(`${base}/writing/sets`, send("POST", { name })),
+    writingSet: (id) => json<WritingSet>(`${base}/writing/sets/${enc(id)}`),
+    updateWritingSet: (id, patch) =>
+      json<WritingSet>(`${base}/writing/sets/${enc(id)}`, send("PATCH", patch)),
+    setExamples: (id, rows) =>
+      json<WritingSet>(`${base}/writing/sets/${enc(id)}/examples`, send("PUT", { rows })),
+    removeWritingSet: async (id) => {
+      const res = await transport.fetch(`${base}/writing/sets/${enc(id)}`, { method: "DELETE" });
+      if (!res.ok) throw new HttpError(res.status, await errorMessage(res));
+    },
+    startWritingRun: (setId) =>
+      json<TrainRun>(`${base}/writing/sets/${enc(setId)}/runs`, { method: "POST" }),
+    useWritingInChat: async (modelId) => {
+      await json<unknown>(`${base}/writing/models/${enc(modelId)}/use`, { method: "POST" });
+    },
+    stopWritingInChat: () => json<{ ended: boolean }>(`${base}/writing/use`, { method: "DELETE" }),
+    languageBases: async () =>
+      (await json<{ bases: LanguageBase[] }>("/desktop/language-setup/bases")).bases,
+    installLanguagePart: async (baseId, part, confirmBytes) =>
+      (
+        await json<{ bases: LanguageBase[] }>(
+          `/desktop/language-setup/bases/${enc(baseId)}/${part}/install`,
+          send("POST", { confirm_bytes: confirmBytes }),
+        )
+      ).bases,
+    cancelLanguagePart: async (baseId, part) =>
+      (
+        await json<{ bases: LanguageBase[] }>(
+          `/desktop/language-setup/bases/${enc(baseId)}/${part}/cancel`,
+          { method: "POST" },
+        )
+      ).bases,
+    decisionStatus: () => json<DecisionStatus>(`${base}/decision/status`),
+    decisionSets: async () => (await json<{ sets: DecisionSet[] }>(`${base}/decision/sets`)).sets,
+    createDecisionSet: (name = "") =>
+      json<DecisionSet>(`${base}/decision/sets`, send("POST", { name })),
+    decisionSet: (id) => json<DecisionSet>(`${base}/decision/sets/${enc(id)}`),
+    updateDecisionSet: (id, patch) =>
+      json<DecisionSet>(`${base}/decision/sets/${enc(id)}`, send("PATCH", patch)),
+    setDecisionExamples: (id, rows) =>
+      json<DecisionSet>(`${base}/decision/sets/${enc(id)}/examples`, send("PUT", { rows })),
+    removeDecisionSet: (id) => del(`${base}/decision/sets/${enc(id)}`),
+    startDecisionRun: (setId) =>
+      json<TrainRun>(`${base}/decision/sets/${enc(setId)}/runs`, { method: "POST" }),
+    askDecision: (modelId, text) =>
+      json<DecisionAsk>(`${base}/decision/models/${enc(modelId)}/ask`, send("POST", { text })),
+    sortDecision: (modelId, texts) =>
+      json<DecisionSorted>(`${base}/decision/models/${enc(modelId)}/sort`, send("POST", { texts })),
+    decisionBases: async () =>
+      (await json<{ bases: DecisionBase[] }>("/desktop/decision-setup/bases")).bases,
+    installDecisionBase: async (baseId, confirmBytes) =>
+      (
+        await json<{ bases: DecisionBase[] }>(
+          `/desktop/decision-setup/bases/${enc(baseId)}/install`,
+          send("POST", { confirm_bytes: confirmBytes }),
+        )
+      ).bases,
+    cancelDecisionBase: async (baseId) =>
+      (
+        await json<{ bases: DecisionBase[] }>(
+          `/desktop/decision-setup/bases/${enc(baseId)}/cancel`,
+          { method: "POST" },
+        )
+      ).bases,
+    decisionSetup: () => json<TrainingSetupState>("/desktop/decision-setup"),
+    installDecisionSetup: (confirmBytes) =>
+      json<TrainingSetupState>(
+        "/desktop/decision-setup/install",
+        send("POST", { confirm_bytes: confirmBytes }),
+      ),
+    cancelDecisionSetup: () =>
+      json<TrainingSetupState>("/desktop/decision-setup/install/cancel", { method: "POST" }),
+    removeDecisionSetup: () =>
+      json<{ freed_bytes: number } & TrainingSetupState>("/desktop/decision-setup/uninstall", {
+        method: "POST",
+      }),
+    askWriting: (modelId, question) =>
+      json<WritingAsk>(`${base}/writing/models/${enc(modelId)}/ask`, send("POST", { question })),
+    runs: async () => (await json<{ runs: TrainRun[] }>(`${base}/runs`)).runs,
+    run: (id) => json<TrainRun>(`${base}/runs/${enc(id)}`),
+    pauseRun: (id) =>
+      json<{ paused: boolean }>(`${base}/runs/${enc(id)}/pause`, { method: "POST" }),
+    resumeRun: (id) => json<TrainRun>(`${base}/runs/${enc(id)}/resume`, { method: "POST" }),
+    cancelRun: (id) =>
+      json<{ cancelled: boolean }>(`${base}/runs/${enc(id)}/cancel`, { method: "POST" }),
+    sampleUrl: (runId, name) => objectUrl(`${base}/runs/${enc(runId)}/samples/${enc(name)}`),
+    models: async () => (await json<{ models: TrainedModel[] }>(`${base}/models`)).models,
+    model: (id) => json<TrainedModel>(`${base}/models/${enc(id)}`),
+    renameModel: (id, name) =>
+      json<TrainedModel>(`${base}/models/${enc(id)}`, send("PATCH", { name })),
+    removeModel: (id) => del(`${base}/models/${enc(id)}`),
+    checkPlan: (modelId) =>
+      json<{ items: CheckStep[]; refs: number }>(`${base}/models/${enc(modelId)}/check`),
+    judge: (modelId, picture) =>
+      json<{ same: boolean; reason: string }>(`${base}/models/${enc(modelId)}/judge`, {
+        method: "POST",
+        headers: { "content-type": picture.type || "application/octet-stream" },
+        body: picture,
+      }),
+    saveEvaluation: (modelId, items) =>
+      json<TrainedModel>(`${base}/models/${enc(modelId)}/evaluation`, send("PUT", { items })),
+    setup: () => json<TrainingSetupState>("/desktop/training-setup"),
+    installSetup: (confirmBytes) =>
+      json<TrainingSetupState>(
+        "/desktop/training-setup/install",
+        send("POST", { confirm_bytes: confirmBytes }),
+      ),
+    cancelSetup: () =>
+      json<TrainingSetupState>("/desktop/training-setup/install/cancel", { method: "POST" }),
+    writingSetup: () => json<TrainingSetupState>("/desktop/language-setup"),
+    installWritingSetup: (confirmBytes) =>
+      json<TrainingSetupState>(
+        "/desktop/language-setup/install",
+        send("POST", { confirm_bytes: confirmBytes }),
+      ),
+    cancelWritingSetup: () =>
+      json<TrainingSetupState>("/desktop/language-setup/install/cancel", { method: "POST" }),
+    removeWritingSetup: () =>
+      json<{ freed_bytes: number } & TrainingSetupState>("/desktop/language-setup/uninstall", {
+        method: "POST",
+      }),
+    removeSetup: () =>
+      json<{ freed_bytes: number } & TrainingSetupState>("/desktop/training-setup/uninstall", {
+        method: "POST",
+      }),
+    hubState: () => json<TrainHubState>(`${base}/hub`),
+    fetchHub: (baseId, confirmBytes) =>
+      json<TrainHubState>(
+        `${base}/hub`,
+        send("POST", { base: baseId, confirm_bytes: confirmBytes }),
+      ),
+    cancelHub: () => json<TrainHubState>(`${base}/hub/cancel`, { method: "POST" }),
+  };
+}

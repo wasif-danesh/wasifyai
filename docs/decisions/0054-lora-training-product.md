@@ -1,6 +1,6 @@
 # ADR-0054: LoRA training: dataset, captions, trainer service, publish
 
-- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wasifyai-art`, in its own repository (`wasifyai-art`); wasifyai does not implement it. Nothing here was built.
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio will not be built (owner, 2026-10-24); wasifyai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051 (catalog, LoRA chain). Follows the pattern of ADR-0044 (an external native service) and
   ADR-0037 (a long job the user can leave).
@@ -90,7 +90,6 @@ On the 64 GB Mac, 15 synthetic or owned images, one family (`flux2-klein`):
 - A new service (a trainer with its own Python environment, several GB). CLAUDE.md says to ask before adding a
   service; this ADR is that ask. It adds no datastore.
 - Training blocks image generation on a single-GPU machine; this is a product trade-off, stated in the UI.
-- The trainers' own licences and each base family's terms are recorded by the owner in the family config.
 
 ## Not in this version
 

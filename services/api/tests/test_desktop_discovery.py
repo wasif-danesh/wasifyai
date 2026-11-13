@@ -3,6 +3,7 @@
 import asyncio
 import json
 import struct
+import time
 from pathlib import Path
 
 import httpx
@@ -23,7 +24,7 @@ from wasifyai_api.desktop_discovery import (
     scan_folders,
 )
 from wasifyai_api.desktop_models import ModelEntry, ModelFile, ModelsService
-from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.settings_store import InMemorySettingsStore
 
 MB = 1_000_000
 
@@ -82,7 +83,7 @@ def test_a_gguf_header_tells_what_it_is_without_reading_the_tokenizer(tmp_path):
     h = read_gguf(gguf(tmp_path / "m.gguf", arch="qwen2", name="Qwen2 7B", ftype=15))
     assert h is not None
     assert (h.kind, h.family, h.quant, h.name) == ("language", "qwen2", "Q4_K_M", "Qwen2 7B")
-    assert h.licence == "apache-2.0" and h.context == 8192 and h.tensors == 3
+    assert h.context == 8192 and h.tensors == 3
 
 
 @pytest.mark.parametrize(
@@ -108,6 +109,14 @@ def test_a_file_that_is_not_a_gguf_is_not_one(tmp_path):
         (FLUX, "diffusion", "flux"),
         (WAN, "video", "wan"),
         (LORA, "lora", "flux"),
+        (
+            [
+                "transformer_blocks.0.attn1.to_q.lora_A.weight",
+                "transformer_blocks.0.attn2.to_k.lora_B.weight",
+            ],
+            "lora",
+            "ltx-video",
+        ),
         (VAE, "vae", ""),
         (LLM, "language", "transformers"),
         (["encoder.block.0.layer.0.weight", "shared.weight"], "text_encoder", "t5"),
@@ -186,6 +195,30 @@ def test_ollama_is_read_through_its_manifests(tmp_path):
     assert item.path == str(blob)
 
 
+def test_an_ollama_model_kept_under_a_hash_takes_the_name_it_came_from(tmp_path):
+    # an import leaves "llamacpp:<hash>", which the screen showed as "Unnamed model"
+    # (seen on the owner's Mac, 2026-11-07)
+    root = tmp_path / ".ollama" / "models"
+    gguf(root / "blobs" / "sha256-big", arch="gpt-oss", name="", ftype=15)
+    gguf(root / "blobs" / "sha256-own", arch="llama", name="My Llama", ftype=15)
+    library = root / "manifests" / "registry.ollama.ai" / "library" / "llamacpp"
+    library.mkdir(parents=True)
+    for digest, tag in (("big", "9ba9cc2b4e02463b933096090530aef679d534dd91ecc9af"),
+                        ("own", "0123456789abcdef0123456789abcdef01234567")):  # fmt: skip
+        (library / tag).write_text(json.dumps({"layers": [
+            {"mediaType": "application/vnd.ollama.image.model", "digest": f"sha256:{digest}"},
+            {"mediaType": "application/vnd.ollama.image.template", "digest": "sha256:t",
+             "from": "gpt-oss:20b"},
+        ]}))  # fmt: skip
+
+    names = {
+        Path(i.path).name: i.name
+        for i in scan_folders(tools_for(tmp_path), []).items
+        if i.tool == "ollama"
+    }
+    assert names == {"sha256-big": "gpt-oss:20b", "sha256-own": "My Llama"}
+
+
 def test_a_huggingface_repo_is_one_item_and_a_vocabulary_file_is_none(tmp_path):
     hub = tmp_path / ".cache" / "huggingface" / "hub"
     snap = hub / "models--org--flux-ish" / "snapshots" / "rev1"
@@ -256,7 +289,7 @@ def test_a_folder_that_asks_for_permission_waits_until_it_is_added(tmp_path):
 
 def entry(folder: str, name: str, size: int) -> ModelEntry:
     f = ModelFile(folder, name, "https://example.test/x", size, "0" * 64)
-    return ModelEntry("demo", "wasifyai-image", "Demo image model", "Apache-2.0", "x", "", 8, (f,))
+    return ModelEntry("demo", "wasifyai-image", "Demo image model", "x", "", 8, (f,))
 
 
 def found(path: Path, kind="diffusion", **kw) -> Found:
@@ -320,6 +353,54 @@ async def test_only_servers_that_answer_are_reported(tmp_path):
     assert [(s["tool"], s["kind"]) for s in found_] == [("ollama", "ollama")]
 
 
+async def test_the_servers_are_asked_together_so_one_that_is_down_costs_its_wait_once(tmp_path):
+    asked: list[int] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.port or 0)
+        await asyncio.sleep(0.2)  # every server is slow to answer
+        if request.url.port == 11434:
+            return httpx.Response(200, json={"models": [{"name": "qwen3.8:27b-mlx"}]})
+        raise httpx.ConnectError("refused")
+
+    tools = tools_for(tmp_path)
+    count = sum(1 for t in tools for x in t.servers if x["url"].startswith("http://127.0.0.1:"))
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        started = time.monotonic()
+        found_ = await probe_servers(tools, client)
+        took = time.monotonic() - started
+    assert len(asked) == count > 1
+    assert took < 0.2 * count * 0.75  # together, not one after another
+    assert found_[0]["models"] == ["qwen3.8:27b-mlx"]
+
+
+async def test_the_running_tools_are_found_at_start_before_the_folders_are_read(tmp_path):
+    """A model chosen in Ollama is there as soon as the window asks (not after the slow scan)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.port == 11434:
+            return httpx.Response(200, json={"models": [{"name": "qwen3.8:27b-mlx"}]})
+        raise httpx.ConnectError("refused")
+
+    store = InMemorySettingsStore()
+    svc = DiscoveryService(
+        store,
+        None,
+        tools_for(tmp_path / "home"),
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    svc.start(delay=60)  # the folder scan waits a minute; the servers do not
+    try:
+        for _ in range(50):
+            if svc.servers:
+                break
+            await asyncio.sleep(0.02)
+        assert [s["tool"] for s in svc.servers] == ["ollama"]
+        assert svc.scanned_at is None  # the folders have not been read yet
+    finally:
+        await svc.stop()
+
+
 # ---- the service ------------------------------------------------------------------------------
 
 
@@ -353,6 +434,15 @@ async def test_the_service_scans_saves_and_lets_a_file_be_used_in_place(tmp_path
     assert again.folders == [tmp_path / "extra"]
     with pytest.raises(KeyError):
         await again.use("nope")
+
+    # a scan an older app saved, with a field this one no longer has (`licence`), still loads
+    saved = await store.get("desktop.discovery")
+    assert isinstance(saved, dict)
+    saved["items"][0]["licence"] = "Apache-2.0"
+    await store.put("desktop.discovery", saved, "desktop")
+    older = DiscoveryService(store, svc_models, tools_for(home))
+    await older.load()
+    assert len(older.items) == 1 and not hasattr(older.items[0], "licence")
 
 
 async def test_scans_do_not_overlap_and_a_failure_does_not_stick(tmp_path):

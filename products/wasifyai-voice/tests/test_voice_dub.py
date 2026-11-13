@@ -290,7 +290,7 @@ async def test_a_dub_speaks_each_line_fits_it_and_is_kept_as_a_track(tmp_path, c
         saved["mode"] == "dubbed" and saved["parent_id"] == "song" and saved["sample_rate"] == 44100
     )
     assert saved["edit"]["action"] == "dub" and saved["edit"]["language"] == "en"
-    assert saved["edit"]["voice"] == "am_adam" and saved["edit"]["consent"] is None
+    assert saved["edit"]["voice"] == "am_adam" and "consent" not in saved["edit"]
     assert [s["text"] for s in saved["edit"]["segments"]][0] == "Hello."
     assert final["fit"]["lines"] == 2 and final["fit"]["sped_up"] >= 0
     assert rig.indexed[-1][0] == "track"
@@ -300,7 +300,7 @@ async def test_a_dub_speaks_each_line_fits_it_and_is_kept_as_a_track(tmp_path, c
 
 
 @needs_ffmpeg
-async def test_copying_the_speaker_needs_their_word_and_cuts_their_voice(tmp_path, ctx):  # noqa: F811
+async def test_copying_the_speaker_cuts_their_voice_without_asking_whose_it_is(tmp_path, ctx):  # noqa: F811
     rig = Rig(tmp_path)
     await library_track(rig, track_id="song", rate=44100, channels=2, seconds=12.0)
     await library_track(rig, track_id="vox", title="Vocals", rate=44100, channels=2, seconds=12.0)
@@ -318,19 +318,14 @@ async def test_copying_the_speaker_needs_their_word_and_cuts_their_voice(tmp_pat
     ]
     asked = {"task": "dub", "source_track": "song", "language": "es", "segments": script,
              "voice_from": "speaker", "vocals_track": "vox"}  # fmt: skip
-    final, _ = await rig.run(**asked)
-    assert final["refusal"]["code"] == "consent_required" and rig.engine.cloned == []
-    final, _ = await rig.run(**asked, speaker_basis="own", background_track="bg")
+    final, _ = await rig.run(**asked, background_track="bg")
     assert final["status"] == "done"
     model, text, ref_name, ref_text, _ = rig.engine.cloned[0]
     assert model == "qwen3-tts-0.6b-base" and text == "Un tramo largo de voz."
     assert ref_name == "reference.wav"
     assert ref_text == "A long enough stretch of speech"  # the words of the stretch it copied from
     saved = store_for(rig.state).get_track("t1", "u1", final["track_id"])
-    assert (
-        saved["edit"]["consent"]["basis"] == "own"
-        and saved["edit"]["voice"] == "the original speaker"
-    )
+    assert "consent" not in saved["edit"] and saved["edit"]["voice"] == "the original speaker"
     assert saved["sample_rate"] == 44100 and saved["seconds"] > 11
 
 
@@ -346,7 +341,7 @@ async def test_a_dub_that_cannot_be_made_is_refused_in_words(tmp_path, ctx):  # 
             "no_voice_for_language",
         ),  # Kokoro is English only
         ({"language": "es", "voice_from": "saved", "saved_voice": "ghost"}, "unknown_voice"),
-        ({"language": "es", "voice_from": "speaker", "speaker_basis": "own"}, "no_reference"),
+        ({"language": "es", "voice_from": "speaker"}, "no_reference"),
         ({"language": "en", "segments": None}, "script_required"),
         ({"language": "en", "model": "qwen3-tts-0.6b-base"}, "no_voice_for_language"),
     ):

@@ -59,7 +59,9 @@ class Rig:
         self.caps = build_capabilities(
             config, ProviderDeps(products_dir=tmp_path / "products", usage=self.usage)
         )
-        self.store = NotebookStore(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
+        self.store = NotebookStore.in_folder(
+            tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id
+        )
         self.components = FakeComponents(tmp_path, embedder_ready=embedder_ready)
         files = tmp_path / "nb" / "files"
         files.mkdir()

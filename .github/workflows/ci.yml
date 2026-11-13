@@ -9,6 +9,7 @@ concurrency:
 jobs:
   python:
     runs-on: ubuntu-latest
+    timeout-minutes: 40   # a normal run is about 8 minutes, with the checks before the tests
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -31,11 +32,113 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: uv run ruff check . && uv run ruff format --check .
       - run: uv run pyright
+      # the test steps run even when a check before them failed, so one run shows every problem; the
+      # migration must run with them, or every Postgres test fails on a missing table instead
       - name: Migrate (also proves 0001-0003 apply on an empty database)
+        if: ${{ !cancelled() }}
         run: cd services/api && uv run alembic upgrade head
       # Integration tests for Postgres/pgvector and the Redis media pipeline (with a stub worker)
       # run here; the storage, LiteLLM and ComfyUI ones skip themselves.
-      - run: uv run pytest -v
+      # a normal run takes about 4 minutes. conftest.py has a watchdog: a test that hangs ends the run by itself and
+      # the next step prints which test and where it was stuck (a cancelled job loses its log)
+      # The step has a time limit of its own: a step that is stopped keeps its log (a whole job that is cancelled
+      # does not), and `-v` has printed the name of the test that was running. `faulthandler_timeout` prints where
+      # every thread is stuck when one test runs over 5 minutes.
+      # Every run since the Video Builder commit (f7e3da8) has hung here with no log: the runner stops answering and
+      # neither a step nor a job limit fires. scripts/ci/guard.sh watches the memory, writes a snapshot every 30 s and, when
+      # it runs low, stops the tests (with every thread's stack) so the log survives; both files are uploaded below.
+      # The tests run in steps of their own, each with a time limit: the runner has stopped answering in the middle of the
+      # tests on every run since 21 October, and the first step of four (packages and products) is where it went on 22
+      # October. Nothing reproduces it (the same command passes in 3 minutes in a Linux container with 7 GB and 2 CPUs and
+      # the same Postgres and Redis). A step that has finished keeps its log, so the step that never ends names the group.
+      - name: Tests, the platform SDK
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 packages 2>&1 | tee "$RUNNER_TEMP/pytest-1.log"
+      - name: Tests, the assistant
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-assistant 2>&1 | tee "$RUNNER_TEMP/pytest-2.log"
+      - name: Tests, images
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-image 2>&1 | tee "$RUNNER_TEMP/pytest-3.log"
+      - name: Tests, 3D
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-model3d 2>&1 | tee "$RUNNER_TEMP/pytest-4.log"
+      - name: Tests, notebooks
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-notebooks 2>&1 | tee "$RUNNER_TEMP/pytest-5.log"
+      - name: Tests, video
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-video 2>&1 | tee "$RUNNER_TEMP/pytest-6.log"
+      - name: Tests, voice
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-voice 2>&1 | tee "$RUNNER_TEMP/pytest-7.log"
+      - name: Tests, the API
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 services/api/tests --ignore=services/api/tests/integration 2>&1 | tee "$RUNNER_TEMP/pytest-8.log"
+      - name: Tests, the API, with Postgres and Redis
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 services/api/tests/integration 2>&1 | tee "$RUNNER_TEMP/pytest-9.log"
+      - name: Tests, the workers
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 services/media-worker services/engine-worker 2>&1 | tee "$RUNNER_TEMP/pytest-10.log"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-test-log
+          path: |
+            ${{ runner.temp }}/pytest-*.log
+            ${{ runner.temp }}/resources.txt
+            ${{ runner.temp }}/test-watchdog.txt
+          if-no-files-found: ignore
+      - if: failure() || cancelled()
+        name: Where a hung test stopped
+        shell: bash
+        run: |
+          cat "$RUNNER_TEMP/test-watchdog.txt" 2>/dev/null || echo "the watchdog did not stop anything"
+          echo "=== the machine, last snapshots"
+          tail -40 "$RUNNER_TEMP/resources.txt" 2>/dev/null || echo "no snapshots"
+          echo "=== processes still running"
+          ps -eo pid,ppid,stat,etime,args --forest | head -60
   web:
     runs-on: ubuntu-latest
     steps:
@@ -77,6 +180,11 @@ jobs:
       OLLAMA_EXTERNAL_URL: http://127.0.0.1:11434
       KIND_MODE: light   # a hosted runner is too small for the models; `full` is for a workstation
     steps:
+      # The images are built in Docker and then copied into the kind node, so each is on the disk twice; the runner's
+      # preinstalled toolchains this job never uses take about 20 GB (2026-11-03: "no space left on device" loading web)
+      - run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
       - run: make helm-lint
@@ -89,6 +197,10 @@ jobs:
           kubectl -n wasifyai get pods -o wide
           kubectl -n wasifyai describe pods | tail -80
           for d in api litellm web; do echo "--- $d"; kubectl -n wasifyai logs deploy/wasifyai-$d --tail=40 || true; done
+          # the migration job is the pod that fails first: say why, from this try and the one before it
+          echo "--- migrate"; kubectl -n wasifyai logs job/wasifyai-migrate --tail=80 || true
+          kubectl -n wasifyai logs job/wasifyai-migrate --previous --tail=80 || true
+          kubectl -n wasifyai describe job wasifyai-migrate | tail -30 || true
   images:
     # Switched off for ordinary pushes while the app is built (the multi-arch build is the slowest job by
     # far). It runs for a release tag (`git tag v0.1.0 && git push origin v0.1.0`) or by hand (Actions >

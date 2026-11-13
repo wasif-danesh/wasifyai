@@ -3,11 +3,12 @@ Redis, served from one SQLite file. Product code never imports this package: the
 adapters from the engine's dialect and the deployment profile."""
 
 from wasifyai_platform_sdk.sqlite.engine import (
+    Migration,
+    SchemaTooNew,
     create_sqlite_engine,
-    ensure_columns,
-    ensure_tables,
     from_iso,
     is_sqlite,
+    migrate,
     now_iso,
     to_iso,
 )
@@ -25,11 +26,12 @@ __all__ = [
     "SqliteRunStore",
     "SqliteUploadStore",
     "SqliteUsageRecorder",
+    "Migration",
+    "SchemaTooNew",
     "create_sqlite_engine",
-    "ensure_columns",
-    "ensure_tables",
     "from_iso",
     "is_sqlite",
+    "migrate",
     "now_iso",
     "to_iso",
 ]

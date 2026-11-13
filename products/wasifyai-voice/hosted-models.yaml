@@ -6,7 +6,6 @@
 models:
   - id: hosted-speech
     title: Speech (hosted)
-    licence: The provider's terms of service
     voice:
       engine: remote
       family: openai-speech
@@ -16,9 +15,6 @@ models:
       recommended: [speak]
       languages: [en]
       sample_rate: 24000
-      commercial_use: "yes"
-      licence_evidence: https://openrouter.ai/terms
-      reviewed: "2026-10-18"
       voices:
         - { id: alloy, label: Alloy, language: en }
         - { id: echo, label: Echo, language: en, gender: male }
@@ -29,7 +25,6 @@ models:
         - { name: speed, type: float, label: Speed, default: 1.0, min: 0.5, max: 2.0 }
   - id: hosted-transcribe
     title: Speech to text (hosted)
-    licence: The provider's terms of service
     voice:
       engine: remote
       family: openai-transcription
@@ -39,8 +34,5 @@ models:
       recommended: [transcribe]
       languages: [en]
       sample_rate: 16000
-      commercial_use: "yes"
-      licence_evidence: https://openrouter.ai/terms
-      reviewed: "2026-10-18"
       options:
         - { name: language, type: string, label: Language, description: "A code such as en; left empty it is detected." }

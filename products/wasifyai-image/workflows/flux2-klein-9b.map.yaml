@@ -1,0 +1,31 @@
+workflow: flux2-klein-9b.json
+notes: >
+  FLUX.2 klein 9B: the klein 4B workflow with the 9B model (bf16, black-forest-labs/FLUX.2-klein-9B; the
+  template's fp8 file does not load on a Mac) and its Qwen3 8B text encoder (fp8mixed, Comfy-Org/flux2-klein-9B).
+  Text to image. The same workflow as the song covers, with a size: executed against
+  ComfyUI 0.39, 1024x1024 in about 25 s. It matches the official ComfyUI template (4 steps, cfg 1).
+  The VAE comes from the Comfy-Org/flux2-klein repo.
+models:
+  - diffusion_models/flux-2-klein-9b.safetensors
+  - text_encoders/qwen_3_8b_fp8mixed.safetensors
+  - vae/flux2-vae.safetensors
+inputs:
+  prompt: { node: "4", field: text }
+  seed: { node: "9", field: noise_seed }
+  steps: { node: "7", field: steps }
+  width:
+    - { node: "6", field: width }
+    - { node: "7", field: width }
+  height:
+    - { node: "6", field: height }
+    - { node: "7", field: height }
+outputs:
+  image: { node: "13", type: image }
+# LoRAs (ADR-0051): the diffusion model's output goes through up to eight model-only LoRA loaders (ADR-0091)
+# before the guider. A klein LoRA patches the diffusion model; the text encoder is not patched.
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 8
+  from: { node: "1", output: 0 }
+  to:
+    - { node: "10", field: model }

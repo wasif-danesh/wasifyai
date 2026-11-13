@@ -52,6 +52,14 @@ class Storage:
         res = await obstore.get_async(self._store, key)
         return bytes(await res.bytes_async())
 
+    async def size(self, key: str) -> int:
+        """The file's length in bytes (FileNotFoundError when there is none)."""
+        return int((await obstore.head_async(self._store, key))["size"])
+
+    async def read_range(self, key: str, first: int, last: int) -> bytes:
+        """Bytes `first` to `last` of a file, both included: a media player's request."""
+        return bytes(await obstore.get_range_async(self._store, key, start=first, end=last + 1))
+
     async def exists(self, key: str) -> bool:
         try:
             await obstore.head_async(self._store, key)
@@ -166,6 +174,14 @@ class ScopedStorage:
 
     async def delete_for(self, owner: tuple[str, str, str], rel: str) -> None:
         await self._storage.delete(object_key(*owner, rel))
+
+    async def size_for(self, owner: tuple[str, str, str], rel: str) -> int:
+        return await self._storage.size(object_key(*owner, rel))
+
+    async def read_range_for(
+        self, owner: tuple[str, str, str], rel: str, first: int, last: int
+    ) -> bytes:
+        return await self._storage.read_range(object_key(*owner, rel), first, last)
 
     async def get_for(self, owner: tuple[str, str, str], rel: str) -> bytes:
         return await self._storage.get(object_key(*owner, rel))

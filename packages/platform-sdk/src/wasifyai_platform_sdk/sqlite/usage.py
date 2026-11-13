@@ -6,7 +6,7 @@ from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables, now_iso
+from wasifyai_platform_sdk.sqlite.engine import Migration, migrate, now_iso
 from wasifyai_platform_sdk.usage import UsageEvent
 
 _DDL = (
@@ -28,13 +28,16 @@ _DDL = (
     "ON usage_events (tenant_id, product_id, user_id, kind, created_at)",
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_MIGRATIONS = (Migration(1, _DDL),)
+
 
 class SqliteUsageRecorder:
     def __init__(self, engine: AsyncEngine):
         self._engine = engine
 
     async def record(self, event: UsageEvent) -> None:
-        await ensure_tables(self._engine, "usage_events", _DDL)
+        await migrate(self._engine, "usage_events", _MIGRATIONS)
         async with self._engine.begin() as conn:
             await conn.execute(
                 text(

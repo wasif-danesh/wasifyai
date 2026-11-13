@@ -15,7 +15,6 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantHome } from "../AssistantHome";
 import { ChatScreen } from "../ChatScreen";
-import { ChatScreenNext } from "../ChatScreenNext";
 import { type AttachControl, MAX_ATTACHMENTS, useAttachments } from "./use-attachments";
 
 const images = { get: async () => ({}) } as unknown as ImagesApi;
@@ -121,6 +120,38 @@ describe("useAttachments", () => {
     expect(screen.getAllByText(/At most 4 files/)).toHaveLength(2);
   });
 
+  it("says a long document is cut and offers a notebook for all of it", async () => {
+    const onOpenNotebooks = vi.fn();
+    const c = control({
+      onOpenNotebooks,
+      upload: vi.fn(async (_f: Blob, name: string) => ({
+        id: "long",
+        kind: "document" as const,
+        name,
+        chars: 150_000,
+        pages: 80,
+      })),
+    });
+    const { result } = renderHook(() => useAttachments(c));
+    act(() => result.current.add([doc("report.pdf")]));
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    render(<div>{result.current.chips}</div>);
+    expect(screen.getByText("Only the start is used")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Add it to a notebook to use all of it" }),
+    );
+    expect(onOpenNotebooks).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not offer a notebook for a document that fits", async () => {
+    const c = control({ onOpenNotebooks: vi.fn() });
+    const { result } = renderHook(() => useAttachments(c));
+    act(() => result.current.add([doc()]));
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    render(<div>{result.current.chips}</div>);
+    expect(screen.queryByRole("button", { name: /notebook/ })).toBeNull();
+  });
+
   it("lets go of everything after the message was sent", async () => {
     const c = control();
     const { result } = renderHook(() => useAttachments(c));
@@ -185,10 +216,7 @@ function runsRecording(inputs: object[]) {
   };
 }
 
-describe.each([
-  ["the usual chat", "classic"],
-  ["the new chat", "next"],
-] as const)("%s", (_name, screenKind) => {
+describe("the chat", () => {
   const home = (assistant: AssistantApi, inputs: object[] = []) =>
     render(
       <AssistantHome
@@ -198,7 +226,6 @@ describe.each([
         conversationId={null}
         onAdopt={() => {}}
         onNewChat={() => {}}
-        screen={screenKind}
       />,
     );
 
@@ -238,6 +265,21 @@ describe.each([
     await user.type(screen.getByRole("textbox", { name: "Message" }), "and again{Enter}");
     await waitFor(() => expect(inputs).toHaveLength(2));
     expect(inputs[1]).not.toHaveProperty("attachments");
+  });
+
+  it("sends a message that is only a file, with no words", async () => {
+    const inputs: object[] = [];
+    const user = userEvent.setup();
+    home(assistantWith(OFFER), inputs);
+    await screen.findByRole("button", { name: /^Attach/ });
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled(); // nothing to send yet
+    await user.upload(screen.getByLabelText("Choose files to attach"), [png()]);
+    await screen.findByAltText("fox.png");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(inputs).toHaveLength(1));
+    expect(inputs[0]).toMatchObject({ text: "", attachments: [{ name: "fox.png" }] });
+    expect(await screen.findByText("I see it.")).toBeInTheDocument();
   });
 
   it("does not send while a file is still going up", async () => {
@@ -328,26 +370,158 @@ describe("a saved message with attachments", () => {
     ],
   };
 
-  it.each([
-    ["the usual chat", ChatScreen],
-    ["the new chat", ChatScreenNext],
-  ] as const)(
-    "is shown on %s: a picture from its link, a document by name, the words as text",
-    async (_n, Screen) => {
-      const assistant = { ...assistantWith(OFFER), get: async () => saved };
-      render(
-        <Screen
-          runs={runsRecording([])}
-          assistant={assistant}
-          images={images}
-          conversationId="c9"
-        />,
-      );
-      expect(await screen.findByText("A fox and a plan.")).toBeInTheDocument();
-      const picture = screen.getByAltText("fox.png");
-      expect(picture).toHaveAttribute("src", "https://files.test/fox.png");
-      expect(screen.getByText("plan.md")).toBeInTheDocument();
-      expect(screen.getByText("What is in these?")).toBeInTheDocument();
-    },
-  );
+  it("is shown: a picture from its link, a document by name, the words as text", async () => {
+    const Screen = ChatScreen;
+    const assistant = { ...assistantWith(OFFER), get: async () => saved };
+    render(
+      <Screen runs={runsRecording([])} assistant={assistant} images={images} conversationId="c9" />,
+    );
+    expect(await screen.findByText("A fox and a plan.")).toBeInTheDocument();
+    const picture = screen.getByAltText("fox.png");
+    expect(picture).toHaveAttribute("src", "https://files.test/fox.png");
+    expect(screen.getByText("plan.md")).toBeInTheDocument();
+    expect(screen.getByText("What is in these?")).toBeInTheDocument();
+  });
+});
+
+describe("the picture reader", () => {
+  const reader = (run: (onProgress: (fraction: number | null) => void) => Promise<void>) => ({
+    title: "Qwen3.5 9B picture reader",
+    from: "huggingface.co",
+    bytes: 918_166_080,
+    run,
+  });
+
+  it("offers it with its size when a picture is chosen for a model that cannot read pictures, and attaches the picture once it can", async () => {
+    let finish: () => void = () => {};
+    const run = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const base = control({ images: false, imagesNote: "no reader", pictureReader: reader(run) });
+    const { result, rerender } = renderHook(({ c }) => useAttachments(c), {
+      initialProps: { c: base },
+    });
+    act(() => result.current.add([png(), doc()]));
+    // the document goes up at once; the picture waits, and nothing was uploaded for it
+    expect(base.upload).toHaveBeenCalledTimes(1);
+    const { container } = render(<div>{result.current.notice}</div>);
+    expect(container).toHaveTextContent("Qwen3.5 9B picture reader, from huggingface.co");
+    expect(container).toHaveTextContent("918 MB");
+    expect(container).toHaveTextContent("your pictures are not sent anywhere");
+
+    // nothing is fetched until the person clicks
+    expect(run).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /^Download/ }));
+    expect(run).toHaveBeenCalledTimes(1);
+
+    // the model can read pictures now (the app read the engine's options again): the held picture is attached
+    const ready = control({ images: true });
+    act(() => {
+      rerender({ c: ready });
+      finish();
+    });
+    await waitFor(() => expect(ready.upload).toHaveBeenCalledTimes(1));
+    expect(ready.upload).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "fox.png" }),
+      "fox.png",
+    );
+  });
+
+  it("drops the waiting pictures when the person says not now", async () => {
+    const run = vi.fn(async () => {});
+    const c = control({ images: false, pictureReader: reader(run) });
+    const { result } = renderHook(() => useAttachments(c));
+    act(() => result.current.add([png()]));
+    render(<div>{result.current.notice}</div>);
+    await userEvent.click(screen.getByRole("button", { name: "Not now" }));
+    expect(run).not.toHaveBeenCalled();
+    expect(c.upload).not.toHaveBeenCalled();
+    expect(result.current.count).toBe(0);
+  });
+
+  it("says what went wrong and lets the person try again", async () => {
+    const run = vi.fn(async () => {
+      throw new Error("The download was interrupted.");
+    });
+    const c = control({ images: false, pictureReader: reader(run) });
+    const { result } = renderHook(() => useAttachments(c));
+    act(() => result.current.add([png()]));
+    const view = render(<div>{result.current.notice}</div>);
+    await userEvent.click(screen.getByRole("button", { name: /^Download/ }));
+    view.rerender(<div>{result.current.notice}</div>);
+    expect(await screen.findByText("The download was interrupted.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("the whole flow in the chat: choose a picture, agree, and it is sent along", async () => {
+    let n = 0;
+    const assistant = assistantWith({
+      available: true,
+      images: false,
+      documents: true,
+      images_note: "No picture reader.",
+      picture_reader: {
+        state: "available",
+        title: "Demo reader",
+        from: "huggingface.co",
+        bytes: 1_000_000,
+      },
+    });
+    const options = vi
+      .fn()
+      .mockResolvedValueOnce({
+        thinking: false,
+        attach: {
+          available: true,
+          images: false,
+          documents: true,
+          images_note: "No picture reader.",
+          picture_reader: {
+            state: "available",
+            title: "Demo reader",
+            from: "huggingface.co",
+            bytes: 1_000_000,
+          },
+        },
+      })
+      .mockResolvedValue({ thinking: false, attach: OFFER });
+    assistant.options = options;
+    const states = [
+      {
+        state: "downloading",
+        title: "t",
+        from: "f",
+        bytes: 1,
+        download: { status: "running", bytes_done: 5, bytes_total: 10, error: "" },
+      },
+      { state: "ready" },
+    ];
+    assistant.pictureReader = {
+      start: vi.fn(async () => {}),
+      status: vi.fn(async () => states[Math.min(n++, 1)] as never),
+    };
+    const inputs: object[] = [];
+    const user = userEvent.setup();
+    render(
+      <AssistantHome
+        runs={runsRecording(inputs)}
+        assistant={assistant}
+        images={images}
+        conversationId={null}
+        onAdopt={() => {}}
+        onNewChat={() => {}}
+      />,
+    );
+    await screen.findByRole("button", { name: /^Attach/ });
+    await user.upload(screen.getByLabelText("Choose files to attach"), [png()]);
+    await user.click(await screen.findByRole("button", { name: /^Download/ }));
+    expect(assistant.pictureReader.start).toHaveBeenCalledWith(1_000_000);
+    expect(await screen.findByAltText("fox.png", {}, { timeout: 4000 })).toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "what is it?{Enter}");
+    await waitFor(() => expect(inputs).toHaveLength(1));
+    expect(inputs[0]).toMatchObject({ attachments: [{ name: "fox.png" }] });
+  }, 15000);
 });

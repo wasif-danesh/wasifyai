@@ -4,7 +4,7 @@ pages through to backfill the index and to clean it up. Only finished clips are 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import IndexItem, IndexSource, search_text
-from wasifyai_platform_sdk.sqlite import ensure_tables, is_sqlite
+from wasifyai_platform_sdk.sqlite import is_sqlite, migrate
 
 PRODUCT_ID = "wasifyai-video"
 
@@ -61,9 +61,9 @@ class SqliteVideoIndexSource:
         self._engine = engine
 
     async def _ready(self) -> None:
-        from wasifyai_video.videos import _SQLITE_DDL
+        from wasifyai_video.videos import SQLITE_MIGRATIONS
 
-        await ensure_tables(self._engine, "videos", _SQLITE_DDL)
+        await migrate(self._engine, "videos", SQLITE_MIGRATIONS)
 
     async def page(self, after: str | None, limit: int) -> list[IndexItem]:
         await self._ready()
@@ -97,6 +97,32 @@ class SqliteVideoIndexSource:
         return found
 
 
+class CombinedIndexSource:
+    """The clips and the Motion graphics compositions as one source (a product registers one):
+    every item carries its own kind, and a page is the next `limit` items of both, in id order."""
+
+    product_id = PRODUCT_ID
+    kind = "video"
+
+    def __init__(self, *sources: IndexSource):
+        self._sources = sources
+
+    async def page(self, after: str | None, limit: int) -> list[IndexItem]:
+        items = [i for s in self._sources for i in await s.page(after, limit)]
+        return sorted(items, key=lambda i: i.item_id)[:limit]
+
+    async def present(self, item_ids: list[str]) -> set[str]:
+        found: set[str] = set()
+        for s in self._sources:
+            found |= await s.present(item_ids)
+        return found
+
+
 def video_index_source(engine: AsyncEngine) -> IndexSource:
-    """The source for the database the engine speaks to (Postgres on the web, SQLite on desktop)."""
-    return SqliteVideoIndexSource(engine) if is_sqlite(engine) else VideoIndexSource(engine)
+    """The source for the database the engine speaks to (Postgres on the web, SQLite on desktop,
+    where Motion graphics' compositions are searchable too)."""
+    if not is_sqlite(engine):
+        return VideoIndexSource(engine)
+    from wasifyai_video.builder.index import BuilderIndexSource
+
+    return CombinedIndexSource(SqliteVideoIndexSource(engine), BuilderIndexSource(engine))

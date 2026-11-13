@@ -67,15 +67,11 @@ imagePullSecrets:
     secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: STORAGE_SECRET_KEY }
 {{- end -}}
 
-{{/* The web profile's products (notebooks, voice): what the API and the web app both read. */}}
-{{- define "wasifyai.productsEnv" -}}
-- { name: NOTEBOOKS_ENABLED, value: {{ .Values.notebooks.enabled | quote }} }
-- { name: VOICE_ENABLED, value: {{ .Values.voice.enabled | quote }} }
-{{- end -}}
-
 {{/* Env shared by the API and the migration job. */}}
 {{- define "wasifyai.apiEnv" -}}
 {{ include "wasifyai.dbEnv" . }}
+{{ include "wasifyai.tracingEnv" (dict "root" . "service" "wasifyai-api") }}
+{{ include "wasifyai.langfuseEnv" . }}
 - name: REDIS_URL
   value: "redis://{{ .Release.Name }}-redis:6379/0"
 - name: LITELLM_BASE_URL
@@ -93,8 +89,8 @@ imagePullSecrets:
   value: {{ .Values.env.LOG_LEVEL | quote }}
 - name: PRODUCT_ENV
   value: {{ .Values.env.PRODUCT_ENV | quote }}
-- name: SAFEGUARDS_FORCE_ON
-  value: {{ .Values.safeguards.forceOn | quote }}
+- name: MAX_JOBS_PER_USER
+  value: {{ .Values.jobs.maxPerUser | quote }}
 {{ include "wasifyai.mediaSecretsEnv" . }}
 - name: AUTH_MODE
   value: {{ .Values.auth.mode | quote }}
@@ -106,17 +102,13 @@ imagePullSecrets:
   value: {{ .Values.auth.adminEmails | quote }}
 {{- end }}
 {{- include "wasifyai.storageEnv" . | nindent 0 }}
-{{ include "wasifyai.productsEnv" . }}
-{{- if .Values.notebooks.enabled }}
+{{- /* notebooks and speech are always on (no switches): their settings */}}
 - { name: NOTEBOOKS_SCHEMA, value: {{ .Values.notebooks.schema | quote }} }
 - { name: NOTEBOOKS_EMBED_MODEL, value: {{ .Values.notebooks.embedModel | quote }} }
 - { name: NOTEBOOKS_EMBED_DIMENSION, value: {{ .Values.notebooks.embedDimension | quote }} }
-{{- end }}
-{{- if .Values.voice.enabled }}
 - { name: VOICE_SCHEMA, value: {{ .Values.voice.schema | quote }} }
 {{- with .Values.voice.modelsFile }}
 - { name: VOICE_MODELS_FILE, value: {{ . | quote }} }
-{{- end }}
 {{- end }}
 {{- end -}}
 
@@ -148,5 +140,29 @@ imagePullSecrets:
   valueFrom:
     secretKeyRef: { name: {{ $.Values.secrets.existingSecret }}, key: {{ $key }}, optional: true }
 {{- end }}
+{{- end }}
+{{- end -}}
+
+{{/* Traces (stage O1): OTLP to Tempo when tracing.otlpEndpoint is set. Call with (dict "root" . "service" "<name>"). */}}
+{{- define "wasifyai.tracingEnv" -}}
+{{- with .root.Values.tracing.otlpEndpoint }}
+- { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ . | quote }} }
+- { name: OTEL_SERVICE_NAME, value: {{ $.service | quote }} }
+- { name: OTEL_TRACES_SAMPLER, value: parentbased_traceidratio }
+- { name: OTEL_TRACES_SAMPLER_ARG, value: {{ $.root.Values.tracing.sampleRatio | quote }} }
+{{- end }}
+{{- end -}}
+
+{{/* LLM traces in Langfuse (ADR-0050): the keys come from the Secret and are optional. */}}
+{{- define "wasifyai.langfuseEnv" -}}
+{{- with .Values.langfuse.baseUrl }}
+- { name: LANGFUSE_BASE_URL, value: {{ . | quote }} }
+- { name: LANGFUSE_CAPTURE_CONTENT, value: {{ $.Values.langfuse.captureContent | quote }} }
+- name: LANGFUSE_PUBLIC_KEY
+  valueFrom:
+    secretKeyRef: { name: {{ $.Values.secrets.existingSecret }}, key: LANGFUSE_PUBLIC_KEY, optional: true }
+- name: LANGFUSE_SECRET_KEY
+  valueFrom:
+    secretKeyRef: { name: {{ $.Values.secrets.existingSecret }}, key: LANGFUSE_SECRET_KEY, optional: true }
 {{- end }}
 {{- end -}}

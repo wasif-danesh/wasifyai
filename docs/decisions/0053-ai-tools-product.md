@@ -1,6 +1,6 @@
 # ADR-0053: AI Tools: a manifest-driven product, and Change Clothes
 
-- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio is a separate product, `wasifyai-art`, in its own repository (`wasifyai-art`); wasifyai does not implement it. Nothing here was built.
+- **Status:** Withdrawn (2026-10-12). The TensorArt-style studio will not be built (owner, 2026-10-24); wasifyai does not implement it. Nothing here was built.
 - **Date:** 2026-10-12
 - **Depends on:** ADR-0051 (variants). Uses ADR-0035, ADR-0039 (pictures), ADR-0038 (Enhance), ADR-0040/0041 (library).
 
@@ -76,7 +76,7 @@ Candidates for "two pictures and a sentence, no mask":
 | Qwen Image 2.1 edit, pictures addressed as `<image1>`, `<image2>` in the prompt (ComfyUI's official template, up to 16 pictures) | Installed (int8); built for multi-reference edits | Heavy; speed on Apple silicon unknown |
 | CatVTON / IDM-VTON custom nodes (mask and pose based) | Most faithful transfer | Custom nodes to pin and review, DensePose setup, CUDA-leaning |
 
-**Acceptance (before this ADR is accepted):** 20 person/garment pairs (synthetic or properly licensed images; no
+**Acceptance (before this ADR is accepted):** 20 person/garment pairs (synthetic images or ones used with permission; no
 real person's photo kept in git) through candidates 1 and 2, scored by the owner on garment fidelity (colour,
 pattern, shape), identity kept, pose and background kept, and seconds per image on the Mac. The chosen workflow
 is then run for real through the stack. The results table goes in this ADR.

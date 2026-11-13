@@ -31,6 +31,7 @@ from wasifyai_platform_sdk.usage import record_safely
 
 from wasifyai_api.identity import Identity, get_identity
 from wasifyai_api.metrics import UPLOADS
+from wasifyai_api.services import services_of
 from wasifyai_api.uploads import read_capped
 
 log = logging.getLogger(__name__)
@@ -111,7 +112,7 @@ async def attach_document(
     request: Request, identity: Identity = Depends(get_identity)
 ) -> AttachmentResult:
     """A document for a chat message: the body is the file, `x-file-name` its name."""
-    state: Any = request.app.state
+    state: Any = services_of(request)
     limiter: UploadLimiter = state.upload_limiter
     if not await limiter.allow(identity.tenant_id, identity.user_id):
         raise HTTPException(429, "Too many uploads. Please wait a while and try again.")

@@ -77,6 +77,12 @@ pub struct LaunchConfig {
     pub products_dir: PathBuf,
     pub data_dir: PathBuf,
     pub image_engine: String,
+    /// The operating system's own Downloads folder, where the engine saves a copy when nothing asks
+    /// the person for a place (the assistant's export action). `None` leaves the engine's default.
+    pub download_dir: Option<PathBuf>,
+    /// The engine files this app installs from; the engine reads the locks of its optional components
+    /// there (`WASIFYAI_ENGINE_BUNDLE`, stage F2). `None` in a checkout without a built bundle.
+    pub bundle_dir: Option<PathBuf>,
 }
 
 /// What the shell noticed about this run, for the evidence documents and the self-test's report.
@@ -239,6 +245,8 @@ pub struct Input {
     pub data_dir: PathBuf,
     /// Where the app's bundled files are (the engine bundle sits in `engine-bundle` under it).
     pub resource_dir: Option<PathBuf>,
+    /// The operating system's Downloads folder, as the system names it (it can be moved).
+    pub download_dir: Option<PathBuf>,
 }
 
 /// What to do before the engine can start.
@@ -317,6 +325,7 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
     let cwd = data_dir.clone(); // never the checkout: its `.env` must not reach the engine
     let image_engine = std::env::var("WASIFYAI_IMAGE_ENGINE").unwrap_or_else(|_| "auto".into());
     let products_env = std::env::var_os("WASIFYAI_PRODUCTS_DIR").map(PathBuf::from);
+    let bundle_dir = find_bundle_dir(input);
 
     let launch = |python: PathBuf, products_dir: PathBuf| LaunchConfig {
         python,
@@ -324,6 +333,8 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
         products_dir,
         data_dir: data_dir.clone(),
         image_engine: image_engine.clone(),
+        download_dir: input.download_dir.clone(),
+        bundle_dir: bundle_dir.clone(),
     };
 
     if let Some(p) = std::env::var_os("WASIFYAI_ENGINE_PYTHON") {
@@ -344,8 +355,6 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
     let layout = provision::Layout::new(data_dir, &manifest);
     let managed_python = venv_python_in(&layout.venv_dir());
 
-    let bundle_dir = find_bundle_dir(input);
-
     let dev_python = repo.as_ref().map(|r| venv_python_in(&r.join(".venv")));
     if !env_flag("WASIFYAI_PROVISION") {
         if let (Some(py), Some(r)) = (&dev_python, &repo) {
@@ -356,7 +365,7 @@ fn plan(input: &Input, repair: bool) -> Result<Plan, String> {
         }
     }
 
-    let Some(bundle_dir) = bundle_dir else {
+    let Some(bundle_dir) = bundle_dir.clone() else {
         return Err(
             "The engine is not installed and this app has no engine files to install it from. \
              In a development checkout run `make setup`; to try the installer run \
@@ -528,7 +537,14 @@ async fn run_once(
         .env("DESKTOP_IMAGE_ENGINE", &cfg.image_engine)
         .env("API_AUTH_SECRET", &shared.secret)
         .env("AUTH_MODE", "jwt")
+        // keys and tokens go to the OS keychain (macOS), the Credential Manager (Windows) or
+        // the Secret Service (Linux); the engine keeps its encrypted file where none is
+        // reachable (ADR-0092)
+        .env("DESKTOP_SECRET_STORE", "keychain")
         .env("PRODUCTS_DIR", &cfg.products_dir)
+        // the stdio launcher other apps run (ADR-0069), built beside this shell: Settings shows
+        // the exact command to paste
+        .env("WASIFYAI_MCP_LAUNCHER", launcher_path())
         .env("WASIFYAI_PORT", "0")
         .env("WASIFYAI_EXIT_ON_STDIN_EOF", "1")
         .env("PYTHONUNBUFFERED", "1")
@@ -539,6 +555,15 @@ async fn run_once(
         .kill_on_drop(true);
     if let Some(uv) = managed_uv(&cfg.data_dir) {
         cmd.env("WASIFYAI_UV", uv);
+    }
+    if let Some(dir) = &cfg.bundle_dir {
+        cmd.env("WASIFYAI_ENGINE_BUNDLE", dir);
+    }
+    // a folder set in the shell's own environment (for tests) wins over the system's
+    if std::env::var_os("WASIFYAI_EXPORT_DIR").is_none() {
+        if let Some(dir) = &cfg.download_dir {
+            cmd.env("WASIFYAI_EXPORT_DIR", dir);
+        }
     }
     #[cfg(unix)]
     cmd.process_group(0); // its own group, so the whole tree can be signalled
@@ -787,4 +812,13 @@ mod tests {
             "stopped"
         );
     }
+}
+
+/// Where `wasify-mcp` is: beside this shell's own binary (the same bundle, the same build).
+fn launcher_path() -> String {
+    std::env::current_exe()
+        .ok()
+        .map(|p| p.with_file_name(if cfg!(windows) { "wasify-mcp.exe" } else { "wasify-mcp" }))
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }

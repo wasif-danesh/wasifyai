@@ -62,8 +62,8 @@ class Rig:
             "DESKTOP_IMAGE_ENGINE": args.image_engine, "LITELLM_BASE_URL": "", "METRICS_PORT": "0",
             "DESKTOP_EXTRA_MODEL_DIRS": extra,
         }  # fmt: skip
-        if args.musetalk_home:
-            env["WASIFYAI_MUSETALK_HOME"] = str(Path(args.musetalk_home).expanduser())
+        if args.lipsync_home:
+            env["WASIFYAI_LIPSYNC_HOME"] = str(Path(args.lipsync_home).expanduser())
         os.environ.update(env)
         os.environ.pop("WASIFYAI_AUDIOCPP", None)
         from fastapi.testclient import TestClient
@@ -471,9 +471,9 @@ def tools(rig: Rig, ctx: dict[str, Any]) -> None:
 def lipsync(rig: Rig, ctx: dict[str, Any], face: Path | None) -> None:
     P = "lipsync"
     if not rig.get("/desktop/lipsync").json()["installed"] or not rig.ready(
-        "lipsync", "musetalk-v15"
+        "lipsync", "echomimic-v3-flash"
     ):
-        return rig.skip("the lip sync engine or MuseTalk's files are not ready")
+        return rig.skip("the lip sync engine or EchoMimic's files are not ready")
     if face is None or not face.is_file():
         return rig.skip("no picture given (--face); a painting or a drawing is a good test")
     pic = rig.post(
@@ -484,14 +484,12 @@ def lipsync(rig: Rig, ctx: dict[str, Any], face: Path | None) -> None:
         task="lipsync",
         picture=pic["id"],
         text="Good evening, everyone. Thank you for coming tonight. It is a pleasure to be here.",
-        picture_basis="drawn",
-        voice_basis="generated",
         title="Lip sync sample",
     )
     clip = rig.get(f"/products/wasifyai-voice/clips/{out['clip_id']}/download").content
     rig.add(P, "lipsync", "Lip sync: a picture says a sentence", rig.save("lipsync-sample.mp4", clip),
-            "Does the mouth move with the words (not early, not late)? Is the rest of the face stable? Is the 'AI-generated' mark visible in the bottom-left corner all the way through? The head stays still: that is how this model works.",
-            model="musetalk-v15", seconds=out["seconds"], work_s=round(dt, 1))  # fmt: skip
+            "Does the mouth move with the words (not early, not late)? Do the head and eyes move naturally, and does the face stay the same person to the end?",
+            model="echomimic-v3-flash", seconds=out["seconds"], work_s=round(dt, 1))  # fmt: skip
     rig.post("/desktop/lipsync/stop")
 
 
@@ -582,8 +580,8 @@ def main() -> None:
     ap.add_argument("--only", default=",".join(SECTIONS))
     ap.add_argument("--face", help="a picture of a drawing or painting, for the lip sync sample")
     ap.add_argument(
-        "--musetalk-home",
-        help="a MuseTalk set up by hand (src/ and venv/), if not installed by the app",
+        "--lipsync-home",
+        help="a lip sync engine set up by hand (src/, venv/ and weights/), if not installed by the app",
     )
     ap.add_argument("--image-engine", default="comfyui", choices=["stub", "comfyui", "auto"])
     args = ap.parse_args()

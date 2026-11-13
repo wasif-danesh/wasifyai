@@ -104,14 +104,6 @@ export function ModelForm({
         ) : null}
       </FieldGroup>
 
-      {model.protected ? (
-        <p className="text-muted-foreground">
-          This model decides what the guardrail allows. Saving runs the guardrail test cases on the
-          new model first and only changes it if every must-refuse case is refused. It takes about a
-          minute.
-        </p>
-      ) : null}
-
       <div className="flex flex-wrap items-center gap-2.5">
         <Button variant="outline" type="submit" name="intent" value="test" disabled={pending}>
           Test connection
@@ -153,20 +145,13 @@ function Result({ state }: { state: FormState }) {
     case "saved":
       return (
         <Notice tone="ok" title="Saved">
-          {state.checks === "passed" ? "It passed the guardrail test cases. " : ""}New requests use
-          it right away.
+          New requests use it right away.
         </Notice>
       );
     case "reset":
       return (
         <Notice tone="ok" title="Back to the default">
           New requests use the default model again.
-        </Notice>
-      );
-    case "rejected":
-      return (
-        <Notice tone="error" title="Not saved: the new model did not pass the checks">
-          {state.failures.length ? state.failures.join(" · ") : state.message}
         </Notice>
       );
     case "error":

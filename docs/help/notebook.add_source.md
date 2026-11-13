@@ -13,7 +13,7 @@ Add a text note as a source of a notebook. Files and web pages are added in the 
 
 ## Steps in the app
 
-1. Open **Notebook › View Notebooks** and choose the notebook.
+1. Open **Notebook › View notebooks** and choose the notebook.
 2. Add a source and choose a note.
 
 ## Fields

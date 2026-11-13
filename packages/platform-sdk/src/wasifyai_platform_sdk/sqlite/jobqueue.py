@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from wasifyai_platform_sdk.eventlog import EventLog
 from wasifyai_platform_sdk.jobs import JobRequest, progress_event
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables, now_iso, to_iso
+from wasifyai_platform_sdk.sqlite.engine import Migration, migrate, now_iso, to_iso
 
 _DDL = (
     """
@@ -46,6 +46,9 @@ _DDL = (
     """,
 )
 
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_MIGRATIONS = (Migration(1, _DDL),)
+
 
 @dataclass(frozen=True)
 class QueuedJob:
@@ -68,6 +71,29 @@ class SqliteJobQueue:
         self._engine = engine
         self._log = log
         self._work = asyncio.Event()  # set by `submit` and `requeue`, so a worker need not poll
+        # jobs the person stopped (stage J3): the worker in this process stops them where they
+        # are; the row says so too, so a restart never runs them again
+        self._cancelled: set[str] = set()
+
+    async def cancel(self, job_id: str) -> None:
+        """Stop a job: one still waiting leaves the queue, one being made is marked `stopping`
+        (the worker stops it within a second; `recover` drops it if the app quit first)."""
+        self._cancelled.add(job_id)
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM job_queue WHERE job_id = :j AND state = 'waiting'"), {"j": job_id}
+            )
+            await conn.execute(
+                text(
+                    "UPDATE job_queue SET state = 'stopping' "
+                    "WHERE job_id = :j AND state = 'running'"
+                ),
+                {"j": job_id},
+            )
+
+    async def is_cancelled(self, job_id: str) -> bool:
+        return job_id in self._cancelled
 
     async def wait_for_work(self, timeout_s: float) -> None:
         """Return when a job has been submitted, or after `timeout_s`, whichever is first."""
@@ -78,7 +104,7 @@ class SqliteJobQueue:
             pass
 
     async def _ready(self) -> None:
-        await ensure_tables(self._engine, "job_queue", _DDL)
+        await migrate(self._engine, "job_queue", _MIGRATIONS)
 
     # ---- API side -----------------------------------------------------------------------
 
@@ -221,11 +247,16 @@ class SqliteJobQueue:
         self._work.set()
 
     async def recover(self, older_than_s: float = 0.0) -> int:
-        """Give jobs taken by a worker that is gone back to the queue. At startup `older_than_s`
-        is 0: the one worker of this process is the only one that could have held them."""
+        """Give jobs taken by a worker that is gone back to the queue, and drop the ones that were
+        being stopped. At startup `older_than_s` is 0: the one worker of this process is the only
+        one that could have held them."""
         await self._ready()
         cutoff = to_iso(datetime.now(UTC) - timedelta(seconds=older_than_s))
         async with self._engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM job_queue WHERE state = 'stopping' AND claimed_at <= :c"),
+                {"c": cutoff},
+            )
             result = await conn.execute(
                 text(
                     "UPDATE job_queue SET state = 'waiting', claimed_at = NULL "

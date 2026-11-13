@@ -15,13 +15,13 @@ an uploaded audio says.
 
 The project must be multilingual, so the engine must work in many languages. What was checked on 2026-10-09:
 
-| Engine | Licence | Languages | Notes |
-|---|---|---|---|
-| **Whisper large-v3-turbo** | MIT | 99 | Cannot translate (trained without translation data); weaker on rare languages (Thai and Cantonese are the usual examples) than full large-v3 |
-| **Whisper large-v3** | MIT | 99 | Slower and larger; better on rare languages; can translate to English |
-| **Parakeet-tdt-0.6b-v3** | CC-BY-4.0 (attribution required) | 25 European | Fast; far fewer languages |
+| Engine | Languages | Notes |
+|---|---|---|
+| **Whisper large-v3-turbo** | 99 | Cannot translate (trained without translation data); weaker on rare languages (Thai and Cantonese are the usual examples) than full large-v3 |
+| **Whisper large-v3** | 99 | Slower and larger; better on rare languages; can translate to English |
+| **Parakeet-tdt-0.6b-v3** | 25 European | Fast; far fewer languages |
 
-Runtimes: **faster-whisper** (MIT) is what the Speaches server uses; on an Apple-silicon Mac it runs on the CPU
+Runtimes: **faster-whisper** is what the Speaches server uses; on an Apple-silicon Mac it runs on the CPU
 only, and an informal benchmark measured it about 7 times slower than **mlx-whisper** or **whisper.cpp** with
 Core ML (about 1 second against 7 for a short clip; one machine, one run, so only an indication). Whisper
 decides the language by itself or takes a language hint.
@@ -83,8 +83,7 @@ decides the language by itself or takes a language hint.
 `services/api/evals/transcribe/` with the results written into this ADR.
 
 1. **Accuracy per language:** word error rate (character error rate for Chinese and Japanese) on a small set
-   of clips in each target language from public corpora with open licences (Common Voice is CC0, FLEURS is
-   CC-BY-4.0), for turbo and for large-v3, and the language detection hit rate.
+   of clips in each target language from public corpora (Common Voice, FLEURS), for turbo and for large-v3, and the language detection hit rate.
 2. **Speed:** seconds of audio per second of compute (real-time factor) on the development Mac for each
    runtime (Speaches on the CPU, whisper.cpp with Core ML, MLX), and on a GPU if one is available. The upload
    length limit and the job timeout are set from this.
@@ -95,7 +94,7 @@ decides the language by itself or takes a language hint.
 ## Results of the Whisper evaluation (2026-10-09, development Mac)
 
 Method: 100 real recordings, 10 for each of 10 languages (the first ten clips of each FLEURS test split, read
-speech with a reference text; FLEURS is CC-BY-4.0, Conneau et al. 2022), transcribed by each model with the
+speech with a reference text; FLEURS, Conneau et al. 2022), transcribed by each model with the
 language detected and with the language given. Script: `services/api/evals/transcribe/`, raw outputs in its
 `results/` folder. Error is the word error rate (character error rate for Chinese and Japanese) over all the
 clips of a language. This is read speech with a clean reference, so it is the **best case**: phone audio, noise
@@ -140,13 +139,13 @@ What this decides:
   to an OpenAI-compatible server by address (see the decision above), so a native Apple-silicon server (MLX) can be set as
   that address on a Mac exactly as Ollama and ComfyUI are, and a CUDA Speaches serves a GPU host. Until an MLX server is
   set up, the CPU container with turbo is the default and the 30-minute limit means a wait of up to about 20 minutes,
-  which the page says. An MLX server (for example `mlx-audio`, to be licence-checked) is a small follow-up.
+  which the page says. An MLX server (for example `mlx-audio`) is a small follow-up.
 - **Indian languages use IndicConformer** (next section), and Whisper handles the rest.
 - **Still to do from the plan:** upload hardening tests (point 3), and a test on real recordings with noise.
 
 ### IndicConformer for Bengali and the other Indian languages
 
-IndicConformer-600M-Multilingual (AI4Bharat, **MIT licence**, 22 Indian languages: Assamese, Bengali, Bodo, Dogri,
+IndicConformer-600M-Multilingual (AI4Bharat, 22 Indian languages: Assamese, Bengali, Bodo, Dogri,
 Gujarati, Hindi, Kannada, Konkani, Kashmiri, Maithili, Malayalam, Manipuri, Marathi, Nepali, Odia, Punjabi, Sanskrit,
 Santali, Sindhi, Tamil, Telugu, Urdu) was run on the same 20 Bengali and Hindi FLEURS clips, on the CPU, with the
 language given. The model is gated (accept the terms on its Hugging Face page, a token is needed to download it, as
@@ -177,8 +176,7 @@ What this decides:
   Indic answer goes to IndicConformer. A long file is split on silence into pieces of up to about 30 seconds.
 - **Bengali and Hindi are no longer "limited"** for speech to text once this is built; the other Indic languages are
   listed as "not yet scored" until clips for them are measured.
-- **Not chosen: Indic-Transcribe** (`bodhan-ai/indic-transcribe-core`, 25 languages, built on NVIDIA Canary). Its
-  licence is a custom one that has not been read, so it stays out until it is checked.
+- **Not chosen: Indic-Transcribe** (`bodhan-ai/indic-transcribe-core`, 25 languages, built on NVIDIA Canary).
 
 ## What the first slice built (2026-10-09)
 
@@ -201,7 +199,7 @@ multi-minute noisy-recording test.
 
 ## What the second slice built: the Indian-languages engine (2026-10-09)
 
-- **`services/stt-indic`**: a small server of our own on IndicConformer-600M (MIT), answering `POST
+- **`services/stt-indic`**: a small server of our own on IndicConformer-600M, answering `POST
   /v1/audio/transcriptions` for short 16 kHz mono pieces (up to 40 seconds) with the language given. It uses only the
   CTC decoder and does **not** run the model repository's Python code: the few lines that load the ONNX parts and decode
   are in the server, so only model files come from the Hub, at one pinned revision (`2a77d30`, changed on purpose).

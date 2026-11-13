@@ -1,0 +1,706 @@
+"""Setting up the trainers (ADR-0073): the shared machinery, and the picture trainer itself.
+
+`TrainingSetup` is what every trainer's setup shares (the writing, decision and video trainers and
+the song analysis are its kin): nothing is fetched before the person has seen what it is and how
+large, and has agreed; a hashed lock makes the environment; each model file has a pinned size and
+SHA-256 (its part of `components/manifests/<platform>.yaml`), fetched by the resumable downloader
+the Models screen uses; a check runs at the end, and only then `installed.json` is written.
+
+`PictureSetup` sets up the picture trainer, AI Toolkit (Ostris), under
+`<app data>/components/ai-toolkit/` (ADR-0073, amendment 2026-11-07: the owner's aim is that
+teaching works on every platform). Steps:
+
+    1 disk         enough free space, said before anything is downloaded
+    2 environment  AI Toolkit's source, a pinned archive of one commit (size and SHA-256)
+    3 packages     AI Toolkit's own manager makes its environment (`training_aitk_install`):
+                   PyTorch for the graphics chip of a Mac with Apple silicon, or the CUDA
+                   build for an NVIDIA card on Windows and Linux, and FFmpeg
+    4 model        the small files of the text encoder (its settings and tokenizer)
+    5 check        PyTorch starts in that environment; only then `installed.json`
+
+The big files are **not** fetched here: they are the image model's own (FLUX.2 klein 4B), the ones
+Create uses, found where the Models screen keeps them. If they are not on this computer the setup
+says so and where to get them. A copy of AI Toolkit already set up (named by
+`WASIFYAI_AI_TOOLKIT_DIR`) is used where it is and nothing is offered for it.
+"""
+
+import asyncio
+import contextlib
+import json
+import logging
+import os
+import platform
+import shutil
+import sys
+import tarfile
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+from wasifyai_platform_sdk import Identity, installer
+
+from wasifyai_api.components.manifest import legacy_digest, part_pins, pins_digest
+from wasifyai_api.desktop_models import (
+    DownloadError,
+    DownloadManager,
+    ModelEntry,
+    ModelFile,
+    free_disk_bytes,
+)
+from wasifyai_api.identity import get_identity
+from wasifyai_api.services import services_of
+
+log = logging.getLogger(__name__)
+
+PART = "trainer-pictures"  # its pins in the component manifests
+STATE_FILE = "installed.json"
+MIN_FREE_BYTES = 3 * 1024**3  # room to work in, besides what is downloaded
+HUB = "https://huggingface.co"
+COMPONENT = "ai-toolkit"
+CHECKOUT = "ai-toolkit"  # AI Toolkit's own folder inside the component's
+INSTALL_SCRIPT = Path(__file__).with_name("training_aitk_install.py")
+
+STEPS = ("disk", "environment", "packages", "model", "check")
+STEP_TEXT = {
+    "disk": "Checking free space",
+    "environment": "Preparing the trainer's environment",
+    "packages": "Installing the trainer's packages",
+    "model": "Getting the model's small files",
+    "check": "Checking that it starts",
+}
+PICTURE_STEP_TEXT = {
+    "disk": "Checking free space",
+    "environment": "Getting AI Toolkit",
+    "packages": "Installing the trainer's packages (PyTorch and the rest, a few GB)",
+    "model": "Getting the text encoder's settings",
+    "check": "Checking that it starts",
+}
+
+
+# the one installer's error (stage F2): `str(e)` is a sentence safe to show, `step` where it stopped
+InstallError = installer.InstallError
+
+
+def apple_silicon() -> bool:
+    return sys.platform == "darwin" and platform.machine() == "arm64"
+
+
+def nvidia_gpu() -> bool:
+    """An NVIDIA graphics card with its driver: the driver brings `nvidia-smi`."""
+    return shutil.which("nvidia-smi") is not None
+
+
+def apple_or_nvidia() -> bool:
+    """A Mac with Apple silicon, or Windows or Linux with an NVIDIA graphics card: where the
+    PyTorch trainers (pictures, decisions) run on the graphics chip."""
+    return apple_silicon() or (sys.platform in ("win32", "linux") and nvidia_gpu())
+
+
+def picture_supported() -> bool:
+    """Where AI Toolkit can teach a picture model."""
+    return apple_or_nvidia()
+
+
+def uv_target() -> str:
+    """This computer as uv names a platform: the suffix of a per-platform lock file."""
+    arm = platform.machine().lower() in ("arm64", "aarch64")
+    if sys.platform == "darwin":
+        return "aarch64-apple-darwin" if arm else "x86_64-apple-darwin"
+    if sys.platform == "win32":
+        return "x86_64-pc-windows-msvc"
+    return "aarch64-unknown-linux-gnu" if arm else "x86_64-unknown-linux-gnu"
+
+
+# ---- the pins ------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class BaseFile:
+    path: str
+    size: int
+    sha256: str
+
+
+@dataclass(frozen=True)
+class Pins:
+    tool_version: str
+    packages_bytes: int
+    base_id: str
+    base_title: str
+    base_repo: str
+    base_revision: str
+    base_folder: str
+    base_files: tuple[BaseFile, ...]
+    digest: str  # of the pins: what an install records, so a changed pin asks for a new one
+
+    legacy: str | None = None  # what installs made before the pins moved to the manifests recorded
+    tool_url: str = (
+        ""  # a tool fetched as one archive (AI Toolkit's source), with its size and hash
+    )
+    tool_size: int = 0
+    tool_sha256: str = ""
+    model: str = (
+        ""  # the image model whose files are taught (its catalogue id), when not fetched here
+    )
+
+    def made_from(self, recorded: object) -> bool:
+        """Whether an install's record was made from these pins."""
+        return recorded is not None and recorded in (self.digest, self.legacy)
+
+    @property
+    def base_bytes(self) -> int:
+        return sum(f.size for f in self.base_files)
+
+
+def load_pins(path: Path | None = None, part: str = PART) -> Pins:
+    """A trainer's pins: its part in this platform's component manifest (stage F2), or a file."""
+    raw = json.loads(path.read_text()) if path is not None else part_pins(part)
+    tool, base = raw["tool"], raw["base"]
+    files = []
+    for f in base["files"]:
+        parts = Path(f["path"]).parts
+        if ".." in parts or Path(f["path"]).is_absolute() or len(str(f["sha256"])) != 64:
+            raise ValueError(f"the pin for {f['path']} needs a relative path and a SHA-256")
+        files.append(BaseFile(f["path"], int(f["size"]), str(f["sha256"]).lower()))
+    return Pins(
+        tool_version=str(tool["version"]),
+        packages_bytes=int(tool["packages_bytes"]),
+        base_id=str(base["id"]),
+        base_title=str(base["title"]),
+        base_repo=str(base["repo"]),
+        base_revision=str(base["revision"]),
+        base_folder=str(base["folder"]),
+        base_files=tuple(files),
+        digest=pins_digest(raw),
+        legacy=legacy_digest(raw),
+        tool_url=str(tool.get("url") or ""),
+        tool_size=int(tool.get("size") or 0),
+        tool_sha256=str(tool.get("sha256") or "").lower(),
+        model=str(base.get("model") or ""),
+    )
+
+
+# ---- where things are ----------------------------------------------------------------------------
+
+
+def component_root(data_dir: Path) -> Path:
+    return data_dir / "components" / COMPONENT
+
+
+def venv_python(checkout: Path) -> Path:
+    """The Python of AI Toolkit's environment, as its manager makes it (`.venv`, or `venv`)."""
+    tail = Path("Scripts/python.exe") if sys.platform == "win32" else Path("bin/python")
+    for name in (".venv", "venv"):
+        if (checkout / name / tail).is_file():
+            return checkout / name / tail
+    return checkout / ".venv" / tail
+
+
+def _tool_in(home: Path) -> bool:
+    return (home / "run.py").is_file() and venv_python(home).is_file()
+
+
+def managed_tool(data_dir: Path, pins: Pins) -> Path | None:
+    """The AI Toolkit this app set up, when it still matches the pins."""
+    root = component_root(data_dir)
+    try:
+        state = json.loads((root / STATE_FILE).read_text())
+    except (OSError, ValueError):
+        return None
+    home = root / CHECKOUT
+    if state.get("schema") == 1 and pins.made_from(state.get("pins")) and _tool_in(home):
+        return home
+    return None
+
+
+def find_tool(data_dir: Path | None, pins: Pins | None = None) -> tuple[Path, str] | None:
+    """(AI Toolkit's folder, with `run.py` and its environment, where it came from): a copy named
+    by `WASIFYAI_AI_TOOLKIT_DIR` (development and CI), or the one this app set up."""
+    pins = pins or load_pins()
+    env = os.environ.get("WASIFYAI_AI_TOOLKIT_DIR")
+    if env and _tool_in(Path(env).expanduser()):
+        return Path(env).expanduser(), "env"
+    if data_dir is not None and (managed := managed_tool(data_dir, pins)) is not None:
+        return managed, "managed"
+    return None
+
+
+def _complete(folder: Path, pins: Pins) -> bool:
+    try:
+        return all((folder / f.path).stat().st_size == f.size for f in pins.base_files)
+    except OSError:
+        return False
+
+
+def find_base(
+    data_dir: Path | None, pins: Pins | None = None, base: str | None = None
+) -> tuple[Path, str] | None:
+    """(the folder of the text encoder's small files, where it came from): this app's own copy, or
+    a complete snapshot in the Hugging Face cache (files fetched earlier are not fetched again).
+    `base` names the picture model wanted: the set-up pins one model, so another is not found."""
+    pins = pins or load_pins()
+    if base is not None and base != pins.base_id:
+        return None
+    if data_dir is not None:
+        own = component_root(data_dir) / "models" / pins.base_folder
+        if _complete(own, pins):
+            return own, "managed"
+    hub = Path(os.environ.get("HF_HOME") or Path.home() / ".cache" / "huggingface") / "hub"
+    snaps = hub / ("models--" + pins.base_repo.replace("/", "--")) / "snapshots"
+    with contextlib.suppress(OSError):
+        for snap in sorted(snaps.iterdir()):
+            if _complete(snap, pins):
+                return snap, "cache"
+    return None
+
+
+# ---- the install ---------------------------------------------------------------------------------
+
+
+@dataclass
+class Progress:
+    state: str = "idle"  # idle | installing | ready | failed
+    step: str | None = None
+    message: str = ""
+    done_bytes: int = 0
+    total_bytes: int = 0
+
+    def public(self) -> dict[str, Any]:
+        return {
+            "state": self.state,
+            "step": self.step,
+            "steps": list(STEPS),
+            "message": self.message,
+            "done_bytes": self.done_bytes,
+            "total_bytes": self.total_bytes,
+        }
+
+
+Runner = Callable[[list[str], dict[str, str]], Awaitable[tuple[int, str]]]
+
+
+async def run_command(args: list[str], env: dict[str, str]) -> tuple[int, str]:
+    proc = await asyncio.create_subprocess_exec(
+        *args, env=env, stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+    )  # fmt: skip
+    out, _ = await proc.communicate()
+    return proc.returncode or 0, out.decode(errors="replace")
+
+
+@dataclass
+class TrainingSetup:
+    """What the engine holds for a trainer's component: what is there, what it would take, and the
+    install. Each trainer's setup says where it lives, what it finds and how it checks itself."""
+
+    step_text = STEP_TEXT  # what each step says on the screen; not a field
+
+    data_dir: Path
+    lock: Path | None = None  # the hashed requirements; None where this build has none
+    uv: str | None = None
+    python: str = field(default_factory=lambda: sys.executable)
+    pins: Pins = field(default_factory=load_pins)
+    base_url: str = HUB  # where the model's files are fetched from (a test serves its own)
+    cache_dir: Path | None = None
+    run: Runner = run_command
+    downloads: DownloadManager = field(default_factory=DownloadManager)
+    progress: Progress = field(default_factory=Progress)
+    _task: asyncio.Task[None] | None = None
+
+    # ---- what is there, and what it would take -----------------------------------------------
+
+    @property
+    def supported(self) -> bool:
+        return apple_silicon()
+
+    @property
+    def root(self) -> Path:
+        raise NotImplementedError
+
+    def tool(self) -> tuple[Path, str] | None:
+        raise NotImplementedError
+
+    def base(self) -> tuple[Path, str] | None:
+        raise NotImplementedError
+
+    @property
+    def running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    def missing_bytes(self) -> int:
+        """What an install would fetch: only the parts that are not already on this computer."""
+        return (0 if self.tool() else self.pins.packages_bytes) + (
+            0 if self.base() else self.pins.base_bytes
+        )
+
+    def problem(self) -> str | None:
+        """Why this cannot be set up here, in words, or None."""
+        if self.tool() is None and (self.lock is None or not self.lock.is_file() or not self.uv):
+            return "The tool that sets up the trainer is not part of this build."
+        return None
+
+    def plan(self) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def state(self) -> dict[str, Any]:
+        tool, base = self.tool(), self.base()
+        return {
+            "installed": tool is not None and base is not None,
+            "tool": tool[1] if tool else None,
+            "base": base[1] if base else None,
+            "problem": self.problem(),
+            "plan": self.plan(),
+            "progress": self.progress.public(),
+        }
+
+    # ---- the install -------------------------------------------------------------------------
+
+    def start(self, confirm_bytes: int) -> None:
+        if (why := self.problem()) is not None:
+            raise InstallError(why)
+        if confirm_bytes != self.missing_bytes():
+            raise InstallError("The size shown is out of date. Look at it again.")
+        if self.running:
+            raise InstallError("It is already being set up.")
+        if self.missing_bytes() == 0:
+            raise InstallError("It is already set up.")
+        self.progress = Progress("installing", STEPS[0], self.step_text["disk"], 0, confirm_bytes)
+        self._task = asyncio.create_task(self._run())
+
+    def cancel(self) -> bool:
+        """Stop an install; what arrived of the model is kept, and a later start continues it."""
+        if not self.running or self._task is None:
+            return False
+        self._task.cancel()
+        return True
+
+    async def wait(self) -> None:
+        if self._task:
+            await asyncio.gather(self._task, return_exceptions=True)
+
+    def remove(self) -> int:
+        """Take the component off the computer; the bytes that came back."""
+        if self.running:
+            raise InstallError("The trainer is being set up. Stop it first.")
+        freed = 0
+        if self.root.is_dir():
+            for p in self.root.rglob("*"):
+                with contextlib.suppress(OSError):
+                    if p.is_file() and not p.is_symlink():
+                        freed += p.stat().st_size
+            shutil.rmtree(self.root, ignore_errors=True)
+        self.progress = Progress()
+        return freed
+
+    def _say(self, step: str, done: int | None = None) -> None:
+        p = self.progress
+        self.progress = Progress(
+            "installing",
+            step,
+            self.step_text[step],
+            p.done_bytes if done is None else done,
+            p.total_bytes,
+        )
+
+    async def _run(self) -> None:
+        try:
+            await self._install()
+        except asyncio.CancelledError:
+            self.progress = Progress(
+                "failed", self.progress.step, "Stopped. Starting again continues where it stopped."
+            )
+        except (InstallError, DownloadError) as e:
+            step = e.step if isinstance(e, InstallError) else "model"
+            self.progress = Progress("failed", step or self.progress.step, str(e))
+        except Exception:
+            log.exception("the trainer did not set up")
+            self.progress = Progress(
+                "failed", self.progress.step, "Setting up the trainer did not work. Try again."
+            )
+        else:
+            t = self.progress.total_bytes
+            self.progress = Progress("ready", None, "The trainer is ready.", t, t)
+
+    def _env(self) -> dict[str, str]:
+        env = {
+            k: v for k, v in os.environ.items() if not k.startswith(("VIRTUAL_ENV", "PYTHONHOME"))
+        }
+        if self.cache_dir is not None:
+            env["UV_CACHE_DIR"] = str(self.cache_dir)
+        return env
+
+    async def _install(self) -> None:
+        p = self.pins
+        need_tool, need_base = self.tool() is None, self.base() is None
+        self._say("disk", 0)
+        self.root.mkdir(parents=True, exist_ok=True)
+        free = await asyncio.to_thread(free_disk_bytes, self.root)
+        if free < self.progress.total_bytes + MIN_FREE_BYTES:
+            raise InstallError(
+                "There is not enough free space: about "
+                f"{(self.progress.total_bytes + MIN_FREE_BYTES) / 1e9:.0f} GB is needed and "
+                f"{free / 1e9:.0f} GB is free.",
+                "disk",
+            )
+        done = 0
+        if need_tool:
+            await self._install_tool()
+            done = p.packages_bytes
+        if need_base:
+            await self._get_base(done)
+        self._say("check", self.progress.total_bytes - 1)
+        await self._check()
+        record = {
+            "schema": 1, "pins": p.digest, "tool": p.tool_version, "base": p.base_revision,
+        }  # fmt: skip
+        tmp = self.root / (STATE_FILE + ".part")
+        tmp.write_text(json.dumps(record))
+        tmp.replace(self.root / STATE_FILE)  # last: this is what makes it installed
+
+    def install_args(self) -> list[str]:
+        """More arguments for `uv pip install` (a trainer whose lock names a CUDA build adds the
+        index it comes from)."""
+        return []
+
+    async def _install_tool(self) -> None:
+        """The trainer's own environment from its hashed lock, through the one installer (F2)."""
+        assert self.lock is not None and self.uv is not None
+        (self.root / STATE_FILE).unlink(missing_ok=True)  # an old install never looks whole
+
+        async def run(args: list[str], env: dict[str, str], _cwd: Path | None) -> tuple[int, str]:
+            return await self.run(args, env)
+
+        await installer.make_environment(
+            self.uv, self.python, self.root / "venv", self.lock, None, "environment", "packages",
+            run, self._env(), on_step=self._say, on_line=lambda text: log.info("%s", text[-300:]),
+            owner="The trainer", extra_args=self.install_args(),
+        )  # fmt: skip
+
+    async def _get_base(self, before: int) -> None:
+        """The model's files, through the resumable, hash-checked downloader."""
+        p = self.pins
+        entry = ModelEntry(p.base_id, "wasifyai-training", p.base_title, "", "", 0, ())
+        files = []
+        for f in p.base_files:
+            folder = "/".join([p.base_folder, *Path(f.path).parent.parts])
+            url = f"{self.base_url}/{p.base_repo}/resolve/{p.base_revision}/{f.path}"
+            files.append(ModelFile(folder, Path(f.path).name, url, f.size, f.sha256))
+        d = self.downloads.start(entry, files, self.root / "models")
+        try:
+            while d.status == "running":
+                self._say("model", before + d.bytes_done)
+                await asyncio.sleep(0.4)
+        except asyncio.CancelledError:
+            self.downloads.cancel(d.id)
+            raise
+        if d.status != "done":
+            raise DownloadError(d.error or "The picture model could not be downloaded.")
+        self._say("model", before + d.bytes_total)
+
+    async def _check(self) -> None:
+        raise NotImplementedError
+
+
+@dataclass
+class PictureSetup(TrainingSetup):
+    """The picture trainer's component: AI Toolkit, its environment as its own manager makes it on
+    this computer, and the text encoder's small files; and a way to find the image model's files."""
+
+    step_text = PICTURE_STEP_TEXT  # not a field
+
+    # the image model's files (transformer, text_encoder, vae) as the Models screen keeps them, or
+    # None: set by the engine
+    picture_model: Callable[[], dict[str, Path] | None] = lambda: None  # noqa: E731
+    picture_model_bytes: int = 0
+    picture_model_title: str = "FLUX.2 klein 4B"
+
+    @property
+    def supported(self) -> bool:
+        return picture_supported()
+
+    @property
+    def root(self) -> Path:
+        return component_root(self.data_dir)
+
+    def tool(self) -> tuple[Path, str] | None:
+        return find_tool(self.data_dir, self.pins)
+
+    def base(self) -> tuple[Path, str] | None:
+        return find_base(self.data_dir, self.pins)
+
+    def tool_bytes(self) -> int:
+        return self.pins.tool_size + self.pins.packages_bytes
+
+    def missing_bytes(self) -> int:
+        return (0 if self.tool() else self.tool_bytes()) + (
+            0 if self.base() else self.pins.base_bytes
+        )
+
+    def problem(self) -> str | None:
+        if not self.supported:
+            return (
+                "Teaching a picture model needs a Mac with Apple silicon, or a computer with an "
+                "NVIDIA graphics card."
+            )
+        if self.tool() is None and (not INSTALL_SCRIPT.is_file() or not self.pins.tool_url):
+            return "The tool that sets up the trainer is not part of this build."
+        return None
+
+    def plan(self) -> dict[str, Any]:
+        p = self.pins
+        tool, base = self.tool(), self.base()
+        return {
+            "supported": self.supported,
+            "bytes": self.missing_bytes() if self.supported else 0,
+            "needs_free_bytes": self.missing_bytes() + MIN_FREE_BYTES,
+            "parts": [
+                {
+                    "name": "Trainer (AI Toolkit)", "version": p.tool_version,
+                    "bytes": 0 if tool else self.tool_bytes(), "have": tool is not None,
+                    "source": "github.com and pypi.org",
+                },
+                {
+                    "name": p.base_title, "version": "a few small files",
+                    "bytes": 0 if base else p.base_bytes, "have": base is not None,
+                    "source": "huggingface.co",
+                },
+            ],
+            # what teaching also needs and this setup does not fetch: the model Create uses
+            "needs": [
+                {
+                    "name": f"The image model ({self.picture_model_title})",
+                    "have": self.picture_model() is not None,
+                    "bytes": self.picture_model_bytes,
+                    "how": "Choose Select image model on an Images screen to get it.",
+                }
+            ],
+        }  # fmt: skip
+
+    async def _install_tool(self) -> None:
+        """AI Toolkit's source from its pinned archive, then its environment from its manager."""
+        p = self.pins
+        (self.root / STATE_FILE).unlink(missing_ok=True)  # an old install never looks whole
+        name = f"ai-toolkit-{p.tool_version}.tar.gz"
+        entry = ModelEntry("ai-toolkit", "wasifyai-training", "AI Toolkit", "", "", 0, ())
+        d = self.downloads.start(
+            entry, [ModelFile("download", name, p.tool_url, p.tool_size, p.tool_sha256)], self.root
+        )
+        try:
+            while d.status == "running":
+                self._say("environment", d.bytes_done)
+                await asyncio.sleep(0.4)
+        except asyncio.CancelledError:
+            self.downloads.cancel(d.id)
+            raise
+        if d.status != "done":
+            raise InstallError(d.error or "AI Toolkit could not be downloaded.", "environment")
+        archive = self.root / "download" / name
+        checkout = self.root / CHECKOUT
+        await asyncio.to_thread(_unpack, archive, checkout)
+        archive.unlink(missing_ok=True)
+        self._say("packages", p.tool_size)
+        env = self._env()
+        env["UV_PYTHON_INSTALL_DIR"] = str(checkout / ".uv" / "python")
+        if self.uv:
+            env["PATH"] = os.pathsep.join([str(Path(self.uv).parent), env.get("PATH", "")])
+        code, out = await self.run([self.python, "-I", str(INSTALL_SCRIPT), str(checkout)], env)
+        for line in out.splitlines()[-40:]:
+            log.info("ai-toolkit setup: %s", line[-300:])
+        if "AITK-SETUP-UNSUPPORTED" in out:
+            why = out.split("AITK-SETUP-UNSUPPORTED", 1)[1].strip().splitlines()[0]
+            raise InstallError(f"AI Toolkit cannot be set up here: {why}", "packages")
+        if code != 0 or "AITK-SETUP-OK" not in out:
+            raise InstallError(
+                "Installing the trainer's packages did not work. Try again.", "packages"
+            )
+
+    async def _check(self) -> None:
+        # the record that makes it installed is written after this check: look at the folder itself
+        found = self.tool()
+        home = found[0] if found else self.root / CHECKOUT
+        if self.base() is None:
+            raise InstallError("Some of the text encoder's files are missing. Try again.", "check")
+        if not _tool_in(home):
+            raise InstallError("The trainer was installed but could not be found.", "check")
+        code, out = await self.run(
+            [
+                str(venv_python(home)),
+                "-c",
+                "import torch, diffusers; print('ok', torch.__version__)",
+            ],
+            self._env(),
+        )
+        if code != 0 or "ok" not in out:
+            log.error("the trainer check failed: %s", out[-600:])
+            raise InstallError("The trainer was installed but did not start.", "check")
+
+
+def _unpack(archive: Path, checkout: Path) -> None:
+    """The archive's one top folder becomes `checkout`; a half-unpacked one is never left."""
+    tmp = checkout.with_name(checkout.name + ".part")
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    with tarfile.open(archive) as tar:
+        tar.extractall(tmp, filter="data")
+    tops = [p for p in tmp.iterdir() if p.is_dir()]
+    if len(tops) != 1:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise InstallError("The AI Toolkit download is not what was expected.", "environment")
+    shutil.rmtree(checkout, ignore_errors=True)
+    tops[0].replace(checkout)
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ---- the routes ----------------------------------------------------------------------------------
+
+router = APIRouter(prefix="/desktop/training-setup", tags=["desktop"])
+
+
+def _setup(request: Request) -> TrainingSetup:
+    found: TrainingSetup | None = services_of(request).training_setup
+    if found is None:
+        raise HTTPException(404, "not available in this deployment")
+    return found
+
+
+class ConfirmInstall(BaseModel):
+    """What the person was shown and agreed to: the size of the download."""
+
+    confirm_bytes: int
+
+
+@router.get("")
+async def setup_state(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+    return _setup(request).state()
+
+
+@router.post("/install", status_code=202)
+async def setup_install(
+    body: ConfirmInstall, request: Request, _: Identity = Depends(get_identity)
+) -> dict[str, Any]:
+    setup = _setup(request)
+    try:
+        setup.start(body.confirm_bytes)
+    except InstallError as e:
+        raise HTTPException(409, str(e)) from None
+    return setup.state()
+
+
+@router.post("/install/cancel")
+async def setup_cancel(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+    setup = _setup(request)
+    setup.cancel()
+    return setup.state()
+
+
+@router.post("/uninstall")
+async def setup_uninstall(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+    setup = _setup(request)
+    try:
+        freed = setup.remove()
+    except InstallError as e:
+        raise HTTPException(409, str(e)) from None
+    return {"freed_bytes": freed, **setup.state()}

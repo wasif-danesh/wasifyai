@@ -2,12 +2,14 @@
 SQLite store and a scripted child run: the documented result, the files and the search kept in
 step, a picture of the library made ready for editing."""
 
+import io
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from image_rig import png
+from PIL import Image
 from wasifyai_image.actions import actions, library_kinds
 from wasifyai_image.images import ImageRecord, image_store
 from wasifyai_platform_sdk import (
@@ -157,6 +159,84 @@ async def test_a_picture_that_is_not_yours_or_not_there_cannot_be_edited(rig):
     for image_id in (IMAGE_ID, "ghost"):
         r = await rig.go("image.edit", {"image_id": image_id, "prompt": "x"})
         assert (r.status, r.code) == ("refused", "not_found")
+    assert rig.host.runs == []
+
+
+SECOND_ID = "00000000-0000-0000-0000-000000000002"
+
+
+async def test_two_pictures_of_the_library_are_made_ready_and_combined(rig):
+    await rig.keep()
+    await rig.keep(SECOND_ID, prompt="a wooden chair")
+    rig.host.script("wasifyai-image", done(image_id="img-3"))
+    r = await rig.go(
+        "image.reference",
+        {"image_ids": [IMAGE_ID, SECOND_ID], "prompt": "the teapot on the chair", "size": "wide"},
+    )
+    assert r.ok and "made from the two pictures" in r.text
+    [(_, graph_input)] = rig.host.runs
+    assert graph_input["mode"] == "reference" and graph_input["size"] == "wide"
+    assert graph_input["prompt"] == "the teapot on the chair"
+    keys = [graph_input["image_key"], graph_input["image2_key"]]
+    assert keys[0] != keys[1]
+    for key in keys:  # two uploads the graph can find, and delete when it is done
+        assert await rig.state.uploads.find("t1", "wasifyai-image", "u1", key) is not None
+    assert [e.kind for e in rig.state.usage.events] == ["upload.created"] * 2
+
+
+async def test_a_reference_needs_two_different_pictures_that_are_yours(rig):
+    await rig.keep()
+    await rig.keep(SECOND_ID, user="someone-else")
+    bad = [
+        ({"image_ids": [IMAGE_ID], "prompt": "x"}, "invalid_input"),
+        ({"image_ids": [IMAGE_ID, SECOND_ID, IMAGE_ID], "prompt": "x"}, "invalid_input"),
+        ({"image_ids": [IMAGE_ID, IMAGE_ID], "prompt": "x"}, "same_picture"),
+        ({"image_ids": [IMAGE_ID, SECOND_ID], "prompt": "x"}, "not_found"),  # not yours
+        ({"image_ids": [IMAGE_ID, "ghost"], "prompt": "x"}, "not_found"),
+    ]
+    for params, code in bad:
+        r = await rig.go("image.reference", params)
+        assert (r.status, r.code) == ("refused", code), params
+    assert rig.host.runs == []
+
+
+async def test_a_rectangle_becomes_a_mask_of_the_pictures_shape_and_the_picture_is_made_ready(rig):
+    await rig.keep()  # 64 x 48
+    rig.host.script("wasifyai-image", done(image_id="img-4"))
+    r = await rig.go(
+        "image.inpaint",
+        {
+            "image_id": IMAGE_ID,
+            "prompt": "a white cup",
+            "region": {"left": 0.5, "top": 0.5, "width": 0.25, "height": 0.5},
+        },
+    )
+    assert r.ok and "changed in the chosen area" in r.text
+    [(_, graph_input)] = rig.host.runs
+    assert graph_input["mode"] == "inpaint" and graph_input["prompt"] == "a white cup"
+    async with rig._as("u1"):
+        mask_bytes = await rig.state.storage.get(graph_input["mask_key"])
+    mask = Image.open(io.BytesIO(mask_bytes)).convert("L")
+    assert mask.size == (64, 48)  # the picture's own shape
+    assert mask.getpixel((40, 30)) == 255 and mask.getpixel((10, 10)) == 0
+    assert mask.getbbox() == (32, 24, 48, 48)  # exactly the rectangle
+    for key in (graph_input["image_key"], graph_input["mask_key"]):
+        assert await rig.state.uploads.find("t1", "wasifyai-image", "u1", key) is not None
+
+
+async def test_a_bad_inpaint_request_never_reaches_the_graph(rig):
+    await rig.keep()
+    region = {"left": 0.1, "top": 0.1, "width": 0.5, "height": 0.5}
+    for params in (
+        {"image_id": IMAGE_ID, "prompt": "x"},  # no area
+        {"image_id": IMAGE_ID, "prompt": "x", "region": {**region, "left": 1.5}},
+        {"image_id": IMAGE_ID, "prompt": "x", "region": {**region, "width": 0}},
+        {"image_id": IMAGE_ID, "prompt": "x", "region": {"left": 0.1}},
+    ):
+        r = await rig.go("image.inpaint", params)
+        assert (r.status, r.code) == ("refused", "invalid_input"), params
+    r = await rig.go("image.inpaint", {"image_id": "ghost", "prompt": "x", "region": region})
+    assert (r.status, r.code) == ("refused", "not_found")
     assert rig.host.runs == []
 
 

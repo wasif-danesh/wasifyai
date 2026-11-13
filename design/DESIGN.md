@@ -29,7 +29,7 @@ spacing, depth, motion) is defined once, in the tokens block at the end of this 
   "magic word" not "trigger token" (the experts' words stay in "For experts").
 - A button says what it does ("Make the picture", "Save a copy"), not "Submit" or "OK".
 - **An error says what happened and what to do next,** never a code or a stack trace: "That file is too large. Use one under 300 MB."
-- Use the product words consistently: *My creations*, *My models*, *Video Builder*, *Motion Graphics*, *Make a 3D model*, *Teach*.
+- Use the product words consistently: *My creations*, *My models*, *Video Builder*, *Motion graphics*, *Make a 3D model*, *Teach*.
 - English only in v1; the layout must still survive longer strings and right-to-left (use logical properties: start and end).
 
 ## Components: which to use
@@ -38,14 +38,28 @@ spacing, depth, motion) is defined once, in the tokens block at the end of this 
 |---|---|
 | The main action | `Button` (filled, accent). One per area. |
 | A quieter action | `Button` secondary or outline; destructive uses the `danger` token and confirms in a dialog |
-| Pick one of a few | `RadioGroup` or `ToggleGroup`; of many, `Select`; with search, `Command` |
-| A setting that applies at once | `Switch` |
+| Pick one of a few | `RadioGroup` (stacked, with a line under each) or `Segmented` (side by side, one always chosen); of many, `Select`; with search, `Command` |
+| A yes or no | `Checkbox`; a setting that applies at once, `Switch` |
+| A number on a range | `Slider`, with the value in words beside it |
+| A labelled control | `Field`: the label, the control, one hint line, the error |
+| Settings only an expert needs | `Experts`: a collapsed "For experts" section, closed by default |
+| Where a person is in a flow | `Stepper` |
+| A screen that makes something | `MakeScreen`: ask on the left with the main button in view, the `Stage` on the right, the `RecentStrip` under it |
+| Where a result appears | `Stage`: empty, working, error and result, with its actions |
+| What can be done with a thing | `ActionsRow`: three buttons and a `Menu` for the rest |
+| The last things a tool made | `RecentStrip`, fed by the one library |
+| Audio | `Player` (the app's own controls), never the browser's |
 | A message about the page | `Notice` (info, warning, error) at the top of the area it concerns; a toast (`Sonner`) only for a result of an action |
-| Something takes time | a `ProgressBar` with words (what, how far, how long); the work continues if the person leaves |
+| Something takes time | a `ProgressBar` with words (what, how far, how long); the work continues if the person leaves; on a make screen, the `Stage`'s working state |
 | A list of things the person made | cards in a grid with a thumbnail, title and kind filter; the library search is one box |
-| Details for experts | a collapsed "For experts" section, closed by default |
+| An area with nothing in it yet | `EmptyState`: what goes here and the first step |
+| An error | `ErrorNotice`: what happened in plain words (`plainError` strips paths, addresses and codes), what to do, the raw text under "Details for experts" |
 
-Always build from `packages/ui` and `apps/web/components/ui`; do not style a native element by hand.
+Always build from `packages/ui` and `apps/web/components/ui`; do not style a native element by hand, and do not use a
+native `<select>`, checkbox, radio, range or `<audio>` in a screen: the components above replace them. Every component in
+every state, in both themes, is on the web's `/design` page (`apps/web/components/design/DesignPage.tsx`); a new component or
+state is added there in the same change. The words a screen uses for what a person makes come from `packages/ui/src/words.ts`
+("picture", "make"); `words.test.ts` keeps "generate", "image", "asset" and "Takes" from creeping back in.
 
 ## States every component has
 
@@ -71,10 +85,21 @@ Short and quiet: entrances ease out (`--ease-out-soft`); nothing moves for more 
 Logical CSS properties (`ms-`, `me-`, `ps-`, `pe-`, `start`, `end`) instead of left and right. No fixed-width text boxes. Fonts are
 files we ship with their licences recorded; the desktop never fetches fonts from the network.
 
+## The shell (ADR-0093, stage U2)
+
+One side menu with its groups (Notebook, Images, Video, Voice, Music open one at a time with their tools under them;
+the owner kept this over tabs in the bar, 2026-10-28). One top bar (`AppBar`, 48 px) on the desktop window and on the
+web: the app's navigation buttons, the group's name as the title, the screen's model button (put there with
+`PageHeader`), then the job tray, search (⌘K, `SearchPalette`) and the theme. No breadcrumb, no second bar, no "Group: Item" title. A screen that has a title of
+its own (a chat, a notebook) passes `title` to `PageHeader` and the bar shows that instead.
+
 ## Screen patterns (written before the screens are built)
 
-- **Chat (the assistant; built on assistant-ui, ADR-0082, `packages/ui/src/chat/thread/`; behind Labs until it passes the parity
-  checklist):** a title bar (name, rename, delete) only for a saved chat; while empty, the greeting, the box and three
+- **Long work never blocks the window (ADR-0086 amendment, 2026-10-25).** A model download asks first in a dialog (files, size, licence) that closes the moment the person agrees; the work goes on in a **tray** at the top right, under the top bar, on every screen: name, percentage, a thin bar, a stop button; queued rows say "Waiting"; a finished row says "Ready" and leaves after a few seconds; a failed row stays with its reason and "Try again". The tray is a labelled region with a polite live line; it never takes focus and the page behind stays usable.
+
+- **The model button is in the top bar (ADR-0086 amendment, 2026-10-24).** Every screen that makes something with a model puts its "Select ... model" button at the left of the page's top bar, as the chat, Images and Notebook screens do; the page's other tools (the library link, a mode tab) go at the right. In the app window that bar is the window's own (`PageHeader`); on the web it is a bar at the top of the screen's area (`TopBarSlot`, same `PageHeader` call). A screen never puts its model button in the body or gives it a "Model" label. A second picker on one screen (for example editing a track on the Music screen) stays in its own panel. On the web the button on Image, Video, Chat and 3D is read only: it names the model the service uses and says whether it is ready.
+
+- **Chat (the assistant; built on assistant-ui, ADR-0082, `packages/ui/src/chat/thread/`):** a title bar (name, rename, delete) only for a saved chat; while empty, the greeting, the box and three
   suggestions under it, which put their text in the box and never send; afterwards the thread (at most `max-w-3xl`, a gap
   between messages) and the box at the bottom. **The box is one element for the whole chat** (Enter sends, Shift+Enter is a new
   line, `dir="auto"`, up to 4,000 characters); while an answer arrives Stop sits beside Send, which waits. The person's message
@@ -110,7 +135,7 @@ files we ship with their licences recorded; the desktop never fetches fonts from
   messages have a pencil ("Edit message") that opens an edit box in place (Cancel, Send), and replies have "Answer again". **The confirm card** (`ConfirmActionCard`) is an
   `accent` panel, 28 rem wide at most: the action's name, a line, up to four parameters as plain text, then "Go ahead" and "Not now"; once answered it says what happened.
   Everything is a token; at 320 px nothing scrolls sideways (a wide table, code block or diagram scrolls inside its own frame).
-- **Notebook chat (the same thread primitives, ADR-0082 stage CU4; behind the same Labs switch):** the old layout kept: a slim bar above the thread
+- **Notebook chat (the same thread primitives, ADR-0082 stage CU4):** the old layout kept: a slim bar above the thread
   (conversation switcher, "New chat"), then, while empty, the add-sources screen or the guide and one line ("Ask a question about your sources. Answers cite the passages
   they came from."), then the box. **The box** is the assistant's with two differences: it is named and says "Ask about your sources", and its bar starts with the
   **scope** ("12 of 14 sources, 2 being read", `text-xs`, `muted-foreground`, truncates) and carries the model chip before Stop and Send; no options bar. An answer is
@@ -122,7 +147,7 @@ files we ship with their licences recorded; the desktop never fetches fonts from
 - **Teach (training):** a front door with three cards; three steps (add examples, check, train) then "use it"; the app picks the
   settings and shows "Quick" or "Better" and a time (ADR-0073).
 - **Agent:** a goal box, starting points, a live feed, approvals as inline cards, Stop always visible, the result saved as a report.
-- **Video Builder and Motion Graphics:** describe, preview three stills, change it in words, render; the code view is closed.
+- **Video Builder and Motion graphics:** describe, preview three stills, change it in words, render; the code view is closed.
 - **Make a 3D model:** pick a starting point, check the picture, "about 5 to 25 minutes", a viewer with orbit, the result as a card.
 - **Setup and download cards:** what it is, where it comes from, the size, the licence, one button; nothing is fetched without the click.
 

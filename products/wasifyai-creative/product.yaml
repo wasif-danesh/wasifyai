@@ -1,0 +1,5 @@
+id: wasifyai-creative
+# Creative Studio (ADR-0090): one project from a song to a finished video. It keeps the project and the plan, and
+# asks the other products for what it needs. On the desktop the writer is the person's chosen chat model.
+capabilities:
+  text.chat: { provider: litellm, model: default-chat }

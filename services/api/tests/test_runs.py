@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
+from wasifyai_api.assemble import Injected
 from wasifyai_api.graphs.hello import build_hello
 from wasifyai_api.main import create_app
 from wasifyai_platform_sdk import (
@@ -25,15 +26,17 @@ def hello_registry() -> GraphRegistry:
 def mem_app(registry, products, usage, *, storage=None, **kw):
     """An app wired entirely in memory: no Redis, Postgres or network."""
     return create_app(
-        registry,
-        products,
-        InMemorySaver(),
-        usage,
-        storage,
-        heartbeat_s=0.05,
-        event_log=InMemoryEventLog(),
-        run_store=InMemoryRunStore(),
-        **kw,
+        Injected(
+            registry=registry,
+            products_dir=products,
+            checkpointer=InMemorySaver(),
+            usage=usage,
+            storage=storage,
+            heartbeat_s=0.05,
+            event_log=InMemoryEventLog(),
+            run_store=InMemoryRunStore(),
+            **kw,
+        )
     )
 
 
@@ -254,6 +257,14 @@ async def test_a_child_run_yields_the_events_of_another_graph_until_it_ends(tmp_
     assert names[-1] == "done" and "token" in names
     assert [e["seq"] for e in events] == sorted(e["seq"] for e in events)
     # its own run: owned by the same user, and it is in the store like any other
+    run_id = events[0]["run_id"]
+    # what an action job reads after a restart (stage J3): the run's status and its last event
+    state = await runs.state_of("t1", run_id)
+    assert state["status"] == "done" and state["end"]["event"] == "done"
+    assert state["end"]["outputs"] == events[-1]["outputs"]
+    assert not runs.live(run_id)
+    assert await runs.state_of("t1", "no-such-run") == {"status": "unknown"}
+    assert (await runs.state_of("another-tenant", run_id))["status"] == "unknown"
     await runs.aclose()
 
 
@@ -427,3 +438,48 @@ async def test_stop_that_reaches_another_replica_is_noticed_by_the_one_running_t
     events = await log.read("t", rec.run_id, 0, 10_000)
     assert [e["code"] for e in events if e["event"] == "error"] == ["cancelled"]
     await mgr.aclose()
+
+
+@pytest.mark.parametrize("ending", ["done", "run_error", "crash"])
+async def test_a_run_is_marked_finished_only_once_its_last_event_is_in_the_log(ending):
+    """A stream that finds the run finished and nothing new in the log stops: if the state said
+    finished before the closing event was logged, the stream ended without it (the kind smoke)."""
+    from wasifyai_api.runs import RunManager
+    from wasifyai_contracts import TERMINAL_EVENTS
+    from wasifyai_platform_sdk import RunError
+
+    log = InMemoryEventLog()
+    seen: list[str | None] = []
+
+    class Store(InMemoryRunStore):
+        async def set_state(
+            self,
+            tenant_id: str,
+            run_id: str,
+            status: str,
+            awaiting: str | None = None,
+            waiting_job: str | None = None,
+        ) -> None:
+            if status in ("done", "error"):
+                last = await log.read(tenant_id, run_id, 0, 1)
+                seen.append(last[-1]["event"] if last else None)
+            await super().set_state(tenant_id, run_id, status, awaiting, waiting_job)
+
+    def graph(caps, checkpointer):  # noqa: ANN001, ANN202
+        def node(state):  # noqa: ANN001, ANN202
+            if ending == "run_error":
+                raise RunError("bad", "Bad.", False)
+            if ending == "crash":
+                raise ConnectionError("no model server")
+            return {"draft": "ok"}
+
+        g = StateGraph(ApproveState)
+        g.add_node("n", node)
+        g.add_edge(START, "n")
+        g.add_edge("n", END)
+        return g.compile(checkpointer=checkpointer)
+
+    runs = RunManager(log, Store(), {"g": graph(None, InMemorySaver())})
+    events = [e async for e in runs.run_child("g", "t1", "u1", {})]
+    assert events[-1]["event"] == ("done" if ending == "done" else "error")
+    assert seen and seen[-1] in TERMINAL_EVENTS

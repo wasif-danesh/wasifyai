@@ -1,7 +1,7 @@
 """Models on the desktop (ADR-0059, docs/phase2-stage-a-plan.md, step A3): what can be used, what
 is on this computer, and getting a missing one.
 
-    load_catalogue()   the products' `models.yaml` files: id, licence, source, files (size, SHA-256)
+    load_catalogue()   the products' `models.yaml` files: id, source, files (size, SHA-256)
     ModelsService      where models live (the app's folder plus read-only extra folders), what is
                        present, the memory and disk checks, removal
     DownloadManager    one download at a time: resumable, checksum verified, atomic, cancellable
@@ -12,12 +12,13 @@ and total size the window showed the person (`Confirm`), so a stale or forged ca
 """
 
 import asyncio
+import errno
 import hashlib
 import logging
 import os
 import shutil
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -26,7 +27,7 @@ from uuid import uuid4
 import httpx
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from wasifyai_platform_sdk import Identity, VoiceModel, parse_voice_model
 
 from wasifyai_api.desktop_fit import (
@@ -39,7 +40,9 @@ from wasifyai_api.desktop_fit import (
     read_machine,
 )
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.media_access import MediaAccessError
+from wasifyai_api.services import services_of
+from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +51,8 @@ DISK_MARGIN = 1_000_000_000  # keep this much free after a download
 ALLOWED_FOLDERS = frozenset(
     {
         "checkpoints", "diffusion_models", "unet", "text_encoders", "clip", "vae", "loras",
-        "controlnet", "upscale_models", "embeddings", "audio", "lipsync",
+        "controlnet", "upscale_models", "latent_upscale_models", "embeddings", "audio",
+        "lipsync",
     }
 )  # fmt: skip
 
@@ -70,12 +74,14 @@ class ModelEntry:
     id: str
     product_id: str
     title: str
-    licence: str
     source: str
     note: str
     approx_ram_gb: int
     files: tuple[ModelFile, ...]
     voice: VoiceModel | None = None  # the descriptor of a speech, music or avatar model (ADR-0066)
+    # what the product's model of this id can do (`image.edit` ...), from `product.yaml` `models:`
+    # (ADR-0097); empty when the product binds one model at the top level
+    can: tuple[str, ...] = ()
 
     @property
     def total_bytes(self) -> int:
@@ -101,14 +107,24 @@ def parse_catalogue(raw: dict[str, Any], product_id: str) -> list[ModelEntry]:
             files.append(ModelFile(f["folder"], f["name"], f["url"], int(f["size"]), sha))
         out.append(
             ModelEntry(
-                id=m["id"], product_id=product_id, title=m["title"], licence=m["licence"],
+                id=m["id"], product_id=product_id, title=m["title"],
                 source=m["source"], note=m.get("note", ""),
                 approx_ram_gb=int(m.get("approx_ram_gb", 0)), files=tuple(files),
-                voice=parse_voice_model(m["id"], m["title"], m["licence"], m["voice"])
+                voice=parse_voice_model(m["id"], m["title"], m["voice"])
                 if m.get("voice") else None,
             )
         )  # fmt: skip
     return out
+
+
+def model_verbs(product_yaml: Path) -> dict[str, tuple[str, ...]]:
+    """Each model of a product's `models:` list (ADR-0097) and the capabilities it binds."""
+    if not product_yaml.is_file():
+        return {}
+    raw = yaml.safe_load(product_yaml.read_text()) or {}
+    return {
+        str(m["id"]): tuple(sorted(m.get("capabilities") or {})) for m in raw.get("models") or []
+    }
 
 
 def load_catalogue(products_dir: Path, product_ids: list[str]) -> list[ModelEntry]:
@@ -116,7 +132,14 @@ def load_catalogue(products_dir: Path, product_ids: list[str]) -> list[ModelEntr
     for pid in product_ids:
         path = products_dir / pid / "models.yaml"
         if path.is_file():
-            out += parse_catalogue(yaml.safe_load(path.read_text()) or {}, pid)
+            verbs = model_verbs(products_dir / pid / "product.yaml")
+            # a product that lists its models offers only those: a catalogue entry it does not list
+            # (pinned, waiting for a file that runs here) is not shown
+            out += [
+                replace(e, can=verbs.get(e.id, ()))
+                for e in parse_catalogue(yaml.safe_load(path.read_text()) or {}, pid)
+                if not verbs or e.id in verbs
+            ]
     return out
 
 
@@ -223,13 +246,26 @@ class DownloadManager:
             d.status = "cancelled"  # the partial file is kept: a later start continues it
         except DownloadError as e:
             d.status, d.error = "failed", str(e)
-        except (httpx.HTTPError, OSError) as e:
+        except PermissionError as e:
+            # not the connection: macOS keeps an app off an outside drive until it is allowed
             log.warning("model download failed: %s", e)
             d.status = "failed"
             d.error = (
-                "The download was interrupted. Check the connection and try again: it continues "
-                "where it stopped."
+                f"Wasify AI is not allowed to save in {models_dir}. On a Mac, allow it in "
+                "System Settings › Privacy & Security › Files and Folders (Removable Volumes "
+                "for an outside drive), or choose another folder under Models › Where models "
+                "are kept."
             )
+        except (httpx.HTTPError, OSError) as e:
+            log.warning("model download failed: %s", e)
+            d.status = "failed"
+            if isinstance(e, OSError) and e.errno == errno.ENOSPC:
+                d.error = f"There is not enough free space in {models_dir}."
+            else:
+                d.error = (
+                    "The download was interrupted. Check the connection and try again: it "
+                    "continues where it stopped."
+                )
         finally:
             if self._active is d:
                 self._active = None
@@ -294,6 +330,28 @@ def _hash_prefix(path: Path, digest: Any) -> Any:
     return digest
 
 
+class FolderModels:
+    """What the trainers use of `ModelsService`, without a settings store: a catalogue and folders.
+    A worker has no window to choose folders in; it reads them from its settings."""
+
+    def __init__(
+        self, catalogue: list[ModelEntry], models_dir: Path, extra_dirs: tuple[Path, ...] = ()
+    ):
+        self.catalogue = {e.id: e for e in catalogue}
+        self.models_dir = models_dir
+        self.extra_dirs = extra_dirs
+
+    def roots(self) -> list[Path]:
+        return [self.models_dir, *self.extra_dirs]
+
+    def locate(self, f: ModelFile) -> Path | None:
+        for root in self.roots():
+            p = root / f.folder / f.name
+            if p.is_file() and p.stat().st_size == f.size:
+                return p
+        return None
+
+
 # ---- the service ------------------------------------------------------------------------------
 
 
@@ -342,6 +400,12 @@ class ModelsService:
             {"models_dir": str(self.models_dir), "extra_dirs": [str(p) for p in self.extra_dirs]},
             "window",
         )
+        self._tell_sidecar()
+
+    def attach(self, sidecar: Any, slot: Any) -> None:
+        """The worker is built after `load`, so the folders a person chose earlier reach the image
+        engine here; without this it would look only in the app's own folder."""
+        self.sidecar, self.slot = sidecar, slot
         self._tell_sidecar()
 
     def _tell_sidecar(self) -> None:
@@ -406,7 +470,7 @@ class ModelsService:
             fit = assess_fit(need_declared(e.approx_ram_gb), machine or read_machine())
         gate = fit.reason if fit and fit.verdict != "fits" else None
         return {
-            "id": e.id, "product_id": e.product_id, "title": e.title, "licence": e.licence,
+            "id": e.id, "product_id": e.product_id, "title": e.title,
             "source": e.source, "note": e.note, "approx_ram_gb": e.approx_ram_gb,
             "status": status,
             "files": files, "bytes_total": e.total_bytes,
@@ -414,6 +478,7 @@ class ModelsService:
             "memory_warning": gate,
             "fit": fit.public() if fit else None,
             "voice": e.voice.public() if e.voice else None,
+            "can": list(e.can),
         }  # fmt: skip
 
     def remove(self, e: ModelEntry) -> int:
@@ -435,7 +500,7 @@ router = APIRouter(prefix="/desktop", tags=["desktop"])
 
 
 def _svc(request: Request) -> ModelsService:
-    svc = getattr(request.app.state, "desktop_models", None)
+    svc = services_of(request).desktop_models
     if svc is None:
         raise HTTPException(404, "not available in this deployment")
     return svc
@@ -536,6 +601,35 @@ async def remove_model(
     if svc.downloads.active:
         raise HTTPException(409, "Wait for the download to finish first.")
     return {"removed": svc.remove(_entry(svc, entry_id))}
+
+
+class Chosen(BaseModel):
+    model_id: str = Field(min_length=1, max_length=100)
+
+
+# The image and video model the person chose on a screen (ADR-0097). The window keeps it too, but
+# what the engine makes on its own (Creative's stills and clips, the assistant, another app over
+# MCP) names no model, so the graphs ask for this one, as they ask for an admin's choice on the web.
+@router.get("/models/chosen")
+async def chosen_models(request: Request, _: Identity = Depends(get_identity)) -> dict[str, Any]:
+    media = services_of(request).media
+    if media is None:
+        raise HTTPException(404, "not available in this deployment")
+    return {p: await media.chosen_model(p) for p in ("wasifyai-image", "wasifyai-video")}
+
+
+@router.put("/models/chosen/{product_id}")
+async def choose_model(
+    product_id: str, body: Chosen, request: Request, who: Identity = Depends(get_identity)
+) -> dict[str, Any]:
+    media = services_of(request).media
+    if media is None:
+        raise HTTPException(404, "not available in this deployment")
+    try:
+        await media.choose_model(product_id, body.model_id, who.user_id)
+    except MediaAccessError as exc:
+        raise HTTPException(422, str(exc)) from None
+    return {"product_id": product_id, "chosen": body.model_id}
 
 
 @router.put("/models/folders")

@@ -29,12 +29,6 @@ from wasifyai_platform_sdk.actions.helpers import need_deps
 from wasifyai_platform_sdk.search import search_text
 
 from wasifyai_notebooks import hardening
-from wasifyai_notebooks.quotas import (
-    QuotaExceeded,
-    active_limits,
-    check_new_notebook,
-    check_new_source,
-)
 from wasifyai_notebooks.runtime import NotAvailable, Runtime, runtime_for
 from wasifyai_notebooks.store import Conflict, NotFound
 from wasifyai_notebooks.studio.formats import FORMATS
@@ -71,8 +65,6 @@ async def _call(fn: Any, *args: Any, **kwargs: Any) -> Any:
         raise ActionRefused("not_found", "That notebook is not there.") from e
     except Conflict as e:
         raise ActionRefused("conflict", str(e)) from None
-    except QuotaExceeded as e:
-        raise ActionRefused("quota_exceeded", str(e)) from None
 
 
 async def _reindex(ctx: ActionContext, nid: str) -> None:
@@ -145,9 +137,6 @@ class NotebookOut(BaseModel):
 
 async def _create(p: CreateIn, ctx: ActionContext) -> Outcome:
     rt, a = _rt(ctx), ctx.actor
-    limits = await active_limits(need_deps(ctx).state)
-    if limits:
-        await _call(check_new_notebook, limits, rt.store, a.tenant_id, a.user_id)
     made = await _call(rt.store.create_notebook, a.tenant_id, a.user_id, p.title)
     await _reindex(ctx, made["id"])
     return Outcome.ok(
@@ -172,12 +161,6 @@ class SourceOut(BaseModel):
 
 async def _add_source(p: AddSourceIn, ctx: ActionContext) -> Outcome:
     rt, a = _rt(ctx), ctx.actor
-    limits = await active_limits(need_deps(ctx).state)
-    if limits:
-        await _call(
-            check_new_source, limits, rt.store, a.tenant_id, a.user_id, p.notebook_id,
-            len(p.content.encode()),
-        )  # fmt: skip
     doc = await _call(
         rt.store.add_note, a.tenant_id, a.user_id, p.notebook_id, title=p.title,
         content=p.content, folder_id=None,

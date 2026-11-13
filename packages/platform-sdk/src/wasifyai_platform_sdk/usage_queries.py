@@ -1,4 +1,4 @@
-"""Reads over `usage_events`: what quotas and (later) billing roll-ups are built on."""
+"""Reads over `usage_events`: what the usage pages and (later) billing roll-ups are built on."""
 
 from datetime import UTC, datetime
 

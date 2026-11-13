@@ -10,7 +10,6 @@ REPO_PRODUCTS = Path(__file__).resolve().parents[3] / "products"
 def test_loads_and_validates(products):
     cfg = load_product_config(products, "demo", environ={})
     assert cfg.capabilities["video.generate"].workflow == "tiny"
-    assert cfg.quotas == {"songs_per_user_per_day": 10}
     assert cfg.settings["audio_format"] == "mp3"
 
 
@@ -27,11 +26,11 @@ def test_env_file_overlay_wins_over_base(products):
 def test_env_var_overrides_win_over_files(products):
     env = {
         "DEMO__CAPABILITIES__VIDEO_GENERATE__DEFAULTS__DURATION_S": "15",
-        "DEMO__QUOTAS__SONGS_PER_USER_PER_DAY": "3",
+        "DEMO__SETTINGS__AUDIO_FORMAT": "wav",
     }
     cfg = load_product_config(products, "demo", environ=env)
     assert cfg.capabilities["video.generate"].defaults["duration_s"] == 15
-    assert cfg.quotas["songs_per_user_per_day"] == 3
+    assert cfg.settings["audio_format"] == "wav"
 
 
 def test_reports_every_problem_at_once(products):
@@ -81,3 +80,24 @@ def test_committed_product_configs_are_valid(product):
     """Every shipped product loads, its workflows and map files exist, and every mapped node ID
     is present in the workflow JSON."""
     load_product_config(REPO_PRODUCTS, product, environ={}, check_files=True)
+
+
+def test_models_bind_media_only_and_once(tmp_path):
+    import pytest as _pytest
+    from wasifyai_platform_sdk.config import ProductConfig
+
+    gen = {"image.generate": {"provider": "fake"}}
+    ok = ProductConfig.model_validate({"id": "p", "models": [{"id": "a", "capabilities": gen}]})
+    first, named = ok.model(None), ok.model("a")
+    assert first is not None and first.id == "a" and named is not None and named.id == "a"
+    assert ok.model("b") is None
+    for bad in (
+        {"id": "p", "models": [{"id": "a", "capabilities": {"text.chat": {"provider": "fake"}}}]},
+        {"id": "p", "models": [{"id": "a", "capabilities": {}}]},
+        {"id": "p", "models": [{"id": "a", "capabilities": gen}] * 2},
+        {"id": "p", "capabilities": {"image.edit": {"provider": "fake"}},
+         "models": [{"id": "a", "capabilities": gen}]},
+        {"id": "p", "models": [{"id": "Bad Id", "capabilities": gen}]},
+    ):  # fmt: skip
+        with _pytest.raises(ValueError):
+            ProductConfig.model_validate(bad)

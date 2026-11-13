@@ -7,3 +7,10 @@ api:
   replicas: 1
 web:
   replicas: 1
+
+# Traces to Tempo and LLM traces to Langfuse with prompts (ADR-0050 decision 4: content on in staging).
+tracing:
+  otlpEndpoint: http://tempo.monitoring:4318
+langfuse:
+  baseUrl: http://langfuse-web.observability:3000
+  captureContent: true

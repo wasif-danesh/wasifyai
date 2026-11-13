@@ -77,7 +77,8 @@ class Components:
             if paths is None:
                 raise Unavailable(
                     "embedder_missing",
-                    "The search model is not on this computer yet. Get it in Models, then add the "
+                    "The search model is not on this computer yet. "
+                    "Get it in the Model hub, then add the "
                     "source again.",
                 )
             self._embedder = OnnxEmbedder(self.spec, *paths)
@@ -96,7 +97,8 @@ class Components:
         if paths is None:
             raise Unavailable(
                 "embedder_missing",
-                "The search model is not on this computer yet. Get it in Models, then add the "
+                "The search model is not on this computer yet. "
+                "Get it in the Model hub, then add the "
                 "source again.",
             )
         return paths[1]

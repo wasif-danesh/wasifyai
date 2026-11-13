@@ -20,15 +20,25 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 from wasifyai_contracts import JobProgressEvent
 
+from wasifyai_platform_sdk.tracing import carrier
+
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def input_image_name(job_id: str) -> str:
+# The pictures a job can take, by slot: the job's input `<slot>_key` names the user's upload, and
+# the workflow map has an input of the same name. `image` is the picture to change (Edit, Inpaint)
+# or the first reference; `image2` the second reference; `mask` the area to change, white on black;
+# `video` a clip to carry on (Extend video), an MP4 rather than a picture.
+PICTURE_SLOTS = ("image", "image2", "mask", "video")
+
+
+def input_image_name(job_id: str, slot: str = "image") -> str:
     """The file name an input picture goes by on the backend for this job. The API puts it in the
     workflow before the job exists; the worker uploads the user's picture under it."""
-    return f"wasifyai-{job_id}.png"
+    ext = "mp4" if slot == "video" else "png"
+    return f"wasifyai-{job_id}.{ext}" if slot == "image" else f"wasifyai-{job_id}-{slot}.{ext}"
 
 
 class JobRequest(BaseModel):
@@ -46,6 +56,8 @@ class JobRequest(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     outputs: dict[str, Any]  # output name -> {node, type}, from the workflow map
     created_at: str = Field(default_factory=_now)
+    # the trace it belongs to (`traceparent`), taken where it is made, so the worker's span joins it
+    trace: dict[str, str] = Field(default_factory=carrier)
 
 
 class JobHandle(BaseModel):
@@ -72,6 +84,8 @@ class JobResult(BaseModel):
     outputs: dict[str, JobOutput] = Field(default_factory=dict)
     error: JobError | None = None
     gpu_seconds: float = 0.0
+    # the job's span (`traceparent`): the run's next stretch continues the same trace from it
+    trace: dict[str, str] = Field(default_factory=dict)
 
 
 class JobFailed(Exception):

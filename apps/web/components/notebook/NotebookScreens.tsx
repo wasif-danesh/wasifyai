@@ -1,6 +1,7 @@
 "use client";
 
 import { webImages, webNotebooks } from "@/lib/library";
+import { NEW_NOTEBOOK } from "@/lib/notebook-ids";
 import { webClient } from "@/lib/run-client";
 import type { NotebookSummary } from "@wasifyai/client";
 import { Button, NotebookList, NotebookPlaceProvider, NotebookWorkspace } from "@wasifyai/ui";
@@ -8,10 +9,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export const NEW_NOTEBOOK = "new";
 const DRAFT_TITLE = "Untitled notebook";
 
-/** View Notebooks: the person's notebooks as cards (the shared screen, also the desktop's). */
+/** View notebooks: the person's notebooks as cards (the shared screen, also the desktop's). */
 export function NotebookListScreen() {
   const router = useRouter();
   const [notebooks, setNotebooks] = useState<NotebookSummary[]>([]);
@@ -41,9 +41,7 @@ export function NotebookListScreen() {
         error={error}
         onOpen={(n) => router.push(`/notebooks/${n.id}`)}
         onCreate={() => router.push(`/notebooks/${NEW_NOTEBOOK}`)}
-        onRename={async (n) => {
-          const next = window.prompt("Name this notebook", n.title)?.trim();
-          if (!next || next === n.title) return;
+        onRename={async (n, next) => {
           try {
             await webNotebooks.rename(n.id, next);
             await load();
@@ -52,8 +50,6 @@ export function NotebookListScreen() {
           }
         }}
         onRemove={async (n) => {
-          const what = n.sources ? ` and its ${n.sources} source${n.sources === 1 ? "" : "s"}` : "";
-          if (!window.confirm(`Delete “${n.title}”${what}? This cannot be undone.`)) return;
           try {
             await webNotebooks.remove(n.id);
             await load();

@@ -15,8 +15,11 @@ Read a text aloud in a voice and keep the recording in your library.
 
 1. Open **Voice › Text to speech**.
 2. Type or paste the text.
-3. Choose a voice: one that comes with the model, or one of your saved voices.
-4. Choose Speak. The recording appears under Made before.
+3. Choose a voice in the list: your own voices first, then the ones that come with the model. **Hear it**
+   speaks a short line in a voice you have not heard yet; a voice heard before plays at once. **Make a voice**
+   at the end of the list describes or copies a new one without leaving the screen.
+4. Choose **Make the speech**. It plays where it appears, with its waveform, and joins Recent speech under it.
+   Speed and seed are under **For experts**.
 
 ## Fields
 
@@ -41,5 +44,5 @@ Read a text aloud in a voice and keep the recording in your library.
 
 ## Problems
 
-- **It says a model is missing** Open **Models**, get a speech model, then try again.
+- **It says a model is missing** Open **Model hub**, get a speech model, then try again.
 - **The text is too long** Split it, or use the Audiobook screen.

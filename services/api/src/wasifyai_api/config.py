@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     # for example an existing ComfyUI models folder, so 16 GB are not copied
     desktop_extra_model_dirs: str = ""
     desktop_idle_unload_s: int = 600  # unload the model after this long without a job
+    # where the desktop keeps keys and tokens (ADR-0092): `keychain` (the macOS keychain; the
+    # shell asks for it) or `file` (Fernet under `secrets.key` in the data folder; the default, so
+    # an engine started by hand or by a test never touches the person's keychain)
+    desktop_secret_store: str = "file"
+    # the stdio launcher other apps run to reach this engine (ADR-0069); the shell passes the
+    # path of the bundled `wasify-mcp` so Settings can show the exact command to paste
+    wasifyai_mcp_launcher: str = ""  # the env var the shell sets is WASIFYAI_MCP_LAUNCHER
     # extra ComfyUI arguments, space separated (for example `--gpu-only`): memory modes, for tuning
     desktop_comfyui_args: str = ""
     # comma-separated product ids; empty: all (desktop: image, video, assistant, notebooks, voice)
@@ -39,8 +46,21 @@ class Settings(BaseSettings):
     comfyui_video_base_url: str = ""  # the ComfyUI video runs on (ADR-0037); empty: the one above
     ollama_base_url: str = "http://host.containers.internal:11434"
     log_level: str = "INFO"
+    # Traces (stage O1): OTLP to Tempo when OTEL_EXPORTER_OTLP_ENDPOINT is set (the OTel SDK reads
+    # its own OTEL_* variables); JSON lines in this file when set. The desktop writes
+    # <data dir>/logs/traces.jsonl unless this names another file.
+    wasifyai_traces_file: str = ""
+    # LLM traces in Langfuse (ADR-0050): on when all three are set. Prompts and outputs are stored
+    # only with capture on (development and staging); a person is a one-way hash either way.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = ""
+    langfuse_capture_content: bool = False
     metrics_port: int = 9464  # Prometheus scrapes this port (ADR-0048); 0 turns the listener off
     media_secrets_key: str = ""  # encrypts media provider API keys saved in the admin area
+    # the assistant may search the web once an admin picks the service and a person allows it
+    # (ADR-0083); off here for a deployment that must send nothing out
+    web_search_enabled: bool = True
 
     # Search over My creations (ADR-0041). The embedder is the `creation-embedder` alias; the index
     # records which model made each row, and a row made by another model is re-embedded.
@@ -51,8 +71,10 @@ class Settings(BaseSettings):
     search_reconcile_every_s: int = 300
     search_reconcile_batch: int = 200  # items embedded per check: about 3 seconds of work
 
-    # ADR-0047: true in production: the safeguards are always on and the admin cannot turn them off.
-    safeguards_force_on: bool = False
+    # ADR-0088: how many jobs one person may have in the line at once, across everything (pictures,
+    # clips, speech, music, 3D, Motion graphics, training). 0 means no limit; the desktop is never
+    # limited. The Helm values set 1 (`jobs.maxPerUser`).
+    max_jobs_per_user: int = 0
 
     products_dir: str = "products"
     product_env: str = ""  # selects products/<id>/product.<env>.yaml overlays
@@ -65,25 +87,25 @@ class Settings(BaseSettings):
     storage_access_key: str = ""
     storage_secret_key: str = ""
 
-    # Notebooks on the web (docs/phase3-web-parity-plan.md, W4): off until a reading worker is
-    # deployed, because a source waits for it. The models and the reader are on the worker's
-    # machine; the engine needs the search model's folder only to answer about what was read.
-    notebooks_enabled: bool = False
+    # Notebooks on the web (docs/phase3-web-parity-plan.md, W4): always there on the web profile; a
+    # source waits for the reading worker. The models and the reader are on the worker's machine;
+    # the engine needs the search model's folder only to answer about what was read.
     notebooks_models_dir: str = ""
     notebooks_reader_dir: str = ""
     notebooks_schema: str = "notebooks"
     notebooks_embed_model: str = "creation-embedder"  # the gateway alias that serves the search
     notebooks_embed_dimension: int = 1024
 
-    # Speech on the web (docs/phase3-web-parity-plan.md, W5): the hosted models of
-    # `products/wasifyai-voice/hosted-models.yaml`, asked through the gateway by alias. Off until
-    # the gateway has the aliases (`voice-speak`, `voice-transcribe`) pointed at provider models.
-    voice_enabled: bool = False
+    # Speech on the web (docs/phase3-web-parity-plan.md, W5): always there on the web profile. The
+    # hosted models of `products/wasifyai-voice/hosted-models.yaml` are asked through the gateway
+    # by alias; until the gateway has the aliases (`voice-speak`, `voice-transcribe`) pointed at
+    # provider models, the models list says they are not available.
     voice_schema: str = "voice"
-    # what answers speech: hosted (the gateway's speech routes), local (the models in
-    # DESKTOP_DATA_DIR, as the desktop app runs them) or both; local and both are for a service on a
-    # machine that has the models
-    voice_engine: Literal["hosted", "local", "both"] = "hosted"
+    # what answers speech: hosted (the gateway's speech routes); worker (the default: engine workers
+    # run the desktop's capabilities, ADR-0087, and the hosted models answer too); local (the models
+    # in DESKTOP_DATA_DIR run inside this process, as the desktop app does) or both (hosted and
+    # local); local and both are for a service on a machine that has the models
+    voice_engine: Literal["hosted", "local", "both", "worker"] = "worker"
     voice_models_file: str = ""  # your own descriptors; default: the product's file
 
     @model_validator(mode="after")
@@ -101,7 +123,7 @@ class Settings(BaseSettings):
             if not self.products_enabled:
                 self.products_enabled = (
                     "wasifyai-image,wasifyai-video,wasifyai-assistant,wasifyai-notebooks,"
-                    "wasifyai-voice"
+                    "wasifyai-voice,wasifyai-model3d,wasifyai-training,wasifyai-creative"
                 )
         return self
 

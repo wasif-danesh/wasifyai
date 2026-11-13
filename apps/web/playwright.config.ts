@@ -57,8 +57,6 @@ export default defineConfig({
       AUTH_MODE: "stub",
       API_BASE_URL: "http://127.0.0.1:9",
       NEXT_TELEMETRY_DISABLED: "1",
-      NOTEBOOKS_ENABLED: "true", // the menu offers notebooks
-      VOICE_ENABLED: "true", // and the shared speech screens, which the older speech pages redirect to
     },
     reuseExistingServer: !process.env.CI,
     timeout: 300_000,

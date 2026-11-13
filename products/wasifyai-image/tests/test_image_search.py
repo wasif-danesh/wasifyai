@@ -9,7 +9,7 @@ from test_image_routes import identity, image
 from wasifyai_image.images import InMemoryImageStore
 from wasifyai_image.index import ImageIndexSource, image_index_source, index_text
 from wasifyai_image.routes import build_routes
-from wasifyai_platform_sdk import RouteDeps, ScopedStorage, memory_storage
+from wasifyai_platform_sdk import EngineServices, RouteDeps, ScopedStorage, memory_storage
 
 
 class Recorder:
@@ -48,15 +48,17 @@ def make_client(removed):
     store = InMemoryImageStore()
     store.images = [image(1), image(2), image(3), image(5, user="someone-else")]
     app = FastAPI()
-    app.state.storage = ScopedStorage(memory_storage())
+    app.state.services = EngineServices()
+    app.state.services.storage = ScopedStorage(memory_storage())
 
     class Index:
         async def remove(self, tenant_id, product_id, item_id):
             removed.append((tenant_id, product_id, item_id))
 
-    app.state.creation_index = Index()
+    app.state.services.creation_index = Index()
     app.include_router(
-        build_routes(RouteDeps(app.state, identity), store), prefix="/products/wasifyai-image"
+        build_routes(RouteDeps(app.state.services, identity), store),
+        prefix="/products/wasifyai-image",
     )
     return TestClient(app)
 

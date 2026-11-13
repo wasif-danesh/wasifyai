@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from wasifyai_platform_sdk.runstore import RunRecord
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables
+from wasifyai_platform_sdk.sqlite.engine import Migration, migrate
 
 _DDL = (
     """
@@ -23,6 +23,10 @@ _DDL = (
     )
     """,
 )
+
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_MIGRATIONS = (Migration(1, _DDL),)
+
 _COLUMNS = (
     "run_id, thread_id, product_id, tenant_id, user_id, status, awaiting, waiting_job, created_at"
 )
@@ -33,7 +37,7 @@ class SqliteRunStore:
         self._engine = engine
 
     async def _ready(self) -> None:
-        await ensure_tables(self._engine, "runs", _DDL)
+        await migrate(self._engine, "runs", _MIGRATIONS)
 
     async def create(self, rec: RunRecord) -> bool:
         await self._ready()

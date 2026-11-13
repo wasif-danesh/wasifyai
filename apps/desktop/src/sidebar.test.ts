@@ -1,6 +1,6 @@
 import { MENU_GROUPS } from "@wasifyai/ui";
 import { describe, expect, it, vi } from "vitest";
-import { ROUTES, resolveItem } from "./menu";
+import { ROUTES, resolveItem, routeTitle } from "./menu";
 import { type Route, routePath } from "./router";
 
 const ids = MENU_GROUPS.flatMap((g) => g.items.map((i) => i.id));
@@ -10,21 +10,44 @@ const at = (route: Route, notebook: string | null = null, conversationId: string
 describe("the window's side menu", () => {
   it("opens a screen for everything that is built and marks the rest as soon", () => {
     const soon = ids.filter((id) => at("home")(id) === undefined);
-    expect(soon).toEqual([
-      "images.transform",
-      "images.inpaint",
-      "images.extend",
-      "images.upscale",
-      "images.reference",
-      "video.extend",
-    ]);
-    expect(at("home")("train")).toBeUndefined();
+    expect(soon).toEqual([]); // every item of the groups opens a screen
+    const train = at("home")("train"); // and so does Train (ADR-0073), the one item outside the groups
+    expect(train && !("hidden" in train)).toBe(true);
+  });
+
+  it("leaves out what the chosen image model cannot do (ADR-0097)", () => {
+    const cannot = new Set(["images.edit", "images.inpaint"]);
+    const r = resolveItem("create", () => {}, { conversationId: null, notebook: null, cannot });
+    expect(r("images.edit")).toEqual({ hidden: true });
+    expect(r("images.inpaint")).toEqual({ hidden: true });
+    const make = r("images.create");
+    expect(make && !("hidden" in make) ? make.current : null).toBe(true);
+  });
+
+  it("shows the screens that are built, and marks the page being shown", () => {
+    for (const [id, route, path] of [
+      ["motion", "videobuilder", "/video/builder"],
+      ["model3d", "model3d", "/images/3d"],
+      ["library", "creations", "/creations"],
+      ["images.reference", "reference", "/images/reference"],
+      ["images.inpaint", "inpaint", "/images/inpaint"],
+    ] as const) {
+      const shown = at("home")(id);
+      expect(shown && !("hidden" in shown) ? shown.current : null, id).toBe(false);
+      const open = at(route)(id);
+      expect(open && !("hidden" in open) ? open.current : null, id).toBe(true);
+      expect(routePath(route)).toBe(path);
+    }
   });
 
   it("points every item at a route that exists", () => {
     for (const [id, route] of Object.entries(ROUTES)) {
       expect(routePath(route), id).toBeTruthy();
-      expect(ids.includes(id) || ["library", "models"].includes(id), id).toBe(true);
+      expect(
+        ids.includes(id) ||
+          ["creative", "motion", "model3d", "library", "models", "train"].includes(id),
+        id,
+      ).toBe(true);
     }
   });
 
@@ -35,10 +58,14 @@ describe("the window's side menu", () => {
     };
     expect(current("video", "video.create")).toBe(true);
     expect(current("animate", "video.create")).toBe(false);
-    expect(current("videos", "video.library")).toBe(true);
-    expect(current("tracks", "music.library")).toBe(true);
+    // the routes that were "Your videos" and "Your music" show the Library: its item is the one marked
+    expect(current("videos", "library")).toBe(true);
+    expect(current("tracks", "library")).toBe(true);
+    expect(current("library", "library")).toBe(true);
+    expect(current("creations", "library")).toBe(true);
     expect(current("speechedit", "voice.edit")).toBe(true);
     expect(current("models", "models")).toBe(true);
+    expect(current("train", "train")).toBe(true);
   });
 
   it("tells a new chat from an open one, and a draft notebook from a saved one", () => {
@@ -61,5 +88,24 @@ describe("the window's side menu", () => {
     if (!v || "hidden" in v) throw new Error("no view");
     v.onSelect?.();
     expect(go).toHaveBeenCalledWith("animate");
+  });
+});
+
+describe("the title the top bar shows when a screen gives none", () => {
+  it("is the menu's own words for every screen that has a menu item", () => {
+    expect(routeTitle("create")).toBe("Images");
+    expect(routeTitle("extend")).toBe("Video");
+    expect(routeTitle("speak")).toBe("Voice");
+    expect(routeTitle("dub")).toBe("Voice");
+    expect(routeTitle("home")).toBe("Chat");
+    expect(routeTitle("models")).toBe("Model hub");
+    expect(routeTitle("train")).toBe("Train models");
+    expect(routeTitle("settings")).toBe("Settings");
+  });
+
+  it("names every screen: none falls back to the app's name", () => {
+    for (const route of new Set(Object.values(ROUTES))) {
+      expect(routeTitle(route)).not.toBe("Wasify AI");
+    }
   });
 });

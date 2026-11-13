@@ -13,12 +13,12 @@ and a male or female voice, and gets speech to play and download. It is the firs
 The whole project must be multilingual, so language coverage is the main design question, not an afterthought.
 What the facts are (checked on 2026-10-09 from the model cards and repositories):
 
-| Engine | Licence | Languages | Voices |
-|---|---|---|---|
-| **Kokoro-82M** (82M parameters) | Apache-2.0 | English (US and UK), Spanish, French, Hindi, Italian, Japanese, Portuguese (Brazil), Chinese | 54 presets in the catalog: US English 11 female and 9 male, UK English 4 and 4, Spanish 1 and 2, French **1 and 0**, Hindi 2 and 2, Italian 1 and 1, Japanese 4 and 1, Portuguese 1 and 2, Chinese 4 and 4 |
-| **Chatterbox Multilingual** (0.5B) | MIT | 23: Arabic, Danish, German, Greek, English, Spanish, Finnish, French, Hebrew, Hindi, Italian, Japanese, Korean, Malay, Dutch, Norwegian, Polish, Portuguese, Russian, Swedish, Swahili, Turkish, Chinese | None built in: it speaks in the voice of a reference recording (zero-shot cloning) |
-| **Indic Parler-TTS** (AI4Bharat and Hugging Face, about 0.94B parameters) | Apache-2.0 (the model is gated: access terms are accepted on Hugging Face and a token is needed to download it) | 21 officially: Assamese, **Bengali**, Bodo, Dogri, Gujarati, Hindi, Kannada, Konkani, Maithili, Malayalam, Manipuri, Marathi, Nepali, Odia, Sanskrit, Santali, Sindhi, Tamil, Telugu, Urdu and English; Chhattisgarhi, Kashmiri and Punjabi are reported as unofficial | The voice is described in words (gender, pitch, pace, style) and the card lists recommended named speakers per language (69 voices in total, per the card) |
-| **Piper** | engine MIT; each voice has its own licence | many | many; per-voice licences must be read one by one |
+| Engine | Languages | Voices |
+|---|---|---|
+| **Kokoro-82M** (82M parameters) | English (US and UK), Spanish, French, Hindi, Italian, Japanese, Portuguese (Brazil), Chinese | 54 presets in the catalog: US English 11 female and 9 male, UK English 4 and 4, Spanish 1 and 2, French **1 and 0**, Hindi 2 and 2, Italian 1 and 1, Japanese 4 and 1, Portuguese 1 and 2, Chinese 4 and 4 |
+| **Chatterbox Multilingual** (0.5B) | 23: Arabic, Danish, German, Greek, English, Spanish, Finnish, French, Hebrew, Hindi, Italian, Japanese, Korean, Malay, Dutch, Norwegian, Polish, Portuguese, Russian, Swedish, Swahili, Turkish, Chinese | None built in: it speaks in the voice of a reference recording (zero-shot cloning) |
+| **Indic Parler-TTS** (AI4Bharat and Hugging Face, about 0.94B parameters) | 21 officially: Assamese, **Bengali**, Bodo, Dogri, Gujarati, Hindi, Kannada, Konkani, Maithili, Malayalam, Manipuri, Marathi, Nepali, Odia, Sanskrit, Santali, Sindhi, Tamil, Telugu, Urdu and English; Chhattisgarhi, Kashmiri and Punjabi are reported as unofficial | The voice is described in words (gender, pitch, pace, style) and the card lists recommended named speakers per language (69 voices in total, per the card) |
+| **Piper** | many | many |
 
 No single engine gives "any language, male or female". **Kokoro does not support Bengali** (nor any Indic
 language except Hindi), which the product needs, so **Indic Parler-TTS is added for Bengali and the other Indic
@@ -52,17 +52,17 @@ APIs (ADR-0032), so the same pattern fits speech.
   listening, and recorded in `voices.yaml`.
 - **Preset voices only in this version.** No user-supplied voice, no cloning. Cloning someone's voice is an
   impersonation risk that needs its own consent design (a separate ADR). The Chatterbox route to male and female
-  voices in more languages is therefore only used with reference recordings we own or that are licensed for this
+  voices in more languages is therefore only used with reference recordings we own or that we have the right to use for this
   (to be sourced if the evaluation says we need it).
 - **Engines are servers that speak the OpenAI speech API, behind a new worker backend.** The worker gets an
   `openai-speech` runner (like `OpenAIImagesRunner`) that posts to `/v1/audio/speech` on the server named by the
   voice's engine, from a map `engine -> address` in the backend's settings; an admin can change the addresses
   (or point an engine at a hosted server) at `/admin/media` (ADR-0032). Two servers, both new services in compose
   and Helm (adding a service needs your approval, and accepting this ADR is that approval):
-  1. **`speech` = Speaches** (MIT): one container serving Kokoro and Piper for speech and faster-whisper for
-     ADR-0043. Alternative: `Kokoro-FastAPI` (Apache-2.0, Kokoro only).
+  1. **`speech` = Speaches**: one container serving Kokoro and Piper for speech and faster-whisper for
+     ADR-0043. Alternative: `Kokoro-FastAPI` (Kokoro only).
   2. **`speech-indic`**, a small server of our own in `services/speech-indic/`: it loads Indic Parler-TTS once
-     with the `parler-tts` library (Apache-2.0) and `transformers`, and answers `/v1/audio/speech` (the input
+     with the `parler-tts` library and `transformers`, and answers `/v1/audio/speech` (the input
      text, the voice description or speaker as `voice`, a WAV back). Indic Parler-TTS is not served by Speaches,
      so this adapter is needed. The model is gated: the image is built without it, and the weights are downloaded
      at first start with a `HF_TOKEN` secret (never in the repository or the image) after the access terms are
@@ -104,7 +104,6 @@ Like ADR-0037 and ADR-0041, the engine is chosen by measuring on the development
    missing words. For Bengali the listening review decides.
 3. **Speed:** seconds to synthesise 10 and 60 seconds of speech on the Mac (CPU in a container) and, if
    available, on a GPU.
-4. **Licences:** each voice file's licence, recorded in the catalog.
 
 Acceptance needs Bengali and the languages the home page promises (decided with you after the coverage table),
 a male and a female voice for each language we list (a gap is shown, not hidden), and an error rate that is not

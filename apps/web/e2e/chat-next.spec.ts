@@ -5,12 +5,10 @@ import { mockApi } from "./mock-api";
 // docs/chat-ui-migration-plan.md run against it in a real browser: the engine is the mock of mock-api.ts plus the scripted
 // answers below. `@layout` cases run in CI; the pictures (`@visual`) are kept per operating system.
 
-const KEY = "wasifyai.labs.chat-next";
 const RUN = "5b6c1c1e-0000-4000-8000-000000000001";
 
 test.beforeEach(async ({ page }) => {
   await mockApi(page);
-  await page.addInitScript((k) => localStorage.setItem(k, "1"), KEY);
 });
 
 type Ev = [event: string, data: Record<string, unknown>];
@@ -54,7 +52,12 @@ async function ask(page: Page, text: string) {
   await page.goto("/");
   await expect(box(page)).toBeVisible();
   await box(page).fill(text);
-  await box(page).press("Enter");
+  // The first Enter can arrive before the page can use it (the box is there before its handler is), so it is
+  // pressed again, but only while the text is still in the box: a message that was sent empties it, and is never sent twice.
+  await expect(async () => {
+    if ((await box(page).inputValue()) === text) await box(page).press("Enter");
+    await expect(box(page)).toHaveValue("", { timeout: 1500 });
+  }).toPass({ timeout: 20_000 });
 }
 
 async function noSideScroll(page: Page) {
@@ -174,8 +177,23 @@ test("a picture is made: progress first, then the picture with a way to open it 
 }) => {
   await answers(page, [
     ["token", { node: "agent", text: "Drawing it. " }],
-    ["tool_call", { id: "t1", name: "generate_image", arguments: { prompt: "a lighthouse" } }],
-    ["tool_result", { id: "t1", name: "generate_image", status: "ok", output: { image_id: "i1" } }],
+    [
+      "tool_call",
+      {
+        id: "t1",
+        name: "propose_action",
+        arguments: { action_id: "image.generate", params: { prompt: "a lighthouse" } },
+      },
+    ],
+    [
+      "tool_result",
+      {
+        id: "t1",
+        name: "propose_action",
+        status: "ok",
+        output: { action_id: "image.generate", message: "Made.", image_id: "i1" },
+      },
+    ],
     ["token", { node: "agent", text: "Here it is." }],
     DONE,
   ]);
@@ -203,7 +221,7 @@ test("results of a search are a card in the answer @layout", async ({ page }) =>
   ]);
   await ask(page, "find my lighthouse");
   await expect(page.getByText("Found 1 in your library")).toBeVisible();
-  await expect(page.getByText("A lighthouse at sunrise")).toBeVisible();
+  await expect(page.getByText("A lighthouse at sunrise", { exact: true })).toBeVisible();
 });
 
 test("a reply can be copied @layout", async ({ page, context }) => {
@@ -228,7 +246,7 @@ test("what a model writes is not markup, and only http(s) links open @layout", a
     DONE,
   ]);
   await ask(page, "x");
-  await expect(page.getByRole("link", { name: "ok" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "ok", exact: true })).toHaveAttribute(
     "href",
     "https://example.com/",
   );
@@ -305,21 +323,6 @@ test("right-to-left text is laid out right to left, in the bubble and in the ans
   await noSideScroll(page);
 });
 
-test("the usual chat is still the default, and ?chat=next turns the new one on @layout", async ({
-  page,
-}) => {
-  await page.addInitScript((k) => localStorage.removeItem(k), KEY);
-  await page.goto("/");
-  await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
-  // the new chat's box has a log region for the screen reader, the usual one has a live thread instead
-  await expect(page.getByRole("log")).toHaveCount(0);
-  await page.goto("/?chat=next");
-  await expect(page.getByRole("log")).toHaveCount(1);
-  await page.goto("/?chat=classic");
-  await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
-  await expect(page.getByRole("log")).toHaveCount(0);
-});
-
 test("the new chat looks right, empty and answered @visual", async ({ page }) => {
   await answers(page, [
     [
@@ -329,8 +332,23 @@ test("the new chat looks right, empty and answered @visual", async ({ page }) =>
         text: "Here is **bold** text and a list:\n\n- one\n- two\n\n```ts\nconst x: number = 1;\n```\n\n$$E = mc^2$$\n\nA [link](https://example.com).",
       },
     ],
-    ["tool_call", { id: "t1", name: "generate_image", arguments: { prompt: "a lighthouse" } }],
-    ["tool_result", { id: "t1", name: "generate_image", status: "ok", output: { image_id: "i1" } }],
+    [
+      "tool_call",
+      {
+        id: "t1",
+        name: "propose_action",
+        arguments: { action_id: "image.generate", params: { prompt: "a lighthouse" } },
+      },
+    ],
+    [
+      "tool_result",
+      {
+        id: "t1",
+        name: "propose_action",
+        status: "ok",
+        output: { action_id: "image.generate", message: "Made.", image_id: "i1" },
+      },
+    ],
     DONE,
   ]);
   await page.goto("/");

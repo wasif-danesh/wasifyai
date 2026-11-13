@@ -1,89 +1,94 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Create and Animate (ADR-0037): a clip from words, or from a picture and what should move. The shared
-// workspace with this window's model chip and setup notices.
-import { Notice, VideoWorkspace, cn } from "@wasifyai/ui";
-import { FitBadge } from "../FitBadge";
+// Create, Animate and Extend (ADR-0037): a clip from words, from a picture and what should move, or one of
+// your videos carried on. The shared make screen with this window's model button (in the top bar) and setup notices.
+import type { VideoMode, VideoSummary } from "@wasifyai/client";
+import {
+  ModelSelect,
+  type ModelSelectHandle,
+  Notice,
+  VideoWorkspace,
+  useChoicesFor,
+} from "@wasifyai/ui";
+import { useRef } from "react";
 import { client } from "../api";
+import { useGroupReady } from "../choices/use-ready";
 import { useImageEngine, useModelOf } from "../engine-hooks";
 import type { Route } from "../router";
+import { useVideoLooks } from "../video-looks";
 import { videos } from "../videos";
 
-const LINK = "underline underline-offset-4";
+type PageMode = Exclude<VideoMode, "import">;
 
-export function VideoPage({ mode, go }: { mode: "text" | "image"; go: (r: Route) => void }) {
-  const model = useModelOf("wasifyai-video");
+/** the capability each screen asks for, and what it does in words (ADR-0097) */
+const VERB: Record<PageMode, string> = {
+  text: "video.generate",
+  image: "video.animate",
+  extend: "video.extend",
+};
+const CANNOT: Record<PageMode, string> = {
+  text: "make a video from words",
+  image: "animate a picture",
+  extend: "extend a video",
+};
+
+export function VideoPage({
+  mode,
+  go,
+  onExtendThis,
+  sourceImage,
+  sourceVideo,
+}: {
+  mode: PageMode;
+  go: (r: Route) => void;
+  onExtendThis?: (video: VideoSummary) => void;
+  sourceImage?: { url: string; name: string; id?: string } | null;
+  sourceVideo?: VideoSummary | null;
+}) {
+  // "Select video model": the model in use, or the way to get one (ADR-0086)
+  const choices = useChoicesFor("video");
+  const picker = useRef<ModelSelectHandle>(null);
+  const { ensure, keyed, chosen } = useGroupReady(choices, picker);
+  const model = useModelOf("wasifyai-video", keyed ? null : chosen);
   const engine = useImageEngine();
+  // the chosen model makes the clip (ADR-0097); one that cannot do this screen's work says so
+  const offered = !keyed && model !== null && model.id === chosen && (model.can?.length ?? 0) > 0;
+  const cannot = offered && !model.can?.includes(VERB[mode]);
+  const looks = useVideoLooks();
 
   // only a real model can be too big: the placeholder engine runs anywhere
-  const real = engine?.state === "installed";
+  const real = engine?.state === "installed" && !keyed;
   const tooBig = real && model?.fit?.verdict === "too_big";
   const tight = real && model?.fit?.verdict === "tight";
 
   return (
-    <div className="grid gap-6 px-6 pt-10 pb-16">
-      <header className="mx-auto grid w-full max-w-3xl gap-2">
-        <div>
-          <h1 className="font-semibold text-2xl">
-            {mode === "text" ? "Make a video" : "Animate a picture"}
-          </h1>
-          <p className="text-muted-foreground">
-            {mode === "text"
-              ? "Describe a scene and get a short clip. It is made on this computer."
-              : "Choose a picture and say what should move. It is made on this computer."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium">{model?.title ?? "Video model"}</span>
-          {model ? (
-            <span
-              className={cn(
-                "rounded-full border px-2 py-0.5 text-xs",
-                model.status === "ready" ? "text-ok" : "text-muted-foreground",
-              )}
-            >
-              {model.status === "ready" ? "ready" : "not downloaded"}
-            </span>
-          ) : null}
-          {model?.fit ? <FitBadge fit={model.fit} /> : null}
-        </div>
-      </header>
-      <VideoWorkspace
-        mode={mode}
-        runs={client}
-        videos={videos}
-        canSave
-        onOpenLibrary={() => go("videos")}
-        blockedReason={
-          tooBig && model?.fit ? `${model.title} will not fit. ${model.fit.reason}` : null
-        }
-        notices={
-          <>
-            {tight && model?.fit ? (
-              <Notice tone="warn" title="This computer is tight on memory">
-                {model.fit.reason}
-              </Notice>
-            ) : null}
-            {engine?.state === "not_installed" ? (
-              <Notice tone="info" title="Placeholder clips">
-                Real videos need the image engine set up once.{" "}
-                <button type="button" className={LINK} onClick={() => go("settings")}>
-                  Open Settings
-                </button>
-                .
-              </Notice>
-            ) : null}
-            {model && model.status !== "ready" && engine?.state === "installed" ? (
-              <Notice tone="warn" title="The model is not on this computer yet">
-                Get it in{" "}
-                <button type="button" className={LINK} onClick={() => go("models")}>
-                  Models
-                </button>{" "}
-                before making real videos ({Math.round(model.bytes_missing / 1e9)} GB to get).
-              </Notice>
-            ) : null}
-          </>
-        }
-      />
-    </div>
+    <VideoWorkspace
+      mode={mode}
+      runs={client}
+      videos={videos}
+      header={<ModelSelect group="video" api={choices} handleRef={picker} />}
+      canSave
+      hint="A 5 second clip takes a few minutes on a fast Mac, and an 8 second one about twice as long. It is made on this computer."
+      onOpenLibrary={() => go("videos")}
+      onExtendThis={onExtendThis}
+      sourceImage={sourceImage}
+      sourceVideo={sourceVideo}
+      model={offered ? model.id : null}
+      blockedReason={
+        cannot
+          ? `${model?.title} cannot ${CANNOT[mode]}. Choose another video model above.`
+          : tooBig && model?.fit
+            ? `${model.title} will not fit. ${model.fit.reason}`
+            : null
+      }
+      beforeMake={ensure}
+      looks={looks}
+      notices={
+        tight && model?.fit ? (
+          <Notice tone="warn" title="This computer is tight on memory">
+            {model.fit.reason}
+          </Notice>
+        ) : null
+      }
+    />
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { AuiIf, ComposerPrimitive, useAui } from "@assistant-ui/react";
+import { AuiIf, ComposerPrimitive, useAui, useAuiState } from "@assistant-ui/react";
 import { ArrowUp, Square } from "lucide-react";
 import type { ClipboardEventHandler, ReactNode } from "react";
 import { Button } from "../../components/button";
@@ -14,7 +14,36 @@ export type AttachBox = {
   picker: ReactNode;
   dropProps: object;
   onPaste?: ClipboardEventHandler;
+  /** files that are ready: with them a message needs no words */
+  count: number;
 };
+
+const SEND =
+  "grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40";
+
+/** Send. With files ready and no words, the library's own Send is idle, so the click appends the message itself. */
+function SendButton({ files }: { files: number }) {
+  const aui = useAui();
+  const empty = useAuiState((s) => s.composer.isEmpty);
+  const running = useAuiState((s) => s.thread.isRunning);
+  if (files > 0 && empty)
+    return (
+      <button
+        type="button"
+        aria-label="Send"
+        disabled={running}
+        className={SEND}
+        onClick={() => aui.thread().append({ role: "user", content: [{ type: "text", text: "" }] })}
+      >
+        <ArrowUp className="size-5" />
+      </button>
+    );
+  return (
+    <ComposerPrimitive.Send aria-label="Send" className={SEND}>
+      <ArrowUp className="size-5" />
+    </ComposerPrimitive.Send>
+  );
+}
 
 /**
  * The message box. One element for the whole life of the chat, so typing is never interrupted when the first answer starts:
@@ -73,12 +102,7 @@ export function Composer({
                 </Button>
               </ComposerPrimitive.Cancel>
             </AuiIf>
-            <ComposerPrimitive.Send
-              aria-label="Send"
-              className="grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-40"
-            >
-              <ArrowUp className="size-5" />
-            </ComposerPrimitive.Send>
+            <SendButton files={attach?.count ?? 0} />
           </div>
         </div>
       </div>

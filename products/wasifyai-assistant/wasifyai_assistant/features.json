@@ -1,0 +1,337 @@
+[
+  {
+    "screen": "notebook.create",
+    "where": "Notebook › Create",
+    "actions": [
+      "notebook.create"
+    ],
+    "does": [
+      "Create a notebook"
+    ]
+  },
+  {
+    "screen": "notebook.list",
+    "where": "Notebook › View notebooks",
+    "actions": [
+      "notebook.add_source",
+      "notebook.ask",
+      "notebook.list",
+      "notebook.search",
+      "notebook.studio_output"
+    ],
+    "does": [
+      "Add a note to a notebook",
+      "Ask a notebook",
+      "My notebooks",
+      "Search inside notebooks",
+      "Make a Studio output"
+    ]
+  },
+  {
+    "screen": "images.create",
+    "where": "Images › Create",
+    "actions": [
+      "image.generate",
+      "styles.add_from_hub",
+      "styles.list",
+      "styles.remove"
+    ],
+    "does": [
+      "Make a picture",
+      "Get a style from Hugging Face",
+      "Styles on this computer",
+      "Delete a style"
+    ]
+  },
+  {
+    "screen": "images.edit",
+    "where": "Images › Edit",
+    "actions": [
+      "image.edit"
+    ],
+    "does": [
+      "Change a picture"
+    ]
+  },
+  {
+    "screen": "images.inpaint",
+    "where": "Images › Inpaint",
+    "actions": [
+      "image.inpaint"
+    ],
+    "does": [
+      "Change part of a picture"
+    ]
+  },
+  {
+    "screen": "images.reference",
+    "where": "Images › Reference",
+    "actions": [
+      "image.reference"
+    ],
+    "does": [
+      "Make a picture from two pictures"
+    ]
+  },
+  {
+    "screen": "video.create",
+    "where": "Video › Create",
+    "actions": [
+      "video.generate"
+    ],
+    "does": [
+      "Make a video"
+    ]
+  },
+  {
+    "screen": "video.animate",
+    "where": "Video › Animate an image",
+    "actions": [
+      "video.animate"
+    ],
+    "does": [
+      "Animate a picture"
+    ]
+  },
+  {
+    "screen": "voice.lipsync",
+    "where": "Video › Lip sync",
+    "actions": [
+      "lipsync.make"
+    ],
+    "does": [
+      "Lip sync"
+    ]
+  },
+  {
+    "screen": "video.extend",
+    "where": "Video › Extend video",
+    "actions": [
+      "video.extend"
+    ],
+    "does": [
+      "Extend a video"
+    ]
+  },
+  {
+    "screen": "voice.speak",
+    "where": "Voice › Text to speech",
+    "actions": [
+      "speech.speak"
+    ],
+    "does": [
+      "Text to speech"
+    ]
+  },
+  {
+    "screen": "voice.transcribe",
+    "where": "Voice › Speech to text",
+    "actions": [
+      "speech.transcribe"
+    ],
+    "does": [
+      "Speech to text"
+    ]
+  },
+  {
+    "screen": "voice.voices",
+    "where": "Voice › Voices",
+    "actions": [
+      "voice.clone",
+      "voice.design",
+      "voice.list"
+    ],
+    "does": [
+      "Copy a voice",
+      "Describe a voice",
+      "My saved voices"
+    ]
+  },
+  {
+    "screen": "voice.convert",
+    "where": "Voice › Change a voice",
+    "actions": [
+      "voice.convert"
+    ],
+    "does": [
+      "Change a voice"
+    ]
+  },
+  {
+    "screen": "voice.edit",
+    "where": "Voice › Edit speech",
+    "actions": [
+      "voice.edit_speech"
+    ],
+    "does": [
+      "Edit speech"
+    ]
+  },
+  {
+    "screen": "voice.dub",
+    "where": "Voice › Dub a recording",
+    "actions": [
+      "dub.make",
+      "dub.script"
+    ],
+    "does": [
+      "Dub a recording",
+      "Write the dub script"
+    ]
+  },
+  {
+    "screen": "voice.audiobook",
+    "where": "Voice › Audiobook",
+    "actions": [
+      "audiobook.make",
+      "audiobook.plan"
+    ],
+    "does": [
+      "Make an audiobook",
+      "Find the chapters"
+    ]
+  },
+  {
+    "screen": "music.create",
+    "where": "Music › Create",
+    "actions": [
+      "music.generate"
+    ],
+    "does": [
+      "Make music"
+    ]
+  },
+  {
+    "screen": "music.lyrics",
+    "where": "Music › Lyrics",
+    "actions": [
+      "music.lyrics"
+    ],
+    "does": [
+      "Write lyrics"
+    ]
+  },
+  {
+    "screen": "music.separate",
+    "where": "Music › Split into parts",
+    "actions": [
+      "music.separate"
+    ],
+    "does": [
+      "Split into parts"
+    ]
+  },
+  {
+    "screen": "creative",
+    "where": "Creative Studio",
+    "actions": [
+      "creative.add_media",
+      "creative.animate",
+      "creative.choose_take",
+      "creative.cut",
+      "creative.edit_cut",
+      "creative.edit_plan",
+      "creative.export",
+      "creative.make_shots",
+      "creative.plan",
+      "creative.preview",
+      "creative.read_project",
+      "creative.redo_shot",
+      "creative.remove_media",
+      "creative.undo",
+      "music.analyse",
+      "speech.join",
+      "video.keep"
+    ],
+    "does": [
+      "Add to a project",
+      "Animate a music video's shots",
+      "Choose a shot's take",
+      "Make a music video",
+      "Change a music video's cut",
+      "Change a plan",
+      "Keep a music video in Your videos",
+      "Make the stills of a plan",
+      "Plan a music video",
+      "Preview a music video",
+      "Read a plan",
+      "Make a shot's still again",
+      "Take out of a project",
+      "Undo a change to a plan",
+      "Find the beats of a song",
+      "Join speech",
+      "Keep a finished video"
+    ],
+    "about": "turn a song and an idea into a plan for a music video, shot by shot; change the plan, make a picture for each shot, and preview the cut"
+  },
+  {
+    "screen": "motion",
+    "where": "Motion graphics",
+    "actions": [
+      "motion.add_scene",
+      "motion.change_scene",
+      "motion.duplicate_scene",
+      "motion.make",
+      "motion.make_file",
+      "motion.move_scene",
+      "motion.read_brand",
+      "motion.read_project",
+      "motion.remove_scene",
+      "motion.revise",
+      "motion.set_brand",
+      "motion.set_project",
+      "motion.start_from",
+      "motion.undo",
+      "motion.use_brand",
+      "motion.write_scenes",
+      "video_builder.create",
+      "video_builder.lint",
+      "video_builder.render"
+    ],
+    "does": [
+      "Add a scene",
+      "Change a scene",
+      "Copy a scene",
+      "Make a motion graphic",
+      "Make something for a video project",
+      "Move a scene",
+      "Read the brand",
+      "Read a video project",
+      "Remove a scene",
+      "Change a motion graphic",
+      "Set the brand",
+      "Change the whole project",
+      "Start a video from a starting point",
+      "Undo the last change",
+      "Use the brand on a video project",
+      "Write a video of several scenes",
+      "Write a video project",
+      "Check a video project",
+      "Make the video"
+    ],
+    "about": "describe a video and the assistant lays out its scenes (titles, quotes, charts, your own pictures and clips); change any scene, set a brand look and a shape (16:9, 9:16, 4:5 or 1:1), then make the video"
+  },
+  {
+    "screen": "model3d",
+    "where": "3D model",
+    "actions": [
+      "model3d.generate"
+    ],
+    "does": [
+      "Make a 3D model"
+    ]
+  },
+  {
+    "screen": "train",
+    "where": "Train models",
+    "actions": [
+      "decision.decide",
+      "train.start"
+    ],
+    "does": [
+      "Decide with a model I taught",
+      "Teach a character or style"
+    ],
+    "about": "teach it something of your own, learnt on this computer, in four ways: a character or style for pictures (from 15 to 25 pictures), your way of writing (from examples of questions and answers), a model that decides (yes or no, a category or a score, from texts with the right answer), or a look or motion for video (from pictures and short clips)"
+  }
+]

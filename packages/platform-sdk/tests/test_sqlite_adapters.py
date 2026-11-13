@@ -93,6 +93,33 @@ async def test_job_queue_sqlite(engine):
     await check_job_queue(SqliteJobQueue(engine, log), log, tenant())
 
 
+async def test_a_stopped_job_is_never_run_again_even_after_a_restart(engine):
+    """Stage J3: a waiting job leaves the queue; one being made is stopped, and a restart that
+    finds it does not put it back (a stop kept only in memory ran it again at every start)."""
+    from wasifyai_platform_sdk import JobRequest
+
+    log = SqliteEventLog(engine)
+    q = SqliteJobQueue(engine, log)
+
+    def req(job_id: str) -> JobRequest:
+        return JobRequest(
+            job_id=job_id, tenant_id="t1", product_id="p1", user_id="u1",
+            capability="video.generate", workflow="w", prompt={}, outputs={},
+        )  # fmt: skip
+
+    for j in ("made", "waits", "kept"):
+        await q.submit(req(j))
+    taken = await q.claim()
+    assert taken is not None and taken.request.job_id == "made"
+    await q.cancel("made")
+    await q.cancel("waits")
+    assert await q.is_cancelled("made") and await q.is_cancelled("waits")
+
+    after = SqliteJobQueue(engine, log)  # the app quit while "made" was being stopped
+    assert await after.recover() == 0
+    assert [j.request.job_id for j in await after.waiting()] == ["kept"]
+
+
 async def test_run_store_redis_claims_a_run_id_once_without_a_server():
     """The Redis store's claim of a run id (HSETNX), run against a stand-in for the parts it
     uses, so the path is checked where no Redis is reachable (`test_run_store_redis` runs the

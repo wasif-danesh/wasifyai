@@ -16,19 +16,22 @@ from wasifyai_platform_sdk.workflows import Workflow, workflow_problems
 
 PRODUCTS = Path(__file__).resolve().parents[2]
 WORKFLOWS = PRODUCTS / "wasifyai-video" / "workflows"
-NAMES = ["ltx-video-2b-t2v", "ltx-video-2b-i2v"]
+NAMES = ["ltx-video-2b-t2v", "ltx-video-2b-i2v", "ltx-video-2b-extend"]
+LTX25 = {"ltx-2.5-t2v": ("28", ("32", "33")), "ltx-2.5-i2v": ("33", ("37", "38"))}
+WAN = ["wan2.2-14b-t2v", "wan2.2-14b-i2v"]
 
 
-def test_the_product_config_loads_and_binds_both_modes():
+def test_the_product_config_loads_and_binds_every_mode():
     cfg = load_product_config(PRODUCTS, "wasifyai-video", environ={})
-    assert cfg.capabilities["video.generate"].workflow == "ltx-video-2b-t2v"
-    assert cfg.capabilities["video.animate"].workflow == "ltx-video-2b-i2v"
-    assert cfg.capabilities["text.moderate"].model == "moderator"
+    first = cfg.model(None)  # the default model (ADR-0097)
+    assert first is not None and first.id == "ltx-video-2b"
+    assert first.capabilities["video.generate"].workflow == "ltx-video-2b-t2v"
+    assert first.capabilities["video.animate"].workflow == "ltx-video-2b-i2v"
+    assert first.capabilities["video.extend"].workflow == "ltx-video-2b-extend"
+    assert "text.moderate" not in cfg.capabilities
     assert cfg.capabilities["text.enhance"].model == "prompt-enhancer"
-    for name in ("text.moderate_image", "text.describe_image"):
-        assert cfg.capabilities[name].model == "multimodal"
-        assert cfg.capabilities[name].inputs == ["text", "image"]
-    assert cfg.quotas == {"videos_per_user_per_day": 5}
+    assert cfg.capabilities["text.describe_image"].model == "multimodal"
+    assert cfg.capabilities["text.describe_image"].inputs == ["text", "image"]
     assert cfg.uploads["image"].max_bytes == 10 * 1024 * 1024
     assert (
         cfg.enhance["image_to_video"].needs_picture
@@ -50,7 +53,6 @@ def test_the_sampler_is_fully_wired_and_the_clip_is_saved_as_video(name):
         assert required in sampler, required
     wf = Workflow.load(WORKFLOWS, name)
     assert wf.map.outputs["video"].type == "video" and graph["81"]["class_type"] == "SaveVideo"
-    assert wf.map.licence and "Open RAIL-M" in wf.map.licence
 
 
 def test_the_text_workflow_takes_a_size_and_a_length():
@@ -64,13 +66,16 @@ def test_the_text_workflow_takes_a_size_and_a_length():
 
 def test_the_picture_workflow_holds_the_first_frame_at_full_strength_and_takes_no_size():
     wf = Workflow.load(WORKFLOWS, "ltx-video-2b-i2v")
-    assert set(wf.map.inputs) == {"prompt", "seed", "steps", "length", "image"}
+    assert set(wf.map.inputs) == {"prompt", "seed", "steps", "megapixels", "length", "image"}
     graph = wf.fill({"prompt": "snow falls", "image": "wasifyai-JOB.png", "length": 49})
     loaders = [n for n in graph.values() if n["class_type"] == "LoadImage"]
     assert [n["inputs"]["image"] for n in loaders] == ["wasifyai-JOB.png"]
     # at the template's 0.15 the model ignored the picture and drew the prompt (ADR-0037)
     assert graph["77"]["inputs"]["strength"] == 1.0
     assert graph["77"]["inputs"]["length"] == 49
+    assert graph["79"]["inputs"]["megapixels"] == 0.25  # the final setting is the workflow's own
+    draft = wf.fill({"prompt": "snow falls", "image": "x.png", "steps": 15, "megapixels": 0.125})
+    assert draft["79"]["inputs"]["megapixels"] == 0.125 and draft["71"]["inputs"]["steps"] == 15
 
 
 async def test_an_animate_job_names_the_picture_for_the_worker_and_fills_the_workflow():
@@ -91,3 +96,99 @@ async def test_an_animate_job_names_the_picture_for_the_worker_and_fills_the_wor
     assert job.prompt["78"]["inputs"]["image"] == f"wasifyai-{job.job_id}.png"
     assert job.inputs["image_key"] == "uploads/a.png" and "image_key" not in str(job.prompt)
     assert job.outputs["video"] == {"node": "81", "type": "video"}
+
+
+def test_the_extend_workflow_starts_from_the_last_frames_of_a_clip_at_full_strength():
+    wf = Workflow.load(WORKFLOWS, "ltx-video-2b-extend")
+    assert set(wf.map.inputs) == {"prompt", "seed", "steps", "length", "video", "from_frame"}
+    graph = wf.fill({"prompt": "the fox walks", "video": "wasifyai-JOB.mp4", "from_frame": 40})
+    (loader,) = [n for n in graph.values() if n["class_type"] == "LoadVideo"]
+    assert loader["inputs"]["file"] == "wasifyai-JOB.mp4"
+    (picked,) = [n for n in graph.values() if n["class_type"] == "ImageFromBatch"]
+    # nine frames (8 * n + 1), from the given index, become the start of the new clip
+    assert (picked["inputs"]["batch_index"], picked["inputs"]["length"]) == (40, 9)
+    start = graph["77"]["inputs"]
+    assert start["strength"] == 1.0 and start["image"] == ["92", 0]
+    assert graph["82"]["inputs"]["image"] == ["92", 0]  # the new clip has the old clip's size
+    assert "ImageScaleToTotalPixels" not in {n["class_type"] for n in graph.values()}
+
+
+async def test_an_extend_job_names_the_clip_for_the_worker_and_fills_the_workflow():
+    sink = InMemoryJobSink()
+    provider = ComfyUIProvider(WORKFLOWS, sink)
+    binding = CapabilityBinding(provider="comfyui", workflow="ltx-video-2b-extend")
+    token = set_context(RunContext("t1", "wasifyai-video", "u1", "run-1", "th-1"))
+    try:
+        await provider.generate(
+            "video.extend",
+            binding,
+            {"prompt": "go on", "seed": 1, "length": 49, "from_frame": 80,
+             "video_key": "uploads/extend-a.mp4"},
+        )  # fmt: skip
+    finally:
+        reset_context(token)
+    (job,) = sink.submitted
+    assert job.prompt["90"]["inputs"]["file"] == f"wasifyai-{job.job_id}-video.mp4"
+    assert job.prompt["92"]["inputs"]["batch_index"] == 80
+    assert job.inputs["video_key"] == "uploads/extend-a.mp4" and "extend-a" not in str(job.prompt)
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_every_video_workflow_takes_up_to_two_looks_before_the_sampler(name):
+    wf = Workflow.load(WORKFLOWS, name)
+    assert wf.accepts_loras and wf.map.lora_chain is not None and wf.map.lora_chain.max == 2
+    values = {"prompt": "a fox", "seed": 1, "steps": 20, "length": 49}
+    if name.endswith("t2v"):
+        values.update(width=512, height=512)
+    elif name.endswith("i2v"):
+        values["image"] = "x.png"
+    else:
+        values.update(video="x.mp4", from_frame=9)
+    graph = wf.fill(values, [("a.safetensors", 1.5), ("b.safetensors", 0.8)])
+    loaders = [n for n in graph.values() if n["class_type"] == "LoraLoaderModelOnly"]
+    assert [(n["inputs"]["lora_name"], n["inputs"]["strength_model"]) for n in loaders] == [
+        ("a.safetensors", 1.5), ("b.safetensors", 0.8),
+    ]  # fmt: skip
+    # the sampler's model comes from the last loader, the first loader from the checkpoint
+    last = next(k for k, n in graph.items() if n["inputs"].get("lora_name") == "b.safetensors")
+    assert graph["72"]["inputs"]["model"][0] == last
+    assert graph[
+        next(k for k, n in graph.items() if n["inputs"].get("lora_name") == "a.safetensors")
+    ]["inputs"]["model"] == ["44", 0]
+    with pytest.raises(ValueError, match="at most 2"):
+        wf.fill(values, [("a.safetensors", 1.0), ("b.safetensors", 1.0), ("c.safetensors", 1.0)])
+
+
+def test_each_video_model_names_its_frame_rate_and_takes_what_the_screen_sends():
+    import yaml
+
+    cfg = load_product_config(PRODUCTS, "wasifyai-video", environ={})
+    catalogue = yaml.safe_load((PRODUCTS / "wasifyai-video" / "models.yaml").read_text())["models"]
+    kept = {e["id"]: {f"{f['folder']}/{f['name']}" for f in e["files"]} for e in catalogue}
+    sent = {"generate": {"prompt", "seed", "width", "height", "length"},
+            "animate": {"prompt", "seed", "length", "image"}}  # fmt: skip
+    for m in cfg.models:
+        assert m.settings.get("frames_per_second"), m.id
+        for name, binding in m.capabilities.items():
+            assert binding.workflow
+            wf = Workflow.load(WORKFLOWS, binding.workflow)
+            assert not wf.problems()
+            verb = name.split(".", 1)[1]
+            if verb in sent:
+                assert sent[verb] <= set(wf.map.inputs), (m.id, verb)
+            assert set(wf.map.models) <= kept[m.id], (m.id, set(wf.map.models) - kept[m.id])
+
+
+@pytest.mark.parametrize("name", sorted(LTX25))
+def test_ltx_2_5_takes_up_to_two_looks_on_both_passes(name):
+    """A look taught on LTX-2.5 patches the transformer both guiders use (first pass, refine)."""
+    wf = Workflow.load(WORKFLOWS, name)
+    assert wf.accepts_loras and not wf.problems()
+    source, guiders = LTX25[name]
+    values = {"prompt": "a fox", "seed": 1, "length": 49}
+    values.update({"width": 512, "height": 512} if name.endswith("t2v") else {"image": "x.png"})
+    graph = wf.fill(values, [("a.safetensors", 1.5), ("b.safetensors", 0.8)])
+    by_name = {n["inputs"].get("lora_name"): k for k, n in graph.items()}
+    assert graph[by_name["a.safetensors"]]["inputs"]["model"] == [source, 0]
+    for g in guiders:
+        assert graph[g]["inputs"]["model"] == [by_name["b.safetensors"], 0]

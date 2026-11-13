@@ -6,6 +6,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
+import { extensionOf, fileNameFor, savedText, useSaveCopy } from "../save";
 import { RecipeList } from "./ImageWorkspace";
 
 export type ImageLibraryProps = {
@@ -44,6 +45,7 @@ export function ImageLibrary({
   const [open, setOpen] = useState<ImageSummary | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const saveCopy = useSaveCopy();
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
@@ -118,8 +120,15 @@ export function ImageLibrary({
   }
 
   async function save(img: ImageSummary) {
-    const done = await run(() => api.exportCopy(img.id), "The image could not be saved.");
-    if (done) setMessage(`Saved as ${done.name} in Downloads.`);
+    const done = await run(
+      () =>
+        saveCopy({
+          name: fileNameFor(img.prompt, extensionOf(img.image_url, "png"), "image"),
+          copy: (path) => api.exportCopy(img.id, path),
+        }),
+      "The image could not be saved.",
+    );
+    if (done) setMessage(savedText(done));
   }
 
   async function remove(img: ImageSummary) {
@@ -137,7 +146,7 @@ export function ImageLibrary({
     <div className={cn("mx-auto grid w-full max-w-5xl gap-6 px-8 pt-16 pb-12", className)}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-semibold text-2xl">Library</h1>
+          <h1 className="font-semibold text-2xl">Your images</h1>
           <p className="text-muted-foreground">{subtitle}</p>
         </div>
         <form className="flex items-center gap-2" onSubmit={search}>

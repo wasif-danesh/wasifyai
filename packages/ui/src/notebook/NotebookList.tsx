@@ -5,6 +5,7 @@ import { BookOpen, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
+import { ConfirmDialog, NameDialog } from "../components/dialog";
 import { useNotebookPlace } from "./place";
 
 export type NotebookListProps = {
@@ -13,7 +14,9 @@ export type NotebookListProps = {
   error?: string | null;
   onOpen: (n: NotebookSummary) => void;
   onCreate: () => void;
-  onRename: (n: NotebookSummary) => void;
+  /** called with the new name, once the person has typed one */
+  onRename: (n: NotebookSummary, name: string) => void;
+  /** called once the person has said yes to deleting it */
   onRemove: (n: NotebookSummary) => void;
   /** Find notebooks by what is in them (My creations search). */
   onFind?: (query: string) => Promise<string[]>;
@@ -49,6 +52,9 @@ export function NotebookList({
   const hosted = useNotebookPlace() === "hosted";
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Set<string>>(new Set());
+  // the app window cannot show window.prompt or window.confirm: the app's own dialogs ask
+  const [renaming, setRenaming] = useState<NotebookSummary | null>(null);
+  const [removing, setRemoving] = useState<NotebookSummary | null>(null);
 
   useEffect(() => {
     const q = query.trim();
@@ -141,7 +147,7 @@ export function NotebookList({
                   variant="ghost"
                   size="xs"
                   aria-label={`Rename ${n.title}`}
-                  onClick={() => onRename(n)}
+                  onClick={() => setRenaming(n)}
                 >
                   Rename
                 </Button>
@@ -150,7 +156,7 @@ export function NotebookList({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={`Delete ${n.title}`}
-                  onClick={() => onRemove(n)}
+                  onClick={() => setRemoving(n)}
                 >
                   <Trash2 />
                 </Button>
@@ -159,6 +165,33 @@ export function NotebookList({
           ))}
         </ul>
       )}
+      {renaming ? (
+        <NameDialog
+          title="Rename notebook"
+          label="Name"
+          initial={renaming.title}
+          onSubmit={(name) => {
+            setRenaming(null);
+            onRename(renaming, name);
+          }}
+          onCancel={() => setRenaming(null)}
+        />
+      ) : null}
+      {removing ? (
+        <ConfirmDialog
+          title={`Delete “${removing.title}”?`}
+          message={`${
+            removing.sources
+              ? `Its ${removing.sources} source${removing.sources === 1 ? "" : "s"} will be deleted too. `
+              : ""
+          }This cannot be undone.`}
+          onConfirm={() => {
+            setRemoving(null);
+            onRemove(removing);
+          }}
+          onCancel={() => setRemoving(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { CommercialUse, ModelState, VoiceInfo, VoiceModelInfo } from "@wasifyai/client";
+import type { ModelState, VoiceInfo, VoiceModelInfo } from "@wasifyai/client";
 
 /** "1:05", "0:07": a length as a person reads it. */
 export function clock(seconds: number): string {
@@ -13,13 +13,6 @@ export const STATE_TEXT: Record<ModelState, string> = {
   not_available: "Not available on this computer",
 };
 
-export const COMMERCIAL_TEXT: Record<CommercialUse, string> = {
-  yes: "Commercial use allowed",
-  conditional: "Commercial use with conditions",
-  no: "Not for commercial use",
-  unreviewed: "Licence not reviewed",
-};
-
 /** What a model's state means for this model: a model on the image engine needs that, not speech. */
 export function stateText(m: VoiceModelInfo): string {
   if (m.state === "needs_runtime" && m.engine === "comfyui") return "Needs the image engine";
@@ -31,8 +24,6 @@ export function stateText(m: VoiceModelInfo): string {
 export function modelOption(m: VoiceModelInfo, task: string): string {
   const tags = [m.recommended.includes(task as never) ? "recommended" : null];
   if (m.engine === "remote") tags.push("hosted");
-  if (m.commercial_use === "no" || m.commercial_use === "unreviewed")
-    tags.push("not for commercial use");
   if (m.state !== "ready") tags.push(stateText(m).toLowerCase());
   const shown = tags.filter(Boolean);
   return shown.length ? `${m.title} (${shown.join(", ")})` : m.title;
@@ -51,6 +42,7 @@ export function pickModel(models: VoiceModelInfo[], task: string, last?: string 
 }
 
 const LANGUAGE: Record<string, string> = {
+  en: "English",
   "en-us": "American English",
   "en-gb": "British English",
 };
@@ -79,4 +71,31 @@ export function costLine(m: VoiceModelInfo): string {
     );
   if (memory_gb) bits.push(`${memory_gb} GB of memory while loaded`);
   return bits.join(", ");
+}
+
+/** "1 minute", "3 minutes": a span of seconds as whole minutes, never less than one. */
+export function minutesText(seconds: number): string {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+}
+
+/**
+ * How far a long job is, from the words the engine says while it works: "Chapter 2 of 5, part 1 of 3" (an
+ * audiobook) or "Speaking line 4 of 12" (a dub). Undefined when the words give no count.
+ */
+export function stepProgress(label: string | null | undefined): number | undefined {
+  if (!label) return undefined;
+  const book = /Chapter (\d+) of (\d+)(?:, part (\d+) of (\d+))?/.exec(label);
+  if (book) {
+    const [n, total, part, parts] = book.slice(1).map((x) => (x ? Number(x) : 0));
+    if (!total) return undefined;
+    const within = parts ? ((part || 1) - 1) / parts : 0;
+    return Math.min(1, ((n || 1) - 1 + within) / total);
+  }
+  const line = /(\d+) of (\d+)/.exec(label);
+  if (line) {
+    const [i, n] = [Number(line[1]), Number(line[2])];
+    return n ? Math.min(1, (i - 1) / n) : undefined;
+  }
+  return undefined;
 }

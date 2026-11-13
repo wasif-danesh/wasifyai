@@ -14,8 +14,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/apps/desktop/engine-bundle}"
-PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice"
-PRODUCTS="wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice"
+PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d wasifyai-creative"
+PRODUCTS="wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d wasifyai-creative"
 
 cd "$ROOT"
 rm -rf "$OUT"
@@ -31,12 +31,28 @@ echo "locking third-party packages"
 uv export --package wasifyai-api --extra desktop --no-emit-workspace --no-dev --hashes \
   --format requirements-txt --no-header --quiet > "$OUT/requirements.lock"
 
-# The optional ComfyUI component (ADR-0059): a hashed lock per platform the manifest lists, compiled from the
-# requirements of the pinned release. Torch is not pinned by ComfyUI, so the version released with the app
-# is the one resolved here.
+# The optional ComfyUI component (ADR-0059): a hashed lock per platform whose component manifest lists it
+# (services/api/src/wasifyai_api/components/manifests/<platform>.yaml, stage F2), compiled from the requirements
+# of the pinned release. Torch is not pinned by ComfyUI, so the version released with the app is the one
+# resolved here.
 MANIFEST="$ROOT/apps/desktop/src-tauri/engine-manifest.json"
-COMFY_VERSION="$(uv run --no-project python -c "import json,sys; print(json.load(open(sys.argv[1]))['comfyui']['version'])" "$MANIFEST")"
-COMFY_PLATFORMS="$(uv run --no-project python -c "import json,sys; print(' '.join(json.load(open(sys.argv[1]))['comfyui']['platforms']))" "$MANIFEST")"
+COMPONENTS="$ROOT/services/api/src/wasifyai_api/components/manifests"
+read -r COMFY_VERSION COMFY_PLATFORMS <<EOF_COMFY
+$(uv run --no-project --with pyyaml python - "$COMPONENTS" <<'PY'
+import pathlib, sys, yaml
+found = {}
+for f in sorted(pathlib.Path(sys.argv[1]).glob("*.yaml")):
+    c = (yaml.safe_load(f.read_text()).get("components") or {}).get("comfyui")
+    if c:
+        target = str(c["lock"]).split("requirements-")[-1].split(".lock")[0]
+        found.setdefault(str(c["version"]), []).append(target)
+if len(found) != 1:
+    sys.exit(f"the component manifests must pin one ComfyUI version, not {sorted(found)}")
+(version, targets), = found.items()
+print(version, " ".join(targets))
+PY
+)
+EOF_COMFY
 PY_VERSION="$(uv run --no-project python -c "import json,sys; print(json.load(open(sys.argv[1]))['python']['version'])" "$MANIFEST")"
 mkdir -p "$OUT/comfyui"
 COMFY_REQ="$OUT/comfyui/requirements.txt"
@@ -60,6 +76,42 @@ if ! ls "$READER_SRC"/requirements-*.lock >/dev/null 2>&1; then
   exit 1
 fi
 cp "$READER_SRC"/requirements-*.lock "$OUT/products/wasifyai-notebooks/reader/"
+
+# The trainers' hashed locks (ADR-0073): writing, decisions and video each set up on request from its own lock.
+# The picture trainer is AI Toolkit, set up by its own manager from a pinned source archive (no lock here).
+TRAINER_SRC="products/wasifyai-training/trainer"
+mkdir -p "$OUT/products/wasifyai-training/trainer"
+
+# The writing trainer (ADR-0074): mlx-lm, the same way (scripts/lock-language-trainer.sh writes the lock).
+if [ ! -f "$TRAINER_SRC/language-requirements-aarch64-apple-darwin.lock" ]; then
+  echo "no writing trainer lock file in $TRAINER_SRC: run scripts/lock-language-trainer.sh first" >&2
+  exit 1
+fi
+cp "$TRAINER_SRC"/language-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
+
+# The decision trainer (ADR-0075): Laya and PyTorch, the same way (scripts/lock-decision-trainer.sh writes the lock).
+if [ ! -f "$TRAINER_SRC/decision-requirements-aarch64-apple-darwin.lock" ]; then
+  echo "no decision trainer lock file in $TRAINER_SRC: run scripts/lock-decision-trainer.sh first" >&2
+  exit 1
+fi
+cp "$TRAINER_SRC"/decision-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
+
+# Song analysis (ADR-0090): beat_this, librosa and PyTorch, the same way (scripts/lock-music-analysis.sh writes the lock).
+ANALYSIS_SRC="products/wasifyai-voice/analysis"
+if [ ! -f "$ANALYSIS_SRC/requirements-aarch64-apple-darwin.lock" ]; then
+  echo "no song analysis lock file in $ANALYSIS_SRC: run scripts/lock-music-analysis.sh first" >&2
+  exit 1
+fi
+mkdir -p "$OUT/products/wasifyai-voice/analysis"
+cp "$ANALYSIS_SRC"/requirements-*.lock "$OUT/products/wasifyai-voice/analysis/"
+
+# The video trainer (ADR-0073, video amendment): PyTorch with diffusers and peft, the same way
+# (scripts/lock-video-trainer.sh writes the lock).
+if [ ! -f "$TRAINER_SRC/video-requirements-aarch64-apple-darwin.lock" ]; then
+  echo "no video trainer lock file in $TRAINER_SRC: run scripts/lock-video-trainer.sh first" >&2
+  exit 1
+fi
+cp "$TRAINER_SRC"/video-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
 
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"

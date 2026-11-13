@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from wasifyai_api import desktop_llm
 from wasifyai_api.identity import get_identity
 from wasifyai_api.llama_server import LlamaError, LlamaServer, find_install
+from wasifyai_api.services import ApiServices
 from wasifyai_platform_sdk import Identity
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the fake server is a shell script")
@@ -169,8 +170,9 @@ def test_the_routes_report_and_stop(tmp_path):
     install(tmp_path)
     server = LlamaServer(tmp_path)
     app = FastAPI()
+    app.state.services = ApiServices()
     app.include_router(desktop_llm.router)
-    app.state.llama_server = server
+    app.state.services.llama_server = server
     app.dependency_overrides[get_identity] = lambda: Identity("local", "u1", "user")
     with TestClient(app) as c:
         body = c.get("/desktop/language-engine").json()

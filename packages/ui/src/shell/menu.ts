@@ -1,9 +1,14 @@
-// What the side menu offers, in order (docs/desktop-profile.md, "The side menu's final shape"). The menu is
-// defined once, here, and each app says what its items open: the desktop window opens its own screens, the web
-// app opens its pages. An item an app does not serve yet is shown marked "Soon", never hidden, so both menus keep
-// the same shape.
+// What the side menu offers, in order. The menu is defined once, here, and each app says what its items open:
+// the desktop window opens its own screens, the web app opens its pages. An item an app does not serve yet is
+// shown marked "Soon", never hidden, so both menus keep the same shape.
+//
+// `MENU_GROUPS` and `EXTRA_ITEMS` are the items: one per screen, the ids the actions' `ui` pointers and the web's
+// parity rows name (docs/contracts/actions.json, apps/web/lib/parity.ts). The menu shows the groups, one open at
+// a time (the owner kept this over a flat menu with tabs in the bar, 2026-10-28).
 import {
   BookOpen,
+  Box,
+  Clapperboard,
   FilePlus2,
   FileText,
   Film,
@@ -19,6 +24,7 @@ import {
   Paintbrush,
   Pencil,
   Scissors,
+  Shapes,
   Shuffle,
   Sparkles,
   SquarePen,
@@ -26,7 +32,6 @@ import {
   Users,
   Video,
   Volume2,
-  ZoomIn,
 } from "lucide-react";
 
 export type MenuItemDef = { id: string; label: string; icon: LucideIcon };
@@ -39,7 +44,7 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     icon: BookOpen,
     items: [
       { id: "notebook.create", label: "Create", icon: FilePlus2 },
-      { id: "notebook.list", label: "View Notebooks", icon: BookOpen },
+      { id: "notebook.list", label: "View notebooks", icon: BookOpen },
     ],
   },
   {
@@ -49,12 +54,8 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     items: [
       { id: "images.create", label: "Create", icon: Sparkles },
       { id: "images.edit", label: "Edit", icon: Pencil },
-      { id: "images.transform", label: "Transform", icon: Shuffle },
       { id: "images.inpaint", label: "Inpaint", icon: Paintbrush },
-      { id: "images.extend", label: "Extend", icon: Maximize2 },
-      { id: "images.upscale", label: "Upscale", icon: ZoomIn },
       { id: "images.reference", label: "Reference", icon: SquareStack },
-      { id: "images.library", label: "Your images", icon: Library },
     ],
   },
   {
@@ -64,8 +65,10 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     items: [
       { id: "video.create", label: "Create", icon: Sparkles },
       { id: "video.animate", label: "Animate an image", icon: Film },
+      // makes a video from a picture and a voice, so it is found with video (owner, 2026-11-12); its id,
+      // address, action and help stay `voice.lipsync`
+      { id: "voice.lipsync", label: "Lip sync", icon: Film },
       { id: "video.extend", label: "Extend video", icon: Maximize2 },
-      { id: "video.library", label: "Your videos", icon: Library },
     ],
   },
   {
@@ -75,7 +78,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     items: [
       { id: "voice.speak", label: "Text to speech", icon: Volume2 },
       { id: "voice.transcribe", label: "Speech to text", icon: Mic },
-      { id: "voice.lipsync", label: "Lip sync", icon: Film },
       { id: "voice.voices", label: "Voices", icon: Users },
       { id: "voice.convert", label: "Change a voice", icon: Shuffle },
       { id: "voice.edit", label: "Edit speech", icon: Pencil },
@@ -89,7 +91,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     icon: Music,
     items: [
       { id: "music.create", label: "Create", icon: Sparkles },
-      { id: "music.library", label: "Your music", icon: Library },
       { id: "music.lyrics", label: "Lyrics", icon: FileText },
       { id: "music.separate", label: "Split into parts", icon: Scissors },
     ],
@@ -99,9 +100,12 @@ export const MENU_GROUPS: MenuGroupDef[] = [
 /** The single items above and below the groups. */
 export const CHAT_ITEM: MenuItemDef = { id: "chat", label: "New chat", icon: SquarePen };
 export const EXTRA_ITEMS: MenuItemDef[] = [
+  { id: "creative", label: "Creative Studio", icon: Clapperboard },
+  { id: "motion", label: "Motion graphics", icon: Shapes },
+  { id: "model3d", label: "3D model", icon: Box },
   { id: "library", label: "Library", icon: Library },
-  { id: "models", label: "Models", icon: SquareStack },
-  { id: "train", label: "Train", icon: FlaskConical },
+  { id: "train", label: "Train models", icon: FlaskConical },
+  { id: "models", label: "Model hub", icon: SquareStack },
 ];
 
 /** What an app says about one item. No answer means the app does not serve it yet: it shows as "Soon". */
@@ -117,3 +121,36 @@ export type ItemView =
     };
 
 export type ItemResolver = (id: string) => ItemView | undefined;
+
+/** The group an item belongs to, if it is in one. */
+export function groupOf(itemId: string): MenuGroupDef | undefined {
+  return MENU_GROUPS.find((g) => g.items.some((i) => i.id === itemId));
+}
+
+/** What the top bar calls the screen a person is on: its group's name, or the item's own; null when none is current. */
+export function titleOf(resolve: ItemResolver): string | null {
+  const current = (item: MenuItemDef) => {
+    const v = resolve(item.id);
+    return v !== undefined && !("hidden" in v) && v.current === true;
+  };
+  for (const group of MENU_GROUPS) if (group.items.some(current)) return group.label;
+  if (current(CHAT_ITEM)) return "Chat";
+  const extra = EXTRA_ITEMS.find(current);
+  return extra ? extra.label : null;
+}
+
+/** Every tool an app serves, with its words ("Images: Edit"), for the search box. */
+export function placesOf(
+  resolve: ItemResolver,
+): { id: string; label: string; view: Exclude<ItemView, { hidden: true }> }[] {
+  const out: { id: string; label: string; view: Exclude<ItemView, { hidden: true }> }[] = [];
+  const add = (item: MenuItemDef, label: string) => {
+    const v = resolve(item.id);
+    if (v !== undefined && !("hidden" in v)) out.push({ id: item.id, label, view: v });
+  };
+  add(CHAT_ITEM, "Chat");
+  for (const group of MENU_GROUPS)
+    for (const item of group.items) add(item, `${group.label}: ${item.label}`);
+  for (const item of EXTRA_ITEMS) add(item, item.label);
+  return out;
+}

@@ -2,6 +2,7 @@
 
     SDK built-ins     library.*, app.status, job.*        (they belong to no product)
     this module       models.*                            (the desktop's model library)
+    styles_actions    styles.*                            (the image screens' styles, ADR-0091)
     each product      image.*, video.*, speech.* ...      (`actions.py`, registered like routes)
 
 `build_registry` gathers them for the products this deployment serves, so a product that is not
@@ -31,16 +32,20 @@ from wasifyai_platform_sdk.actions import (
     CallBinding,
     InMemoryApprovalStore,
     InMemoryAuditStore,
+    JobBook,
     LibraryKind,
     Outcome,
     SqlApprovalStore,
     SqlAuditStore,
+    SqlJobStore,
     builtin_actions,
     need_runtime,
     render,
 )
 
 from wasifyai_api.desktop_fit import assess_fit, need_declared
+from wasifyai_api.mcp_client.actions import external_actions
+from wasifyai_api.styles_actions import styles_actions
 
 ROOT = Path(__file__).resolve().parents[4]
 CONTRACT = ROOT / "docs" / "contracts" / "actions.json"
@@ -253,7 +258,9 @@ def build_registry(reg: GraphRegistry, served: Iterable[str] | None = None) -> A
     """Every action of the products this deployment serves, plus the platform's own. A product
     that declares none exposes nothing (ADR-0057)."""
     ok = None if served is None else set(served)
-    out = ActionRegistry([*builtin_actions(), *engine_actions()])
+    out = ActionRegistry(
+        [*builtin_actions(), *engine_actions(), *styles_actions(), *external_actions()]
+    )
     for product_id, provider in sorted(reg.action_providers().items()):
         if ok is None or product_id in ok:
             out.add_all(provider())
@@ -287,6 +294,8 @@ def build_executor(
         host,
         audit=SqlAuditStore(db) if db is not None else InMemoryAuditStore(),
         approvals=SqlApprovalStore(db) if db is not None else InMemoryApprovalStore(),
+        # long jobs outlive a restart (stage J3): kept in the same database
+        jobs=JobBook(SqlJobStore(db)) if db is not None else None,
         usage=usage,
         library=library_kinds(reg, served),
     )

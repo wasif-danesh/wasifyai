@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from video_rig import png
+from video_rig import mp4, png
 from wasifyai_platform_sdk import (
     Identity,
     InMemoryUploadStore,
@@ -53,6 +53,26 @@ def a_picture_kind() -> LibraryKind:
     return LibraryKind("image", "wasifyai-image", "picture", list_, get, delete, read=read)
 
 
+def a_project_kind() -> LibraryKind:
+    """What Creative Studio declares: a project whose cut is a finished video, and one with none."""
+
+    async def list_(c, n):
+        return []
+
+    async def get(c, i):
+        return None
+
+    async def read(c, i):
+        return {"made": mp4((160, 96), 48), "junk": b"not a video"}.get(i)
+
+    async def delete(c, i):
+        return False
+
+    return LibraryKind(
+        "creative_project", "wasifyai-creative", "project", list_, get, delete, read=read
+    )
+
+
 class Rig:
     def __init__(self, tmp_path: Path, engine):
         self.unindexed: list[str] = []
@@ -70,7 +90,11 @@ class Rig:
         self.ex = ActionExecutor(
             ActionRegistry([*builtin_actions(), *actions()]),
             self.host,
-            library={**{k.kind: k for k in library_kinds()}, "image": a_picture_kind()},
+            library={
+                **{k.kind: k for k in library_kinds()},
+                "image": a_picture_kind(),
+                "creative_project": a_project_kind(),
+            },
         )
         self.store = video_store(engine)
 
@@ -82,7 +106,7 @@ class Rig:
         finally:
             reset_context(token)
 
-    async def keep(self, status="done", prompt="waves on a beach") -> None:
+    async def keep(self, status="done", prompt="waves on a beach", frames=49) -> None:
         async with self.as_user():
             await self.state.storage.put(f"{VIDEO_ID}/video.mp4", b"mp4-bytes", "video/mp4")
             await self.state.storage.put(f"{VIDEO_ID}/poster.jpg", b"jpeg", "image/jpeg")
@@ -90,7 +114,7 @@ class Rig:
             VideoRecord(
                 id=VIDEO_ID, tenant_id="t1", product_id="wasifyai-video", user_id="u1",
                 thread_id=None, run_id=None, mode="text", status=status, prompt=prompt,
-                seconds=2, frames=49, fps=24, width=768, height=512,
+                seconds=2, frames=frames, fps=24, width=768, height=512,
                 video_key=f"{VIDEO_ID}/video.mp4", poster_key=f"{VIDEO_ID}/poster.jpg",
             )
         )  # fmt: skip
@@ -111,7 +135,7 @@ async def rig(tmp_path):
 
 
 def finished(**out: Any) -> list[dict]:
-    done = {"status": "done", "seconds": 2, "width": 768, "height": 512} | out
+    done = {"status": "done", "seconds": 5, "width": 768, "height": 512} | out
     return [{"event": "done", "outputs": done}]
 
 
@@ -122,11 +146,11 @@ async def test_a_video_is_made_and_it_may_take_a_while(rig):
         "video_id", "product_id", "uri", "prompt", "seconds", "width", "height",
     }  # fmt: skip
     assert r.text == (
-        'The video was made (2 seconds, 768x512) from "waves on a beach" and saved to the library.'
+        'The video was made (5 seconds, 768x512) from "waves on a beach" and saved to the library.'
     )
     assert rig.host.runs == [
         ("wasifyai-video", {"mode": "text", "prompt": "waves on a beach", "shape": "portrait",
-                            "seconds": 2})
+                            "seconds": 5})
     ]  # fmt: skip
     action = rig.ex.registry.get("video.generate")
     assert action and action.long and "costly" in action.flags
@@ -138,7 +162,12 @@ async def test_the_second_asks_before_a_costly_make_when_the_person_chose_to_be_
 
 
 async def test_a_request_the_product_cannot_take_is_refused_in_words(rig):
-    for params in ({"prompt": "x", "seconds": 7}, {"prompt": "x", "shape": "wide"}, {"prompt": ""}):
+    for params in (
+        {"prompt": "x", "seconds": 2},
+        {"prompt": "x", "seconds": 7},
+        {"prompt": "x", "shape": "wide"},
+        {"prompt": ""},
+    ):
         r = await rig.go("video.generate", params)
         assert (r.status, r.code) == ("refused", "invalid_input"), params
     assert rig.host.runs == []
@@ -167,6 +196,38 @@ async def test_a_picture_of_the_library_is_set_moving(rig):
     assert (ghost.status, ghost.code) == ("refused", "not_found")
 
 
+async def test_a_video_of_the_library_is_carried_on(rig):
+    await rig.keep()
+    rig.host.script("wasifyai-video", finished(video_id="vid-3", seconds=4))
+    r = await rig.go(
+        "video.extend", {"video_id": VIDEO_ID, "prompt": "the waves keep rolling", "seconds": 8}
+    )
+    assert r.ok and r.output["seconds"] == 4
+    assert rig.host.runs == [
+        ("wasifyai-video",
+         {"mode": "extend", "prompt": "the waves keep rolling", "source_id": VIDEO_ID,
+          "seconds": 8})
+    ]  # fmt: skip
+    await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "go on"})
+    assert rig.host.runs[-1][1]["seconds"] == 5  # five seconds unless asked otherwise
+    action = rig.ex.registry.get("video.extend")
+    assert action and action.long and "costly" in action.flags and action.ui == "video.extend"
+
+
+async def test_only_a_finished_video_can_be_carried_on_whatever_its_length(rig):
+    ghost = await rig.go("video.extend", {"video_id": "ghost", "prompt": "x"})
+    assert (ghost.status, ghost.code) == ("refused", "not_found")
+    await rig.keep(status="working")
+    working = await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "x"})
+    assert working.code == "not_found"
+    assert rig.host.runs == []
+    await rig.store.delete("t1", "u1", VIDEO_ID)
+    await rig.keep(frames=300)  # no cap on the length
+    rig.host.script("wasifyai-video", finished(video_id="vid-9"))
+    long = await rig.go("video.extend", {"video_id": VIDEO_ID, "prompt": "x"})
+    assert long.ok
+
+
 async def test_clips_are_listed_exported_and_deleted_but_not_while_being_made(rig, tmp_path):
     await rig.keep()
     [item] = (await rig.go("library.list", {"kind": "video"})).output["items"]
@@ -189,7 +250,42 @@ async def test_a_clip_still_being_made_is_not_deleted(rig):
     assert export.code == "not_found"  # nothing to copy yet
 
 
+async def test_a_finished_video_from_another_product_is_kept_as_a_new_video_every_time(rig):
+    first = await rig.go(
+        "video.keep", {"from_kind": "creative_project", "from_id": "made", "title": "Dawn drive"}
+    )
+    assert first.ok, first.text
+    again = await rig.go(
+        "video.keep", {"from_kind": "creative_project", "from_id": "made", "title": "Dawn drive"}
+    )
+    assert again.ok and again.output["video_id"] != first.output["video_id"]
+    kept = await rig.store.get("t1", "u1", first.output["video_id"])
+    assert (
+        kept
+        and kept.status == "done"
+        and kept.mode == "kept"
+        and (kept.width, kept.height) == (160, 96)
+    )
+    assert (
+        first.output["seconds"] == 2
+        and first.text == '"Dawn drive" is saved to your videos (2 seconds, 160x96).'
+    )
+    async with rig.as_user():
+        assert await rig.state.storage.get(kept.video_key) == mp4((160, 96), 48)
+    for wanted, code in (("none", "not_found"), ("junk", "invalid_input")):
+        r = await rig.go(
+            "video.keep", {"from_kind": "creative_project", "from_id": wanted, "title": "x"}
+        )
+        assert r.code == code, r.text
+    r = await rig.go("video.keep", {"from_kind": "nothing_here", "from_id": "made", "title": "x"})
+    assert r.code == "not_found"
+
+
 def test_every_video_action_is_run_in_this_file():
-    source = Path(__file__).read_text()
+    # Motion graphics' actions are run in test_builder.py, which has its own rig and stand-in engine
+    source = Path(__file__).read_text() + "".join(
+        (Path(__file__).parent / name).read_text()
+        for name in ("test_builder.py", "test_builder_make.py", "test_builder_brand.py")
+    )
     missing = [a.id for a in actions() if f'"{a.id}"' not in source]
     assert not missing, f"no test runs {missing}"

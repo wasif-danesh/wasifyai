@@ -28,7 +28,7 @@ Find something you made earlier by what it was about: a picture, a video, a song
 
 ## Needs
 
-- Nothing. Search by meaning works better when the search model is installed (**Models**).
+- Nothing. Search by meaning works better when the search model is installed (**Model hub**).
 
 ## Examples
 

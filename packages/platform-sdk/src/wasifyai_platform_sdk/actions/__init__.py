@@ -24,7 +24,13 @@ from wasifyai_platform_sdk.actions.executor import (
 from wasifyai_platform_sdk.actions.export import export_catalogue, render
 from wasifyai_platform_sdk.actions.help import Help, HelpError, load_help, parse_help
 from wasifyai_platform_sdk.actions.host import ActionHost
-from wasifyai_platform_sdk.actions.jobs import Job, JobBook
+from wasifyai_platform_sdk.actions.jobs import (
+    InMemoryJobStore,
+    Job,
+    JobBook,
+    JobStore,
+    SqlJobStore,
+)
 from wasifyai_platform_sdk.actions.library import LibraryItem, LibraryKind, creation_uri
 from wasifyai_platform_sdk.actions.model import (
     CHAT,
@@ -43,6 +49,7 @@ from wasifyai_platform_sdk.actions.model import (
     need_product,
     need_runtime,
     parse_origin,
+    scope_of,
     surface_of,
 )
 from wasifyai_platform_sdk.actions.policy import (
@@ -83,7 +90,10 @@ __all__ = [
     "InMemoryApprovalStore",
     "InMemoryAuditStore",
     "Job",
+    "InMemoryJobStore",
     "JobBook",
+    "JobStore",
+    "SqlJobStore",
     "LibraryItem",
     "LibraryKind",
     "Need",
@@ -104,6 +114,7 @@ __all__ = [
     "on_the_floor",
     "parse_help",
     "parse_origin",
+    "scope_of",
     "render",
     "surface_of",
 ]

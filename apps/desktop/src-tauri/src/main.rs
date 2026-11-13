@@ -7,11 +7,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod comfyui;
 mod disk;
 mod download;
 mod engine;
-mod llamacpp;
 mod logsink;
 #[allow(dead_code)]
 mod loopback_http;
@@ -81,34 +79,6 @@ async fn update_check(app: tauri::AppHandle) -> updater::UpdateStatus {
 #[tauri::command]
 async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
     updater::install(&app).await
-}
-
-#[tauri::command]
-fn component_status(
-    id: String,
-    comfy: State<'_, comfyui::Components>,
-    llama: State<'_, llamacpp::Components>,
-) -> Result<comfyui::ComponentStatus, String> {
-    match id.as_str() {
-        comfyui::COMPONENT => Ok(comfy.status()),
-        llamacpp::COMPONENT => Ok(llama.status()),
-        _ => Err(format!("unknown component {id}")),
-    }
-}
-
-#[tauri::command]
-fn component_install(
-    id: String,
-    repair: bool,
-    app: tauri::AppHandle,
-    comfy: State<'_, comfyui::Components>,
-    llama: State<'_, llamacpp::Components>,
-) -> Result<(), String> {
-    match id.as_str() {
-        comfyui::COMPONENT => comfy.start(app, repair),
-        llamacpp::COMPONENT => llama.start(app, repair),
-        _ => Err(format!("unknown component {id}")),
-    }
 }
 
 #[tauri::command]
@@ -215,6 +185,8 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main_window(app);
         }))
+        // the system's Save As box for "Save a copy" (nothing else of the plugin is allowed)
+        .plugin(tauri_plugin_dialog::init())
         .manage(engine.clone())
         .invoke_handler(tauri::generate_handler![
             engine_status,
@@ -222,8 +194,6 @@ fn main() {
             engine_restart,
             open_external,
             engine_repair,
-            component_status,
-            component_install,
             update_check,
             update_install,
             smoke_enabled,
@@ -241,9 +211,8 @@ fn main() {
             let input = engine::Input {
                 data_dir,
                 resource_dir: app.path().resource_dir().ok(),
+                download_dir: app.path().download_dir().ok(),
             };
-            app.manage(comfyui::Components::new(input.clone()));
-            app.manage(llamacpp::Components::new(input.clone()));
             engine.start(app.handle().clone(), input);
             quit_on_signals(app.handle().clone());
             Ok(())

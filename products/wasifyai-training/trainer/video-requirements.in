@@ -1,0 +1,12 @@
+# The video trainer (ADR-0073, video amendment): PyTorch with diffusers and peft, in an environment of its own.
+# PyTorch runs on the Mac graphics chip (MPS). Compile with scripts/lock-video-trainer.sh and commit the result.
+torch
+diffusers
+transformers
+peft
+accelerate
+sentencepiece
+safetensors
+numpy
+pillow
+protobuf

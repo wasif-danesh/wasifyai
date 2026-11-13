@@ -13,7 +13,7 @@ from wasifyai_notebooks.files import ObjectFiles, artifact_key
 from wasifyai_notebooks.ingest import IngestWorker
 from wasifyai_notebooks.routes import Runtime, build_routes
 from wasifyai_notebooks.store import NotebookStore
-from wasifyai_platform_sdk import Identity, RouteDeps, memory_storage
+from wasifyai_platform_sdk import EngineServices, Identity, RouteDeps, memory_storage
 
 pytestmark = pytest.mark.usefixtures("use_backends")  # on SQLite and on Postgres
 
@@ -32,14 +32,8 @@ class Indexed:
         self.items.pop(item_id, None)
 
 
-class State:
-    creation_index = None
-    engine = None
-    storage = None
-
-
 def make_app(tmp_path, file_kind="local", **components):
-    store = NotebookStore(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
+    store = NotebookStore.in_folder(tmp_path / "nb", dimension=SPEC.dimension, embedder_id=SPEC.id)
     comps = FakeComponents(tmp_path, **components)
     reader = FakeReader()
     files = tmp_path / "nb" / "files"
@@ -54,8 +48,10 @@ def make_app(tmp_path, file_kind="local", **components):
         return Identity(x_tenant, x_user)
 
     app = FastAPI()
+    app.state.services = EngineServices()  # read per request, so a test may change it
     app.include_router(
-        build_routes(RouteDeps(State(), identity), runtime), prefix="/products/wasifyai-notebooks"
+        build_routes(RouteDeps(app.state.services, identity), runtime),
+        prefix="/products/wasifyai-notebooks",
     )
     return app, runtime, comps, reader
 
@@ -355,7 +351,7 @@ def test_conversations_are_listed_read_renamed_and_deleted(api):
 def test_a_notebook_is_in_search_at_once_with_its_sources_and_leaves_with_it(tmp_path):
     app, runtime, *_ = make_app(tmp_path)
     index = Indexed()
-    State.creation_index = index  # type: ignore[assignment]  # read from the state per request
+    app.state.services.creation_index = index
     try:
         with TestClient(app) as c:
             c.base_url = c.base_url.join("/products/wasifyai-notebooks/")
@@ -371,7 +367,7 @@ def test_a_notebook_is_in_search_at_once_with_its_sources_and_leaves_with_it(tmp
             assert c.portal is not None
             c.portal.call(runtime.worker.stop)
     finally:
-        State.creation_index = None
+        app.state.services.creation_index = None
 
 
 def test_outputs_are_listed_read_downloaded_renamed_stopped_and_deleted(api):
@@ -414,6 +410,40 @@ def test_outputs_are_listed_read_downloaded_renamed_stopped_and_deleted(api):
     assert c.delete(f"notebooks/{nid}/artifacts/{made['id']}").status_code == 204
     assert not files.exists(artifact_key(nid, made["id"], "plan.docx"))
     assert c.get(f"notebooks/{nid}/artifacts/{made['id']}").status_code == 404
+
+
+def test_an_outputs_file_is_copied_to_the_export_folder_when_there_is_one(api, tmp_path):
+    c, runtime, *_ = api
+    nid = c.post("notebooks", json={}).json()["id"]
+    made = runtime.store.create_artifact("t1", "u1", nid, fmt="word", prompt="", source_ids=[])
+    runtime.files_for("t1", "u1").put_bytes(artifact_key(nid, made["id"], "plan.docx"), b"PK-doc")
+    runtime.store.finish_artifact(
+        "t1", "u1", nid, made["id"], title="Plan", body="# Plan", data=None,
+        file_name="plan.docx", file_mime="application/octet-stream",
+    )  # fmt: skip
+    path = f"notebooks/{nid}/artifacts/{made['id']}/export"
+    assert c.post(path).status_code == 404  # no export folder: the web has none
+    services: EngineServices = c.app.state.services  # type: ignore[attr-defined]
+    services.export_dir = tmp_path / "exports"
+    try:
+        first = c.post(path)
+        second = c.post(path)  # a copy never replaces a file
+        assert first.json()["name"] == "plan.docx" and second.json()["name"] == "plan-2.docx"
+        assert (tmp_path / "exports" / "plan.docx").read_bytes() == b"PK-doc"
+        chosen = tmp_path / "Documents" / "mine.docx"
+        chosen.parent.mkdir()
+        mine = c.post(path, json={"path": str(chosen)})
+        assert mine.json()["path"] == str(chosen) and chosen.read_bytes() == b"PK-doc"
+        elsewhere = c.post(path, json={"path": str(tmp_path / "no" / "x.docx")})
+        assert elsewhere.status_code == 422
+        assert c.post(path, headers={"x-user": "u2"}).status_code == 404
+        report = runtime.store.create_artifact(
+            "t1", "u1", nid, fmt="report", prompt="", source_ids=[]
+        )
+        none = c.post(f"notebooks/{nid}/artifacts/{report['id']}/export")
+        assert none.status_code == 404  # no file to copy
+    finally:
+        services.export_dir = None
 
 
 def test_the_guide_route_reads_what_the_graph_saved_and_says_when_it_is_stale(api):
@@ -477,6 +507,8 @@ def _every_notebook_route(c, nid):
         ("delete", "/notebooks/{nid}/artifacts/{aid}", f"notebooks/{nid}/artifacts/nope", {}),
         ("get", "/notebooks/{nid}/artifacts/{aid}/file", f"notebooks/{nid}/artifacts/nope/file",
          {}),
+        ("post", "/notebooks/{nid}/artifacts/{aid}/export",
+         f"notebooks/{nid}/artifacts/nope/export", {}),
         ("post", "/notebooks/{nid}/artifacts/{aid}/voices",
          f"notebooks/{nid}/artifacts/nope/voices", {"json": {}}),
         ("get", "/notebooks/{nid}/artifacts/{aid}/voices", f"notebooks/{nid}/artifacts/nope/voices",

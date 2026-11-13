@@ -9,7 +9,7 @@
 - **Depends on:** ADR-0082 (chat on assistant-ui; the primitives for attachments, dictation and reasoning), ADR-0057 (the
   assistant), ADR-0068 and ADR-0071 (actions, approvals, action cards), ADR-0070 (trust and the taint rule), ADR-0066 (our
   speech runtime), ADR-0078 (Qwen3.5-9B: reads pictures, thinks by default), ADR-0056 and ADR-0063 (the model slot, will it
-  fit), ADR-0035 (upload hardening), ADR-0065 (notebooks reader), ADR-0081 (design tokens), ADR-0047, ADR-0012.
+  fit), ADR-0035 (upload hardening), ADR-0065 (notebooks reader), ADR-0081 (design tokens), ADR-0047.
 - **Plan:** `docs/composer-options-plan.md`, stages CO0 to CO4.
 
 ## Context
@@ -32,9 +32,9 @@ What exists today (checked in the repo, 2026-10-19):
   **no microphone code** in the window and **no microphone permission** in the Tauri shell. The speech runtime reads **WAV
   only**. The model slot keeps **one resident owner**: starting the speech runtime unloads the chat model and the reverse
   (`SlotManager.hold`), so dictation would evict a 9B model on every use.
-- **DuckDuckGo:** the `ddgs` library (PyPI 9.16.0, **MIT**, "a metasearch library that aggregates results from diverse web
+- **DuckDuckGo:** the `ddgs` library (PyPI 9.16.0, "a metasearch library that aggregates results from diverse web
   search services"; the renamed `duckduckgo-search`) scrapes search pages; it is unofficial and can break or be rate limited.
-  Page text extraction: `trafilatura` (**Apache-2.0**) or `readability-lxml` (Apache-2.0).
+  Page text extraction: `trafilatura` or `readability-lxml`.
 
 ## Decision
 
@@ -89,7 +89,7 @@ What exists today (checked in the repo, 2026-10-19):
      webview).
    - **Tauri shell:** a microphone usage description and entitlement so macOS asks once. Whether the shell's webview allows
      `getUserMedia` is **unverified** and is the first CO0 check.
-   - **Setup card** when no speech model is installed (what, where from, size, licence, one click; ADR-0066 runtime). Language
+   - **Setup card** when no speech model is installed (what, where from, size, one click; ADR-0066 runtime). Language
      follows the model's languages (Parakeet about 25 European ones; Whisper more); the picker says so.
    - **The model slot gets a "light owner" rule:** a small speech model may stay resident next to the chat model when the fit
      check (ADR-0063) says they fit together; otherwise dictation says so and falls back to unloading. This is a small change
@@ -101,7 +101,7 @@ What exists today (checked in the repo, 2026-10-19):
 7. **What is not in this ADR:** Tools and Skills buttons (they need the MCP client of ADR-0070 or a skills concept), an
    "Approve for me" mode (a design decision for stage A2; `destroy` and `needs_consent` actions always ask), read-aloud
    (CU3), live dictation, web image search, a research mode.
-8. **Dependencies (asked for in CO0, versions pinned):** `ddgs` (MIT) and `trafilatura` (Apache-2.0) in the engine; nothing new
+8. **Dependencies (asked for in CO0, versions pinned):** `ddgs` and `trafilatura` in the engine; nothing new
    in the window for Thinking, Attach or the recorder (the browser's `MediaRecorder` or an `AudioWorklet` is enough). The
    vision projector (0.92 GB) and a speech model are downloads with the owner's yes, sizes shown.
 9. **Safety and privacy summary:** no network request for search without the person's opt-in; web and attachment text is
@@ -122,7 +122,7 @@ What exists today (checked in the repo, 2026-10-19):
 ## Alternatives considered
 
 - **A search-only API provider first (Brave, Tavily):** more reliable, but needs a key and a cost; kept as the second provider.
-- **Self-hosted SearXNG (AGPL-3.0):** private, but a service to run; a candidate for the hosted product, not the desktop.
+- **Self-hosted SearXNG:** private, but a service to run; a candidate for the hosted product, not the desktop.
 - **The browser's built-in speech recognition for the mic:** simple but not private or offline.
 - **Streaming (live) dictation first:** nicer, but needs partial results from the speech runtime; deferred.
 - **Wait for the assistant-ui migration:** the options bar is independent of the thread, so there is no reason to wait.
@@ -139,14 +139,24 @@ What exists today (checked in the repo, 2026-10-19):
 
 ## Owner decisions on CO3 (2026-10-20)
 
-**A. Dependencies: approved.** `ddgs` 9.16.0 (MIT) and `trafilatura` 2.3.1 (Apache-2.0), as pinned in `packages/platform-sdk` and locked in `uv.lock`.
+**A. Dependencies: approved.** `ddgs` 9.16.0 and `trafilatura` 2.3.1, as pinned in `packages/platform-sdk` and locked in `uv.lock`.
 
 **B. DuckDuckGo: stays the default, the terms risk is accepted.** The owner knows that DuckDuckGo's terms do not mention automated use, offer no search API and forbid
 "displaying" the service inside another service (CO0 section 5), and that `ddgs` is an unofficial scraper DuckDuckGo can block at any time. **When it stops working, the
-app tells the person in words to add a search key in Settings** and use another service (Ollama, Tavily, Exa or Brave Search): both the "busy" and the "could not be reached" messages say so.
+app tells the person in words to add a search key in Settings** and use another service (Ollama, Tavily, Exa or Brave Search): both the "busy" and the "could not be reached" messages say so; after three failures in a row the message says DuckDuckGo has not answered from this computer, and the search card has an Open Settings button.
 Counsel has not been asked; revisit before a public release if the risk changes.
 
 ## Not in v1
 
 Tools and Skills buttons, "Approve for me", live dictation, image search, deep research, search history,
 voice conversations.
+
+## Amendment: web search on the web app (2026-10-24, owner)
+
+The web app has the same Search button, consent card and tools as the desktop. On a service the settings are split: an **admin**
+chooses the search service and keeps the keys (Admin > Search; the keys are encrypted with `MEDIA_SECRETS_KEY` and never shown
+again), and **each person** allows searching for themself (their consent is kept per person and per service; changing the service asks
+everyone again). Nothing is sent before a person has allowed it. DuckDuckGo needs no key. The pages are read through the same
+guarded reader (private and internal addresses are refused). `WEB_SEARCH_ENABLED=false` turns the whole feature off for a
+deployment that must send nothing out. Usage is counted as on the desktop (`web.search`, `web.read`). The routes are the assistant's
+`GET/PUT /search`; on a service `PUT` refuses a person who is not an admin when it changes the service or a key.

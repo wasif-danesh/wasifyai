@@ -11,7 +11,7 @@ import {
   type VoiceApi,
   type VoiceModelInfo,
 } from "@wasifyai/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { AssistantHome } from "../AssistantHome";
 
 const runs = { startRun: vi.fn(async () => {}), watchRun: vi.fn(async () => {}) };
@@ -25,12 +25,11 @@ const model = (over: Partial<VoiceModelInfo> = {}) =>
   ({
     id: "parakeet-tdt-0.6b-v3",
     title: "Parakeet TDT 0.6B v3",
-    licence: "CC-BY-4.0",
     tasks: ["transcribe"],
     recommended: ["transcribe"],
-    licence_evidence: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     state: "ready",
     bytes_missing: 0,
+    source: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     ...over,
   }) as VoiceModelInfo;
 const runtime = (installed: boolean): AudioRuntime => ({
@@ -62,12 +61,17 @@ function home(props: Partial<React.ComponentProps<typeof AssistantHome>> = {}) {
   );
 }
 
+// The chat is a separate chunk (AssistantHome loads it lazily). Loading assistant-ui took longer than the default wait on a slow
+// Windows runner, so the first test found an empty page. Load it once here, with room to do so.
+beforeAll(async () => {
+  await import("../ChatScreen");
+}, 60_000);
+
 afterEach(() => vi.restoreAllMocks());
 
-describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screenName) => {
+describe("the home screen", () => {
   it("shows the Mic when a speech model is ready", async () => {
     home({
-      screen: screenName,
       voice: voiceThat(
         () => [model()],
         () => runtime(true),
@@ -77,14 +81,13 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
   });
 
   it("has no Mic without a speech client, or where there is no speech-to-text model", async () => {
-    home({ screen: screenName });
+    home();
     await screen.findByRole("heading", { level: 1 });
     expect(screen.queryByRole("button", { name: /^Mic/ })).toBeNull();
   });
 
   it("has no Mic on the web when the service offers no transcription", async () => {
     home({
-      screen: screenName,
       voice: voiceThat(
         () => [],
         () => HOSTED_RUNTIME,
@@ -100,13 +103,13 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
       () => [model({ state: "can_install", bytes_missing: 9e8 })],
       () => runtime(false),
     );
-    home({ screen: screenName, voice });
+    home({ voice });
     await screen.findByRole("heading", { level: 1 });
     await waitFor(() => expect(voice.models).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: /^Mic/ })).toBeNull();
   });
 
-  it("offers the missing model with its size and licence, asks nothing until the button is pressed, then sets up", async () => {
+  it("offers the missing model with its size, asks nothing until the button is pressed, then sets up", async () => {
     let installed = false;
     let have = false;
     const voice = voiceThat(
@@ -122,11 +125,11 @@ describe.each(["classic", "next"] as const)("the home screen (%s chat)", (screen
       have = true;
     });
     const user = userEvent.setup();
-    home({ screen: screenName, voice, getSpeechModel });
+    home({ voice, getSpeechModel });
     await user.click(await screen.findByRole("button", { name: /^Mic/ }));
     const card = await screen.findByRole("region", { name: "Set up dictation" });
     expect(card).toHaveTextContent("Parakeet TDT 0.6B v3");
-    expect(card).toHaveTextContent("CC-BY-4.0");
+    expect(card).not.toHaveTextContent("CC-BY");
     expect(card).toHaveTextContent("huggingface.co");
     expect(card).toHaveTextContent("956 MB"); // the model and the 40 MB runtime
     expect(voice.installRuntime).not.toHaveBeenCalled(); // nothing is fetched before the click

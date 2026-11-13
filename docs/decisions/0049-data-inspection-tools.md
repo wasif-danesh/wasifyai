@@ -13,19 +13,18 @@ When a job seems stuck or a run ends oddly, the answer is in two places: the Red
 
 Facts (checked 2026-10-10):
 
-- **RedisInsight** (the official viewer) is licensed **SSPL**, not an OSI open-source licence, and has no login
+- **RedisInsight** (the official viewer) has no login
   of its own. As a *desktop application* it runs on the operator's machine and connects to any Redis it can
   reach, including one behind `kubectl port-forward` or Tailscale. Nothing needs to be hosted for it.
-- **Redis Commander** (MIT) is the hosted alternative, with weak stream support and no consumer-group view.
-- Postgres viewers: **Adminer** (Apache-2.0 or GPL-2.0, one small container), **pgAdmin** (PostgreSQL licence,
-  own users, heavier), **CloudBeaver** (Apache-2.0, heavier).
+- **Redis Commander** is the hosted alternative, with weak stream support and no consumer-group view.
+- Postgres viewers: **Adminer** (one small container), **pgAdmin** (own users, heavier), **CloudBeaver** (heavier).
 - The database holds user content and e-mail addresses. A viewer reads all of it, so in production that is a
   privacy decision, not only a convenience.
 
 ## Decision
 
 1. **Redis: RedisInsight desktop only.** Nothing is hosted for Redis in any environment. The operator connects
-   through `kubectl port-forward` (kind, GCP) or Tailscale (staging). No SSPL software is shipped, built into an
+   through `kubectl port-forward` (kind, GCP) or Tailscale (staging). No Redis viewer is shipped, built into an
    image or run in a cluster by this project. A hosted viewer (Redis Commander) is added only if the desktop route
    proves not to work for staging or production.
 2. **Postgres: Adminer in the cluster**, one chart component `tools.postgresViewer`, off by default and switched
@@ -57,8 +56,8 @@ Facts (checked 2026-10-10):
 
 ## Alternatives considered
 
-- **Host RedisInsight:** best stream tool, but SSPL and no login. Not needed, because the desktop app covers it.
-- **Redis Commander (MIT, hosted):** works without a desktop, but weak on streams; the fallback if desktop access
+- **Host RedisInsight:** best stream tool, but no login. Not needed, because the desktop app covers it.
+- **Redis Commander (hosted):** works without a desktop, but weak on streams; the fallback if desktop access
   fails.
 - **pgAdmin or CloudBeaver instead of Adminer:** per-person accounts, heavier; revisit when more than one operator
   needs the database.

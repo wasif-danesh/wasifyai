@@ -1,30 +1,21 @@
 "use client";
 
-import {
-  type ConsentBasis,
-  type ParsedEvent,
-  type SavedVoice,
-  type VoiceApi,
-  makeSpeech,
-} from "@wasifyai/client";
+import { type ParsedEvent, type SavedVoice, type VoiceApi, makeSpeech } from "@wasifyai/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/button";
+import { Modal } from "../components/dialog";
 import { Label } from "../components/label";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { clock } from "./format";
-
-export const CONSENT_TEXT: Record<ConsentBasis, string> = {
-  own: "This is my own voice.",
-  permission: "I have the permission of the person whose voice this is.",
-};
 
 const EXAMPLES = [
   "A deep, calm older man with a slow British accent",
   "A bright, energetic young woman who speaks quickly",
   "A warm, gentle narrator with a soft voice",
 ];
-const SAMPLE = "Hello, this is how I sound. I hope you like it.";
+/** The line a voice says when the person asks to hear it. */
+export const SAMPLE = "Hello, this is how I sound. I hope you like it.";
 
 export type VoicesWorkspaceProps = {
   api: VoiceApi;
@@ -37,8 +28,7 @@ export type VoicesWorkspaceProps = {
 
 /**
  * Voices of your own: described in words, or cloned from a short recording. A voice is not tied to
- * one model: it is spoken by any model that can do that (Text to speech lists them). A cloned voice
- * asks whose voice it is, and keeps the answer.
+ * one model: it is spoken by any model that can do that (Text to speech lists them).
  */
 export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps) {
   const [voices, setVoices] = useState<SavedVoice[]>([]);
@@ -50,9 +40,10 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [said, setSaid] = useState("");
-  const [consent, setConsent] = useState<ConsentBasis | null>(null);
   const [trying, setTrying] = useState<string | null>(null);
   const [heard, setHeard] = useState<Record<string, string>>({});
+  // the app window cannot show window.prompt: the app's own dialog asks for the words
+  const [editing, setEditing] = useState<SavedVoice | null>(null);
   const abort = useRef<AbortController | null>(null);
 
   const load = useCallback(
@@ -77,14 +68,13 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
     try {
       if (mode === "design") {
         await api.designVoice(name.trim(), description.trim());
-      } else if (file && consent) {
-        await api.cloneVoice(file, name.trim(), consent, said.trim() || undefined);
+      } else if (file) {
+        await api.cloneVoice(file, name.trim(), said.trim() || undefined);
       }
       setName("");
       setDescription("");
       setFile(null);
       setSaid("");
-      setConsent(null);
       await load();
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "That voice could not be saved.");
@@ -115,9 +105,8 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
     setVoices((list) => list.filter((v) => v.id !== id));
   }
 
-  async function editWords(v: SavedVoice) {
-    const next = window.prompt("The words spoken in the recording", v.reference_text);
-    if (next === null) return;
+  async function editWords(v: SavedVoice, next: string) {
+    setEditing(null);
     try {
       const saved = await api.updateVoice(v.id, { reference_text: next });
       setVoices((list) => list.map((x) => (x.id === v.id ? saved : x)));
@@ -127,8 +116,7 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
   }
 
   const ready =
-    name.trim().length > 0 &&
-    (mode === "design" ? description.trim().length >= 3 : file !== null && consent !== null);
+    name.trim().length > 0 && (mode === "design" ? description.trim().length >= 3 : file !== null);
 
   return (
     <div className="mx-auto grid w-full min-w-0 max-w-3xl gap-6">
@@ -212,20 +200,6 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
                 onChange={(e) => setSaid(e.target.value)}
               />
             </div>
-            <fieldset className="grid gap-2 border-0 p-0">
-              <legend className="mb-1 font-medium text-sm">Whose voice is it?</legend>
-              {(Object.keys(CONSENT_TEXT) as ConsentBasis[]).map((b) => (
-                <label key={b} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="consent"
-                    checked={consent === b}
-                    onChange={() => setConsent(b)}
-                  />
-                  {CONSENT_TEXT[b]}
-                </label>
-              ))}
-            </fieldset>
           </>
         )}
         <div className="flex flex-wrap items-center gap-3">
@@ -270,14 +244,11 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
                       <button
                         type="button"
                         className="underline underline-offset-4"
-                        onClick={() => void editWords(v)}
+                        onClick={() => setEditing(v)}
                       >
                         Change the words
                       </button>
                     </p>
-                    {v.consent.statement ? (
-                      <p className="text-muted-foreground text-xs">{v.consent.statement}</p>
-                    ) : null}
                   </>
                 )}
                 {heard[v.id] ? (
@@ -312,6 +283,57 @@ export function VoicesWorkspace({ api, runs, onUseVoice }: VoicesWorkspaceProps)
           </ul>
         </section>
       )}
+      {editing ? (
+        <WordsDialog
+          initial={editing.reference_text}
+          onSubmit={(next) => void editWords(editing, next)}
+          onCancel={() => setEditing(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** The words spoken in a voice's recording: several lines, so not the one-line NameDialog. Empty is
+ * allowed (some models need no words). */
+function WordsDialog({
+  initial,
+  onSubmit,
+  onCancel,
+}: {
+  initial: string;
+  onSubmit: (words: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <Modal label="Change the words" onClose={onCancel}>
+      <form
+        className="grid gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (value.trim() !== initial.trim()) onSubmit(value.trim());
+          else onCancel();
+        }}
+      >
+        <div className="grid gap-1.5">
+          <Label htmlFor="voice-words">The words spoken in the recording</Label>
+          <Textarea
+            id="voice-words"
+            autoFocus
+            rows={4}
+            value={value}
+            maxLength={1000}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit">Save</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

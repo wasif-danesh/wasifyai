@@ -12,7 +12,7 @@ product the user navigates with a **side panel** (ADR-0046), and the home page k
 | `/image`, `/video`, `/voice/<screen>` | Create an image or a video, or use a voice screen: text to speech, speech to text, voices, music, lyrics, splitting, voice change, speech edit, dubbing, audiobook, lip sync (sign-in required; the voice screens need `VOICE_ENABLED`, and the menu lists the ones a ready model can run). A video is made in the background: the top bar shows "Making your video…" and a notice says when it is ready |
 | `/image/creations/[id]`, `/video/creations/[id]` | One saved result: the media, its words, downloads, delete (links are signed fresh on every visit) |
 | `/creations` | My creations: one library of everything the user made, newest first, as cards or a sortable table, with filters (`?show=songs\|images\|videos\|speeches\|transcripts\|lipsyncs`), "Load more" and a search that finds things by meaning or exact words in any language (sign-in required) |
-| `/notebooks`, `/notebooks/[id]` | Notebooks (`NOTEBOOKS_ENABLED`) |
+| `/notebooks`, `/notebooks/[id]` | Notebooks |
 | `/admin/...` | The admin area (admins only): usage, users, models, media, safeguards, audit log, as sortable, filterable, paged tables |
 
 `/music`, `/text-to-speech`, `/speech-to-text` and `/lip-sync` still answer: the middleware sends them to the voice screens.

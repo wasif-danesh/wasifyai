@@ -16,6 +16,8 @@ cd "$ROOT"
 DATA_DIR="${WEB_LOCAL_DATA_DIR:-$HOME/Library/Application Support/ai.wasifyai.desktop}"
 [ -d "$DATA_DIR" ] || { bad "no data folder at $DATA_DIR (set WEB_LOCAL_DATA_DIR)"; exit 1; }
 
+# the sign-in mode is this script's (stub unless the caller sets one), not the .env's: it is for the web deployment
+CALLER_AUTH_MODE="${AUTH_MODE:-}"
 set -a
 # shellcheck disable=SC1091
 . ./.env
@@ -36,9 +38,10 @@ export REDIS_URL="redis://localhost:6379/0"
 export LITELLM_BASE_URL="http://localhost:4000"
 export STORAGE_ENDPOINT="http://localhost:8333"
 export STORAGE_PUBLIC_ENDPOINT="http://localhost:8333"
-export AUTH_MODE="${AUTH_MODE:-stub}"
+export AUTH_MODE="${CALLER_AUTH_MODE:-stub}"
+# the API runs from services/api, where a relative products folder is not found
+export PRODUCTS_DIR="$ROOT/products"
 # speech from the models on this Mac, and hosted ones too where the gateway has them (VOICE_ENGINE=both)
-export VOICE_ENABLED=true
 export VOICE_ENGINE="${VOICE_ENGINE:-local}"
 export DESKTOP_DATA_DIR="$DATA_DIR"
 

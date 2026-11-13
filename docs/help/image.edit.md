@@ -22,6 +22,8 @@ Change a picture you already have by saying what to change. The original stays.
 
 - `image_id`: The picture to change.
 - `prompt`: What to change.
+- `model`: which image model makes it, by its id (for example `qwen-image-2.1`); left out, the default. A model
+  that cannot do this is refused ("This model cannot ...").
 
 ## Limits
 

@@ -1,0 +1,8 @@
+# The writing trainer's environment (ADR-0074): mlx-lm 0.31.3 (MIT) and the versions of the environment the
+# real runs were made in (2026-10-26: mlx 0.32.3, transformers 5.5.0), installed by the app on request
+# (`wasifyai_api.language_setup`) with `--require-hashes`. mlx-lm runs on MLX, so this is Apple silicon only.
+# Lock it with `scripts/lock-language-trainer.sh` and commit the result.
+mlx-lm==0.31.3
+mlx==0.32.3
+mlx-metal==0.32.3
+transformers==5.5.0

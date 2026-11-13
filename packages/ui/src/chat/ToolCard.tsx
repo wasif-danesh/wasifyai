@@ -5,6 +5,7 @@ import { BookOpen, FileText, Globe, ImageIcon, Music, Search } from "lucide-reac
 import { useEffect, useState } from "react";
 import { Button } from "../components/button";
 import { Spinner } from "../components/spinner";
+import { JobProgress } from "./thread/tool-uis/JobProgress";
 
 type Tool = Extract<ChatPart, { type: "tool" }>;
 
@@ -18,6 +19,8 @@ export type ToolCardProps = {
   tracks?: TrackLookup;
   /** Open a creation in its own screen (the library for an image). */
   onOpenCreation?: (kind: string, id: string) => void;
+  /** Take the person to Settings (a search service that fails: add a key there). */
+  onOpenSettings?: () => void;
 };
 
 function Picture({
@@ -110,21 +113,13 @@ function MusicPlayer({
 /** A picture being made, then shown with a way to open it. */
 export function ImageToolCard({ tool, images, tracks, onOpenCreation }: ToolCardProps) {
   if (tool.status === "running") {
-    const queued = tool.jobStatus === "queued";
-    const pct = typeof tool.progress === "number" ? Math.round(tool.progress * 100) : null;
     return (
-      <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
-        <Spinner />
-        <span>
-          {queued
-            ? tool.queuePosition && tool.queuePosition > 1
-              ? `Waiting for a turn, place ${tool.queuePosition}`
-              : "Waiting for a turn"
-            : pct !== null && pct > 0
-              ? `Making your picture, ${pct}%`
-              : "Making your picture"}
-        </span>
-      </output>
+      <JobProgress
+        making="Making your picture"
+        progress={tool.progress}
+        queued={tool.jobStatus === "queued"}
+        place={tool.queuePosition}
+      />
     );
   }
   if (tool.status === "ok" && typeof tool.output?.image_id === "string") {
@@ -309,7 +304,7 @@ function SourceLink({ url, children }: { url: unknown; children: string }) {
 }
 
 /** What a search of the web found: the sources, with their sites, so the answer can be checked. */
-export function WebSearchCard({ tool }: ToolCardProps) {
+export function WebSearchCard({ tool, onOpenSettings }: ToolCardProps) {
   if (tool.status === "running") {
     return (
       <output className="flex items-center gap-3 rounded-lg border p-3 text-sm">
@@ -318,11 +313,23 @@ export function WebSearchCard({ tool }: ToolCardProps) {
     );
   }
   if (tool.status !== "ok") {
+    // a search service that does not answer: the way out is another service, chosen in Settings
+    const code = String(tool.output?.code ?? "");
+    const another = ["search_busy", "search_failed", "search_unreliable", "needs_key", "bad_key"];
     return (
-      <p className="flex items-center gap-2 rounded-lg border p-3 text-sm">
-        <Globe className="size-4 shrink-0" aria-hidden="true" />
-        {String(tool.output?.message ?? "The web could not be searched.")}
-      </p>
+      <div className="grid gap-2 rounded-lg border p-3 text-sm">
+        <p className="flex items-center gap-2">
+          <Globe className="size-4 shrink-0" aria-hidden="true" />
+          {String(tool.output?.message ?? "The web could not be searched.")}
+        </p>
+        {onOpenSettings && another.includes(code) ? (
+          <div>
+            <Button type="button" size="sm" variant="outline" onClick={onOpenSettings}>
+              Open Settings
+            </Button>
+          </div>
+        ) : null}
+      </div>
     );
   }
   const results = Array.isArray(tool.output?.results)

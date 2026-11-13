@@ -78,4 +78,27 @@ describe("videos api", () => {
   it("names a length", () => {
     expect(clipLength(5)).toBe("5 s");
   });
+
+  it("sends an added video file as a form and answers with the new video", async () => {
+    const calls: { path: string; init?: RequestInit }[] = [];
+    const transport: Transport = {
+      async fetch(path, init) {
+        calls.push({ path, init });
+        return json({ id: "v9", mode: "import", status: "done" }, 201);
+      },
+    };
+    const file = new File(["x"], "holiday.mp4", { type: "video/mp4" });
+    const made = await createVideosApi(transport).importVideo(file);
+    expect(made.id).toBe("v9");
+    expect(calls[0]?.path).toBe("/products/wasifyai-video/videos/import");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect((calls[0]?.init?.body as FormData).get("file")).toBeInstanceOf(File);
+    const refused = fake({
+      "/products/wasifyai-video/videos/import": () =>
+        json({ detail: "That file is not a video." }, 422),
+    });
+    await expect(createVideosApi(refused.transport).importVideo(file)).rejects.toThrow(
+      "That file is not a video.",
+    );
+  });
 });

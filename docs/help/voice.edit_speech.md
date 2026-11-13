@@ -15,7 +15,8 @@ Change some of the words a recording says, keeping the voice.
 
 1. Open **Voice › Edit speech**.
 2. Choose the recording; its words are shown.
-3. Change the words and choose Edit.
+3. Change the words and choose **Change the words**. Under a speech you made, **Edit the words** opens this
+   screen with it chosen.
 
 ## Fields
 

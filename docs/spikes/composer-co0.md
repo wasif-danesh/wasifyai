@@ -274,9 +274,21 @@ Attach, end to end on the desktop profile (`docs/composer-options-plan.md`, CO2)
 - **Window.** An Attach button (a paperclip) in the options bar, a file picker, drag and drop on the box, paste of a file (a screenshot), chips above the words (a thumbnail for a picture, name and size for
   a document, "Reading" while it goes up, the engine's sentence when it is refused, a remove button), Send waits for files still going up, the message shows its attachments, on **both** chat screens.
   `GET /options` has `attach {available, images, documents, images_note}`.
-- **Not done:** the **one-click download of the projector** (918 MB): it needs a catalogue entry with a published checksum, and the download needs your yes; without it a person who has no `mmproj` file is
-  told why a picture is refused. "Add this to a notebook instead?" for a long document (the chip says "Only the start is used"); the notebooks' "best passages" rule (a long file is cut to its start);
-  Word and PDF were tested only with the reader mocked; **a picture alone, with no words, is allowed by the engine but the box still wants a question** (the new thread's send button waits for text).
+- **Not done:** the notebooks' "best passages" rule (a long file is cut to its start); Word and PDF were tested only with the reader mocked.
+
+### Follow-up the same day: the picture reader, file-only messages, notebooks hint, search failures
+
+- **The picture reader is fetched by the app, only after a click.** `projector-shelf.yaml` names the exact file for a model (today Qwen3.5 9B: `unsloth/Qwen3.5-9B-GGUF` `mmproj-F16.gguf`, **918,166,080 bytes**,
+  SHA-256 `f70dc350...029f`, Apache-2.0; the checksum is Hugging Face's published one and equals the copy in this Mac's cache). `VisionService` (`desktop_vision.py`) offers it when the chosen file model
+  has none beside it, `POST /desktop/vision/download {bytes}` fetches it through the ordinary download manager (resume, one at a time, refused unless it matches its checksum) into
+  `<models>/projectors/<id>/`, and `GET /desktop/vision` picks it up (the model is told, its server restarts with `--mmproj`). `GET .../options` carries `attach.picture_reader` (title, licence, source, size).
+  In the window, choosing a picture for such a model opens the card "Get the picture reader" (what, licence, host, size, "runs on this computer"), `Download 918 MB` / `Not now`, progress, and the picture
+  is attached when the model can read it. **Nothing was downloaded to build or test this** (the tests serve a stand-in file).
+- **A message can be only a file.** Send is enabled with a file ready and no words on both screens; the engine names the chat after the file.
+- **A cut document offers a notebook.** A document longer than the 12,000 characters the model is given says "Only the start is used" and has "Add it to a notebook to use all of it", which opens the notebooks.
+- **Search failures.** DuckDuckGo failures are counted; the third in a row says "DuckDuckGo has not answered from this computer the last few times. Add a search key in Settings to use another service."
+  (`search_unreliable`; a success starts the count again). The tool result carries the error `code`, and the search card shows **Open Settings** for a service that does not answer (`search_busy`,
+  `search_failed`, `search_unreliable`, `needs_key`, `bad_key`).
 
 ## What this changes
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
 import { cn } from "../cn";
+import { RecentChats, type Recents } from "./RecentChats";
 import { CHAT_ITEM, EXTRA_ITEMS, type ItemResolver, MENU_GROUPS, type MenuItemDef } from "./menu";
 
 /** How an app draws a link to one of its addresses (the web app passes its router's link). */
@@ -15,12 +16,6 @@ export type MenuLink = ComponentType<{
 
 const DefaultLink: MenuLink = ({ children, ...props }) => <a {...props}>{children}</a>;
 
-export type Recents = {
-  label?: string;
-  empty?: string;
-  items: { id: string; title: string; current?: boolean; onSelect: () => void }[];
-};
-
 export type SideMenuProps = {
   /** What each item opens in this app. */
   resolve: ItemResolver;
@@ -30,8 +25,6 @@ export type SideMenuProps = {
   header?: ReactNode;
   /** Where the brand goes when it is clicked (the web's home page); left out, it is plain text. */
   brandHref?: string;
-  /** The brand row's search button (opens the library). Left out, no button. */
-  onSearch?: () => void;
   /** Recent chats; left out, the section is not shown. */
   recents?: Recents;
   /** Items after the library, models and train: Admin on the web. */
@@ -60,14 +53,13 @@ function Soon() {
 }
 
 /** The side menu both apps show: the brand, a chat entry, the groups (one open at a time, the one holding the
- * current page stays open), the library, and the person at the bottom. The frame around it (width, border,
- * collapsing) belongs to the app. */
+ * current page stays open; the owner kept this over tabs in the bar, 2026-10-28), the library, and the person at
+ * the bottom. The frame around it (width, border, collapsing) belongs to the app. Search is the bar's. */
 export function SideMenu({
   resolve,
   link: Link = DefaultLink,
   header,
   brandHref,
-  onSearch,
   recents,
   extra,
   footer,
@@ -163,19 +155,9 @@ export function SideMenu({
         ) : (
           <span className="flex items-center gap-2">{brand}</span>
         )}
-        {onSearch ? (
-          <button
-            type="button"
-            aria-label="Search My creations"
-            className="ms-auto rounded-md p-2 text-muted-foreground hover:bg-accent"
-            onClick={onSearch}
-          >
-            <Search className="size-4" />
-          </button>
-        ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="mt-2 grid gap-0.5">
           {entry(CHAT_ITEM, false)}
 
@@ -221,34 +203,7 @@ export function SideMenu({
           })}
         </div>
 
-        {recents ? (
-          <>
-            <div className="mt-4 px-3 text-muted-foreground text-sm">
-              {recents.label ?? "Recents"}
-            </div>
-            {recents.items.length === 0 ? (
-              <div className="px-3 py-1 text-muted-foreground/80 text-sm">
-                {recents.empty ?? "No chats yet"}
-              </div>
-            ) : (
-              <ul className="grid gap-0.5" aria-label="Recent chats">
-                {recents.items.map((c) => (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      title={c.title}
-                      aria-current={c.current ? "page" : undefined}
-                      className={cn(ITEM, "py-1.5 text-ui", c.current && "bg-accent")}
-                      onClick={c.onSelect}
-                    >
-                      <span className="truncate">{c.title || "New chat"}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : null}
+        {recents ? <RecentChats recents={recents} /> : null}
       </div>
 
       {footer ? <div className="mt-auto pt-3">{footer}</div> : null}

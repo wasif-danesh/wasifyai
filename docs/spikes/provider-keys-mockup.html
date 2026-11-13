@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud models: mockup</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(20% 0.014 255));
+    --surface-2: light-dark(oklch(95.5% 0.006 250), oklch(25% 0.016 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(32% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --ok: light-dark(oklch(52% 0.13 155), oklch(74% 0.14 155));
+    --cloud: light-dark(oklch(50% 0.15 258), oklch(76% 0.12 250));
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
+  .note { max-width: 1040px; margin: 18px auto 0; padding: 0 16px; color: var(--muted); font-size: 13px; }
+  .note b { color: var(--text); }
+  .tabs { max-width: 1040px; margin: 10px auto 0; padding: 0 16px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tabs button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px;
+                 padding: 5px 14px; font: inherit; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .win { max-width: 1040px; margin: 12px auto 24px; border: 1px solid var(--border); border-radius: 14px;
+         background: var(--surface); }
+  .top { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--border);
+         background: var(--surface-2); border-radius: 14px 14px 0 0; position: relative; }
+  .top .brand { font-weight: 600; }
+  main { padding: 20px 24px 28px; display: grid; gap: 18px; align-content: start; min-width: 0; min-height: 520px; }
+  @media (max-width: 760px) { main { padding: 16px; } }
+  h1 { margin: 0; font-size: 20px; }
+  .lead { margin: 2px 0 0; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+         padding: 5px 12px; font: inherit; cursor: pointer; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 0; }
+  .btn.small { padding: 2px 9px; font-size: 12.5px; }
+  .btn:focus-visible, .item:focus-visible, .seg button:focus-visible, .tabs button:focus-visible,
+  select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+                  border-radius: 8px; padding: 6px 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.cloud { background: var(--cloud); }
+
+  /* Settings › Your keys */
+  .products { display: grid; border-top: 1px solid var(--border); }
+  .prod { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 12px; padding: 12px 4px;
+          border-bottom: 1px solid var(--border); align-items: start; }
+  @media (max-width: 640px) { .prod { grid-template-columns: minmax(0, 1fr); } }
+  .prod > b { padding-top: 3px; }
+  .keys { display: grid; gap: 6px; }
+  .key { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+  .key .name { font-weight: 500; min-width: 90px; }
+  .key .ok-text { color: var(--ok); }
+  .add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: var(--surface-2);
+         border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+  .add input { flex: 1 1 200px; min-width: 0; }
+
+  /* the model button and its panel, as in the app */
+  .mb { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 10px;
+        padding: 5px 12px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+  .panel { position: absolute; z-index: 5; top: calc(100% + 4px); left: 70px; width: min(560px, calc(100vw - 32px));
+           background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px;
+           box-shadow: 0 14px 36px rgb(0 0 0 / .28); }
+  @media (max-width: 640px) { .panel { left: 8px; } }
+  .panel[hidden] { display: none; }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 999px;
+         padding: 4px; gap: 2px; }
+  .seg button { border: 0; background: none; color: var(--muted); border-radius: 999px; padding: 6px 8px; font: inherit;
+                cursor: pointer; }
+  .seg button[aria-selected="true"] { background: var(--surface-2); color: var(--text); }
+  .list { display: grid; gap: 2px; margin-top: 8px; max-height: 420px; overflow: auto; }
+  .gh { font-size: 12px; color: var(--muted); font-weight: 600; padding: 10px 12px 2px; }
+  .item { display: grid; gap: 1px; text-align: left; border: 0; background: none; color: var(--text); font: inherit;
+          padding: 9px 12px; border-radius: 10px; cursor: pointer; }
+  .item:hover, .item[aria-current="true"] { background: var(--surface-2); }
+  .item .t { font-weight: 500; }
+  .item .d { color: var(--muted); font-size: 13px; }
+  .item .s { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ok); }
+  .item .s.cloud { color: var(--cloud); }
+  .empty { padding: 14px 12px; color: var(--muted); font-size: 13px; display: grid; gap: 8px; justify-items: start; }
+  .card { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: grid; gap: 10px; }
+  .drop { border: 1px dashed var(--border); border-radius: 10px; padding: 16px; color: var(--muted); text-align: center; }
+  .sent { border-left: 3px solid var(--cloud); padding: 6px 10px; background: var(--accent-soft); border-radius: 6px;
+          font-size: 13px; margin: 0; }
+  .sent.here { border-color: var(--muted); background: var(--surface-2); }
+  .changes { max-width: 1040px; margin: 0 auto 40px; padding: 0 16px; color: var(--muted); font-size: 13px; }
+  .changes h3 { color: var(--text); font-size: 14px; margin: 14px 0 6px; }
+  .changes ul { margin: 0; padding-left: 18px; }
+</style>
+</head>
+<body>
+<p class="note"><b>Mockup (not built), 2026-11-11, third version.</b> Settings › Your keys only holds keys, by
+product. Where a product runs is chosen in its model picker: a new <b>Cloud</b> tab lists every model that the
+product's saved keys can run, beside Recommended, On this computer and More.</p>
+
+<div class="tabs" role="tablist" aria-label="Screens in this mockup">
+  <button role="tab" aria-selected="true" data-screen="settings">Settings › Your keys</button>
+  <button role="tab" aria-selected="false" data-screen="lipsync">Lip sync</button>
+  <button role="tab" aria-selected="false" data-screen="music">Music</button>
+  <button role="tab" aria-selected="false" data-screen="chat">Chat</button>
+</div>
+
+<div class="win">
+  <div class="top" id="top"></div>
+  <main id="main"></main>
+</div>
+
+<div class="changes">
+  <h3>What changes from today's screens</h3>
+  <ul>
+    <li><b>Settings › Your keys</b> keeps one row per product and holds only keys. A product can have keys for
+      several providers (fal.ai, WaveSpeed, Runware; the text providers for Chat), each with Test and Remove.
+      Nothing about models or "where it runs" is set there.</li>
+    <li><b>The model picker</b> of each product gains a <b>Cloud</b> tab. It lists every model of that product from
+      each provider with a saved key, grouped by provider, with its price. Choosing one makes the product run there,
+      as choosing a local model does now.</li>
+    <li><b>No key yet:</b> the Cloud tab says which providers offer models for this product and links to Your keys.</li>
+    <li><b>Recommended</b> can include a cloud model once its key is saved; <b>On this computer</b> and <b>More</b>
+      stay as they are.</li>
+    <li><b>What is sent:</b> a cloud model's status line names its provider. One line on the screen says that what
+      you give goes to that provider.</li>
+  </ul>
+</div>
+
+<script>
+const PROV = { fal: "fal.ai", wavespeed: "WaveSpeed", runware: "Runware", openrouter: "OpenRouter",
+               openai: "OpenAI", anthropic: "Anthropic", gemini: "Google Gemini", compatible: "Another OpenAI-compatible server" };
+const PRODUCTS = [
+  ["chat", "Chat and writing", ["fal", "wavespeed", "runware", "openrouter", "openai", "anthropic", "gemini", "compatible"]],
+  ["images", "Images", ["fal", "wavespeed", "runware"]],
+  ["video", "Video", ["fal", "wavespeed", "runware"]],
+  ["voice", "Voice", ["fal", "wavespeed"]],
+  ["music", "Music", ["fal", "wavespeed", "runware"]],
+  ["sfx", "Sound effects", ["fal"]],
+  ["lipsync", "Lip sync", ["fal", "wavespeed"]],
+  ["model3d", "3D", ["fal", "wavespeed", "runware"]],
+];
+// the keys saved, by product
+const keys = { lipsync: ["fal", "wavespeed"], music: [], chat: ["openrouter"], images: ["runware"] };
+const adding = {};
+const LOCAL = {
+  lipsync: [["EchoMimic v3 flash", "Head, eyes and mouth move. Any length."],
+            ["MuseTalk 1.5", "Mouth only, head still. Any length."],
+            ["InfiniteTalk", "A 3-second test on this computer."],
+            ["LongCat Avatar", "A 3-second test on this computer."]],
+  music: [["ACE-Step 1.5 turbo", "Songs with lyrics or instrumentals, 5 s to 4 min."],
+          ["Stable Audio 3 small", "Instrumentals."]],
+  chat: [["Qwen3.8 27B (MLX)", "Running in Ollama. Answers come from that tool."],
+         ["Gemma4 E4B", "Running in Ollama. Answers come from that tool."],
+         ["GPT OSS 20B", "Found in Ollama."]],
+};
+const CLOUD = {
+  lipsync: {
+    fal: [["LongCat Avatar", "Head, body and hands; keeps moving in pauses. Up to 50 s.", "$0.15–0.30 per s"],
+          ["InfiniteTalk", "Head and body. Up to 28 s.", "$0.20 per s"]],
+    wavespeed: [["LongCat Avatar", "Head, body and hands; keeps moving in pauses.", "price on WaveSpeed"],
+                ["InfiniteTalk", "Head and body. Up to 10 min.", "$0.03 per s at 480p"],
+                ["InfiniteTalk Fast", "Quicker, a little less detail.", "$0.015 per s"]],
+  },
+  music: {
+    fal: [["MiniMax Music 2.6", "Songs with your lyrics, or it writes them.", "$0.15 per song"],
+          ["ElevenLabs Music", "Instrumentals or vocals, 3 s to 10 min.", "$0.60 per min"]],
+    wavespeed: [["MiniMax Music", "Songs with lyrics.", "price on WaveSpeed"],
+                ["ElevenLabs Music", "Instrumentals.", "price on WaveSpeed"]],
+    runware: [["MiniMax Music 2.6", "Songs with lyrics.", "price on Runware"]],
+  },
+  chat: {
+    openrouter: [["Gemini 2.5 Flash", "Google.", "per word used"], ["GPT-4o mini", "OpenAI.", "per word used"],
+                 ["Claude Sonnet", "Anthropic.", "per word used"], ["DeepSeek V3", "DeepSeek.", "per word used"]],
+    fal: [["Gemini 2.5 Flash", "Through fal.ai.", "per word used"]],
+  },
+};
+const TITLE = { lipsync: "Lip sync", music: "Music", chat: "Chat" };
+const chosen = { lipsync: "local:0", music: "local:0", chat: "local:0" };
+let screen = "settings", open = false, tab = "device";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+function current(kind) {
+  const [where, a, b] = chosen[kind].split(":");
+  if (where === "cloud" && (keys[kind] || []).includes(a)) {
+    const m = CLOUD[kind][a][+b];
+    return { cloud: true, provider: PROV[a], name: m[0], price: m[2] };
+  }
+  const m = LOCAL[kind][where === "local" ? +a : 0];
+  return { cloud: false, name: m[0] };
+}
+
+function settings() {
+  const rows = PRODUCTS.map(([id, title, offers]) => {
+    const saved = keys[id] || [];
+    const list = saved.map((p) => `<div class="key"><span class="name">${esc(PROV[p])}</span>
+        <span class="ok-text">● Saved · works</span>
+        <button class="btn small" data-test>Test</button>
+        <button class="btn small" data-remove="${id}|${p}">Remove</button></div>`).join("");
+    const left = offers.filter((p) => !saved.includes(p));
+    const form = adding[id] ? `<div class="add">
+        <select aria-label="Provider for ${esc(title)}" data-prov="${id}">${left.map((p) =>
+          `<option value="${p}">${esc(PROV[p])}</option>`).join("")}</select>
+        <input type="password" placeholder="Paste the key" aria-label="Key" autocomplete="off">
+        <button class="btn" data-test>Test</button>
+        <button class="btn primary" data-save="${id}">Save</button>
+        <button class="btn" data-cancel="${id}">Cancel</button></div>` : "";
+    const none = saved.length ? "" : `<span class="hint">No key: ${esc(title)} uses this computer's models only.</span>`;
+    const more = left.length && !adding[id]
+      ? `<div><button class="btn link" data-add="${id}">+ Add a key</button>
+          <span class="hint">· ${left.map((p) => esc(PROV[p])).join(", ")}</span></div>` : "";
+    return `<div class="prod"><b>${esc(title)}</b><div class="keys">${list}${none}${form}${more}</div></div>`;
+  }).join("");
+  return `<header><h1>Your keys</h1>
+    <p class="lead">Save a provider key for a product, and that provider's models for it appear in the product's
+      model picker, under Cloud. A key is kept in this computer's keychain, used only by its product, and never shown
+      again. Testing sends nothing that costs money.</p></header>
+    <section class="products" aria-label="Keys by product">${rows}</section>`;
+}
+
+function localItems(kind, only) {
+  return (LOCAL[kind] || []).slice(0, only || undefined).map((m, i) => {
+    const id = `local:${i}`, on = chosen[kind] === id;
+    return `<button class="item" aria-current="${on}" data-pick="${kind}|${id}"><span class="t">${esc(m[0])}</span>
+      <span class="d">${esc(m[1])}</span><span class="s"><span class="dot ok"></span>${on ? "In use" : "On this computer"}</span></button>`;
+  }).join("");
+}
+
+function cloudItems(kind, only) {
+  const saved = (keys[kind] || []).filter((p) => CLOUD[kind][p]);
+  return saved.slice(0, only || undefined).map((p) =>
+    `<div class="gh">With your ${esc(PROV[p])} key</div>` + CLOUD[kind][p].slice(0, only || undefined).map((m, i) => {
+      const id = `cloud:${p}:${i}`, on = chosen[kind] === id;
+      return `<button class="item" aria-current="${on}" data-pick="${kind}|${id}"><span class="t">${esc(m[0])}</span>
+        <span class="d">${esc(m[1])}</span>
+        <span class="s cloud"><span class="dot cloud"></span>${on ? "In use · " : ""}${esc(PROV[p])} · ${esc(m[2])}</span></button>`;
+    }).join("")).join("");
+}
+
+function panel(kind) {
+  const offers = PRODUCTS.find(([id]) => id === kind)[2].map((p) => PROV[p]);
+  const cloud = cloudItems(kind);
+  const body = tab === "cloud"
+    ? (cloud || `<div class="empty">No key for ${esc(TITLE[kind])} yet. ${esc(offers.join(", "))} offer
+        ${esc(TITLE[kind].toLowerCase())} models.<button class="btn" data-screen="settings">Add a key in Settings › Your keys</button></div>`)
+    : tab === "device" ? localItems(kind)
+    : tab === "recommended" ? localItems(kind, 1) + cloudItems(kind, 1)
+    : `<div class="empty">More models to download for this computer, as today.</div>`;
+  return `<div class="panel" role="dialog" aria-label="${esc(TITLE[kind])} model" ${open ? "" : "hidden"}>
+    <div class="seg" role="tablist">${[["recommended", "Recommended"], ["device", "On this computer"],
+      ["cloud", "Cloud"], ["more", "More"]].map(([k, l]) =>
+      `<button role="tab" aria-selected="${tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>
+    <div class="list">${body}</div></div>`;
+}
+
+function make(kind) {
+  const m = current(kind);
+  const sent = m.cloud
+    ? `<p class="sent">Made by ${esc(m.provider)} with your key: what you give is sent there. ${esc(m.price)}.</p>`
+    : `<p class="sent here">Made on this computer. Nothing leaves it.</p>`;
+  const form = kind === "lipsync"
+    ? `<div class="drop">Picture: drop a face here</div><div class="drop">Voice: a recording, or words to speak</div>`
+    : kind === "music"
+    ? `<label class="hint">Describe the music<br><input value="Warm city pop at night, female vocal" style="width:100%"></label>`
+    : `<div class="drop">Ask anything…</div>`;
+  return `<header><h1>${TITLE[kind]}</h1></header><div class="card">${form}</div>${sent}
+    <div class="row"><button class="btn primary">${kind === "chat" ? "Send" : "Make"}</button></div>`;
+}
+
+function render() {
+  const top = document.getElementById("top");
+  if (screen === "settings") {
+    top.innerHTML = `<span class="brand">Wasify AI</span><span class="hint">Settings</span>`;
+  } else {
+    const m = current(screen);
+    top.innerHTML = `<span class="brand">${TITLE[screen]}</span>
+      <button class="mb" aria-haspopup="dialog" aria-expanded="${open}" data-toggle>
+        <span class="dot ${m.cloud ? "cloud" : "ok"}"></span>${esc(m.name)}${m.cloud ? ` · ${esc(m.provider)}` : ""} ▾</button>
+      ${panel(screen)}`;
+  }
+  document.getElementById("main").innerHTML = screen === "settings" ? settings() : make(screen);
+  document.querySelectorAll(".tabs [role=tab]").forEach((b) =>
+    b.setAttribute("aria-selected", String(b.dataset.screen === screen)));
+}
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button");
+  if (!t) { if (open && !e.target.closest(".panel")) { open = false; render(); } return; }
+  if (t.dataset.screen) { screen = t.dataset.screen; open = false; tab = "device"; render(); return; }
+  if (t.hasAttribute("data-toggle")) { open = !open; render(); return; }
+  if (t.dataset.tab) { tab = t.dataset.tab; render(); return; }
+  if (t.dataset.pick) { const [k, id] = t.dataset.pick.split("|"); chosen[k] = id; open = false; render(); return; }
+  if (t.dataset.add) { adding[t.dataset.add] = true; render(); return; }
+  if (t.dataset.cancel) { adding[t.dataset.cancel] = false; render(); return; }
+  if (t.dataset.save) {
+    const id = t.dataset.save, sel = document.querySelector(`select[data-prov="${id}"]`);
+    keys[id] = [...(keys[id] || []), sel.value]; adding[id] = false; render(); return;
+  }
+  if (t.dataset.remove) {
+    const [id, p] = t.dataset.remove.split("|"); keys[id] = keys[id].filter((x) => x !== p); render(); return;
+  }
+  if (t.hasAttribute("data-test")) { t.textContent = "Works ✓"; }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && open) { open = false; render(); } });
+render();
+</script>
+</body>
+</html>

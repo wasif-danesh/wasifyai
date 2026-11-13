@@ -30,9 +30,6 @@ DESKTOP_MENU_TS = ROOT / "apps" / "desktop" / "src" / "menu.ts"
 # exemption"). Anything else with a screen must be the `ui` of an action.
 EXEMPT_SCREENS = {
     "chat": "The assistant itself: it is what runs actions, not one of them.",
-    "images.library": "A view of the library filtered to pictures: library.list with kind image.",
-    "video.library": "A view of the library filtered to videos: library.list with kind video.",
-    "music.library": "A view of the library filtered to songs: library.list with kind track.",
 }
 
 
@@ -55,7 +52,9 @@ def menu() -> tuple[dict[str, str], dict[str, str]]:
         groups[gid] = glabel
         for iid, ilabel in re.findall(r'id: "([\w.]+)", label: "([^"]+)"', body):
             items[iid] = f"{glabel} › {ilabel}"
-    for iid, ilabel in re.findall(r'\{ id: "(chat|library|models|train)", label: "([^"]+)"', text):
+    for iid, ilabel in re.findall(
+        r'\{ id: "(chat|creative|motion|model3d|library|models|train)", label: "([^"]+)"', text
+    ):
         items[iid] = ilabel
     return items, groups
 
@@ -164,7 +163,21 @@ def test_the_export_says_everything_a_reviewer_needs(catalogue):
 
 def test_the_first_set_is_there(catalogue):
     ids = {a.id for a in catalogue}
-    assert 35 <= len(ids) <= 45  # "about 40" (ADR-0068 decision 7)
+    # "about 40" (ADR-0068 decision 7); 45 at motion graphics, 46 with 3D (ADR-0080 decision 9): a
+    # creation kind's list, look, rename, delete, save and read are the library's, not new actions;
+    # 51 with decision.decide (ADR-0075 decision 7), the one action a taught decision model adds;
+    # 52 with external.call (ADR-0070 decision 8), the one action behind every outside tool;
+    # 55 with styles.list, styles.add_from_hub and styles.remove (ADR-0091 decision 12);
+    # 64 with motion.write_scenes, motion.set_project, motion.read_project, the five changes to one
+    # scene and motion.undo (ADR-0096)
+    # 65 with motion.make_file (ADR-0096 MX6)
+    # 69 with motion.read_brand, set_brand, use_brand and start_from (ADR-0096 MX7)
+    # 72 with music.analyse, creative.plan and creative.edit_plan (ADR-0090 CS1)
+    # 76 with creative.read_project, undo, add_media and remove_media (ADR-0090 screen)
+    # 80 with creative.make_shots, redo_shot, choose_take and preview (ADR-0090 CS2)
+    # 84 with video.keep and creative.edit_cut, cut and export (ADR-0090 CS3)
+    # 85 with creative.animate (CS4); 86 with speech.join (CS5)
+    assert 35 <= len(ids) <= 86
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",
@@ -185,9 +198,12 @@ def test_nothing_that_configures_the_app_is_an_action(catalogue):
 
 def test_effects_and_flags_are_what_the_adr_says(catalogue):
     by = {a.id: a for a in catalogue}
-    assert {a.id for a in catalogue if a.effect == "destroy"} == {"library.delete"}
+    assert {a.id for a in catalogue if a.effect == "destroy"} == {
+        "library.delete", "styles.remove",
+    }  # fmt: skip
     consent = {a.id for a in catalogue if "needs_consent" in a.flags}
-    assert consent == {"voice.clone", "lipsync.make", "models.download"}
+    # the person approves a download: a model, or a style from Hugging Face; nothing else
+    assert consent == {"models.download", "styles.add_from_hub"}
     for a in catalogue:
         assert (a.effect == "read") or a.effect in ("make", "change", "destroy")
         if a.private:
@@ -302,3 +318,31 @@ def test_the_docs_describe_how_to_add_one():
     for needle in ("add_actions", "docs/help", "actions.json", "ui_exempt", "needs_consent"):
         assert needle in text, needle
     assert Path(CONTRACT).is_file()
+
+
+def test_the_assistants_feature_list_is_current():
+    """The screens the chat assistant is told about are made from the catalogue and the menu."""
+    from wasifyai_api import assistant_features
+
+    assert assistant_features.main(["--check"]) == 0, (
+        "run: python -m wasifyai_api.assistant_features --write"
+    )
+    wheres = {str(row["where"]) for row in assistant_features.build()}
+    assert {"Video › Create", "Voice › Text to speech", "3D model", "Train models"} <= wheres
+    assert {"Creative Studio", "Motion graphics"} <= wheres  # single menu items below the groups
+
+
+def test_screens_with_several_jobs_say_what_they_are_for():
+    """Train has four cards and two actions, so its sentence must name all four jobs.
+    Creative Studio and Motion graphics are one job in steps. The assistant says no less."""
+    from wasifyai_api import assistant_features
+
+    rows = {str(r["screen"]): r for r in assistant_features.build()}
+    assert set(assistant_features.ABOUT) <= set(rows), "ABOUT names a screen that has no row"
+    train = str(rows["train"]["about"])
+    for job in ("character or style", "writing", "decides", "video"):
+        assert job in train, job
+    motion = str(rows["motion"]["about"])
+    assert "scenes" in motion and "make the video" in motion
+    creative = str(rows["creative"]["about"])
+    assert "music video" in creative and "plan" in creative

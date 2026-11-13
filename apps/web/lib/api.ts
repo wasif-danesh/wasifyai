@@ -2,6 +2,7 @@
 // (the same network position as the BFF route handlers); the browser never does.
 import { apiAuthHeaders } from "./api-token";
 import { API_BASE_URL } from "./proxy";
+import { traceHeaders } from "./trace";
 
 export class ApiError extends Error {
   constructor(
@@ -15,7 +16,10 @@ export class ApiError extends Error {
 export async function apiGet<T>(path: string): Promise<T> {
   const identity = await apiAuthHeaders();
   if (!identity) throw new ApiError(401, "sign in required");
-  const res = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store", headers: identity });
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    cache: "no-store",
+    headers: { ...identity, ...traceHeaders() },
+  });
   if (!res.ok) throw new ApiError(res.status, `API ${path} answered ${res.status}`);
   return (await res.json()) as T;
 }
@@ -32,7 +36,7 @@ export async function apiSend(
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     cache: "no-store",
-    headers: { ...identity, "content-type": "application/json" },
+    headers: { ...identity, ...traceHeaders(), "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   let data: unknown = null;

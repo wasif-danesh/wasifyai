@@ -98,7 +98,7 @@ def _snippet(text: str) -> str:
 def model_facts(state: Any) -> tuple[int, Tier]:
     """The chosen model's window and which prompt it gets, from the engine's state when it has a
     chosen local model; a window of 8192 and the fuller prompt otherwise."""
-    selected = getattr(getattr(state, "desktop_language", None), "selected", None)
+    selected = getattr(state.desktop_language, "selected", None)
     context = int(getattr(selected, "context", 0) or DEFAULT_CONTEXT)
     size: int | None = None
     if selected is not None and getattr(selected, "kind", "") == "file" and selected.path:
@@ -309,7 +309,7 @@ def build_notebook_chat_graph(
             log.exception("the language model failed")
             raise RunError(
                 "language_failed",
-                "The language model did not answer. Check it in Models and try again.",
+                "The language model did not answer. Check it in the Model hub and try again.",
                 retryable=True,
             ) from None
 

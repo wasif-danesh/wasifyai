@@ -19,6 +19,7 @@ from wasifyai_platform_sdk.actions.model import (
     Outcome,
     surface_of,
 )
+from wasifyai_platform_sdk.folders import PathRefused
 from wasifyai_platform_sdk.web import WebError, site_of
 
 LIBRARY_KINDS = (
@@ -30,8 +31,25 @@ LIBRARY_KINDS = (
     "voice",
     "lipsync",
     "notebook",
+    "composition",
+    "model3d",
+    "lora",
+    "creative_project",
 )
-Kind = Literal["image", "video", "speech", "track", "transcript", "voice", "lipsync", "notebook"]
+Kind = Literal[
+    "image",
+    "video",
+    "speech",
+    "track",
+    "transcript",
+    "voice",
+    "lipsync",
+    "notebook",
+    "composition",
+    "model3d",
+    "lora",
+    "creative_project",
+]
 MAX_STATUS_LINES = 12
 MAX_WAIT = 50.0
 
@@ -232,19 +250,47 @@ class ExportOut(BaseModel):
     path: str
 
 
-async def _export(p: RefIn, ctx: ActionContext) -> Outcome:
-    kind = _kind(ctx, p.kind)
-    folder = getattr(getattr(ctx.deps, "state", None), "export_dir", None)
-    if kind.export is None or folder is None:
-        return Outcome.refused("Saving to a folder is not available here.", "unavailable")
+class ExportIn(RefIn):
+    folder: str | None = Field(
+        None,
+        max_length=4096,
+        description=(
+            "The full path of a folder this connection may write to (ADR-0069 decision 6). "
+            "Left out, the person's own export folder."
+        ),
+    )
+
+
+async def _export(p: ExportIn, ctx: ActionContext) -> Outcome:
     from pathlib import Path
 
-    written = await kind.export(ctx, p.id, Path(folder))
+    kind = _kind(ctx, p.kind)
+    if kind.export is None:
+        return Outcome.refused("Saving to a folder is not available here.", "unavailable")
+    if p.folder:
+        # a connection names a folder: only one of its own write folders (spike S2's rules)
+        allowed = ctx.principal.folders if ctx.principal is not None else None
+        if allowed is None:
+            return Outcome.refused(
+                "Only a connection with write folders can name a folder; leave it out to use "
+                "the person's export folder.",
+                "not_allowed",
+            )
+        try:
+            folder = allowed.resolve_folder(p.folder)
+        except PathRefused as e:
+            return Outcome.refused(e.message, e.code)
+    else:
+        chosen = getattr(getattr(ctx.deps, "state", None), "export_dir", None)
+        if chosen is None:
+            return Outcome.refused("Saving to a folder is not available here.", "unavailable")
+        folder = Path(chosen)
+    written = await kind.export(ctx, p.id, folder)
     if written is None:
         return Outcome.refused("That is not in the library.", "not_found")
     return Outcome.ok(
         {"name": written.name, "path": str(written)},
-        f"A copy was saved as {written.name} in the export folder.",
+        f"A copy was saved as {written.name} in {folder}.",
     )
 
 
@@ -365,7 +411,8 @@ def _job_out(job: Any) -> Outcome:
 
 
 async def _remembered(p: JobIn, ctx: ActionContext) -> Outcome:
-    """A job the book does not hold (the app restarted): what the audit log last saw of it."""
+    """A job neither the book nor the store holds (started before jobs were kept): what the
+    audit log last saw of it."""
     seen = await ctx.executor.audit.last_for_job(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
     if seen is None:
         return Outcome.refused("There is no such job.", "unknown_job")
@@ -387,28 +434,31 @@ async def _remembered(p: JobIn, ctx: ActionContext) -> Outcome:
 
 
 async def _job_status(p: JobIn, ctx: ActionContext) -> Outcome:
-    job = ctx.jobs.get(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
-    return _job_out(job) if job else await _remembered(p, ctx)
+    # this process's job, else the one the store kept across a restart (stage J3), settled
+    job = await ctx.jobs.find(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
+    if job is None:
+        return await _remembered(p, ctx)
+    return _job_out(await ctx.executor.settle(job))
 
 
 async def _job_wait(p: JobWaitIn, ctx: ActionContext) -> Outcome:
-    job = ctx.jobs.get(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
+    job = await ctx.jobs.find(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
     if job is None:
         return await _remembered(p, ctx)
-    await ctx.jobs.wait(job, p.seconds)
-    return _job_out(job)
+    return _job_out(await ctx.executor.wait_job(job, p.seconds))
 
 
 async def _job_cancel(p: JobIn, ctx: ActionContext) -> Outcome:
-    job = ctx.jobs.get(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
+    job = await ctx.jobs.find(ctx.actor.tenant_id, ctx.actor.user_id, p.job_id)
     if job is None:
         return await _remembered(p, ctx)
+    job = await ctx.executor.settle(job)
     if job.status != "running":
         return _job_out(job)
     if not await ctx.executor.cancel_job(job):
         return Outcome.refused(
-            f"Job {job.id} cannot be stopped once it has started. It will finish and be saved to "
-            "the library; the person can delete it there.",
+            f"Job {job.id} cannot be stopped. It will finish and be saved to the library; the "
+            "person can delete it there.",
             "not_cancellable",
         )
     await asyncio.sleep(0)
@@ -489,7 +539,11 @@ def builtin_actions() -> list[Action]:
                 "the file's name and path. It never replaces a file. This is the only way a file "
                 "leaves the library."
             ),
-            input=RefIn, output=ExportOut, examples=({"kind": "image", "id": "0b7c1f9e"},),
+            input=ExportIn, output=ExportOut,
+            examples=(
+                {"kind": "image", "id": "0b7c1f9e"},
+                {"kind": "image", "id": "0b7c1f9e", "folder": "/Users/me/Documents/exports"},
+            ),
             effect="change", flags=("private",), bind=CallBinding(_export), ui="library",
         ),
         Action(
@@ -550,8 +604,9 @@ def builtin_actions() -> list[Action]:
             id="job.cancel", title="Stop a long job",
             summary="Stop a job that can still be stopped.",
             description=(
-                "Stop a job. Work that already runs as a product's own run cannot be stopped: "
-                "it finishes and is saved to the library. The answer says which it was."
+                "Stop a job and the work behind it: a product's own run is stopped too (the "
+                "speech runtime restarts, an engine worker stops its job). A picture or clip the "
+                "image engine has started may still finish there, but it is not kept."
             ),
             input=JobIn, output=JobOut, examples=({"job_id": "a1b2c3d4e5f60718"},),
             effect="change", bind=CallBinding(_job_cancel),

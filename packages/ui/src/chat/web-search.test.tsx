@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantHome } from "./AssistantHome";
 import { SearchSettings } from "./SearchSettings";
 import { ToolCard } from "./ToolCard";
+import { chooseOption, moreOptions } from "./options-testing";
 
 const images = {} as ImagesApi;
 
@@ -111,6 +112,7 @@ describe("the Search button", () => {
     await screen.findByRole("heading", { level: 1 });
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole("button", { name: /^Search/ })).toBeNull();
+    expect((await moreOptions()).some((t) => t.startsWith("Search"))).toBe(false);
   });
 
   it("asks first, names the service, and sends nothing about search until allowed", async () => {
@@ -118,10 +120,11 @@ describe("the Search button", () => {
     const assistant = assistantWith({ thinking: false, search: SEARCH });
     const user = userEvent.setup();
     home(assistant, inputs);
-    const button = await screen.findByRole("button", { name: /^Search/ });
-    expect(button).toHaveAttribute("aria-pressed", "false");
-
-    await user.click(button);
+    // off, Search waits in the "+" menu (ADR-0093 U9)
+    await waitFor(async () =>
+      expect((await moreOptions()).some((t) => t.startsWith("Search"))).toBe(true),
+    );
+    await chooseOption(/^Search/);
     const card = screen.getByRole("region", { name: "Allow the assistant to search the web?" });
     expect(card).toHaveTextContent("sends your question to DuckDuckGo");
     expect(assistant.updateSearch).not.toHaveBeenCalled();
@@ -141,7 +144,7 @@ describe("the Search button", () => {
     );
     const user = userEvent.setup();
     home(assistant, inputs);
-    await user.click(await screen.findByRole("button", { name: /^Search/ }));
+    await chooseOption(/^Search/);
     await user.click(screen.getByRole("button", { name: "Allow search" }));
     expect(assistant.updateSearch).toHaveBeenCalledWith({ consent: true });
     await waitFor(() =>
@@ -167,13 +170,10 @@ describe("the Search button", () => {
     );
     const user = userEvent.setup();
     home(assistant);
-    await user.click(await screen.findByRole("button", { name: /^Search/ }));
+    await chooseOption(/^Search/);
     await user.click(screen.getByRole("button", { name: "Allow search" }));
     expect(await screen.findByText("Settings could not be written.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Search/ })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    expect(screen.queryByRole("button", { name: /^Search/ })).toBeNull(); // still off: no pill
   });
 
   it("points to Settings when the chosen service needs a key", async () => {
@@ -193,7 +193,7 @@ describe("the Search button", () => {
       [],
       { onOpenSettings },
     );
-    await user.click(await screen.findByRole("button", { name: /^Search/ }));
+    await chooseOption(/^Search/);
     const card = screen.getByRole("region", { name: "Search needs your Tavily key" });
     await user.click(within(card).getByRole("button", { name: "Open Settings" }));
     expect(onOpenSettings).toHaveBeenCalled();
@@ -254,6 +254,30 @@ describe("the web cards", () => {
     expect(screen.getByText("Searching the web")).toBeInTheDocument();
   });
 
+  it("offers Open Settings when a search service does not answer, and not for other errors", async () => {
+    const onOpenSettings = vi.fn();
+    const failed = (code: string) =>
+      tool("web_search", {
+        status: "error",
+        output: { message: "DuckDuckGo has not answered.", code },
+      });
+    const { rerender } = render(
+      <ToolCard
+        images={images}
+        tool={failed("search_unreliable")}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    rerender(
+      <ToolCard images={images} tool={failed("search_off")} onOpenSettings={onOpenSettings} />,
+    );
+    expect(screen.queryByRole("button", { name: "Open Settings" })).toBeNull();
+    rerender(<ToolCard images={images} tool={failed("search_busy")} />);
+    expect(screen.queryByRole("button", { name: "Open Settings" })).toBeNull(); // nowhere to go here
+  });
+
   it("shows a page that was read, its site and a note when only the start was read", () => {
     render(
       <ToolCard
@@ -292,6 +316,18 @@ describe("SearchSettings", () => {
     const { container } = render(<SearchSettings assistant={assistant} />);
     await new Promise((r) => setTimeout(r, 20));
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("says on a service that the admin chooses it for everyone and each person allows it", async () => {
+    const assistant = assistantWith(
+      { thinking: false },
+      { searchStatus: async () => status({ can_save_keys: false }) },
+    );
+    render(<SearchSettings assistant={assistant} place="service" />);
+    expect(
+      await screen.findByText(/You choose the search service and keep its key for everyone/),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/I allow searching the web with DuckDuckGo/)).toBeInTheDocument();
   });
 
   it("changes the service, the permission and the key, and never shows a saved key", async () => {

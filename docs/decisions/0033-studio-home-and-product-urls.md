@@ -25,8 +25,8 @@ product in its own area.
   routes (`/api/products/{product}/...`) are unchanged: page URLs and API URLs are separate.
 - **Honest copy.** No claim the platform cannot keep (nothing "unlimited"); each card says what the
   product really does.
-- **Artwork is our own vector art** in the theme's colours, not photographs, so there is nothing to
-  license and nothing heavy to load. Real examples can replace it later, with the creators' consent.
+- **Artwork is our own vector art** in the theme's colours, not photographs, so there is nothing
+  heavy to load. Real examples can replace it later, with the creators' consent.
 - **A cross-product "My creations" page** waits until a second product is live.
 
 ## Consequences

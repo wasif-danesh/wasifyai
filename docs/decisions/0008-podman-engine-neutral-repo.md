@@ -5,7 +5,7 @@
 
 ## Context
 
-Preference for open source. Docker Desktop is proprietary and licensed for larger companies; OrbStack is proprietary.
+Preference for open source. Docker Desktop is proprietary; OrbStack is proprietary.
 
 ## Decision
 

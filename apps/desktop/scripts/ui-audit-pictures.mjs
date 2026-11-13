@@ -1,0 +1,1959 @@
+// Pictures of the real desktop window for the UI audit (docs/ui-audit-2026-10-27.md), written to
+// docs/ui-audit/desktop/. Run by ui-audit.sh, which starts the engine and the window's dev server and
+// passes WASIFYAI_AUDIT_BASE and WASIFYAI_AUDIT_TOKEN. The Tauri shell is not running: the polyfill below
+// answers the window's few shell commands (engine_status, engine_session, update_check, ...).
+//
+//   apps/desktop/scripts/ui-audit.sh            light and dark
+//   apps/desktop/scripts/ui-audit.sh light      one scheme
+//   apps/desktop/scripts/ui-audit.sh light home,image-create   only these screens
+//   apps/desktop/scripts/ui-audit.sh light image-make           a real picture, made in the window (pictures of
+//                                                                the stage while it is made and when it is done)
+//   apps/desktop/scripts/ui-audit.sh light video-make           a real clip from the newest picture: Animate this on
+//                                                                Images, the clip made on the stage, then Extend this
+//   apps/desktop/scripts/ui-audit.sh light speech-make          a real speech with its waveform, then a real transcript
+//                                                                of it on Speech to text
+//   apps/desktop/scripts/ui-audit.sh light studio-make          a real dub of the newest speech (into English, or
+//                                                                WASIFYAI_AUDIT_DUB_LANGUAGE) (the
+//                                                                script, the voice, the dub), then a real portrait
+//                                                                made on Images and turned into a lip sync video
+//   apps/desktop/scripts/ui-audit.sh light music-make           a real instrumental on Create music, its More menu,
+//                                                                then Split into parts with it chosen
+//   apps/desktop/scripts/ui-audit.sh light library-make         the Library: a picture opened, Edit this, a real
+//                                                                edit made, then "Made from" and "Made from this"
+//   apps/desktop/scripts/ui-audit.sh light a11y                 every screen of the window against the accessibility
+//                                                                rules (axe, WCAG 2.2 A and AA); prints what fails
+//   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
+//                                                                search, the theme, a setting saved as it changes),
+//                                                                the Models page and the picker with their dots
+//   apps/desktop/scripts/ui-audit.sh light u10-make             Teach's front door, a real notebook report as a card,
+//                                                                a real Motion graphics video on the frame, and a real
+//                                                                3D picture check (its cut-out) on the stage
+//   apps/desktop/scripts/ui-audit.sh light motion-assistant     The editor's assistant (ADR-0096 MX3) on the real language
+//                                                                model: a brief, edits in words, Undo, a video; on this
+//                                                                computer's data, and it deletes what it made
+//   apps/desktop/scripts/ui-audit.sh light creative             Creative Studio (ADR-0090 CS1): a brief, a real plan on the
+//                                                                chosen chat model, edits, Undo, axe, a phone width; needs a
+//                                                                song in Your music and a throwaway DESKTOP_DATA_DIR
+//   apps/desktop/scripts/ui-audit.sh light creative-shots       The Shots step (ADR-0090 CS2): a real redo, takes, the Image, Video and
+//                                                                Add tabs, a real file added, axe, a phone. Needs a project "cs2 real" with
+//                                                                its stills in a throwaway DESKTOP_DATA_DIR, and CS2_FILES with mine.png
+//   apps/desktop/scripts/ui-audit.sh light creative-motion      Motion (ADR-0090 CS4): the Motion panel and its start, a real draft
+//                                                                clip of one shot, the clip's badge, axe, the smallest window. Needs a project
+//                                                                "cs4 real" with its stills in a throwaway DESKTOP_DATA_DIR
+//   apps/desktop/scripts/ui-audit.sh light creative-cut         The Cut step (ADR-0090 CS3): the timeline's buttons and keys, a title, the
+//                                                                Voice tab, Make the video for real, Save a copy, axe, the smallest window.
+//                                                                Needs a project "cs3 real" with its stills in a throwaway DESKTOP_DATA_DIR
+//   apps/desktop/scripts/ui-audit.sh light motion-pack          The marketing pack (ADR-0096 MX7): a starting point, a
+//                                                                brand with a real logo, every shape made for real;
+//                                                                needs MOTION_FIXTURES and a throwaway DESKTOP_DATA_DIR
+//   apps/desktop/scripts/ui-audit.sh light motion-make          The Make panel (ADR-0096 MX6): real models, a real
+//                                                                voiceover with timed captions and a real video; a
+//                                                                throwaway DESKTOP_DATA_DIR with models and components linked
+//   apps/desktop/scripts/ui-audit.sh light motion-media         Media and sound (ADR-0096 MX5): real files through the
+//                                                                screen and a real video; needs MOTION_FIXTURES and a
+//                                                                throwaway DESKTOP_DATA_DIR
+//   apps/desktop/scripts/ui-audit.sh light motion-arrange       Arranging (ADR-0096 MX4): drag and resize on the real
+//                                                                preview, and a real video; prints where each says it
+//                                                                is; use a throwaway DESKTOP_DATA_DIR
+//   apps/desktop/scripts/ui-audit.sh light motion-editor        The Motion graphics editor (ADR-0096 MX2): a new project,
+//                                                                edits, playback, Undo, axe, a phone width and a real
+//                                                                video; use a throwaway DESKTOP_DATA_DIR
+//   apps/desktop/scripts/ui-audit.sh light styles-make          Styles (ADR-0091 S2): the section, the Add menu, Train's
+//                                                                style chosen and a real picture made with it, then
+//                                                                the section on Edit, Inpaint and Reference
+//   apps/desktop/scripts/ui-audit.sh light styles-hub-make      Styles (S3): a real style from Hugging Face fetched,
+//                                                                checked and used in a real picture (downloads it)
+//   apps/desktop/scripts/ui-audit.sh light styles-advanced-make Styles (S4): Advanced, a real picture, a saved look,
+//                                                                then "Make it again" choosing the style again
+//   apps/desktop/scripts/ui-audit.sh light styles-recommended   Styles (S5): the Recommended styles in the Add menu and
+//                                                                the dialog with the pinned file chosen (no download)
+//   apps/desktop/scripts/ui-audit.sh light home-make            the home: quick starts with readiness, the "+" menu,
+//                                                                typed words taken to Images by Picture, a real
+//                                                                picture made, then opened from the home's Recent
+import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const require = createRequire(join(ROOT, "apps", "web", "package.json"));
+const { chromium } = require("@playwright/test");
+const OUT = join(ROOT, "docs", "ui-audit", "desktop");
+const BASE = process.env.WASIFYAI_AUDIT_BASE ?? "http://127.0.0.1:8765";
+const TOKEN = process.env.WASIFYAI_AUDIT_TOKEN ?? "";
+const WINDOW = "http://localhost:1420";
+const only = process.argv[2] ?? "";
+const names = new Set((process.argv[3] ?? "").split(",").filter(Boolean));
+const wanted = (name) => names.size === 0 || names.has(name);
+mkdirSync(OUT, { recursive: true });
+
+const polyfill = `
+window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+window.__TAURI_INTERNALS__ = {
+  transformCallback(cb) { const id = Math.floor(Math.random() * 1e9); window["_" + id] = cb; return id; },
+  unregisterCallback() {},
+  convertFileSrc(p) { return p; },
+  async invoke(cmd) {
+    switch (cmd) {
+      case "engine_status": return { state: "ready", base_url: ${JSON.stringify(BASE)}, pid: 1 };
+      case "engine_session": return { base_url: ${JSON.stringify(BASE)}, token: ${JSON.stringify(TOKEN)}, expires_at: ${Math.floor(Date.now() / 1000) + 3600} };
+      case "smoke_enabled": return false;
+      case "smoke_component": return null;
+      case "update_check": return { state: "not_configured" };
+      case "component_status": return { state: "installed", version: "", accelerator: "mps" };
+      case "plugin:event|listen": return 1;
+      default: return null;
+    }
+  },
+};
+window.isTauri = true;
+`;
+
+async function engine(path) {
+  const res = await fetch(`${BASE}${path}`, { headers: { authorization: `Bearer ${TOKEN}` } });
+  return res.ok ? res.json() : null;
+}
+// a saved notebook and a saved chat, so the pictures show real content
+const notebooks = (await engine("/products/wasifyai-notebooks/notebooks")) ?? [];
+const chats =
+  (await engine("/products/wasifyai-assistant/conversations?limit=1"))?.conversations ?? [];
+const NOTEBOOK = notebooks[0]?.id;
+const CHAT = chats[0]?.id;
+
+const SCREENS = [
+  ["home", "/"],
+  ["chat-saved", CHAT ? `/chat/${CHAT}` : null],
+  ["image-create", "/images/create"],
+  ["image-edit", "/images/edit"],
+  ["image-inpaint", "/images/inpaint"],
+  ["image-reference", "/images/reference"],
+  ["image-library", "/library"],
+  ["image-3d", "/images/3d"],
+  ["video-create", "/video/create"],
+  ["video-animate", "/video/animate"],
+  ["video-extend", "/video/extend"],
+  ["video-builder", "/video/builder"],
+  ["video-library", "/video/library"],
+  ["voice-speak", "/voice/speak"],
+  ["voice-transcribe", "/voice/transcribe"],
+  ["voice-voices", "/voice/voices"],
+  ["voice-convert", "/voice/convert"],
+  ["voice-edit", "/voice/edit-speech"],
+  ["voice-dub", "/voice/dub"],
+  ["voice-audiobook", "/voice/audiobook"],
+  ["voice-lipsync", "/voice/lip-sync"],
+  ["music-create", "/music/create"],
+  ["music-tracks", "/music/library"],
+  ["music-lyrics", "/music/lyrics"],
+  ["music-separate", "/music/separate"],
+  ["notebooks", "/notebooks"],
+  ["notebook", NOTEBOOK ? `/notebooks/${NOTEBOOK}` : null],
+  ["notebook-new", "/notebooks/new"],
+  ["creations", "/creations"],
+  ["train", "/train"],
+  ["models", "/models"],
+  ["settings", "/settings"],
+].filter(([, path]) => path);
+// screens longer than a window: a second picture in a tall window shows the whole of them
+const TALL = new Set([
+  "settings",
+  "models",
+  "train",
+  "voice-lipsync",
+  "voice-dub",
+  "voice-audiobook",
+  "creations",
+  "image-3d",
+  "video-builder",
+  "music-create",
+  "notebooks",
+]);
+const DARK = new Set([
+  "home",
+  "image-create",
+  "video-create",
+  "voice-speak",
+  "music-create",
+  "notebook",
+  "creations",
+  "train",
+  "models",
+  "settings",
+]);
+
+async function open(page, path) {
+  await page.goto(`${WINDOW}/#${path}`);
+  await page.locator("#main").waitFor();
+  await page.waitForTimeout(2500);
+}
+async function shot(page, name, height = 900) {
+  if (height !== 900) {
+    await page.setViewportSize({ width: 1440, height });
+    await page.waitForTimeout(400);
+  }
+  await page.screenshot({ path: join(OUT, `${name}.png`) });
+  if (height !== 900) await page.setViewportSize({ width: 1440, height: 900 });
+  console.log("wrote", name);
+}
+let current = null; // the page of the step being tried, for a picture when it fails
+async function attempt(name, fn) {
+  try {
+    await fn();
+  } catch (e) {
+    console.log("failed", name, e instanceof Error ? e.message.split("\n")[0] : e);
+    if (current) {
+      await current.screenshot({ path: join(OUT, `${name}-failed.png`) }).catch(() => {});
+      const said = await current
+        .locator('[data-slot="stage"]')
+        .first()
+        .innerText()
+        .catch(() => "");
+      if (said) console.log("  the stage said:", said.replace(/\s+/g, " ").slice(0, 300));
+    }
+  }
+}
+
+/** Wait for `ok`, but stop at once when the stage shows an error instead. */
+async function untilDone(page, ok, timeout) {
+  const failed = page.locator('[data-slot="stage"][data-state="error"]');
+  await Promise.race([
+    ok.waitFor({ timeout }),
+    failed.waitFor({ timeout }).then(() => {
+      throw new Error("the stage shows an error");
+    }),
+  ]);
+}
+
+const browser = await chromium.launch();
+for (const scheme of ["light", "dark"]) {
+  if (only && only !== scheme) continue;
+  const ctx = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    colorScheme: scheme,
+  });
+  await ctx.addInitScript(polyfill);
+  await ctx.addInitScript(() => {
+    try {
+      localStorage.setItem("wasifyai:sidebar-collapsed", "0");
+    } catch {}
+  });
+  const page = await ctx.newPage();
+  current = page;
+  const suffix = scheme === "dark" ? "-dark" : "";
+  for (const [name, path] of SCREENS) {
+    if (!wanted(name)) continue;
+    if (scheme === "dark" && !DARK.has(name)) continue;
+    await attempt(name, async () => {
+      await open(page, path);
+      await shot(page, name + suffix);
+      if (scheme === "light" && TALL.has(name)) await shot(page, `${name}-tall`, 2000);
+    });
+  }
+  if (scheme === "light" && names.has("image-make")) {
+    // the check of stage U3: a real picture made in the window, the stage pictured while it works and when it is done
+    await attempt("image-make", async () => {
+      await open(page, "/images/create");
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill("A red ceramic teapot on a wooden table, soft morning light");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "image-making");
+      await page
+        .locator('[data-slot="stage"][data-state="result"] img')
+        .waitFor({ timeout: 300_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "image-made");
+      await page.getByRole("button", { name: "More" }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "image-made-more");
+      await page.keyboard.press("Escape");
+    });
+  }
+  if (names.has("motion-media")) {
+    // Media and sound (ADR-0096 MX5): a real picture, clip and sound added through the screen, then a real
+    // video. MOTION_FIXTURES names a folder with can.png, clip-h264.mp4, music.wav and voice.wav. Run it on
+    // a throwaway DESKTOP_DATA_DIR.
+    await attempt("motion-media", async () => {
+      const seen = { errors: [] };
+      const fixtures = process.env.MOTION_FIXTURES;
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const saved = async () => {
+        await page.waitForTimeout(700);
+        await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      };
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Start empty" }).click();
+      const player = page.locator("hyperframes-player");
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration > 0,
+        null,
+        {
+          timeout: 30000,
+        },
+      );
+      await page.getByRole("radio", { name: "16:9" }).click();
+      await page.getByRole("radio", { name: "Media", exact: true }).click();
+      const add = page.getByLabel("Add a photo or clip");
+      await add.setInputFiles(join(fixtures, "can.png"));
+      await page.getByRole("button", { name: "can.png" }).waitFor({ timeout: 30000 });
+      await add.setInputFiles(join(fixtures, "clip-h264.mp4"));
+      await page.getByRole("button", { name: "clip-h264.mp4" }).waitFor({ timeout: 60000 });
+      await page.getByRole("button", { name: "can.png" }).click();
+      await page.getByRole("button", { name: "Place on scene" }).click();
+      await saved();
+      // a second scene, with the clip behind it, trimmed, with its own sound
+      await page.getByRole("radio", { name: "Add", exact: true }).click();
+      await page.getByRole("button", { name: /^Animated title/ }).click();
+      await saved();
+      await page.getByRole("radio", { name: "Media", exact: true }).click();
+      await page.getByRole("button", { name: "clip-h264.mp4" }).click();
+      await page.getByRole("button", { name: "Use as background" }).click();
+      await page.getByRole("radio", { name: /^Scene 2/ }).click();
+      await page.getByLabel(/Starts .* seconds in/).fill("3");
+      await page.getByLabel("Its own sound").fill("0.5");
+      await saved();
+      // a sound on the scene, music for the whole video
+      await page.getByRole("radio", { name: "Sound", exact: true }).click();
+      await page.getByLabel("Add a sound").setInputFiles(join(fixtures, "voice.wav"));
+      await page.getByLabel("Repeat it to fill the scene").waitFor({ timeout: 30000 });
+      await saved();
+      await page.getByLabel("Add a music file").setInputFiles(join(fixtures, "music.wav"));
+      await page.getByLabel("Repeat", { exact: true }).waitFor({ timeout: 60000 });
+      await saved();
+      await page.waitForTimeout(4000);
+      await shot(page, "motion-media");
+      const frame = () => page.frames().find((f) => f.url().includes("/live/"));
+      seen.page = await frame().evaluate(() => ({
+        film: window.__timelines?.main?.time(),
+        videos: [...document.querySelectorAll("video")].map((v) => ({
+          ready: v.readyState,
+          error: v.error?.message ?? null,
+          at: v.currentTime,
+        })),
+        audios: document.querySelectorAll("audio").length,
+        images: [...document.querySelectorAll("img")].map((i) => i.naturalWidth),
+      }));
+      // playing: the clip moves in the preview
+      page.on("console", (m) => {
+        if (["error", "warning"].includes(m.type())) seen.errors.push(m.text().slice(0, 200));
+      });
+      await player.evaluate((p) => {
+        window.__seen = [];
+        for (const name of ["play", "pause", "ended", "error", "waiting", "ready"]) {
+          p.addEventListener(name, () => window.__seen.push([name, p.currentTime]));
+        }
+      });
+      const before = await player.evaluate((p) => p.currentTime);
+      await page.getByRole("button", { name: "Play" }).click();
+      await page.waitForTimeout(2500);
+      seen.playing = {
+        before,
+        after: await player.evaluate((p) => [p.currentTime, p.paused, window.__seen]),
+        button: await page
+          .locator('[aria-label="Play"],[aria-label="Pause"]')
+          .getAttribute("aria-label"),
+        videos: await frame().evaluate(() =>
+          [...document.querySelectorAll("video")].map((v) => [
+            v.currentTime,
+            v.paused,
+            v.readyState,
+            v.networkState,
+          ]),
+        ),
+        audios: await frame().evaluate(() =>
+          [...document.querySelectorAll("audio")].map((v) => [
+            v.currentTime,
+            v.paused,
+            v.readyState,
+            v.networkState,
+            v.error?.message ?? null,
+          ]),
+        ),
+      };
+      console.log(`MEDIAPLAY ${JSON.stringify(seen)}`);
+      if (await page.getByRole("button", { name: "Pause" }).count()) {
+        await page.getByRole("button", { name: "Pause" }).click();
+      }
+      const AxeBuilder = require("@axe-core/playwright").default;
+      const axe = await new AxeBuilder({ page })
+        .include("[data-slot=scene-editor]")
+        .exclude("hyperframes-player")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      seen.axe = axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Make the video" }).click();
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 240000 });
+      await shot(page, "motion-media-made");
+      seen.check = await dialog.getByText(/Checked:/).innerText();
+      console.log(`MEDIA ${JSON.stringify(seen)}`);
+    });
+  }
+  // the Shots step, on a project that already has its stills (ADR-0090 CS2): a real redo, a take chosen, the tabs
+  if (names.has("creative-shots")) {
+    await attempt("creative-shots", async () => {
+      const seen = { errors: [], console: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      page.on("console", (m) => m.type() === "error" && seen.console.push(m.text().slice(0, 200)));
+      const axe = async () => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/creative");
+      await page.getByRole("button", { name: /^cs2 real/ }).click();
+      await page.getByRole("radio", { name: "Shots" }).waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "creative-plan-stills", 900);
+      await page.getByRole("radio", { name: "Shots" }).click();
+      await page.getByRole("button", { name: "Shot 1", exact: false }).first().click();
+      await page.waitForTimeout(2500);
+      await shot(page, "creative-shots", 900);
+      seen.axeShots = await axe();
+      seen.preview = await page
+        .locator("video")
+        .first()
+        .evaluate(async (v) => {
+          await new Promise((r) =>
+            v.readyState > 0 ? r() : v.addEventListener("loadedmetadata", r),
+          );
+          return { seconds: v.duration, width: v.videoWidth, height: v.videoHeight };
+        });
+      const stage = page.getByRole("region", { name: "The shots" });
+      const started = Date.now();
+      await stage.getByRole("button", { name: "Make it again" }).click();
+      await page.getByRole("button", { name: "Version 2 of shot 1" }).waitFor({ timeout: 300000 });
+      seen.redo_s = Math.round((Date.now() - started) / 1000);
+      await page.waitForTimeout(800);
+      await shot(page, "creative-take", 900);
+      seen.chosenAfterRedo = await page
+        .getByRole("button", { name: "Version 2 of shot 1" })
+        .getAttribute("aria-pressed");
+      await page.getByRole("button", { name: "Version 1 of shot 1" }).click();
+      await page.waitForTimeout(800);
+      seen.chosenBack = await page
+        .getByRole("button", { name: "Version 1 of shot 1" })
+        .getAttribute("aria-pressed");
+      seen.previewStale = await page.getByText(/The shots have changed since/).count();
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      await make.getByRole("tab", { name: "Image" }).click();
+      await page.waitForTimeout(800);
+      seen.imageTabSays = await page.getByText(/What you make here is a version of shot 1/).count();
+      seen.imageButton = await page.getByRole("button", { name: /Make the picture/ }).count();
+      await shot(page, "creative-tab-image", 900);
+      seen.axeImage = await axe();
+      await make.getByRole("tab", { name: "Video" }).click();
+      await page.waitForTimeout(800);
+      seen.videoButton = await page.getByRole("button", { name: /Make the (video|clip)/ }).count();
+      await shot(page, "creative-tab-video", 900);
+      seen.axeVideo = await axe();
+      await make.getByRole("tab", { name: "Add" }).click();
+      await page.waitForTimeout(800);
+      await page
+        .getByLabel("Choose a picture, clip or sound to add")
+        .setInputFiles(join(process.env.CS2_FILES ?? ".", "mine.png"));
+      await page.getByRole("button", { name: "Version 3 of shot 1" }).waitFor({ timeout: 30000 });
+      seen.dropped = await page
+        .getByRole("button", { name: "Version 3 of shot 1" })
+        .getAttribute("aria-pressed");
+      await shot(page, "creative-tab-add", 900);
+      seen.axeAdd = await axe();
+      console.log(`CREATIVESHOTS ${JSON.stringify(seen)}`);
+    });
+  }
+
+  if (names.has("creative-motion")) {
+    await attempt("creative-motion", async () => {
+      const seen = { errors: [], console: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      page.on("console", (m) => m.type() === "error" && seen.console.push(m.text().slice(0, 200)));
+      const axe = async () => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/creative");
+      await page.getByRole("button", { name: /^cs4 real/ }).click();
+      await page.getByRole("radio", { name: "Shots" }).waitFor({ timeout: 15000 });
+      await page.getByRole("radio", { name: "Shots" }).click();
+      const motion = page.getByRole("region", { name: "Motion" });
+      await motion.getByText(/clips? to make|They have their clips/).waitFor({ timeout: 30000 });
+      // Make it better is the default since 2026-11-05; the draft is picked
+      await motion.getByRole("radio", { name: "Draft 30 seconds" }).click();
+      await page.waitForTimeout(1500);
+      seen.draftSays = await motion.locator("p").first().innerText();
+      await shot(page, "creative-motion", 900);
+      seen.axeMotion = await axe();
+      await motion.getByRole("combobox", { name: "Where the 30 seconds start" }).click();
+      const options = page.getByRole("option");
+      seen.starts = await options.allInnerTexts();
+      await options.last().click();
+      await page.waitForTimeout(1500);
+      seen.laterSays = await motion.locator("p").first().innerText();
+      await motion.getByRole("radio", { name: "Make it better" }).click();
+      await page.waitForTimeout(1500);
+      seen.betterSays = await motion.locator("p").first().innerText();
+      await shot(page, "creative-motion-better", 900);
+      await motion.getByRole("radio", { name: "Draft 30 seconds" }).click();
+      // a real draft clip of the last shot, which the excerpt did not reach
+      const last = page
+        .getByRole("list")
+        .filter({ has: page.getByRole("button", { name: /^Shot 1\b/ }) })
+        .getByRole("button")
+        .last();
+      seen.lastShot = await last.getAttribute("aria-label");
+      await last.click();
+      const started = Date.now();
+      await page.getByRole("button", { name: "Make a draft clip" }).click();
+      await page
+        .getByText("Making the clips")
+        .or(page.getByText(/^Animating shot/))
+        .first()
+        .waitFor({ timeout: 30000 });
+      await shot(page, "creative-motion-making", 900);
+      seen.axeMaking = await axe();
+      // the Motion panel comes back when the run has ended
+      await motion.waitFor({ state: "visible", timeout: 600000 });
+      seen.run = await page.getByRole("status").allInnerTexts();
+      seen.clip_s = Math.round((Date.now() - started) / 1000);
+      await page.waitForTimeout(1000);
+      seen.lastShotAfter = await last.getAttribute("aria-label");
+      await shot(page, "creative-motion-clip", 900);
+      seen.axeClip = await axe();
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      await make.getByRole("tab", { name: "Video" }).click();
+      await page.waitForTimeout(800);
+      seen.settingChips = await page.getByRole("button", { name: /^(Final|Draft)/ }).count();
+      await shot(page, "creative-motion-video-tab", 900);
+      seen.axeVideoTab = await axe();
+      // the desktop window's smallest size
+      await page.setViewportSize({ width: 720, height: 700 });
+      await page.waitForTimeout(800);
+      seen.narrow = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      seen.motionAtPhone = await motion.count();
+      await page.screenshot({ path: join(OUT, "creative-motion-phone.png") });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      console.log(`CREATIVEMOTION ${JSON.stringify(seen)}`);
+    });
+  }
+
+  if (names.has("creative-cut")) {
+    await attempt("creative-cut", async () => {
+      const seen = { errors: [], console: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      page.on("console", (m) => m.type() === "error" && seen.console.push(m.text().slice(0, 200)));
+      const axe = async () => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/creative");
+      await page.getByRole("button", { name: /^cs3 real/ }).click();
+      await page.getByRole("radio", { name: "Cut" }).click();
+      const pictures = page.getByRole("list", { name: "Pictures" });
+      await pictures.waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "creative-cut", 900);
+      seen.axeCut = await axe();
+      seen.pieces = await pictures.getByRole("button").count();
+      seen.captions = await page
+        .getByRole("list", { name: "Captions" })
+        .getByRole("button")
+        .count();
+      const second = pictures.getByRole("button").nth(1);
+      seen.before = await second.getAttribute("aria-label");
+      await second.click();
+      await page.getByRole("button", { name: "Longer" }).click();
+      await page.waitForTimeout(800);
+      seen.longer = await pictures.getByRole("button").nth(1).getAttribute("aria-label");
+      await page.getByRole("button", { name: "Fade in" }).click();
+      await page.waitForTimeout(800);
+      seen.faded = await pictures.getByRole("button").nth(1).getAttribute("aria-label");
+      await pictures.getByRole("button").nth(1).focus();
+      await page.keyboard.press("z");
+      await page.waitForTimeout(800);
+      seen.afterZ = await pictures.getByRole("button").nth(1).getAttribute("aria-label");
+      await page.keyboard.press("Shift+Z");
+      await page.waitForTimeout(800);
+      seen.afterShiftZ = await pictures.getByRole("button").nth(1).getAttribute("aria-label");
+      await page.keyboard.press("s");
+      await page.waitForTimeout(800);
+      seen.afterS = await pictures.getByRole("button").count();
+      await page.keyboard.press("z");
+      await page.waitForTimeout(800);
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      await make.getByRole("tab", { name: "Titles" }).click();
+      await page.getByLabel("Words").fill("Dawn drive");
+      await page.getByRole("button", { name: "Add", exact: true }).click();
+      await page.waitForTimeout(800);
+      seen.title = await page.getByRole("button", { name: /^Title at 0:00: Dawn drive/ }).count();
+      await shot(page, "creative-cut-titles", 900);
+      seen.axeTitles = await axe();
+      await make.getByRole("tab", { name: "Voice" }).click();
+      await page.waitForTimeout(800);
+      seen.voiceLines = await page.getByRole("textbox", { name: /^Words at/ }).count();
+      await shot(page, "creative-cut-voice", 900);
+      seen.axeVoice = await axe();
+      const caption = page.getByRole("list", { name: "Captions" }).getByRole("button").nth(1);
+      await caption.click();
+      await page.getByRole("button", { name: "A beat later" }).click();
+      await page.waitForTimeout(800);
+      seen.captionMoved = await page
+        .getByRole("list", { name: "Captions" })
+        .getByRole("button")
+        .nth(1)
+        .getAttribute("aria-label");
+      const kept = page.getByRole("list", { name: "Kept in Your videos" }).getByRole("listitem");
+      const before = await kept.count();
+      const started = Date.now();
+      await page.getByRole("button", { name: "Make the video" }).click();
+      await kept.nth(before).waitFor({ timeout: 1200000 }); // one more than there were: this one
+      seen.make_s = Math.round((Date.now() - started) / 1000);
+      await page.waitForTimeout(1500);
+      seen.video = await page.getByLabel("The video of the cut").evaluate(async (v) => {
+        await new Promise((r) =>
+          v.readyState > 0 ? r() : v.addEventListener("loadedmetadata", r),
+        );
+        return { seconds: v.duration, width: v.videoWidth, height: v.videoHeight };
+      });
+      await page.getByLabel("The video of the cut").evaluate((v) => {
+        v.currentTime = 1;
+      });
+      await page.waitForTimeout(1500);
+      await shot(page, "creative-cut-made", 900);
+      seen.axeMade = await axe();
+      await page.getByRole("button", { name: "Save a copy" }).click();
+      await page.getByText(/^Saved to /).waitFor({ timeout: 60000 });
+      seen.saved = await page.getByText(/^Saved to /).textContent();
+      await page.setViewportSize({ width: 720, height: 700 });
+      await page.waitForTimeout(1000);
+      seen.narrow = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      await page.getByRole("region", { name: "Timeline" }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: join(OUT, "creative-cut-phone.png") });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      console.log(`CREATIVECUT ${JSON.stringify(seen)}`);
+    });
+  }
+
+  if (names.has("creative-shots") || names.has("creative-shots-phone")) {
+    await attempt("creative-shots-phone", async () => {
+      const seen = {};
+      // the smallest the desktop window goes (tauri.conf.json)
+      await page.setViewportSize({ width: 720, height: 700 });
+      await open(page, "/creative");
+      await page.getByRole("button", { name: /^cs2 real/ }).click();
+      await page.getByRole("radio", { name: "Shots" }).click();
+      await page.waitForTimeout(2000);
+      const wide = () =>
+        page.evaluate(() => {
+          const over = document.documentElement.scrollWidth - window.innerWidth;
+          const who = [...document.querySelectorAll("body *")]
+            .filter(
+              (e) => e.getBoundingClientRect().right > window.innerWidth + 1 && e.checkVisibility(),
+            )
+            .slice(0, 6)
+            .map((e) => `${e.tagName}.${String(e.className).slice(0, 60)}`);
+          return { over, who };
+        });
+      await page.screenshot({ path: join(OUT, "creative-shots-phone.png") });
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      for (const tab of ["Image", "Video", "Add"]) {
+        await make.getByRole("tab", { name: tab }).click();
+        await page.waitForTimeout(500);
+        seen[tab] = await wide();
+      }
+      await make.getByRole("tab", { name: "Image" }).click();
+      await make.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(OUT, "creative-tab-image-phone.png") });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      console.log(`CREATIVEPHONE ${JSON.stringify(seen)}`);
+    });
+  }
+
+  if (names.has("creative")) {
+    await attempt("creative", async () => {
+      const seen = { errors: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const axe = async () => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/creative");
+      await page.getByRole("heading", { name: "Creative Studio" }).waitFor({ timeout: 15000 });
+      await page.waitForTimeout(600);
+      await shot(page, "creative-list");
+      seen.axeList = await axe();
+      await page.getByRole("button", { name: "New project" }).first().click();
+      await page.getByRole("combobox", { name: "Song" }).click();
+      await page.getByRole("option").first().click();
+      await page
+        .getByLabel("What is the video about?")
+        .fill("A woman leaves the city in a borrowed grey car and drives the long way home");
+      await page.getByRole("button", { name: "Add a person" }).click();
+      await page.getByLabel("Name of person 1").fill("Mira");
+      await page.getByLabel("How Mira looks").fill("a woman in her thirties, green jacket");
+      await page
+        .getByLabel(/^Places/)
+        .fill("a city street at dawn\na petrol station\na coast road");
+      await shot(page, "creative-brief", 1300);
+      seen.axeBrief = await axe();
+      const started = Date.now();
+      await page.getByRole("button", { name: "Plan it" }).click();
+      await page.getByRole("region", { name: "Progress" }).waitFor({ timeout: 15000 });
+      await shot(page, "creative-planning");
+      await page.getByRole("textbox", { name: "What shot 1 shows" }).waitFor({ timeout: 300000 });
+      seen.planned_s = Math.round((Date.now() - started) / 1000);
+      await page.waitForTimeout(400);
+      await shot(page, "creative-plan", 900);
+      seen.axePlan = await axe();
+      const plan = page.getByRole("region", { name: "The plan" });
+      const saved = (n) => page.getByText(`Plan ${n} · saved`).waitFor({ timeout: 120000 });
+      const box = page.getByRole("textbox", { name: "What shot 2 shows" });
+      await box.fill("Mira turns the key in the grey car at the kerb.");
+      await box.blur();
+      await page.waitForTimeout(500);
+      seen.edited = await page.getByRole("textbox", { name: "What shot 2 shows" }).inputValue();
+      await page.getByRole("button", { name: "End shot 1 one beat later" }).click();
+      await page.waitForTimeout(500);
+      await plan.getByRole("button", { name: "Undo" }).click();
+      await page.waitForTimeout(500);
+      await plan.getByRole("button", { name: "Undo" }).click();
+      await page.waitForTimeout(500);
+      seen.undone = await page.getByRole("textbox", { name: "What shot 2 shows" }).inputValue();
+      await page.getByRole("button", { name: "Planning log" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Close" }).waitFor();
+      await page.waitForTimeout(500);
+      await shot(page, "creative-log");
+      await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+      // the tabs: arrow keys, the ones to come, then Add from the Library
+      const make = page.getByRole("tablist", { name: "Make something for this project" });
+      seen.tabs = await make.getByRole("tab").allTextContents();
+      await make.getByRole("tab", { name: "Ask" }).focus();
+      await page.keyboard.press("ArrowLeft");
+      await page.waitForTimeout(200);
+      seen.arrowTo = await make.locator('[aria-selected="true"]').textContent();
+      await make.getByRole("tab", { name: "Titles" }).click();
+      seen.titlesSay = await page.getByText(/come with the Cut step/).textContent();
+      await page.getByRole("button", { name: "Shot 3", exact: true }).click();
+      await make.getByRole("tab", { name: "Add" }).click();
+      const first = page.getByRole("button", { name: /^Add: / }).first();
+      await first.waitFor({ timeout: 15000 });
+      seen.added = await first.getAttribute("aria-label");
+      await first.click();
+      const rail = page.getByRole("complementary", { name: "Media of this project" });
+      await rail.getByRole("button", { name: /^Take out of this project/ }).waitFor();
+      seen.rail = await rail.getByRole("listitem").allInnerTexts();
+      await page.waitForTimeout(800);
+      await shot(page, "creative-add", 900);
+      seen.axeAdd = await axe();
+      // Ask, with the real model: a change on the selected shot, shown at once, and its card's Undo
+      await make.getByRole("tab", { name: "Ask" }).click();
+      // a shot the plan has on Hold: the plan sets some to Animate by itself
+      const motions = page.getByRole("combobox", { name: /^Motion of shot \d+$/ });
+      const count = await motions.count();
+      let held = 0;
+      for (let i = 0; i < count && !held; i++) {
+        if ((await motions.nth(i).textContent()) === "Hold") held = i + 1;
+      }
+      const motion = page.getByRole("combobox", { name: `Motion of shot ${held}`, exact: true });
+      seen.askShot = held;
+      await page.getByRole("button", { name: `Shot ${held}`, exact: true }).click();
+      await page.getByPlaceholder("Ask anything").last().fill("Make this shot animate.");
+      await page.keyboard.press("Enter");
+      await saved(2);
+      seen.askMotion = await motion.textContent();
+      await page.waitForTimeout(3000);
+      await shot(page, "creative-ask", 900);
+      seen.axeAsk = await axe();
+      const panel = page.getByRole("complementary", { name: "Make panel" });
+      seen.askCards = await panel.getByRole("button", { name: /^undo/i }).allTextContents();
+      await panel.getByRole("button", { name: "Undo", exact: true }).first().click();
+      await saved(1);
+      seen.askUndone = await motion.textContent();
+      await page.getByPlaceholder("Ask anything").last().fill("What does this shot show?");
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(15000);
+      seen.askedChanged = (await page.getByText("Plan 1 · saved").count()) === 0;
+      await shot(page, "creative-ask-question", 900);
+      // the rest of the width steps: stacked, the tabs as a dock
+      await page.setViewportSize({ width: 1000, height: 800 });
+      await page.waitForTimeout(400);
+      await shot(page, "creative-1000");
+      await page.getByRole("button", { name: "Hide the side menu" }).click();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForTimeout(400);
+      seen.phoneOverflow = await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      );
+      seen.axePhone = await axe();
+      await page.screenshot({ path: join(OUT, "creative-plan-phone.png") });
+      await page
+        .getByRole("tablist", { name: "Make something for this project" })
+        .scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(OUT, "creative-make-phone.png") });
+      await page.setViewportSize({ width: 1440, height: 900 });
+      console.log(JSON.stringify(seen, null, 1));
+    });
+  }
+
+  if (names.has("motion-pack")) {
+    // The marketing pack (ADR-0096 MX7): a starting point, a brand set up with a real logo, and one
+    // project made in every shape. MOTION_FIXTURES has can.png. Run it on a throwaway DESKTOP_DATA_DIR.
+    await attempt("motion-pack", async () => {
+      const seen = { errors: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const saved = async () => {
+        await page.waitForTimeout(700);
+        await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      };
+      const ready = () =>
+        page.waitForFunction(
+          () => document.querySelector("hyperframes-player")?.duration > 0,
+          null,
+          {
+            timeout: 30000,
+          },
+        );
+      const axe = async (root) => {
+        const AxeBuilder = require("@axe-core/playwright").default;
+        const found = await new AxeBuilder({ page })
+          .include(root)
+          .exclude("hyperframes-player")
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        return found.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      };
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Product promo" }).click();
+      await shot(page, "motion-pack-start");
+      await page.getByRole("button", { name: "Start from Product promo" }).click();
+      await ready();
+      await page.getByRole("radio", { name: "Looks", exact: true }).click();
+      await page.getByRole("button", { name: "Set up your brand" }).click();
+      const asked = page.getByRole("dialog");
+      await asked.getByLabel("Name").fill("Northbean");
+      await asked
+        .getByLabel("Add your logo")
+        .setInputFiles(join(process.env.MOTION_FIXTURES, "can.png"));
+      await asked.getByLabel("Background").fill("#123456");
+      await asked.getByLabel("It fades to").fill("#0a2a4a");
+      await asked.getByLabel("Accent").fill("#ff8800");
+      await asked.getByLabel("What should people do at the end?").fill("Try Northbean today");
+      await asked.getByLabel(/^Where/).fill("northbean.example");
+      await asked.getByRole("img", { name: "Your logo" }).waitFor();
+      await shot(page, "motion-pack-brand");
+      seen.axeBrand = await axe("dialog");
+      await asked.getByRole("button", { name: "Save your brand" }).click();
+      await page
+        .getByRole("checkbox", { name: "Use it in this video" })
+        .waitFor({ timeout: 15000 });
+      await page.waitForFunction(
+        () => document.querySelector("[data-slot=scene-editor] input[type=checkbox]:checked"),
+        null,
+        { timeout: 15000 },
+      );
+      await saved();
+      await page.waitForTimeout(3000);
+      await shot(page, "motion-pack-branded");
+      seen.axeEditor = await axe("[data-slot=scene-editor]");
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      for (const shape of [/^1:1/, /^16:9/, /^4:5/]) {
+        await dialog.getByRole("checkbox", { name: shape }).check();
+      }
+      await shot(page, "motion-pack-shapes");
+      seen.axeShapes = await axe("dialog");
+      const started = Date.now();
+      await dialog.getByRole("button", { name: "Make 4 videos" }).click();
+      await dialog.getByText("Video 2 of 4", { exact: false }).waitFor({ timeout: 300000 });
+      await shot(page, "motion-pack-making");
+      await dialog.getByText("Your videos are in the Library").waitFor({ timeout: 900000 });
+      seen.seconds = Math.round((Date.now() - started) / 1000);
+      await dialog.locator("video").nth(3).waitFor();
+      await page.waitForTimeout(1500);
+      seen.videos = await dialog
+        .locator("video")
+        .evaluateAll((all) =>
+          all.map((v) => [v.videoWidth, v.videoHeight, Math.round(v.duration)]),
+        );
+      await shot(page, "motion-pack-made");
+      await dialog.getByRole("button", { name: "Close" }).click();
+      // set once: a new project starts with it
+      await page
+        .locator("[data-slot=scene-editor]")
+        .getByRole("button", { name: "Motion graphics", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Start empty" }).click();
+      await ready();
+      await page.getByRole("radio", { name: "Looks", exact: true }).click();
+      seen.newProjectHasBrand = await page
+        .getByRole("checkbox", { name: "Use it in this video" })
+        .isChecked();
+      await shot(page, "motion-pack-new-project");
+      console.log(`PACK ${JSON.stringify(seen)}`);
+    });
+  }
+
+  if (names.has("motion-make")) {
+    // The Make panel (ADR-0096 MX6): real models from inside the editor, a real voiceover with its
+    // captions in time, and a real video. Run it on a throwaway DESKTOP_DATA_DIR with the real
+    // models and components linked into it: what it makes stays out of the person's Library.
+    await attempt("motion-make", async () => {
+      const seen = { errors: [], took: {} };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const saved = async () => {
+        await page.waitForTimeout(700);
+        await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      };
+      const make = async (kind, box, text, button) => {
+        const started = Date.now();
+        await page.getByRole("radio", { name: kind, exact: true }).click();
+        await page.getByLabel(box).fill(text);
+        await page.getByRole("button", { name: button }).click();
+        await page.getByRole("button", { name: "Stop" }).waitFor({ timeout: 10000 });
+        await page.getByRole("button", { name: button }).waitFor({ timeout: 900000 });
+        seen.took[kind] = Math.round((Date.now() - started) / 1000);
+        seen[`${kind}Problem`] = await page.locator("[role=alert]").allInnerTexts();
+        const problem = seen[`${kind}Problem`].join(" ");
+        if (problem) throw new Error(`${kind}: ${problem}`);
+        await saved();
+      };
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Start empty" }).click();
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration > 0,
+        null,
+        { timeout: 30000 },
+      );
+      await page.getByRole("radio", { name: "16:9" }).click();
+      await page.getByRole("radio", { name: "Make", exact: true }).click();
+      await shot(page, "motion-make");
+      await make(
+        "Picture",
+        "What should it show?",
+        "A red can on a marble table",
+        "Make the picture",
+      );
+      await page.waitForTimeout(3000);
+      await shot(page, "motion-make-picture");
+      const WORDS =
+        "Mornings are hard. Northbean steeps for eighteen hours, so you do not have to.";
+      await make("Speech", "What should it say?", WORDS, "Make the voiceover");
+      const frame = () => page.frames().find((f) => f.url().includes("/live/"));
+      await page.waitForTimeout(3000);
+      const id = (await page.locator("hyperframes-player").getAttribute("src")).match(
+        /live\/([0-9a-f]{32})\./,
+      )[1];
+      const found = await engine(`/products/wasifyai-video/builder/projects/${id}`);
+      const scene = found.slots.scenes[0];
+      seen.assets = found.slots.assets.map((a) => [a.kind, a.name, a.seconds]);
+      seen.sound = scene.sound;
+      seen.background = scene.background?.asset;
+      seen.seconds = scene.fields.seconds;
+      seen.cues = scene.cues;
+      seen.wordsKept = scene.cues.map((c) => c.text).join(" ") === WORDS;
+      const second = scene.cues[1];
+      await page
+        .getByLabel("Move through the video")
+        .fill(String(Math.round(((second.start + second.end) / 2) * 20) / 20));
+      await page.waitForTimeout(1500);
+      seen.showing = await frame().evaluate(() =>
+        [...document.querySelectorAll(".cue")]
+          .filter((c) => Number(getComputedStyle(c).opacity) > 0.5)
+          .map((c) => c.textContent),
+      );
+      await shot(page, "motion-make-voiceover");
+      await make(
+        "Music",
+        "What should it sound like?",
+        "Warm acoustic guitar, unhurried",
+        "Make the music",
+      );
+      await make(
+        "Clip",
+        "What should happen in it?",
+        "Steam rising from a cup, slowly",
+        "Make the clip",
+      );
+      await page.waitForTimeout(3000);
+      await shot(page, "motion-make-all");
+      const AxeBuilder = require("@axe-core/playwright").default;
+      const axe = await new AxeBuilder({ page })
+        .include("[data-slot=scene-editor]")
+        .exclude("hyperframes-player")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      seen.axe = axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Make the video" }).click();
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 300000 });
+      await shot(page, "motion-make-made");
+      seen.check = await dialog.getByText(/Checked:/).innerText();
+      const after = await engine(`/products/wasifyai-video/builder/projects/${id}`);
+      seen.renders = (after?.renders ?? []).map((r) => [
+        r.status,
+        r.check?.ok,
+        r.error,
+        r.output_path,
+      ]);
+      console.log(`MOTIONMAKE ${JSON.stringify(seen)}`);
+    });
+  }
+  if (names.has("motion-arrange")) {
+    // Arranging (ADR-0096 MX4): drag a title and resize it on the real preview; the page, the document
+    // and a real video must agree on where it is. Run it on a throwaway DESKTOP_DATA_DIR.
+    await attempt("motion-arrange", async () => {
+      const seen = { errors: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Start empty" }).click();
+      const player = page.locator("hyperframes-player");
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration > 0,
+        null,
+        {
+          timeout: 30000,
+        },
+      );
+      await page.getByRole("radio", { name: "16:9" }).click();
+      await page.getByRole("radio", { name: "Scene 1" }).click();
+      await page.getByLabel(/^Title/).fill("Moved to the corner");
+      await page.getByLabel(/^A line under it/).fill("This line stays");
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.getByRole("radio", { name: "Arrange" }).click();
+      const part = page.getByRole("button", { name: /Move the title\./ });
+      await part.waitFor({ timeout: 15000 });
+      await page.waitForTimeout(3500);
+      await shot(page, "motion-arrange-before");
+      const film = await player.boundingBox();
+      const from = await part.boundingBox();
+      // drag it to the top left, inside the safe area
+      const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      await page.mouse.move(
+        film.x + film.width * 0.1 + from.width / 2,
+        film.y + film.height * 0.18 + from.height / 2,
+        { steps: 8 },
+      );
+      await page.mouse.up();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.waitForTimeout(3500);
+      // then make it bigger with the corner
+      const moved = await part.boundingBox();
+      await page.mouse.move(moved.x + moved.width, moved.y + moved.height);
+      await page.mouse.down();
+      await page.mouse.move(moved.x + moved.width * 0.8, moved.y + moved.height, { steps: 4 });
+      await page.mouse.up();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.waitForTimeout(3500);
+      await shot(page, "motion-arrange-after");
+      // arrow keys: one Undo for the lot
+      await part.focus();
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("ArrowUp");
+      await page.keyboard.press("ArrowUp");
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1500);
+      const id = (await player.getAttribute("src")).match(/live\/([0-9a-f]{32})\./)[1];
+      const project = await engine(`/products/wasifyai-video/builder/projects/${id}`);
+      seen.document = project.slots.scenes[0].arrange;
+      const frame = page.frames().find((f) => f.url().includes("/live/"));
+      seen.page = await frame.evaluate(() => {
+        const box = document.getElementById("root").getBoundingClientRect();
+        const r = document.querySelector("[data-slot$=title]").getBoundingClientRect();
+        const m = document.querySelector(".mask").getBoundingClientRect();
+        const pc = (a, b) => Math.round((a / b) * 1000) / 10;
+        return {
+          letters: [
+            pc(r.left - box.left, box.width),
+            pc(r.top - box.top, box.height),
+            pc(r.width, box.width),
+            pc(r.height, box.height),
+          ],
+          mask: [
+            pc(m.left - box.left, box.width),
+            pc(m.top - box.top, box.height),
+            pc(m.width, box.width),
+            pc(m.height, box.height),
+          ],
+        };
+      });
+      const AxeBuilder = require("@axe-core/playwright").default;
+      const axe = await new AxeBuilder({ page })
+        .include("[data-slot=scene-editor]")
+        .exclude("hyperframes-player")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      seen.axe = axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Make the video" }).click();
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      seen.video = await dialog.locator("video").getAttribute("src");
+      console.log(`ARRANGE ${JSON.stringify(seen)}`);
+    });
+  }
+  if (names.has("motion-assistant")) {
+    // The assistant in the editor (ADR-0096 MX3): the real language model, from a brief to a video. It
+    // leaves nothing behind: the project and its chat are deleted at the end.
+    await attempt("motion-assistant", async () => {
+      const seen = { errors: [], said: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      const scenes = () =>
+        page.locator('[aria-label="Your scenes"] [aria-label^="Scene "]').count();
+      const say = async (text) => {
+        const box = page.getByPlaceholder("Ask anything").last();
+        await box.fill(text);
+        await box.press("Enter");
+      };
+      const idle = async () => {
+        await page.waitForTimeout(800);
+        await page.waitForFunction(() => !document.querySelector("[inert]"), null, {
+          timeout: 180000,
+        });
+        await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+        await page.waitForTimeout(4500);
+        // what the player is really showing: the screen's clock, its own, and the page behind it
+        seen.preview = seen.preview ?? [];
+        seen.preview.push({
+          clock: await page.locator("input[aria-label='Move through the video']").inputValue(),
+          player: await page
+            .locator("hyperframes-player")
+            .evaluate((p) => [p.currentTime, p.duration, p.ready]),
+          page: await Promise.all(
+            page
+              .frames()
+              .filter((f) => f.url().includes("/live/"))
+              .map((f) =>
+                f.evaluate(() => ({
+                  film: window.__timelines?.main?.time(),
+                  shown: [...document.querySelectorAll(".scene")]
+                    .filter(
+                      (s) =>
+                        getComputedStyle(s).visibility !== "hidden" &&
+                        getComputedStyle(s).display !== "none",
+                    )
+                    .map((s) => [s.id, getComputedStyle(s).opacity]),
+                })),
+              ),
+          ),
+        });
+      };
+      await open(page, "/video/builder");
+      await shot(page, "motion-start");
+      await page
+        .getByLabel("Describe your video")
+        .fill(
+          "A 20 second vertical ad for our sparkling tea, Fizzleaf. Calm, for people who want less sugar.",
+        );
+      const start = Date.now();
+      await page.getByRole("button", { name: "Make a first version" }).click();
+      await page.locator("[data-slot=scene-editor]").waitFor();
+      await page.waitForFunction(
+        () =>
+          document.querySelectorAll('[aria-label="Your scenes"] [aria-label^="Scene "]').length > 1,
+        null,
+        { timeout: 180000 },
+      );
+      seen.firstVersionSeconds = Math.round((Date.now() - start) / 1000);
+      await idle();
+      seen.scenesAfterBrief = await scenes();
+      seen.words = await page.locator('[aria-label="Your scenes"]').innerText();
+      await shot(page, "motion-assistant");
+      await say("Make this scene 3 seconds long.");
+      await idle();
+      seen.afterShorten = await page.locator('[aria-label="Your scenes"]').innerText();
+      await say("Make a square version.");
+      await idle();
+      seen.shapeSquare = await page
+        .getByRole("radio", { name: "1:1" })
+        .getAttribute("aria-checked");
+      // Undo on the change's own card
+      await page.getByRole("button", { name: "Undo", exact: true }).last().click();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      seen.shapeAfterUndo = await page
+        .getByRole("radio", { name: "9:16" })
+        .getAttribute("aria-checked");
+      await say("Add an end card that says Try Fizzleaf.");
+      await idle();
+      seen.scenesAfterAdd = await scenes();
+      await shot(page, "motion-assistant-edits");
+      await say("Add our discount to the end card.");
+      await idle();
+      seen.scenesAfterDiscount = await scenes();
+      seen.lastAnswer = (
+        await page
+          .locator('[data-slot="scene-editor"] [data-role="assistant"]')
+          .last()
+          .innerText()
+          .catch(() => "")
+      ).slice(0, 300);
+      await say("OK, make the video now.");
+      const run = page.getByRole("button", { name: /^(Run|Make|Yes|Go ahead)/ }).last();
+      await run.waitFor({ timeout: 120000 });
+      await shot(page, "motion-assistant-card");
+      seen.cardShown = true;
+      const id = (await page.locator("hyperframes-player").getAttribute("src")).match(
+        /live\/([0-9a-f]{32})\./,
+      )[1];
+      await run.click();
+      await page.waitForTimeout(90000);
+      await shot(page, "motion-assistant-made");
+      const project = await engine(`/products/wasifyai-video/builder/projects/${id}`);
+      seen.renders = (project?.renders ?? []).map((r) => [r.status, r.check?.ok, r.error]);
+      seen.savedWords = project?.title;
+      await fetch(`${BASE}/products/wasifyai-video/builder/projects/${id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${TOKEN}` },
+      });
+      if (project?.conversation_id) {
+        await fetch(
+          `${BASE}/products/wasifyai-assistant/conversations/${project.conversation_id}`,
+          {
+            method: "DELETE",
+            headers: { authorization: `Bearer ${TOKEN}` },
+          },
+        );
+      }
+      console.log(`MOTIONCHAT ${JSON.stringify(seen)}`);
+    });
+  }
+  if (names.has("motion-editor")) {
+    // The Motion graphics editor (ADR-0096 MX2): from a new project to a real video, in this window, with the
+    // real engine, the real player and the real sandbox. Run it on a throwaway DESKTOP_DATA_DIR.
+    await attempt("motion-editor", async () => {
+      const seen = { errors: [] };
+      page.on("pageerror", (e) => seen.errors.push(String(e)));
+      await open(page, "/video/builder");
+      await page.getByRole("button", { name: "Video with scenes" }).click();
+      const player = page.locator("hyperframes-player");
+      await player.waitFor({ timeout: 30000 });
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration > 0,
+        null,
+        {
+          timeout: 30000,
+        },
+      );
+      seen.first = await player.evaluate((p) => ({
+        duration: p.duration,
+        src: p.getAttribute("src"),
+      }));
+      await page.getByRole("radio", { name: "9:16" }).click();
+      await page.getByLabel("Project name").fill("Northbean launch");
+      await page.getByLabel(/^Title/).fill("Mornings are hard.");
+      await page.getByRole("button", { name: /^Quote/ }).click();
+      await page.getByLabel(/^Quote/).fill("Smooth, not bitter.");
+      await page.getByRole("button", { name: /^Animated title/ }).click();
+      await page.getByLabel(/^Title/).fill("Try Northbean.");
+      await page.getByLabel(/^Captions/).fill("Twenty percent off your first box.");
+      await page.getByRole("radio", { name: "Slide" }).click();
+      await page.getByRole("radio", { name: "Looks" }).click();
+      await page.getByRole("button", { name: "forest" }).click();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.duration >= 15,
+        null,
+        {
+          timeout: 30000,
+        },
+      );
+      seen.afterEdits = await player.evaluate((p) => p.duration);
+      await page.waitForTimeout(2500); // the player loads the saved page again
+      seen.at = await player.evaluate((p) => p.currentTime);
+      await shot(page, "motion-editor");
+      // play across a scene boundary: the selection follows the film
+      await page.getByRole("button", { name: "Scene 1, " }).click();
+      await page.getByRole("button", { name: "Play" }).click();
+      await page.waitForFunction(
+        () => document.querySelector("hyperframes-player")?.currentTime > 5.5,
+        null,
+        {
+          timeout: 20000,
+        },
+      );
+      seen.selectedWhilePlaying = await page.getByText(/^Scene \d of \d$/).innerText();
+      await page.getByRole("button", { name: "Pause" }).click();
+      // a keyboard walk reaches the main controls; undo takes back one thing
+      await page.getByRole("button", { name: /^Undo/ }).click();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      await page.getByRole("button", { name: "Redo" }).click();
+      await page.locator("[data-save=saved]").waitFor({ timeout: 15000 });
+      const AxeBuilder = require("@axe-core/playwright").default;
+      const axe = await new AxeBuilder({ page })
+        .include("[data-slot=scene-editor]")
+        .exclude("hyperframes-player")
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      seen.axe = axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(" | ")}`);
+      // the smallest window the app allows
+      await page.setViewportSize({ width: 720, height: 520 });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: join(OUT, "motion-editor-small.png") });
+      seen.smallOverflow = await page
+        .locator("[data-slot=scene-editor]")
+        .evaluate((el) => el.scrollWidth > el.clientWidth);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.getByRole("button", { name: "Make the video" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Make the video" }).click();
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      await shot(page, "motion-editor-made");
+      seen.check = await dialog.getByText(/Checked:/).innerText();
+      seen.video = await dialog.locator("video").getAttribute("src");
+      console.log(`MOTION ${JSON.stringify(seen)}`);
+    });
+  }
+  if (scheme === "light" && names.has("styles-make")) {
+    // the check of Styles stage S2 (ADR-0091): the section always in view, the Add menu with yours first,
+    // Train's style chosen, a real picture made with it, and the same section on Edit, Inpaint and Reference
+    await attempt("styles-make", async () => {
+      await open(page, "/images/create");
+      await page.getByRole("region", { name: "Styles" }).waitFor();
+      await shot(page, "styles-empty");
+      await page.getByRole("button", { name: /Add a style/ }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "styles-add-menu");
+      await page
+        .getByRole("menuitem", { name: /\(yours\)/ })
+        .first()
+        .click();
+      await page.waitForTimeout(600);
+      await shot(page, "styles-chosen");
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill("A lighthouse on a cliff at sunrise, soft watercolour");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 300_000);
+      await page.waitForTimeout(800);
+      await shot(page, "styles-made");
+      for (const [name, path] of [
+        ["styles-edit", "/images/edit"],
+        ["styles-inpaint", "/images/inpaint"],
+        ["styles-reference", "/images/reference"],
+      ]) {
+        await open(page, path);
+        await page.getByRole("region", { name: "Styles" }).waitFor();
+        await shot(page, name);
+      }
+    });
+  }
+  if (scheme === "light" && names.has("styles-hub-make")) {
+    // the check of Styles stage S3: a real style from the reviewed shortlist fetched from Hugging Face, checked,
+    // chosen with its word, and a real picture made with it (WASIFYAI_AUDIT_STYLE_REPO picks another)
+    await attempt("styles-hub-make", async () => {
+      const repo = process.env.WASIFYAI_AUDIT_STYLE_REPO ?? "Sawata97/flux2_4b_koni_animestyle";
+      await open(page, "/images/create");
+      await page.getByRole("button", { name: /Add a style/ }).click();
+      await page.getByRole("menuitem", { name: "From Hugging Face…" }).click();
+      await page.getByLabel("Name or address").fill(repo);
+      await page.getByRole("dialog").getByRole("button", { name: "Look", exact: true }).click();
+      const allow = page.getByRole("button", { name: "Allow browsing Hugging Face" });
+      const files = page.getByRole("radio").first();
+      await Promise.race([allow.waitFor({ timeout: 30_000 }), files.waitFor({ timeout: 30_000 })]);
+      if (await allow.isVisible()) await allow.click();
+      await files.waitFor({ timeout: 30_000 });
+      await files.check();
+      await shot(page, "styles-hub-files");
+      await page.getByRole("button", { name: /^Download .* and add$/ }).click();
+      await page.waitForTimeout(3000);
+      await shot(page, "styles-hub-getting");
+      await page.getByText(/was checked and added/).waitFor({ timeout: 900_000 });
+      await shot(page, "styles-hub-added");
+      await page.getByRole("button", { name: "Use it in this picture" }).click();
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill("A lighthouse on a rocky cliff at sunset, a small boat in the bay");
+      const word = page.getByRole("button", { name: "Use this word" }).first();
+      if (await word.isVisible()) await word.click();
+      await page.waitForTimeout(400);
+      await shot(page, "styles-hub-chosen");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 300_000);
+      await page.waitForTimeout(800);
+      await shot(page, "styles-hub-made");
+    });
+  }
+  if (scheme === "light" && names.has("styles-advanced-make")) {
+    // the check of Styles stage S4: a style chosen with its word, Advanced (8 steps, 1280 x 720), a real picture,
+    // the look saved; then a fresh screen, the picture opened and "Make it again" choosing the style again
+    await attempt("styles-advanced-make", async () => {
+      await open(page, "/images/create");
+      await page.getByRole("button", { name: /Add a style/ }).click();
+      await page.getByRole("menuitem", { name: /anime/i }).first().click();
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill("A lighthouse on a rocky cliff at sunset, a small boat in the bay");
+      await page.getByRole("button", { name: "Use this word" }).first().click();
+      await page.getByText("Advanced", { exact: true }).click();
+      await page.getByRole("spinbutton", { name: "Steps" }).fill("8");
+      await page.getByRole("spinbutton", { name: "Width" }).fill("1280");
+      await page.getByRole("spinbutton", { name: "Height" }).fill("720");
+      await page.waitForTimeout(300);
+      await shot(page, "styles-advanced", 1400);
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 300_000);
+      await page.waitForTimeout(800);
+      await shot(page, "styles-advanced-made");
+      await page.getByRole("button", { name: /Saved looks/ }).click();
+      await page.getByRole("menuitem", { name: "Save this look…" }).click();
+      await page.getByLabel("Its name").fill("Anime wide");
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await page.waitForTimeout(600);
+      await page.getByRole("button", { name: /Saved looks/ }).click();
+      await page.waitForTimeout(300);
+      await shot(page, "styles-looks-menu");
+      await page.keyboard.press("Escape");
+      // a fresh screen: nothing chosen; the picture's recipe brings the style, the steps and the size back
+      await open(page, "/images/create");
+      await page.locator('[data-slot="recent-strip"] button[aria-label^="Open:"]').first().click();
+      await page.getByRole("button", { name: "More", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Make it again" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "styles-again", 1400);
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 300_000);
+      await page.waitForTimeout(800);
+      await shot(page, "styles-again-made");
+    });
+  }
+  if (scheme === "light" && names.has("styles-recommended")) {
+    // Styles stage S5: the Add menu with the Recommended styles that are not here yet (nothing is fetched)
+    await attempt("styles-recommended", async () => {
+      await open(page, "/images/create");
+      await page.getByRole("button", { name: /Add a style/ }).click();
+      await page
+        .getByRole("menuitem", { name: /recommended/ })
+        .first()
+        .waitFor();
+      await shot(page, "styles-recommended");
+      await page
+        .getByRole("menuitem", { name: /recommended/ })
+        .first()
+        .click();
+      await page.getByRole("radio").first().waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(400);
+      await shot(page, "styles-recommended-dialog");
+      await page.getByRole("button", { name: "Not now" }).click();
+    });
+  }
+  if (scheme === "light" && names.has("video-make")) {
+    // the check of stage U4: Animate this hands the newest picture to Video, a real clip is made on the stage,
+    // and Extend this opens Extend with it chosen
+    await attempt("video-make", async () => {
+      await open(page, "/images/create");
+      await page.locator('[data-slot="recent-strip"] button[aria-label^="Open:"]').first().click();
+      await page.getByRole("button", { name: "Animate this" }).click();
+      await page.getByText("Animate a picture").first().waitFor();
+      await page.waitForTimeout(3000); // the picture is fetched and uploaded
+      await shot(page, "video-animate-handed");
+      await page
+        .getByRole("textbox", { name: /what should move/i })
+        .fill("Steam rises slowly from the cup and the camera gently pushes in");
+      await page.getByRole("button", { name: "Make the video" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(20_000);
+      await shot(page, "video-making");
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] video'),
+        1_800_000,
+      );
+      await page.waitForTimeout(1500);
+      await shot(page, "video-made");
+      await page.getByRole("button", { name: "More" }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "video-made-more");
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Extend this" }).click();
+      await page.getByText("Extend a video").first().waitFor();
+      await page.waitForTimeout(1500);
+      await shot(page, "video-extend-chosen");
+    });
+  }
+  if (scheme === "light" && names.has("speech-make")) {
+    // the check of stage U5: a real speech on the stage with its waveform, then that speech transcribed
+    await attempt("speech-make", async () => {
+      await open(page, "/voice/speak");
+      await page.getByLabel("What should it say?").waitFor({ timeout: 60_000 });
+      await shot(page, "speech-voices");
+      await page
+        .getByLabel("What should it say?")
+        .fill("Good morning. This is the new speech screen, made on this computer.");
+      await page.getByRole("button", { name: "Make the speech" }).click();
+      await page
+        .locator('[data-slot="stage"][data-state="result"] [data-slot="player"]')
+        .waitFor({ timeout: 300_000 });
+      await page.waitForTimeout(2500); // the waveform is read
+      await shot(page, "speech-made");
+      const src = await page.locator('[data-slot="stage"] audio').getAttribute("src");
+      const b64 = await page.evaluate(async (url) => {
+        const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+        let bin = "";
+        for (const b of bytes) bin += String.fromCharCode(b);
+        return btoa(bin);
+      }, src);
+      await page.getByRole("button", { name: "Make a voice" }).click();
+      await page.waitForTimeout(800);
+      await shot(page, "speech-make-a-voice");
+      await page.keyboard.press("Escape");
+      await open(page, "/voice/transcribe");
+      await page.getByLabel("Choose a recording").setInputFiles({
+        name: "good-morning.wav",
+        mimeType: "audio/wav",
+        buffer: Buffer.from(b64, "base64"),
+      });
+      await page.getByRole("button", { name: "Transcribe" }).click();
+      await page.getByRole("article", { name: "Transcript" }).waitFor({ timeout: 300_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "transcript-made");
+    });
+  }
+  if (scheme === "light" && names.has("studio-make")) {
+    // the check of stage U6: a real dub with its script on the stage, and a real lip sync video
+    const choose = async (list, option) => {
+      await page.getByRole("combobox", { name: list }).click();
+      await page.getByRole("option", { name: option }).first().click();
+    };
+    await attempt("dub-make", async () => {
+      await open(page, "/voice/dub");
+      await page.getByRole("combobox", { name: "Which recording?" }).waitFor({ timeout: 60_000 });
+      await choose("Which recording?", /^Good morning/);
+      // the language a voice model on this computer speaks (Kokoro: English only)
+      await choose("Dub it into", process.env.WASIFYAI_AUDIT_DUB_LANGUAGE ?? "English");
+      await page.getByRole("button", { name: "Write the script" }).click();
+      await untilDone(page, page.getByLabel("Line 1"), 900_000);
+      await page.waitForTimeout(800);
+      await shot(page, "dub-script");
+      await page.getByRole("button", { name: "Next: the voice" }).click();
+      await page.getByRole("radio", { name: /A built-in voice/ }).click();
+      await page.waitForTimeout(800);
+      await shot(page, "dub-voice");
+      await page.getByRole("button", { name: "Make the dub" }).click();
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] [data-slot="player"]'),
+        900_000,
+      );
+      await page.waitForTimeout(2500);
+      await shot(page, "dub-made");
+    });
+    await attempt("lipsync-make", async () => {
+      await open(page, "/images/create");
+      await page
+        .getByRole("textbox", { name: /prompt/i })
+        .fill(
+          "A friendly illustrated portrait of a woman looking straight at the camera, plain light background",
+        );
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await page
+        .locator('[data-slot="stage"][data-state="result"] img')
+        .waitFor({ timeout: 600_000 });
+      const src = await page.locator('[data-slot="stage"] img').first().getAttribute("src");
+      const b64 = await page.evaluate(async (url) => {
+        const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+        let bin = "";
+        for (const b of bytes) bin += String.fromCharCode(b);
+        return btoa(bin);
+      }, src);
+      await open(page, "/voice/lip-sync");
+      await page
+        .getByRole("button", { name: "Choose a picture", exact: true })
+        .first()
+        .waitFor({ timeout: 120_000 });
+      await page.locator('input[type="file"][aria-label="Choose a picture"]').setInputFiles({
+        name: "portrait.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(b64, "base64"),
+      });
+      await page.getByAltText("The face to bring to life").waitFor({ timeout: 60_000 });
+      await page.getByRole("radio", { name: /drawing, painting/ }).click();
+      await page
+        .getByLabel("What should it say?")
+        .fill("Hello! This video was made on this computer.");
+      await page.waitForTimeout(800);
+      await shot(page, "lipsync-face");
+      await page.getByRole("button", { name: "Make the video" }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 60_000 });
+      await page.waitForTimeout(15_000);
+      await shot(page, "lipsync-making");
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] video'),
+        1_800_000,
+      );
+      await page.waitForTimeout(1500);
+      await shot(page, "lipsync-made");
+    });
+  }
+  if (scheme === "light" && names.has("music-make")) {
+    // the check of stage U7: a real song made on the stage, and handed to Split into parts
+    await attempt("music-make", async () => {
+      await open(page, "/music/create");
+      await page.getByLabel("Describe the song").waitFor({ timeout: 120_000 });
+      await page.getByLabel("Describe the song").fill("warm, mellow, soft piano and brushed drums");
+      await page.getByRole("button", { name: "lo-fi", exact: true }).click();
+      const instrumental = page.getByRole("checkbox", { name: /No singing/ });
+      if (await instrumental.count()) await instrumental.click();
+      await shot(page, "music-ask");
+      await page.getByRole("button", { name: /^Make the song/ }).click();
+      await page.locator('[data-slot="stage"][data-state="working"]').waitFor({ timeout: 60_000 });
+      await page.waitForTimeout(10_000);
+      await shot(page, "music-making");
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] [data-slot="player"]'),
+        1_200_000,
+      );
+      await page.waitForTimeout(3000); // the waveform is read
+      await shot(page, "music-made");
+      await page.getByRole("button", { name: "More" }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "music-made-more");
+      await page.getByRole("menuitem", { name: /Split into parts/ }).click();
+      await page.getByText("Split into parts").first().waitFor();
+      await page.waitForTimeout(2500);
+      await shot(page, "music-split-handed");
+    });
+  }
+  if (scheme === "light" && names.has("library-make")) {
+    // the check of stage U8: a real edit started from the Library keeps where it came from
+    await attempt("library-make", async () => {
+      await open(page, "/creations");
+      await page.getByRole("button", { name: /^Pictures/ }).click();
+      await page.waitForTimeout(800);
+      await shot(page, "library");
+      const card = page
+        .getByRole("main")
+        .getByRole("link", { name: /teapot/i })
+        .first();
+      await card.click();
+      const detail = page.getByRole("dialog");
+      await detail.getByRole("button", { name: /Edit this/ }).waitFor();
+      await page.waitForTimeout(800);
+      await shot(page, "library-detail");
+      await detail.getByRole("button", { name: /Edit this/ }).click();
+      await page.getByRole("button", { name: /Replace/ }).waitFor({ timeout: 30_000 });
+      await page
+        .getByRole("textbox", { name: /what should change/i })
+        .fill("Make the teapot deep blue");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 600_000);
+      await page.waitForTimeout(800);
+      await shot(page, "library-edit-made");
+      await open(page, "/creations");
+      await page.getByRole("button", { name: /^Pictures/ }).click();
+      await page
+        .getByRole("main")
+        .getByRole("link", { name: /deep blue/i })
+        .first()
+        .click();
+      const made = page.getByRole("dialog");
+      await made
+        .getByRole("region", { name: "Made from" })
+        .getByRole("button")
+        .first()
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "library-made-from");
+      await made.getByRole("region", { name: "Made from" }).getByRole("button").first().click();
+      await page
+        .getByRole("dialog")
+        .getByRole("region", { name: "Made from this" })
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "library-made-from-this");
+    });
+  }
+  if (names.has("a11y")) {
+    // the window's screens against the same rules as the web's e2e/a11y.spec.ts (ADR-0093 U12, decision 4)
+    const AxeBuilder = require("@axe-core/playwright").default;
+    let failing = 0;
+    for (const [name, path] of SCREENS) {
+      await attempt(`a11y-${name}`, async () => {
+        await open(page, path);
+        const result = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        for (const v of result.violations) {
+          failing += 1;
+          console.log(`A11Y ${scheme} ${name}: ${v.id} (${v.impact}) ${v.help}`);
+          for (const n of v.nodes.slice(0, 4))
+            console.log(
+              `    ${n.target.join(" ")}  ${n.failureSummary?.split("\n")[1]?.trim() ?? ""}`,
+            );
+        }
+      });
+    }
+    console.log(`A11Y ${scheme}: ${SCREENS.length} screens, ${failing} rules failing`);
+  }
+  if (scheme === "light" && names.has("f2-parts")) {
+    // stage F2: every optional part in one list, from the engine's /components
+    await attempt("f2-parts", async () => {
+      await open(page, "/settings");
+      await page.getByRole("searchbox", { name: "Search settings" }).fill("parts");
+      const list = page.getByRole("list", { name: "Optional parts" });
+      await list.waitFor();
+      const shown = await list.getByRole("listitem").count();
+      const listed = (await engine("/components"))?.components?.length ?? -1;
+      if (shown !== listed) throw new Error(`${shown} parts shown, ${listed} listed by the engine`);
+      await page.waitForTimeout(500);
+      await shot(page, "f2-parts", 1300);
+    });
+  }
+  if (scheme === "light" && names.has("u11-make")) {
+    await attempt("u11-settings", async () => {
+      await open(page, "/settings");
+      await page.getByRole("heading", { name: "What this computer can do" }).waitFor();
+      await page.waitForTimeout(12_000); // each job reads its list, again once the running tools are found
+      await shot(page, "u11-settings");
+      await shot(page, "u11-settings-tall", 2600);
+      await page.getByRole("searchbox", { name: "Search settings" }).fill("token");
+      await page.waitForTimeout(400);
+      await shot(page, "u11-settings-search");
+      await page.getByRole("searchbox", { name: "Search settings" }).fill("");
+      // saved as it changes: the switch off and on again, so the computer's setting is as it was
+      const look = page.getByRole("checkbox", { name: "Look for models when the app starts" });
+      const was = (await look.getAttribute("aria-checked")) === "true";
+      // each change waits for the engine's answer, and the switch ends as it began (it is the person's setting)
+      const saved = () =>
+        page.waitForResponse(
+          (r) => r.url().includes("/desktop/discovery/settings") && r.request().method() === "PUT",
+          { timeout: 15_000 },
+        );
+      await Promise.all([saved(), look.click()]);
+      await Promise.all([saved(), look.click()]);
+      if (((await look.getAttribute("aria-checked")) === "true") !== was)
+        throw new Error("Look for models did not end as it began");
+      const after = await engine("/desktop/discovery");
+      if (after && after.enabled !== was) throw new Error("the engine kept the switch changed");
+      await page.getByRole("radio", { name: "Dark" }).click();
+      await page.waitForTimeout(600);
+      await shot(page, "u11-settings-dark");
+      await page.getByRole("radio", { name: "Like the computer" }).click();
+    });
+    await attempt("u11-models", async () => {
+      await open(page, "/models");
+      await page.getByRole("table").waitFor();
+      await page.waitForTimeout(1000);
+      await shot(page, "u11-models");
+      await open(page, "/images/create");
+      await page.locator('button[aria-haspopup="dialog"]').first().click();
+      await page.waitForTimeout(1200);
+      await shot(page, "u11-picker");
+      await page.keyboard.press("Escape");
+    });
+  }
+  if (scheme === "light" && names.has("u10-make")) {
+    // the check of stage U10: the four screens with real work in them
+    await attempt("u10-train", async () => {
+      await open(page, "/train");
+      await page.getByRole("region", { name: "What to teach" }).waitFor();
+      await page.waitForTimeout(1500);
+      await shot(page, "u10-train", 1300);
+    });
+    await attempt("u10-notebook", async () => {
+      if (!NOTEBOOK) throw new Error("no notebook to open");
+      await open(page, `/notebooks/${NOTEBOOK}`);
+      await page.getByRole("button", { name: "Report", exact: true }).click();
+      await page
+        .getByRole("form", { name: "Make a report" })
+        .getByRole("button", { name: "Create" })
+        .click();
+      // a real report by the chat model, shown as a card in Outputs
+      await page
+        .locator('[data-slot="output-card"]')
+        .filter({ hasText: /Report · / })
+        .first()
+        .waitFor({ timeout: 600_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "u10-notebook-output");
+      await page
+        .locator('[data-slot="output-card"]')
+        .first()
+        .getByRole("button", { name: /^Rename/ })
+        .click();
+      await page.waitForTimeout(400);
+      await shot(page, "u10-notebook-rename");
+      await page.keyboard.press("Escape");
+    });
+    await attempt("u10-motion", async () => {
+      await open(page, "/video/builder");
+      await shot(page, "u10-motion-start");
+      await page.getByRole("button", { name: "Or fill in the form yourself" }).click();
+      await page.getByLabel("Title").fill("Launch day");
+      await page.getByRole("button", { name: "Make the video" }).click();
+      await untilDone(
+        page,
+        page.locator('[data-slot="stage"][data-state="result"] video'),
+        600_000,
+      );
+      await page.waitForTimeout(1500);
+      await shot(page, "u10-motion-made");
+    });
+    await attempt("u10-3d", async () => {
+      await open(page, "/images/3d");
+      await shot(page, "u10-3d-start");
+      // the newest picture of the Library, as a file, checked for real (its cut-out); no model is made
+      const images = (await engine("/products/wasifyai-image/images?limit=10"))?.images ?? [];
+      const teapot = images.find((i) => /teapot/i.test(i.prompt)) ?? images[0];
+      if (!teapot) throw new Error("no picture to start from");
+      const res = await fetch(
+        teapot.image_url.startsWith("http") ? teapot.image_url : `${BASE}${teapot.image_url}`,
+        {
+          headers: { authorization: `Bearer ${TOKEN}` },
+        },
+      );
+      const buffer = Buffer.from(await res.arrayBuffer());
+      await page
+        .getByLabel("Choose a picture")
+        .setInputFiles({ name: "teapot.png", mimeType: "image/png", buffer });
+      await page.getByRole("img", { name: "The object cut out" }).waitFor({ timeout: 600_000 });
+      await page.waitForTimeout(1000);
+      await shot(page, "u10-3d-check");
+    });
+  }
+  if (scheme === "light" && names.has("home-make")) {
+    // the check of stage U9: the home's quick starts carry the words typed, and Recent opens in the Library
+    await attempt("home-make", async () => {
+      await open(page, "/");
+      await page.getByRole("navigation", { name: "Quick starts" }).waitFor();
+      await page.waitForTimeout(1500); // each start reads whether its model is ready
+      await shot(page, "home-start");
+      await page.getByRole("button", { name: /^More options/ }).click();
+      await page.waitForTimeout(400);
+      await shot(page, "home-plus");
+      await page.keyboard.press("Escape");
+      const words = "A lighthouse on a cliff in thick fog, one beam of light";
+      await page.getByRole("textbox", { name: "Message" }).fill(words);
+      await page
+        .getByRole("navigation", { name: "Quick starts" })
+        .getByRole("button", { name: /^Picture/ })
+        .click();
+      const prompt = page.getByRole("textbox", { name: /prompt/i });
+      await prompt.waitFor({ timeout: 30_000 });
+      if ((await prompt.inputValue()) !== words)
+        throw new Error("the words typed did not reach Images");
+      await shot(page, "home-to-images");
+      await page.getByRole("button", { name: "Make the picture" }).click();
+      await untilDone(page, page.locator('[data-slot="stage"][data-state="result"] img'), 600_000);
+      await open(page, "/");
+      const recent = page
+        .getByRole("region", { name: "Recent" })
+        .getByRole("button", { name: /lighthouse/i })
+        .first();
+      await recent.waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "home-recent");
+      await recent.click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: /Edit this/ })
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "home-recent-opened");
+    });
+  }
+  if (scheme === "light" && names.size === 0) {
+    for (const [name, path] of [
+      ["picker-images", "/images/create"],
+      ["picker-speech", "/voice/speak"],
+      ["picker-chat", "/"],
+    ]) {
+      await attempt(name, async () => {
+        await open(page, path);
+        await page.locator('button[aria-haspopup="dialog"]').first().click();
+        await page.waitForTimeout(1200);
+        await shot(page, name);
+        await page.keyboard.press("Escape");
+      });
+    }
+    await attempt("menu-hidden", async () => {
+      await open(page, "/images/create");
+      await page.getByRole("button", { name: "Hide the side menu" }).click();
+      await page.waitForTimeout(500);
+      await shot(page, "menu-hidden");
+      await page.getByRole("button", { name: "Show the side menu" }).click();
+    });
+    await attempt("menu-open", async () => {
+      await open(page, "/images/create");
+      const nav = page.locator("nav").first();
+      for (const group of ["Notebook", "Images", "Video", "Voice", "Music"]) {
+        const button = nav.getByRole("button", { name: group, exact: true });
+        if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+        await page.waitForTimeout(150);
+      }
+      await shot(page, "menu-open", 1500);
+    });
+    await attempt("search", async () => {
+      await open(page, "/images/create");
+      await page.keyboard.press("Meta+K");
+      await page.waitForTimeout(500);
+      await shot(page, "search");
+      await page.keyboard.press("Escape");
+    });
+    await attempt("tray", async () => {
+      await open(page, "/images/create");
+      await page.getByRole("button", { name: /running|Nothing running/ }).click();
+      await page.waitForTimeout(500);
+      await shot(page, "tray");
+      await page.keyboard.press("Escape");
+    });
+    // Train: the next screen of each card whose Start works (the video card waits for its trainer)
+    for (const [i, name] of [
+      [0, "train-pictures"],
+      [1, "train-writing"],
+      [2, "train-decide"],
+    ]) {
+      await attempt(name, async () => {
+        await open(page, "/train");
+        // Train reopens the set the last step started: go back to the front door first
+        const back = page.getByRole("button", { name: "Back to Train models" });
+        if (await back.count()) {
+          await back.first().click();
+          await page.getByRole("region", { name: "What to teach" }).waitFor();
+        }
+        await page
+          .locator('section[aria-label="What to teach"] > *')
+          .nth(i)
+          .locator("button")
+          .first()
+          .click();
+        await page.waitForTimeout(2500);
+        await shot(page, name, 1400);
+      });
+    }
+    await attempt("models-advanced", async () => {
+      await open(page, "/models");
+      await page.locator("summary", { hasText: "Advanced" }).click();
+      await page.waitForTimeout(2000);
+      await shot(page, "models-advanced", 3200);
+    });
+  }
+  await ctx.close();
+}
+await browser.close();

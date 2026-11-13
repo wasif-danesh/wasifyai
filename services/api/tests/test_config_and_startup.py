@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
+from wasifyai_api.assemble import Injected
 from wasifyai_api.graphs import default_registry
 from wasifyai_api.graphs.hello import build_hello
 from wasifyai_api.main import create_app
@@ -21,12 +22,14 @@ def test_bad_product_config_fails_at_startup(tmp_path):
     registry = GraphRegistry()
     registry.register("hello", build_hello)
     app = create_app(
-        registry,
-        tmp_path,
-        InMemorySaver(),
-        InMemoryUsageRecorder(),
-        event_log=InMemoryEventLog(),
-        run_store=InMemoryRunStore(),
+        Injected(
+            registry=registry,
+            products_dir=tmp_path,
+            checkpointer=InMemorySaver(),
+            usage=InMemoryUsageRecorder(),
+            event_log=InMemoryEventLog(),
+            run_store=InMemoryRunStore(),
+        )
     )
     with pytest.raises(ConfigError, match="requires 'model'"):
         with TestClient(app):
@@ -38,12 +41,14 @@ def test_committed_hello_config_boots(tmp_path):
 
     products = Path(__file__).resolve().parents[3] / "products"
     app = create_app(
-        default_registry(),
-        products,
-        InMemorySaver(),
-        InMemoryUsageRecorder(),
-        event_log=InMemoryEventLog(),
-        run_store=InMemoryRunStore(),
+        Injected(
+            registry=default_registry(),
+            products_dir=products,
+            checkpointer=InMemorySaver(),
+            usage=InMemoryUsageRecorder(),
+            event_log=InMemoryEventLog(),
+            run_store=InMemoryRunStore(),
+        )
     )
     with TestClient(app) as c:
         assert c.get("/health").json() == {"status": "ok"}
@@ -59,12 +64,14 @@ def test_every_product_route_requires_an_identity():
 
     products = Path(__file__).resolve().parents[3] / "products"
     app = create_app(
-        default_registry(),
-        products,
-        InMemorySaver(),
-        InMemoryUsageRecorder(),
-        event_log=InMemoryEventLog(),
-        run_store=InMemoryRunStore(),
+        Injected(
+            registry=default_registry(),
+            products_dir=products,
+            checkpointer=InMemorySaver(),
+            usage=InMemoryUsageRecorder(),
+            event_log=InMemoryEventLog(),
+            run_store=InMemoryRunStore(),
+        )
     )
 
     def nobody():

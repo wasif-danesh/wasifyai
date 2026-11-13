@@ -5,13 +5,13 @@ import os
 import socket
 import wave
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from urllib.parse import urlparse
 
 import pytest
 import yaml
 from wasifyai_platform_sdk import (
+    EngineServices,
     LipSyncResult,
     MusicResult,
     SeparateResult,
@@ -41,7 +41,7 @@ def _png_size(path: Path | str) -> int:
 def catalogue() -> dict[str, VoiceModel]:
     raw = yaml.safe_load((PRODUCT / "models.yaml").read_text())
     return {
-        m["id"]: parse_voice_model(m["id"], m["title"], m["licence"], m["voice"])
+        m["id"]: parse_voice_model(m["id"], m["title"], m["voice"])
         for m in raw["models"]
         if m.get("voice")
     }
@@ -188,13 +188,10 @@ class FakeEngine:
 
 def app_state(
     tmp_path: Path, engine: FakeEngine | None = None, store: Any = None
-) -> SimpleNamespace:
-    """The engine's app state. Without a `store` the desktop's folder is used (SQLite); with one
+) -> EngineServices:
+    """The engine's services. Without a `store` the desktop's folder is used (SQLite); with one
     (the web's Postgres store) it is the library, as the web engine provides it."""
-    state = SimpleNamespace(audio=engine or FakeEngine(), desktop_dir=tmp_path, storage=None)
-    if store is not None:
-        state.voice_store = store
-    return state
+    return EngineServices(audio=engine or FakeEngine(), desktop_dir=tmp_path, voice_store=store)
 
 
 def pg_dsn() -> str:

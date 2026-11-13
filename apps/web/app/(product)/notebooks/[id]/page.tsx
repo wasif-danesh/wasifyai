@@ -1,4 +1,5 @@
-import { NEW_NOTEBOOK, NotebookScreen } from "@/components/notebook/NotebookScreens";
+import { NotebookScreen } from "@/components/notebook/NotebookScreens";
+import { NEW_NOTEBOOK } from "@/lib/notebook-ids";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 

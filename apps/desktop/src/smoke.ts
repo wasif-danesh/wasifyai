@@ -5,6 +5,7 @@
 // DOM a person would, so CORS, the content security policy and the signed file link are all exercised.
 import { invoke } from "@tauri-apps/api/core";
 import { notebooksApi } from "./api";
+import { gate } from "./choices/use-ready";
 
 const PROMPT = "a red ceramic teapot on a wooden table";
 const TIMEOUT_MS = 90_000;
@@ -38,6 +39,7 @@ function type(el: HTMLTextAreaElement, text: string) {
 }
 
 export async function runSmoke(): Promise<void> {
+  gate.open = true; // a fresh computer has no model: the placeholder engine makes the picture
   try {
     // the home screen is the assistant (ADR-0057): say hello and wait for an answer or a plain error
     // (with no chat model chosen, as on a fresh computer, the error says what to do)
@@ -64,49 +66,84 @@ export async function runSmoke(): Promise<void> {
     await new Promise((r) => setTimeout(r, 100));
     const box = await until("the prompt box", () => document.querySelector("textarea"));
     type(box, PROMPT);
-    const go = await until("the Generate button", () =>
+    const go = await until("the Make the picture button", () =>
       [...document.querySelectorAll("button")].find(
-        (b) => b.textContent?.trim() === "Generate" && !b.disabled,
+        (b) => b.textContent?.trim() === "Make the picture" && !b.disabled,
       ),
     );
     go.click();
 
+    // the picture lands on the stage (stage U3 of the UI plan)
+    const onStage = (alt: string) =>
+      document.querySelector<HTMLImageElement>(
+        `[data-slot="stage"][data-state="result"] img[alt="${alt}"]`,
+      );
     const picture = await until("the finished picture", () => {
-      const img = document.querySelector<HTMLImageElement>(`figure img[alt="${PROMPT}"]`);
+      const img = onStage(PROMPT);
       return img?.complete && img.naturalWidth > 0 ? img : null;
     });
+    // read now: the screen re-renders on the way to the second picture, and an element it let go of can read 0x0
+    const firstSize = `${picture.naturalWidth}x${picture.naturalHeight}`;
     if (!picture.src.startsWith("http://127.0.0.1:") || !picture.src.includes("/files/")) {
       throw new Error(`the picture did not come from the engine: ${picture.src}`);
     }
-    await until("the ready message", () =>
-      document.body.textContent?.includes("Your image is ready"),
-    );
+    await until("the caption", () => document.body.textContent?.includes(PROMPT));
 
-    // the recipe: favourite it, read its seed, then make it again and expect the same recipe
+    // the recipe: favourite it, read its seed, then make it again and expect the same recipe. The stage shows
+    // three actions as buttons and the rest behind More, and which three depends on the screen, so an
+    // action is a button when it is one and a menu item otherwise
     const buttonNamed = (name: string | RegExp) => () =>
       [...document.querySelectorAll("button")].find((b) =>
         typeof name === "string" ? b.textContent?.trim() === name : name.test(b.textContent ?? ""),
       );
+    const act = async (name: string) => {
+      const button = buttonNamed(name)();
+      if (button) {
+        button.click();
+        return;
+      }
+      // the menu opens on a press (pointerdown), as Radix has it; a bare click() opens nothing. A press while
+      // the last menu is still closing toggles it shut, so wait for it to go and press again if none opens
+      const named = () =>
+        [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+          (el) => el.textContent?.trim() === name,
+        );
+      for (let press = 0; ; press++) {
+        await until("the last menu to close", () => !document.querySelector('[role="menu"]'));
+        (await until("More", buttonNamed("More"))).dispatchEvent(
+          new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }),
+        );
+        try {
+          await until("the More menu", () => document.querySelector('[role="menu"]'), 3000);
+          break;
+        } catch (e) {
+          if (press >= 2) throw e;
+        }
+      }
+      (await until(name, named)).click();
+    };
     const readSeed = async () => {
-      if (!document.querySelector("dl")) (await until("Recipe", buttonNamed("Recipe"))).click();
+      if (!document.querySelector("dl")) await act("Recipe");
       const dd = await until("the seed", () => document.querySelector("dl dd.font-mono"));
       return Number(dd.textContent);
     };
-    (await until("Add to favourites", buttonNamed("Add to favourites"))).click();
-    await until("the favourite mark", buttonNamed("Favourite"));
+    await act("Add to favourites");
+    await until("the favourite mark", () => document.body.textContent?.includes("· favourite"));
     const seed = await readSeed();
     if (!Number.isInteger(seed)) throw new Error(`the recipe has no seed: ${seed}`);
-    (await until("Make it again", buttonNamed(/Make it again/))).click();
+    await act("Make it again");
     const again = await until("the second picture", () => {
-      const img = document.querySelector<HTMLImageElement>(`figure img[alt="${PROMPT}"]`);
+      const img = onStage(PROMPT);
       return img?.complete && img.naturalWidth > 0 && img.src !== picture.src ? img : null;
     });
-    await until("the second recipe", buttonNamed(/Make it again/));
+    const secondSize = `${again.naturalWidth}x${again.naturalHeight}`;
+    await until("the second recipe", buttonNamed("More"));
     const seedAgain = await readSeed();
     if (seedAgain !== seed) throw new Error(`the seed changed: ${seed} then ${seedAgain}`);
-    const size = `${again.naturalWidth}x${again.naturalHeight}`;
-    if (size !== `${picture.naturalWidth}x${picture.naturalHeight}`) {
-      throw new Error(`the second picture has another size: ${size}`);
+    if (secondSize !== firstSize) {
+      throw new Error(
+        `the second picture has another size: ${secondSize}, the first was ${firstSize}`,
+      );
     }
     // the Models screen lists what other tools left here (ADR-0063): the first scan finishes by itself
     window.location.hash = "/models";
@@ -116,19 +153,10 @@ export async function runSmoke(): Promise<void> {
         ? text
         : null;
     });
-    // Discover asks before it contacts anyone (ADR-0064), and the recommended list needs no network
-    const discover = await until("the Discover tab", () =>
-      [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent === "Discover"),
-    );
-    (discover as HTMLElement).click();
+    // the hub's recommended list needs no network (ADR-0064), and Advanced holds it
     await until("the recommended models", () =>
       document.body.textContent?.includes("Recommended to start with"),
     );
-    (
-      [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent === "On device") as
-        | HTMLElement
-        | undefined
-    )?.click();
     await until("the result of the look", () => {
       const text = document.body.textContent ?? "";
       return /Looked (just now|\d+ minutes? ago)|No models from other tools|Looking is turned off/.test(
@@ -146,7 +174,7 @@ export async function runSmoke(): Promise<void> {
         : null,
     );
     const menu = document.querySelector('nav[aria-label="Main"]')?.textContent ?? "";
-    for (const word of ["Notebook", "View Notebooks", "Video", "Voice", "Music"]) {
+    for (const word of ["Notebook", "View notebooks", "Video", "Voice", "Music"]) {
       if (!menu.includes(word)) throw new Error(`the side menu has no ${word}`);
     }
     window.location.hash = "/notebooks/new";
@@ -178,7 +206,16 @@ export async function runSmoke(): Promise<void> {
         ? true
         : null,
     );
-    await notebooksApi.remove(saved[1] ?? "");
+    // a computer with the search model is still reading the file: the notebook can be deleted once it is read
+    for (const deadline = Date.now() + TIMEOUT_MS; ; ) {
+      try {
+        await notebooksApi.remove(saved[1] ?? "");
+        break;
+      } catch (e) {
+        if (Date.now() > deadline || !String(e).includes("being read")) throw e;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
 
     // Voice (ADR-0066): both screens list their models from the engine's descriptors and say what
     // they need. Nothing here needs the speech runtime or a model.
@@ -191,9 +228,7 @@ export async function runSmoke(): Promise<void> {
       window.location.hash = path;
       await until(`the ${label} screen`, () =>
         model
-          ? [...document.querySelectorAll("select option")].some((o) =>
-              o.textContent?.startsWith(model),
-            )
+          ? document.querySelector('button[aria-haspopup="dialog"]')
             ? true
             : null
           : document.body.textContent?.includes("Describe a voice")
@@ -201,15 +236,16 @@ export async function runSmoke(): Promise<void> {
             : null,
       );
       if (!model) continue;
-      const needs = document.body.textContent ?? "";
-      if (!needs.includes("Set up speech") && !needs.includes("Licence")) {
-        throw new Error(`the ${label} screen shows neither the runtime setup nor the licence`);
-      }
+      // every screen that needs a model has the one button (ADR-0086)
+      await until(`the model button on the ${label} screen`, () =>
+        document.querySelector('button[aria-haspopup="dialog"]'),
+      );
     }
 
-    // Your music and Lyrics open without a model and say what they are for.
+    // the tools open without a model and say what they are for; the old "Your music" and "Your videos"
+    // addresses open the one Library (ADR-0093 U8)
     for (const [path, heading] of [
-      ["/music/library", "Your music"],
+      ["/music/library", "Library"],
       ["/music/lyrics", "Lyrics"],
       ["/music/separate", "Split into parts"],
       ["/voice/convert", "Change a voice"],
@@ -219,7 +255,8 @@ export async function runSmoke(): Promise<void> {
       ["/voice/audiobook", "Audiobook"],
       ["/video/create", "Make a video"],
       ["/video/animate", "Animate a picture"],
-      ["/video/library", "Your videos"],
+      ["/video/extend", "Extend a video"],
+      ["/video/library", "Library"],
     ] as const) {
       window.location.hash = path;
       await until(`the ${heading} screen`, () =>
@@ -229,7 +266,7 @@ export async function runSmoke(): Promise<void> {
 
     await report(
       true,
-      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech and music screens listing their models; Your music, Lyrics, Lip sync, Dub, Audiobook, the three audio tools and the three video screens opening`,
+      `picture ${picture.naturalWidth}x${picture.naturalHeight} from ${picture.src}; again with seed ${seed}; a notebook saved with its first source; the speech and music screens listing their models; the Library from its old addresses, Lyrics, Lip sync, Dub, Audiobook, the three audio tools and the three video screens opening`,
     );
   } catch (e) {
     // what the window was saying when it gave up makes a CI log readable

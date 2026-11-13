@@ -5,19 +5,20 @@ not in responses, the audit log or the logs."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from wasifyai_platform_sdk import need
 
 from wasifyai_api.admin import AuditEntry
 from wasifyai_api.identity import Identity, require_admin
 from wasifyai_api.litellm_admin import BackendError
 from wasifyai_api.model_access import (
     Binding,
-    CanaryFailed,
     ModelAccess,
     ModelAccessError,
     ModelView,
     ProviderView,
     TestOutcome,
 )
+from wasifyai_api.services import services_of
 
 router = APIRouter(prefix="/admin/models", tags=["admin"])
 
@@ -29,15 +30,14 @@ class ModelList(BaseModel):
 
 class ModelUpdated(BaseModel):
     model: ModelView
-    checks: str  # "passed" when the product's checks ran and passed, otherwise "none"
 
 
 def _models(request: Request) -> ModelAccess:
-    return request.app.state.models
+    return need(services_of(request).models, "model access")
 
 
 async def _audit(request: Request, who: Identity, action: str, alias: str, **detail) -> None:
-    await request.app.state.admin.audit(
+    await need(services_of(request).admin, "the admin store").audit(
         who.tenant_id,
         AuditEntry(
             id="", actor_user_id=who.user_id, action=action, target_type="model_alias",
@@ -68,18 +68,13 @@ async def set_model(
     alias: str, binding: Binding, request: Request, who: Identity = Depends(require_admin)
 ) -> ModelUpdated:
     try:
-        view, checks = await _models(request).set(alias, binding, who.user_id)
-    except CanaryFailed as exc:
-        await _audit(
-            request, who, "admin.model.rejected", alias, **_describe(binding), failures=exc.failures
-        )
-        raise HTTPException(409, {"message": str(exc), "failures": exc.failures}) from exc
+        view = await _models(request).set(alias, binding, who.user_id)
     except ModelAccessError as exc:
         raise HTTPException(422, str(exc)) from exc
     except BackendError as exc:
         raise HTTPException(502, str(exc)) from exc
-    await _audit(request, who, "admin.model.update", alias, **_describe(binding), checks=checks)
-    return ModelUpdated(model=view, checks=checks)
+    await _audit(request, who, "admin.model.update", alias, **_describe(binding))
+    return ModelUpdated(model=view)
 
 
 @router.post("/{alias}/test", response_model=TestOutcome)

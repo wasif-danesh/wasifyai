@@ -1,3 +1,11 @@
+from wasifyai_platform_sdk import (
+    admin_wire,
+    analysis_wire,
+    builder_wire,
+    model3d_wire,
+    speech_wire,
+    train_wire,
+)
 from wasifyai_platform_sdk.capabilities import (
     Capabilities,
     CapabilityNotConfigured,
@@ -13,17 +21,26 @@ from wasifyai_platform_sdk.config import (
     load_product_config,
 )
 from wasifyai_platform_sdk.context import RunContext, require_context, reset_context, set_context
+from wasifyai_platform_sdk.engine_jobs import (
+    EngineError,
+    EngineJob,
+    EngineOutcome,
+    EngineQueue,
+    EngineUnavailable,
+    EngineWorkerInfo,
+)
 from wasifyai_platform_sdk.enhance import (
     ENHANCED,
-    EnhanceRefused,
     build_enhance_router,
     clean_output,
 )
 from wasifyai_platform_sdk.errors import RunError
 from wasifyai_platform_sdk.eventlog import EventLog, InMemoryEventLog, RedisEventLog
+from wasifyai_platform_sdk.folders import AllowedFolders, PathRefused
 from wasifyai_platform_sdk.identity import Identity
 from wasifyai_platform_sdk.jobqueue import RedisJobSink
 from wasifyai_platform_sdk.jobs import (
+    PICTURE_SLOTS,
     InMemoryJobSink,
     JobError,
     JobFailed,
@@ -37,11 +54,15 @@ from wasifyai_platform_sdk.jobs import (
 )
 from wasifyai_platform_sdk.media_backends import (
     BACKENDS,
+    ENGINE_WORKERS,
+    FAL,
+    FAL_QUEUE,
     BackendSpec,
     CheckOutcome,
     InvalidBackendConfig,
     backends_for,
     check_backend,
+    default_backend,
     family,
     validate_config,
 )
@@ -61,10 +82,20 @@ from wasifyai_platform_sdk.parts import (
     UnsupportedInput,
     part_from_file,
 )
+from wasifyai_platform_sdk.principal import (
+    ALL_SCOPES,
+    SCOPE_WORDS,
+    SCOPES,
+    USER_SCOPES,
+    Principal,
+    Scope,
+)
 from wasifyai_platform_sdk.providers import ProviderDeps, build_capabilities, register_provider
-from wasifyai_platform_sdk.registry import CheckResult, GraphRegistry, ModelCheck
+from wasifyai_platform_sdk.registry import GraphRegistry
+from wasifyai_platform_sdk.route_usage import RouteUsage
 from wasifyai_platform_sdk.routes import RouteDeps, RouteFactory, parse_ids
 from wasifyai_platform_sdk.runstore import InMemoryRunStore, RedisRunStore, RunRecord, RunStore
+from wasifyai_platform_sdk.saving import SaveRefused, SaveTo, copy_to_path, write_to_path
 from wasifyai_platform_sdk.search import (
     KINDS,
     CreationIndexer,
@@ -74,6 +105,17 @@ from wasifyai_platform_sdk.search import (
     search_text,
 )
 from wasifyai_platform_sdk.secretbox import SecretBox, SecretsUnavailable
+from wasifyai_platform_sdk.secrets import (
+    EnvSecretStore,
+    FileSecretStore,
+    InMemorySecretStore,
+    KeychainSecretStore,
+    LayeredSecretStore,
+    SecretStore,
+    SqlSecretStore,
+    secret_name,
+)
+from wasifyai_platform_sdk.services import EngineServices, need
 from wasifyai_platform_sdk.slots import Held, OwnerLock, SlotManager
 from wasifyai_platform_sdk.storage import (
     LocalFileStorage,
@@ -103,9 +145,7 @@ from wasifyai_platform_sdk.usage import InMemoryUsageRecorder, UsageEvent, Usage
 from wasifyai_platform_sdk.usage_postgres import PostgresUsageRecorder
 from wasifyai_platform_sdk.usage_queries import start_of_day_utc, sum_usage
 from wasifyai_platform_sdk.voice_models import (
-    LIPSYNC_PICTURE,
-    LIPSYNC_VOICE,
-    MARK_TEXT,
+    LIPSYNC_SHAPES,
     ConvertRequest,
     LipSyncRequest,
     LipSyncResult,
@@ -135,16 +175,17 @@ from wasifyai_platform_sdk.voice_models import (
     check_speech_edit,
     check_transcribe,
     edit_markup,
+    lipsync_frame,
     parse_voice_model,
 )
 
 __all__ = [
-    "LIPSYNC_PICTURE",
-    "LIPSYNC_VOICE",
-    "MARK_TEXT",
     "LipSyncRequest",
     "LipSyncResult",
     "check_lipsync",
+    "lipsync_frame",
+    "LIPSYNC_SHAPES",
+    "PICTURE_SLOTS",
     "input_image_name",
     "UPLOAD_CREATED",
     "InMemoryUploadLimiter",
@@ -164,6 +205,9 @@ __all__ = [
     "process_audio",
     "process_image",
     "BACKENDS",
+    "ENGINE_WORKERS",
+    "FAL",
+    "FAL_QUEUE",
     "BackendSpec",
     "CheckOutcome",
     "InMemoryMediaBindingStore",
@@ -173,17 +217,38 @@ __all__ = [
     "PostgresMediaBindingStore",
     "SecretBox",
     "SecretsUnavailable",
+    "SecretStore",
+    "InMemorySecretStore",
+    "FileSecretStore",
+    "KeychainSecretStore",
+    "SqlSecretStore",
+    "EnvSecretStore",
+    "LayeredSecretStore",
+    "secret_name",
     "backends_for",
+    "default_backend",
     "check_backend",
     "family",
     "validate_config",
-    "CheckResult",
-    "ModelCheck",
     "Identity",
+    "AllowedFolders",
+    "PathRefused",
+    "Principal",
+    "Scope",
+    "SCOPES",
+    "SCOPE_WORDS",
+    "ALL_SCOPES",
+    "USER_SCOPES",
+    "EngineServices",
+    "need",
     "RouteDeps",
+    "RouteUsage",
+    "SaveRefused",
+    "SaveTo",
+    "copy_to_path",
+    "write_to_path",
     "RouteFactory",
     "ENHANCED",
-    "EnhanceRefused",
     "KINDS",
     "CreationIndexer",
     "IndexItem",
@@ -197,7 +262,19 @@ __all__ = [
     "EventLog",
     "InMemoryEventLog",
     "RedisEventLog",
+    "EngineError",
+    "EngineJob",
+    "EngineOutcome",
+    "EngineQueue",
+    "EngineUnavailable",
+    "EngineWorkerInfo",
     "RedisJobSink",
+    "admin_wire",
+    "builder_wire",
+    "model3d_wire",
+    "analysis_wire",
+    "train_wire",
+    "speech_wire",
     "JobError",
     "JobFailed",
     "JobOutput",

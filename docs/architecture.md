@@ -100,7 +100,7 @@ Key properties:
 
 A product is a folder under `products/` containing:
 
-- `product.yaml`: ID, capability bindings, quotas, feature flags
+- `product.yaml`: ID, capability bindings, uploads, Enhance kinds, settings
 - `graphs/`: LangGraph graphs, registered with the API at startup
 - `prompts/`: versioned prompt templates
 - `workflows/`: ComfyUI API-format workflow JSON plus `*.map.yaml` input/output maps
@@ -111,6 +111,18 @@ authenticated read routes for its own data under `/products/{product_id}/` (ADR-
 live in one shared Next.js app, `apps/web` (ADR-0014). Controls and data grids use shadcn/ui and TanStack Table
 (ADR-0045), and inside a product the user navigates with a side panel while the home page keeps its cards (ADR-0046);
 the side panel and the shadcn/ui components are built for the product screens; other screens migrate as they are touched.
+
+What a product's routes and graphs may reach is the engine's services: one typed `EngineServices` object
+(`wasifyai_platform_sdk.services`), `deps.state` in a route and `caps.extras["app_state"]` in a graph, with a field for each
+service and `None` where this deployment has none (stage F1). The engine builds it, with its own services added
+(`ApiServices`), in `wasifyai_api/assemble.py`: what both deployments share first, then the web's or the desktop's builder.
+`app.state.services` is the only attribute of the app; an engine route reads it with `services_of(request)`.
+
+A product that keeps its own tables (notebooks, 3D, training, voice, Motion graphics) has one store class over a
+`StoreDb` (`wasifyai_platform_sdk.sqlstore`, stage J2): a SQLite file on the desktop (`Store.in_folder(...)`) or its
+own schema in the deployment's Postgres on the web (`Store.on_postgres(...)`). The SQL is written once, with `?`
+parameters and types both databases read alike; what really differs (the notebooks' keyword and vector index) is a
+branch on `db.dialect` inside the product.
 
 ## Capabilities
 
@@ -160,7 +172,7 @@ library. The checklist is in ADR-0041 ("A rule for everything built later").
 | Auth | Identity resolved on every request (stub in dev); Auth.js in Next.js, the BFF signs a short-lived JWT that FastAPI validates (ADR-0030); optional central OIDC (Keycloak / Authentik) later |
 | Billing | `usage_events` table: tokens, GPU seconds, jobs per tenant and user |
 | Observability | OpenTelemetry instrumentation, structured JSON logs with trace IDs; Langfuse for LLM traces; Prometheus / Grafana / Loki later |
-| Quotas | Usage events + per-product limits in `product.yaml` |
+| Usage | Usage events (no per-person limits, ADR-0094) |
 
 ## Security baseline
 

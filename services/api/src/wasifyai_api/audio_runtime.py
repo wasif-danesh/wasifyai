@@ -25,10 +25,8 @@ import secrets
 import shutil
 import socket
 import sys
-import tarfile
 import tempfile
 import time
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -50,12 +48,14 @@ from wasifyai_platform_sdk import (
     TranscriptSegment,
     VoiceEngineError,
     VoiceModel,
+    installer,
 )
 from wasifyai_platform_sdk.slots import Held
 
+from wasifyai_api.components.manifest import part_pins
+
 log = logging.getLogger(__name__)
 
-PINS_FILE = Path(__file__).with_name("audio_pins.json")
 INSTALL_RECORD = "INSTALL.json"
 MIN_FREE_BYTES = 1_000_000_000
 SERVER_START_TIMEOUT_S = 120.0
@@ -87,8 +87,9 @@ class Pins:
     assets: dict[str, Pin]
 
 
-def load_pins(path: Path = PINS_FILE) -> Pins:
-    raw = json.loads(path.read_text())
+def load_pins(path: Path | None = None) -> Pins:
+    """The speech runtime's pins: its part in this platform's component manifest (stage F2)."""
+    raw = json.loads(path.read_text()) if path is not None else part_pins("audiocpp")
     assets = {
         key: Pin(key, a["name"], a["url"], int(a["size"]), a["sha256"].lower(), a["backend"],
                  a["archive"], bool(a["measured"]))
@@ -171,8 +172,8 @@ def _sha256_file(path: Path) -> str:
 # ---- installing it ------------------------------------------------------------------------------
 
 
-class InstallError(Exception):
-    """`str(e)` is a sentence safe to show."""
+# the one installer's error (stage F2): `str(e)` is a sentence safe to show
+InstallError = installer.InstallError
 
 
 @dataclass
@@ -258,21 +259,15 @@ class AudioInstaller:
             raise InstallError("There is not enough free disk space for the speech runtime.")
         archive = stage / pin.name
         self._say("download", "Downloading the speech runtime", 0)
-        digest = hashlib.sha256()
-        size = 0
-        async with self._client_factory() as http, http.stream("GET", pin.url) as r:
-            r.raise_for_status()
-            with archive.open("wb") as f:
-                async for block in r.aiter_bytes(1 << 20):
-                    f.write(block)
-                    digest.update(block)
-                    size += len(block)
-                    self._say("download", "Downloading the speech runtime", size)
-        if size != pin.size or digest.hexdigest() != pin.sha256:
-            raise InstallError("The download did not match what was expected. Nothing was kept.")
+        # through the one installer (stage F2): size and SHA-256 checked, nothing kept otherwise
+        await installer.download(
+            installer.Archive(pin.url, pin.size, pin.sha256, pin.archive), archive, "download",
+            lambda done, _: self._say("download", "Downloading the speech runtime", done),
+            client=self._client_factory,
+        )  # fmt: skip
         self._say("unpack", "Unpacking")
         target = stage / "unpacked"
-        await asyncio.to_thread(_unpack, archive, target, pin.archive)
+        await asyncio.to_thread(installer.unpack, archive, pin.archive, 0, target, "unpack")
         server = await asyncio.to_thread(_find_server, target, self.pins.server)
         if server is None:
             raise InstallError("The download did not contain the speech runtime.")
@@ -304,20 +299,6 @@ class AudioInstaller:
                   "source": "found"}  # fmt: skip
         (self._root / INSTALL_RECORD).write_text(json.dumps(record))
         return AudioInstall(found["tag"], found["backend"], server, "found")
-
-
-def _unpack(archive: Path, target: Path, kind: str) -> None:
-    target.mkdir(parents=True)
-    if kind == "zip":
-        with zipfile.ZipFile(archive) as z:
-            for name in z.namelist():
-                parts = Path(name).parts
-                if Path(name).is_absolute() or ".." in parts:
-                    raise InstallError("The download contained an unsafe file path.")
-            z.extractall(target)
-        return
-    with tarfile.open(archive) as t:
-        t.extractall(target, filter="data")  # refuses absolute paths, '..' and links outside
 
 
 def _find_server(root: Path, name: str) -> Path | None:
@@ -540,8 +521,13 @@ class AudioEngine:
         self.installer = installer
         self.server = server
         self.comfy = comfy  # ComfyMusic: the music models the image engine runs (V3b)
-        self.lipsync_sidecar = lipsync  # LipSyncSidecar: MuseTalk, an optional component (V5)
+        self.lipsync_sidecar = lipsync  # LipSyncSidecar: EchoMimic v3, an optional component (V5)
         self.slot: Any = None  # the SlotManager; set when the worker is built
+
+    @property
+    def models_service(self) -> Any:
+        """The catalogue and the downloads (the engine worker fetches models through it)."""
+        return self._models
 
     # ---- state ---------------------------------------------------------------------------
 
@@ -593,7 +579,7 @@ class AudioEngine:
             missing = 0 if files else e.total_bytes
             out.append(
                 {**m.public(), "state": state, "files_ready": files, "runtime_ready": runtime,
-                 "bytes_missing": missing}
+                 "bytes_missing": missing, "source": e.source}
             )  # fmt: skip
         return out
 
@@ -608,7 +594,9 @@ class AudioEngine:
         else:
             wanted = [x for x in entries.values() if task in x.voice.recommended]
             ready = [x for x in wanted if self._present(x)]
-            e = (ready or wanted or [None])[0]
+            # an installed model that can do the task beats a recommended one still to get
+            able = [x for x in entries.values() if task in x.voice.tasks and self._present(x)]
+            e = (ready or able or wanted or [None])[0]
             if e is None:
                 raise VoiceEngineError("no_model", "There is no model for this yet.")
         if not self._runtime_ready(e.voice):
@@ -629,7 +617,8 @@ class AudioEngine:
             )
         if self._present(e) is None:
             raise VoiceEngineError(
-                "model_missing", f"{e.voice.title} is not on this computer yet. Get it in Models."
+                "model_missing",
+                f"{e.voice.title} is not on this computer yet. Get it in the Model hub.",
             )
         return e.voice
 
@@ -902,7 +891,7 @@ class AudioEngine:
     async def lipsync(
         self, model: VoiceModel, req: LipSyncRequest, picture: Path, voice: Path
     ) -> LipSyncResult:
-        """A video of the face in the picture saying the voice. The sidecar draws the mark."""
+        """A video of the face in the picture saying the voice."""
         if "lipsync" not in model.tasks:
             raise VoiceEngineError("wrong_task", f"{model.title} does not make talking videos.")
         sidecar = self.lipsync_sidecar
@@ -913,7 +902,7 @@ class AudioEngine:
         entry = next(e for e in self._entries() if e.id == model.id)
         files = {f.name: self._models.locate(f) for f in entry.files}
         hold = self.slot.hold("lipsync") if self.slot is not None else contextlib.nullcontext()
-        async with hold:  # MuseTalk takes about 12 GB: one big model at a time
+        async with hold:  # EchoMimic takes about 29 GB: one big model at a time
             return await sidecar.generate(  # type: ignore[no-any-return]
                 model, req, picture, voice, {k: v for k, v in files.items() if v is not None}
             )

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type VideoSummary, type VideosApi, createRunClient } from "@wasifyai/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { SaveAsProvider } from "../save";
 import { done, node, sse } from "../test-utils";
 import { VideoLibrary } from "./VideoLibrary";
 import { VideoWorkspace } from "./VideoWorkspace";
@@ -51,12 +52,13 @@ function api(over: Partial<VideosApi> = {}): VideosApi {
     get: vi.fn(),
     remove: vi.fn().mockResolvedValue(undefined),
     exportCopy: vi.fn().mockResolvedValue({ name: "a-red-fox.mp4", path: "/Downloads/a.mp4" }),
+    importVideo: vi.fn(),
     ...over,
   };
 }
 
 describe("VideoWorkspace", () => {
-  it("makes a clip from words: sends the shape and length, shows the player, saves a copy", async () => {
+  it("makes a clip from words: sends the shape and length, plays it on the stage, saves a copy", async () => {
     fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_video"), ready]));
     const videos = api();
     const user = userEvent.setup();
@@ -70,44 +72,238 @@ describe("VideoWorkspace", () => {
         onOpenLibrary={openLibrary}
       />,
     );
+    expect(screen.getByText("Your video appears here.")).toBeInTheDocument();
 
     await user.type(screen.getByRole("textbox"), "a red fox");
-    await user.click(screen.getByRole("button", { name: /5 seconds/i }));
+    await user.click(screen.getByRole("button", { name: /8 seconds/i }));
     await user.click(screen.getByRole("button", { name: /portrait/i }));
-    await user.click(screen.getByRole("button", { name: /make my video/i }));
+    await user.click(screen.getByRole("button", { name: "Make the video" }));
 
-    expect(await screen.findByText(/saved in your videos/i)).toBeInTheDocument();
+    const stage = await screen.findByRole("region", { name: "Result" });
+    await waitFor(() => expect(stage).toHaveAttribute("data-state", "result"));
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/products/wasifyai-video/runs");
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body.input).toEqual({
       mode: "text",
       prompt: "a red fox",
-      seconds: 5,
+      seconds: 8,
       shape: "portrait",
     });
-    const player = document.querySelector("video");
+    const player = stage.querySelector("video");
     expect(player).toHaveAttribute("src", "http://127.0.0.1:1/files/v1.mp4");
     expect(player).toHaveAttribute("poster", "http://127.0.0.1:1/files/v1.jpg");
+    expect(screen.getByText(/kept in your videos/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /save a copy/i }));
-    expect(videos.exportCopy).toHaveBeenCalledWith("v1");
+    expect(videos.exportCopy).toHaveBeenCalledWith("v1", undefined);
     expect(await screen.findByText("Saved as a-red-fox.mp4 in Downloads.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /your videos/i }));
+    await user.click(screen.getByRole("button", { name: "See all" }));
     expect(openLibrary).toHaveBeenCalled();
+    // the words stay in the box for the next clip
+    expect(screen.getByRole("textbox")).toHaveValue("a red fox");
+  });
 
-    // "Make another" brings the form back
-    await user.click(screen.getByRole("button", { name: /make another/i }));
-    await waitFor(() => expect(screen.getByRole("textbox")).toBeInTheDocument());
+  it("lists the recent clips, plays one on the stage, and hands it to Extend", async () => {
+    const videos = api({
+      list: vi.fn().mockResolvedValue({ videos: [clip()], next_before: null }),
+    });
+    const extend = vi.fn();
+    const user = userEvent.setup();
+    render(<VideoWorkspace mode="text" runs={client} videos={videos} onExtendThis={extend} />);
+    expect(videos.list).toHaveBeenCalledWith(expect.objectContaining({ status: "done" }));
+    await user.click(await screen.findByRole("button", { name: /open: a red fox/i }));
+    expect(screen.getByRole("region", { name: "Result" }).querySelector("video")).toHaveAttribute(
+      "src",
+      "http://127.0.0.1:1/files/v1.mp4",
+    );
+    await user.click(screen.getByRole("button", { name: /extend this/i }));
+    expect(extend).toHaveBeenCalledWith(expect.objectContaining({ id: "v1" }));
+  });
+
+  it("animates a picture sent from Images: fetches it and uploads it like one the person chose", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          upload_id: "u1",
+          key: "uploads/u1.png",
+          width: 512,
+          height: 512,
+          bytes: 1,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const realFetch = globalThis.fetch;
+    // jsdom's Blob does not survive a Response, so the fetched picture is a stand-in with blob()
+    globalThis.fetch = vi.fn(async () => ({
+      blob: async () => new Blob(["x"], { type: "image/png" }),
+    })) as unknown as typeof fetch;
+    URL.createObjectURL = vi.fn(() => "blob:preview");
+    URL.revokeObjectURL = vi.fn();
+    try {
+      render(
+        <VideoWorkspace
+          mode="image"
+          runs={client}
+          sourceImage={{ url: "http://127.0.0.1:1/files/i1.png", name: "i1.png" }}
+        />,
+      );
+      await waitFor(() =>
+        expect(fetchMock.mock.calls[0]?.[0]).toBe("/products/wasifyai-video/uploads/images"),
+      );
+      expect(globalThis.fetch).toHaveBeenCalledWith("http://127.0.0.1:1/files/i1.png");
+      expect((fetchMock.mock.calls[0]?.[1]?.body as File).name).toBe("i1.png");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("keeps the picture of the library a clip animates, forgets it when another is chosen, and sends the draft setting", async () => {
+    const uploaded = (n: number) =>
+      new Response(
+        JSON.stringify({
+          upload_id: `u${n}`,
+          key: `uploads/u${n}.png`,
+          width: 8,
+          height: 8,
+          bytes: 1,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => ({
+      blob: async () => new Blob(["x"], { type: "image/png" }),
+    })) as unknown as typeof fetch;
+    URL.createObjectURL = vi.fn(() => "blob:preview");
+    URL.revokeObjectURL = vi.fn();
+    try {
+      for (const replace of [false, true]) {
+        fetchMock.mockReset();
+        let n = 0;
+        fetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+          if (path === "/products/wasifyai-video/runs") return sse([ready]);
+          if (init?.method === "DELETE") return new Response(null, { status: 204 });
+          n += 1;
+          return uploaded(n);
+        });
+        const user = userEvent.setup({ applyAccept: false });
+        const { unmount } = render(
+          <VideoWorkspace
+            mode="image"
+            runs={client}
+            sourceImage={{ url: "http://x/i1.png", name: "i1.png", id: "i-1" }}
+          />,
+        );
+        await screen.findByRole("button", { name: /Replace/ });
+        if (replace) {
+          await user.upload(
+            screen.getByLabelText("Your picture"),
+            new File(["y"], "mine.png", { type: "image/png" }),
+          );
+          await waitFor(() => expect(n).toBe(2));
+        }
+        await user.type(screen.getByRole("textbox"), "snow falls");
+        if (replace) await user.click(screen.getByRole("button", { name: /^Draft/ }));
+        await waitFor(() =>
+          expect(screen.getByRole("button", { name: "Make the video" })).toBeEnabled(),
+        );
+        await user.click(screen.getByRole("button", { name: "Make the video" }));
+        await waitFor(() =>
+          expect(fetchMock.mock.calls.some((c) => c[0] === "/products/wasifyai-video/runs")).toBe(
+            true,
+          ),
+        );
+        const run = fetchMock.mock.calls.find((c) => c[0] === "/products/wasifyai-video/runs");
+        const body = JSON.parse(String(run?.[1]?.body));
+        if (replace) expect(body.input).not.toHaveProperty("source_image_id");
+        else expect(body.input.source_image_id).toBe("i-1");
+        // the draft setting is sent only when it is chosen
+        if (replace) expect(body.input.quality).toBe("draft");
+        else expect(body.input).not.toHaveProperty("quality");
+        unmount();
+      }
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("shows My looks only when there are any, and sends the chosen look with its strength and magic word", async () => {
+    fetchMock.mockResolvedValueOnce(sse([node("check_request"), node("generate_video"), ready]));
+    const user = userEvent.setup();
+    const looks = [
+      {
+        name: "wasify-video-ena-12345678.safetensors",
+        title: "Ena",
+        word: "enaz",
+        model: "ltx-video-2b",
+      },
+      {
+        name: "wasify-video-fog-87654321.safetensors",
+        title: "Fog",
+        word: "fogzy",
+        model: "ltx-video-2b",
+      },
+    ];
+    const { unmount } = render(<VideoWorkspace mode="text" runs={client} />);
+    expect(screen.queryByRole("region", { name: "My looks" })).toBeNull();
+    unmount();
+
+    render(<VideoWorkspace mode="text" runs={client} looks={looks} />);
+    await user.click(screen.getByRole("button", { name: /My looks/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Ena/ }));
+    const slider = screen.getByRole("slider", { name: "Strength of Ena" });
+    expect((slider as HTMLInputElement).value).toBe("1.5");
+    fireEvent.change(slider, { target: { value: "2" } });
+    await user.type(screen.getByRole("textbox"), "walking in snow");
+    await user.click(screen.getByRole("button", { name: "Make the video" }));
+    await waitFor(() =>
+      expect(screen.getByRole("region", { name: "Result" })).toHaveAttribute(
+        "data-state",
+        "result",
+      ),
+    );
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.input.prompt).toBe("enaz, walking in snow");
+    expect(body.input.loras).toEqual([
+      { name: "wasify-video-ena-12345678.safetensors", weight: 2 },
+    ]);
+  });
+
+  it("allows two looks at most", async () => {
+    const user = userEvent.setup();
+    const looks = ["a", "b", "c"].map((n) => ({
+      name: `${n}.safetensors`,
+      title: n,
+      word: `${n}word`,
+      model: "ltx-video-2b",
+    }));
+    render(<VideoWorkspace mode="text" runs={client} looks={looks} />);
+    await user.click(screen.getByRole("button", { name: /My looks/ }));
+    await user.click(screen.getByRole("checkbox", { name: /^a/ }));
+    await user.click(screen.getByRole("checkbox", { name: /^b/ }));
+    expect((screen.getByRole("checkbox", { name: /^c/ }) as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("offers only the looks taught on the chosen video model", async () => {
+    const user = userEvent.setup();
+    const looks = [
+      { name: "old.safetensors", title: "Old", word: "oldw", model: "ltx-video-2b" },
+      { name: "new.safetensors", title: "New", word: "neww", model: "ltx-2.5" },
+    ];
+    render(<VideoWorkspace mode="text" runs={client} looks={looks} model="ltx-2.5" />);
+    await user.click(screen.getByRole("button", { name: /My looks/ }));
+    expect(screen.getByRole("checkbox", { name: /^New/ })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /^Old/ })).toBeNull();
   });
 
   it("needs a picture before it can animate one", async () => {
     render(<VideoWorkspace mode="image" runs={client} />);
     await userEvent.setup().type(screen.getByRole("textbox"), "snow starts to fall");
-    expect(screen.getByRole("button", { name: /make my video/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Make the video" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: /portrait/i })).toBeNull(); // the clip keeps the picture's shape
   });
 
-  it("explains a refusal and keeps what the person wrote", async () => {
+  it("explains a refusal on the stage and keeps what the person wrote", async () => {
     fetchMock.mockResolvedValueOnce(
       sse([
         node("check_request"),
@@ -117,8 +313,9 @@ describe("VideoWorkspace", () => {
     const user = userEvent.setup();
     render(<VideoWorkspace mode="text" runs={client} />);
     await user.type(screen.getByRole("textbox"), "a fox");
-    await user.click(screen.getByRole("button", { name: /make my video/i }));
+    await user.click(screen.getByRole("button", { name: "Make the video" }));
     expect(await screen.findByText("One at a time.")).toBeInTheDocument();
+    expect(screen.getByText("We can't make that one")).toBeInTheDocument();
     expect(screen.getByRole("textbox")).toHaveValue("a fox");
   });
 
@@ -127,7 +324,7 @@ describe("VideoWorkspace", () => {
     const user = userEvent.setup();
     render(<VideoWorkspace mode="text" runs={client} />);
     await user.type(screen.getByRole("textbox"), "a fox");
-    await user.click(screen.getByRole("button", { name: /make my video/i }));
+    await user.click(screen.getByRole("button", { name: "Make the video" }));
     expect(await screen.findByText(/couldn't reach the server/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
@@ -145,7 +342,7 @@ describe("VideoWorkspace", () => {
     expect(screen.getByText("Set up the image engine first.")).toBeInTheDocument();
     expect(screen.getByText("LTX will not fit.")).toBeInTheDocument();
     await user.type(screen.getByRole("textbox"), "a fox");
-    await user.click(screen.getByRole("button", { name: /make my video/i }));
+    expect(screen.getByRole("button", { name: "Make the video" })).toBeDisabled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
@@ -166,7 +363,8 @@ describe("VideoLibrary", () => {
     expect(screen.getByText(/From text · 2 s · 768×512/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /save a copy/i }));
-    expect(videos.exportCopy).toHaveBeenCalledWith("v1");
+    expect(videos.exportCopy).toHaveBeenCalledWith("v1", undefined);
+    expect(screen.queryByRole("button", { name: /extend this/i })).toBeNull(); // only when the app offers it
 
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(videos.remove).not.toHaveBeenCalled(); // asks first
@@ -174,6 +372,34 @@ describe("VideoLibrary", () => {
     expect(videos.remove).toHaveBeenCalledWith("v1");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(await screen.findByText("No videos yet.")).toBeInTheDocument();
+  });
+
+  it("in the app window asks where to save the clip, with a name from its words, and writes it there", async () => {
+    const videos = api({
+      list: vi.fn().mockResolvedValue({ videos: [clip()], next_before: null }),
+      exportCopy: vi.fn(async (_id: string, path?: string) => ({
+        name: "fox.mp4",
+        path: path ?? "",
+      })),
+    });
+    const choose = vi.fn<(name: string) => Promise<string | null>>(
+      async () => "/Users/me/Movies/fox.mp4",
+    );
+    const user = userEvent.setup();
+    render(
+      <SaveAsProvider value={{ choose, write: vi.fn() }}>
+        <VideoLibrary videos={videos} canSave />
+      </SaveAsProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: /open: a red fox/i }));
+    await user.click(screen.getByRole("button", { name: /save a copy/i }));
+    expect(choose).toHaveBeenCalledWith("a-red-fox-in-the-snow.mp4");
+    expect(videos.exportCopy).toHaveBeenCalledWith("v1", "/Users/me/Movies/fox.mp4");
+    expect((await screen.findAllByText("Saved as fox.mp4 in Movies.")).length).toBeGreaterThan(0);
+    choose.mockResolvedValueOnce(null); // cancelled: nothing more is saved
+    await user.click(screen.getByRole("button", { name: /save a copy/i }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(videos.exportCopy).toHaveBeenCalledTimes(1);
   });
 
   it("shows a clip being made and a failed one, and looks again while one is being made", async () => {

@@ -67,6 +67,19 @@ describe("video flow", () => {
     expect(s.runId).toBe(RUN);
   });
 
+  it("follows an extension and keeps the mode of the clip it made", () => {
+    let s = videoFlowReducer(initialVideoState, { type: "submitted" });
+    s = play([started("generate_video")], s);
+    s = play(
+      [ev("job_progress", { capability: "video.extend", status: "running", progress: 0.4 })],
+      s,
+    );
+    expect(s.job).toEqual({ status: "running", progress: 0.4 });
+    s = play([ev("done", { outputs: { status: "done", video_id: "v2", mode: "extend" } })], s);
+    expect(s.phase).toBe("done");
+    expect(s.result?.mode).toBe("extend");
+  });
+
   it("shows a refusal in words and an error with whether to try again", () => {
     let s = play([
       ev("done", {

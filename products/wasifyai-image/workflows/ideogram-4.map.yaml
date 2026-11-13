@@ -1,0 +1,32 @@
+workflow: ideogram-4.json
+notes: >
+  Text to image with Ideogram 4 (int8). ComfyUI's template image_ideogram4_t2i_int8 (ComfyUI 0.44.2) written out by
+  hand: the conditional model with CFG 3 for the last 30 percent, the unconditional model for the negative side
+  (DualModelGuider, cfg 7), the template's "Default" preset (mu 0, std 1.75), euler. The text encoder is the
+  Qwen3-VL 8B int8 that Qwen-Image 2.1 already keeps, not the template's fp8 copy. No edit workflow yet.
+  Ideogram 4 reads a structured JSON caption: a plain sentence makes a grey "Image blocked by safety filter" card.
+  The model's `prompt_writer` (product.yaml) has the text model write that caption from the person's words
+  (wasifyai_image/caption.py), and the caption is the prompt sent here.
+models:
+  - diffusion_models/ideogram4_int8_convrot.safetensors
+  - diffusion_models/ideogram4_unconditional_int8_convrot.safetensors
+  - text_encoders/qwen3vl_8b_int8_convrot.safetensors
+  - vae/flux2-vae.safetensors
+inputs:
+  prompt: { node: "11", field: text }
+  seed: { node: "5", field: noise_seed }
+  steps: { node: "8", field: steps }
+  width:
+    - { node: "8", field: width }
+    - { node: "9", field: width }
+  height:
+    - { node: "8", field: height }
+    - { node: "9", field: height }
+outputs:
+  image: { node: "1", type: image }
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 8
+  from: { node: "14", output: 0 }
+  to:
+    - { node: "10", field: model }

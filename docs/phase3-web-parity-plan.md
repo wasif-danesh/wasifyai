@@ -1,6 +1,6 @@
 # Phase 3: the web app looks and works like the desktop app (plan)
 
-Status: **Proposed 2026-10-17**. The owner chose the recommended order on 2026-10-17 and said the hosting questions come later. **W1, W2 and W3 built 2026-10-17 and 2026-10-18** (see their sections); the rest is not started. Builds on ADR-0056
+Status: **Proposed 2026-10-17**. **Amended 2026-10-21 (owner): no feature switches, and the web follows every desktop feature (W8 below).** `NOTEBOOKS_ENABLED` and `VOICE_ENABLED` are gone: the web profile always serves notebooks and speech, the stack always runs the notebooks worker, and every mention of the switches below is history. The owner chose the recommended order on 2026-10-17 and said the hosting questions come later. **W1, W2 and W3 built 2026-10-17 and 2026-10-18** (see their sections); the rest is not started. Builds on ADR-0056
 ("a feature is built once, in the engine, with two shells"), ADR-0046 (the web side panel), ADR-0066 decision 11
 (the web stack lists the models a deployment allows) and the shared packages `packages/ui` and `packages/client`.
 
@@ -131,7 +131,7 @@ and the reading worker (`python -m wasifyai_notebooks.worker`, any number of the
 ADR-0065's second amendment. The web engine can now store and serve notebooks when it is switched on and a worker runs; the
 menu keeps them "Soon" because there are no web screens yet (step 4). **Step 3 is built**: the search model through the gateway (`GatewayEmbedder`, alias `creation-embedder`, multilingual), token usage
 recorded for every embedding call, and per-person limits on notebooks, sources and bytes, applied while the safeguards are on
-(ADR-0065's third amendment). **Step 4 is built**: `/notebooks` (View Notebooks) and `/notebooks/<id>` or `/notebooks/new` (a draft, saved when its first source
+(ADR-0065's third amendment). **Step 4 is built**: `/notebooks` (View notebooks) and `/notebooks/<id>` or `/notebooks/new` (a draft, saved when its first source
 is added, then given its address without a reload) show the shared `NotebookList` and `NotebookWorkspace` over the BFF (the
 catch-all route carries the uploads, the downloads and the question runs). The menu's two Notebook items are live when the web
 app has `NOTEBOOKS_ENABLED=true` (the same switch as the engine's) and "Soon" otherwise. Copy that promised "stays on this
@@ -291,3 +291,25 @@ code, which its tests cover.
   only the screens are shared.
 - Copy desktop pages into `apps/web`. A page that differs between the apps takes its differences as props.
 - Offer a web feature whose server side has no safeguards, quotas or tests; it stays "Soon".
+
+
+### W8. Catch-up and a rule (owner, 2026-10-21): the web and the desktop have the same features — built 2026-10-21
+**The rule.** Every item of the desktop's side menu has a decision for the web in `apps/web/lib/parity.ts` (live, soon, or
+desktop-only with the reason); `parity.test.ts` fails when a desktop item has none or the web menu does something else.
+`docs/web-parity-ledger.md` is the readable list. A desktop feature is not done until its row says what the web does.
+
+**Done.**
+- The two switches are removed (API settings and startup, web menu, layout, voice page and redirects, Helm values and
+  templates, `scripts/web-local.sh`, Playwright). `compose.yaml` and `scripts/kind-up.sh` run and build the notebooks worker;
+  the API image carries ffmpeg (Extend video, voice conversions).
+- Web pages and menu items for **Inpaint**, **Reference** and **Extend video** (the shared workspaces with the new modes; the
+  product routes and graphs are the desktop's).
+- 3D models and Video Builder show **Soon** on the web (they were hidden): each needs a local component run as a job on a GPU or
+  browser worker (ADR-0080, ADR-0077).
+
+**Not the same, on purpose.** The model picker and the Models page (a person's own local models; on the web an admin chooses the
+deployment's models), the Save As box and the window bar (a browser downloads and has its own bar).
+
+**Not verified.** None of the new web pages has been run against a real stack with a GPU: the checks are unit, type and menu
+tests. Needs a run of `make dev` with ComfyUI real for Reference, Inpaint and Extend (the Extend source is read from storage by the
+worker as `uploads/...`), and a run of the notebooks worker image build (about 3 GB, never built in this change).

@@ -1,26 +1,29 @@
 # pyright: reportTypedDictNotRequiredAccess=false
 # (Graph state is filled in node by node; a node only reads keys that earlier nodes have set.)
-"""The video graph: guardrail, one job, finish (ADR-0037).
+"""The video graph: a check of the request, one job, finish (ADR-0037).
 
     check_request -> start_job -> await_job -> finalise
         |
         v
       refuse
 
-Two modes: `text` (a description, a shape and a length) and `image` (an uploaded picture, a
-description of the motion and a length). Graph code names capabilities (`text.moderate`,
-`text.moderate_image`, `video.generate`, `video.animate`), never models or workflow node IDs.
+Three modes: `text` (a description, a shape and a length), `image` (an uploaded picture, a
+description of the motion and a length) and `extend` (one of the person's clips and what should
+keep happening: the last frames of the clip start a new clip and the two are joined, see
+docs/spikes/video-extend-vx0.md). Graph code names capabilities (`video.generate`, `video.animate`,
+`video.extend`), never models or workflow node IDs.
 
 The clip's row is created when the job starts, with status "working", so the site can show "being
 made" on any page while the user explores it. The finished clip, a failure or a refusal ends it.
 The uploaded picture is deleted as soon as it is no longer needed: when the request is refused,
-when the job fails, and when the clip is saved."""
+when the job fails, and when the clip is saved. An extension works on a temporary copy of the source
+clip in the user's uploads (the worker reads only from there); that is deleted the same way."""
 
 import logging
 import re
 import secrets
 from typing import Any, Literal, TypedDict, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
@@ -36,25 +39,32 @@ from wasifyai_platform_sdk import (
     upload_store,
 )
 
-from wasifyai_video import guardrail
 from wasifyai_video.index import index_text
 from wasifyai_video.schemas import (
     DEFAULT_SECONDS,
     DEFAULT_SHAPE,
+    DRAFT,
     FPS,
     LENGTHS,
     MAX_PROMPT_CHARS,
+    OVERLAP_FRAMES,
     SHAPES,
+    check_looks,
 )
 from wasifyai_video.videos import (
+    STOPPED,
+    TAIL_FRAMES,
     VIDEO_CREATED,
+    ClipError,
     InMemoryVideoStore,
+    JoinError,
     PosterError,
-    Quota,
-    UsageQuota,
     VideoRecord,
     VideoStore,
+    join_clips,
+    last_frame,
     poster_of,
+    tail_of,
     video_store,
 )
 
@@ -63,15 +73,61 @@ log = logging.getLogger(__name__)
 Status = Literal["working", "done", "refused", "failed"]
 BUSY = "You already have a video being made. It will be in My creations when it's ready."
 FAILED = "Your video couldn't be made. Please try again."
+NOT_EXTENDABLE = "Please choose one of your finished videos to carry on."
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
+def frames_for(caps: Capabilities, model: str | None, seconds: int) -> int:
+    """The frames of a clip of `seconds` on the chosen model (its `settings`, ADR-0097): the
+    fewest at its frame rate that it can make, a count of `frame_step * n + frame_offset`.
+    LTX-Video (24 a second, 8n + 1) gives the 121 and 193 of LENGTHS; Wan 2.2 (16, 4n + 1) 81;
+    MiniMax-H3 (24, 17n + 5) 124."""
+    fps = int(caps.video.setting(model, "frames_per_second", FPS))
+    step = int(caps.video.setting(model, "frame_step", 8))
+    offset = int(caps.video.setting(model, "frame_offset", 1))
+    least = fps * seconds
+    return least + (offset - least) % step
+
+
+# the capability verb of each mode, and what a model that lacks it cannot do (ADR-0097)
+VERBS = {"text": "generate", "image": "animate", "extend": "extend"}
+CANNOT = {
+    "text": "make a video from words",
+    "image": "animate a picture",
+    "extend": "extend a video",
+}
 
 
 class VideoState(TypedDict, total=False):
     # request
     mode: str
     prompt: str
+    # which of the product's models makes the clip (ADR-0097); absent: the first in product.yaml
+    model: str
     shape: str
     seconds: int
+    quality: str  # image: final, or draft (quicker and softer)
     image_key: str
+    source_id: str  # extend: the clip to carry on
+    source_image_id: str  # image: the picture of the library it animates, when it came from there
+    loras: list[dict[str, Any]]  # looks the person taught: [{name, weight}], checked
+    lora_files: dict[
+        str, str
+    ]  # on the web: the storage key of each look, which is the person's own
+    # extend: what the check found about it, and the temporary copy the worker reads
+    source_video_key: str
+    source_mode: str
+    source_frames: int
+    keep_frames: int
+    new_frames: int
+    temp_key: str
     # job and result
     video_id: str
     job_id: str
@@ -96,8 +152,7 @@ def build_video(caps: Capabilities, checkpointer: Any):
     """Registry entry point: wires the production stores from the capabilities."""
     videos: VideoStore = video_store(caps.db) if caps.db is not None else InMemoryVideoStore()
     uploads: UploadStore = upload_store(caps.db) if caps.db is not None else InMemoryUploadStore()
-    quota: Quota | None = UsageQuota(caps.db) if caps.db is not None else None
-    return build_video_graph(caps, checkpointer, videos, uploads, quota)
+    return build_video_graph(caps, checkpointer, videos, uploads)
 
 
 def build_video_graph(
@@ -105,18 +160,7 @@ def build_video_graph(
     checkpointer: Any,
     videos: VideoStore,
     uploads: UploadStore,
-    quota: Quota | None,
 ):
-    limit = (caps.config.quotas.get("videos_per_user_per_day") if caps.config else None) or None
-
-    async def over_quota() -> bool:
-        if not await caps.safeguards_on():  # ADR-0047: quotas apply only with safeguards
-            return False
-        return bool(limit and quota and await quota.used_today(require_context()) >= limit)
-
-    def quota_message() -> str:
-        return f"You've reached today's limit of {limit} videos. Please try again tomorrow."
-
     async def busy() -> bool:
         ctx = require_context()
         return await videos.working_count(ctx.tenant_id, ctx.user_id) >= 1
@@ -142,13 +186,24 @@ def build_video_graph(
             pass
         await uploads.consume(record)
 
+    async def discard_temp(key: str | None) -> None:
+        """Delete the temporary copy of a clip that is being carried on. Safe when it is gone."""
+        if not key:
+            return
+        assert caps.storage is not None
+        try:
+            await caps.storage.delete(key)
+        except FileNotFoundError:
+            pass
+
     async def fail_clip(state: VideoState, message: str = FAILED) -> None:
         """The clip will not be made: tell the row, and do not keep the user's picture."""
         if video_id := state.get("video_id"):
             await videos.fail(require_context().tenant_id, video_id, message)
         await discard_upload(state.get("image_key"))
+        await discard_temp(state.get("temp_key"))
 
-    # ---- guardrail ----------------------------------------------------------------------
+    # ---- the request ----------------------------------------------------------------------
 
     async def check_request(state: VideoState) -> VideoState:
         write = get_stream_writer()
@@ -161,11 +216,15 @@ def build_video_graph(
             }
         )
         mode = state.get("mode")
-        if mode not in ("text", "image"):
-            return refuse_with("invalid_request", "Please choose text to video or image to video.")
+        if mode not in ("text", "image", "extend"):
+            return refuse_with("invalid_request", "Please choose what kind of video to make.")
         prompt = _clean(state.get("prompt"), MAX_PROMPT_CHARS + 1)
         if not prompt:
-            what = "describe the video" if mode == "text" else "say what should move"
+            what = {
+                "text": "describe the video",
+                "image": "say what should move",
+                "extend": "say what should keep happening",
+            }[mode]
             return refuse_with("invalid_request", f"Please {what} you would like.")
         if len(prompt) > MAX_PROMPT_CHARS:
             return refuse_with(
@@ -176,17 +235,97 @@ def build_video_graph(
             return refuse_with("invalid_request", "Please choose one of the video shapes.")
         seconds = state.get("seconds", DEFAULT_SECONDS)
         if seconds not in LENGTHS:
-            return refuse_with("invalid_request", "Please choose a length of 2 or 5 seconds.")
+            lengths = " or ".join(str(n) for n in LENGTHS)
+            return refuse_with("invalid_request", f"Please choose a length of {lengths} seconds.")
+        model = state.get("model")
+        chosen_by_admin = caps.extras.get("chosen_model")  # the web: an admin's choice (MV6)
+        if model is None and chosen_by_admin is not None:
+            admin_pick = await chosen_by_admin()
+            if admin_pick and VERBS[mode] in caps.video.models().get(admin_pick, ()):
+                model = admin_pick  # used when it can do this; otherwise the product's first model
+        if model is not None:  # one of this product's models, and one that can do this (ADR-0097)
+            offered = caps.video.models()
+            if not isinstance(model, str) or model not in offered:
+                return refuse_with("invalid_request", "Please choose one of the video models.")
+            if VERBS[mode] not in offered[model]:
+                return refuse_with("invalid_request", f"This model cannot {CANNOT[mode]}.")
         if mode == "image" and (not key or await find_upload(key) is None):
             return refuse_with("invalid_request", "Please upload your picture again.")
+        quality = state.get("quality") or "final"
+        if quality not in ("final", "draft") or (quality == "draft" and mode != "image"):
+            return refuse_with("invalid_request", "Only Animate has a draft setting.")
+        loras, why = check_looks(state.get("loras"))
+        if why:
+            return refuse_with("invalid_request", why)
+        # a model may have no draft setting and take no looks (its `settings`, ADR-0097)
+        if quality == "draft" and not caps.video.setting(model, "draft", True):
+            return refuse_with("invalid_request", "This model has no draft setting.")
+        if loras and not caps.video.setting(model, "looks", True):
+            return refuse_with(
+                "invalid_request", "Your looks work only with the model they were taught on."
+            )
+        taught_on = caps.extras.get("look_models")  # which model each look was taught on
+        if loras and taught_on is not None:
+            ctx = require_context()
+            found = await taught_on(ctx.tenant_id, ctx.user_id, [x["name"] for x in loras])
+            using = model or next(iter(caps.video.models()), None)  # none named: the first
+            if any(found.get(x["name"], using) != using for x in loras):
+                return refuse_with(
+                    "invalid_request",
+                    "A look works only with the video model it was taught on. Choose that model, "
+                    "or leave the look out.",
+                )
+        lora_files: dict[str, str] = {}
+        resolve_looks = caps.extras.get(
+            "person_looks"
+        )  # the web keeps each person's looks in storage
+        if loras and resolve_looks is not None:
+            ctx = require_context()
+            found = await resolve_looks(ctx.tenant_id, ctx.user_id, [x["name"] for x in loras])
+            if found is None:
+                return refuse_with("invalid_request", "One of those looks is not yours any more.")
+            lora_files = found
         out: VideoState = {
             "mode": mode,
             "prompt": prompt,
             "shape": str(state.get("shape") or DEFAULT_SHAPE),
             "seconds": seconds,
+            "quality": quality,
             "image_key": key if mode == "image" else "",
+            "loras": loras,
+            "lora_files": lora_files,
             "status": "working",
+            # the run keeps what it was given: only a source that is checked below is kept
+            "source_id": "",
+            "source_image_id": "",
         }
+        if model:
+            out["model"] = str(model)
+        if mode == "image":
+            # a picture of the library (Animate this): kept as where the clip came from. The
+            # pictures are another product's, so only its shape is checked here; the picture list,
+            # which only gives a person their own, is what opens it later.
+            picture = str(state.get("source_image_id") or "")
+            if _is_uuid(picture):
+                out["source_image_id"] = picture
+        if mode == "extend":
+            ctx = require_context()
+            source = await videos.get(ctx.tenant_id, ctx.user_id, str(state.get("source_id") or ""))
+            if source is None or source.status != "done" or not source.video_key:
+                return refuse_with("invalid_request", NOT_EXTENDABLE)
+            if (
+                source.mode not in ("text", "image", "extend", "import")
+                or source.frames < OVERLAP_FRAMES
+            ):
+                return refuse_with("invalid_request", NOT_EXTENDABLE)
+            keep = source.frames - OVERLAP_FRAMES
+            out["source_id"] = source.id
+            out["source_video_key"] = source.video_key
+            out["source_mode"] = source.mode
+            out["source_frames"] = source.frames
+            out["keep_frames"] = keep
+            out["new_frames"] = LENGTHS[seconds]  # the new part, which repeats the nine first
+            out["seconds"] = round((keep + LENGTHS[seconds]) / FPS)  # the whole clip
 
         async def refused(code: str, message: str) -> VideoState:
             await discard_upload(key if mode == "image" else None)
@@ -194,21 +333,13 @@ def build_video_graph(
 
         if await busy():  # the GPU does one clip at a time
             return await refused("busy", BUSY)
-        if await over_quota():  # before any LLM or GPU work
-            return await refused("quota_exceeded", quota_message())
-
-        if not await caps.safeguards_on():  # ADR-0047: no moderation while they are off
-            return out
-        kind = "video description" if mode == "text" else "animation description"
-        verdict = await guardrail.judge_text(caps, kind, prompt)
-        if not verdict.allowed:
-            return await refused(verdict.category, guardrail.refusal_message(verdict.category))
-        if mode == "image":
+        if mode == "extend" and out.get("source_mode") == "import":
+            # a video the person added must have a last frame to grow from
             assert caps.storage is not None
-            picture = await caps.storage.get(key)
-            verdict = await guardrail.judge_picture(caps, prompt, picture)
-            if not verdict.allowed:
-                return await refused(verdict.category, guardrail.refusal_message(verdict.category))
+            try:
+                await last_frame(await caps.storage.get(out["source_video_key"]))
+            except (ClipError, FileNotFoundError):
+                return refuse_with("invalid_request", NOT_EXTENDABLE)
         return out
 
     def after_check(state: VideoState) -> str:
@@ -220,14 +351,18 @@ def build_video_graph(
     # ---- the job ------------------------------------------------------------------------
 
     async def start_job(state: VideoState) -> VideoState:
-        if await over_quota():  # again, right before the GPU is used
-            await discard_upload(state.get("image_key"))
-            raise RunError("quota_exceeded", quota_message())
         if await busy():  # a second run that started while this one was being checked
             await discard_upload(state.get("image_key"))
             raise RunError("busy", BUSY)
         ctx = require_context()
         seconds, edit = state["seconds"], state["mode"] == "image"
+        extend = state["mode"] == "extend"
+        chosen: dict[str, Any] = {"model": state["model"]} if state.get("model") else {}
+        frames = (
+            state["keep_frames"] + state["new_frames"]
+            if extend
+            else frames_for(caps, state.get("model"), seconds)
+        )
         video_id = str(uuid4())
         await videos.add(
             VideoRecord(
@@ -241,8 +376,10 @@ def build_video_graph(
                 status="working",
                 prompt=state["prompt"],
                 seconds=seconds,
-                frames=LENGTHS[seconds],
+                frames=frames,
                 fps=FPS,
+                source_id=(state.get("source_id") if extend else state.get("source_image_id"))
+                or None,
             )
         )
         write = get_stream_writer()
@@ -255,13 +392,40 @@ def build_video_graph(
             }
         )
         seed = secrets.randbelow(2**31)
+        looks: dict[str, Any] = {"loras": state["loras"]} if state.get("loras") else {}
+        if state.get("lora_files"):
+            looks["lora_files"] = state["lora_files"]
+        temp_key = ""
         try:
-            if edit:
+            if extend:
+                # the worker reads a job's inputs only from the user's uploads: a copy of the clip
+                temp_key = f"uploads/extend-{uuid4()}.mp4"
+                assert caps.storage is not None
+                clip = await caps.storage.get(state["source_video_key"])
+                from_frame = state["keep_frames"]
+                if state["source_frames"] > 3 * TAIL_FRAMES:
+                    # only the end is needed, and the engine holds every frame it is given in memory
+                    clip = await tail_of(clip, TAIL_FRAMES, state["source_frames"])
+                    from_frame = TAIL_FRAMES - OVERLAP_FRAMES
+                await caps.storage.put(temp_key, clip, "video/mp4")
+                handle = await caps.video.extend(
+                    prompt=state["prompt"],
+                    video_key=temp_key,
+                    from_frame=from_frame,
+                    length=state["new_frames"],
+                    seed=seed,
+                    **looks,
+                    **chosen,
+                )
+            elif edit:
                 handle = await caps.video.animate(
                     prompt=state["prompt"],
                     image_key=state["image_key"],
-                    length=LENGTHS[seconds],
+                    length=frames,
                     seed=seed,
+                    **(DRAFT if state.get("quality") == "draft" else {}),
+                    **looks,
+                    **chosen,
                 )
             else:
                 width, height = SHAPES[state["shape"]]
@@ -269,13 +433,21 @@ def build_video_graph(
                     prompt=state["prompt"],
                     width=width,
                     height=height,
-                    length=LENGTHS[seconds],
+                    length=frames,
                     seed=seed,
+                    **looks,
+                    **chosen,
                 )
         except Exception:
-            await fail_clip({"video_id": video_id, "image_key": state.get("image_key", "")})
+            await fail_clip(
+                {
+                    "video_id": video_id,
+                    "image_key": state.get("image_key", ""),
+                    "temp_key": temp_key,
+                }
+            )
             raise
-        return {"video_id": video_id, "job_id": handle.job_id}
+        return {"video_id": video_id, "job_id": handle.job_id, "temp_key": temp_key}
 
     async def await_job_node(state: VideoState) -> VideoState:
         try:
@@ -295,15 +467,27 @@ def build_video_graph(
         try:
             # Final layout {tenant}/wasifyai-video/{user}/{video_id}/video.mp4; the worker's jobs/
             # paths are temporary.
-            video_key = await caps.storage.move(state["result_key"], f"{video_id}/video.mp4")
+            if state["mode"] == "extend":
+                # the old clip up to the frames the new one repeats, then the new clip, as one file
+                joined = await join_clips(
+                    await caps.storage.get(state["source_video_key"]),
+                    await caps.storage.get(state["result_key"]),
+                    state["keep_frames"],
+                )
+                video_key = f"{video_id}/video.mp4"
+                await caps.storage.put(video_key, joined, "video/mp4")
+                await caps.storage.delete(state["result_key"])
+            else:
+                video_key = await caps.storage.move(state["result_key"], f"{video_id}/video.mp4")
             width, height, poster = await poster_of(await caps.storage.get(video_key))
             poster_key = f"{video_id}/poster.jpg"
             await caps.storage.put(poster_key, poster, "image/jpeg")
             await videos.finish(ctx.tenant_id, video_id, width, height, video_key, poster_key)
-        except PosterError:
+        except (PosterError, JoinError):
             await fail_clip(state)
             raise RunError("video_failed", FAILED, retryable=True) from None
         await discard_upload(state.get("image_key"))  # the user's original is not kept
+        await discard_temp(state.get("temp_key"))
         await caps.index_creation("video", video_id, index_text(state["prompt"]))  # ADR-0041
         await caps.record_usage(
             VIDEO_CREATED,
@@ -340,4 +524,13 @@ def build_video_graph(
     g.add_edge("start_job", "await_job")
     g.add_edge("await_job", "finalise")
     g.add_edge("finalise", END)
-    return g.compile(checkpointer=checkpointer)
+    graph = g.compile(checkpointer=checkpointer)
+
+    async def stopped(state: VideoState) -> None:
+        await fail_clip(state, STOPPED)
+
+    # A run stopped while its clip is with the media worker never reaches `await_job`: the run
+    # manager calls this with the run's last state, so the row is not left "being made" (which
+    # would hold the one-clip-at-a-time rule for 90 minutes) and the picture is not kept (stage J3).
+    graph.on_cancel = stopped  # type: ignore[attr-defined]
+    return graph

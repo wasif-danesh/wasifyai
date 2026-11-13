@@ -7,9 +7,11 @@ from typing import Any
 
 import httpx
 import pytest
-from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_api.web_search import KEY, WebService, consent_text, load_or_create_key
 from wasifyai_platform_sdk import (
+    FileSecretStore,
+    InMemorySecretStore,
     InMemoryUsageRecorder,
     RunContext,
     SecretBox,
@@ -33,7 +35,7 @@ def service(**kw: Any) -> tuple[WebService, InMemorySettingsStore, InMemoryUsage
         min_gap_s=0,
         run=lambda q, n: [{"title": "Fox", "href": "https://a.test/fox", "body": "Foxes."}],
     )
-    svc = WebService(store, SecretBox(SecretBox.generate_key()), usage, duckduckgo=ddg, **kw)
+    svc = WebService(store, InMemorySecretStore(), usage, duckduckgo=ddg, **kw)
     return svc, store, usage
 
 
@@ -117,11 +119,13 @@ async def test_settings_refuse_what_makes_no_sense():
     assert (await no_box.status())["can_save_keys"] is False
 
 
-async def test_a_saved_key_that_cannot_be_read_says_to_enter_it_again():
+async def test_a_saved_key_that_cannot_be_read_says_to_enter_it_again(tmp_path):
     store = InMemorySettingsStore()
-    first = WebService(store, SecretBox(SecretBox.generate_key()))
+    path = tmp_path / "secrets.json"
+    first = WebService(store, FileSecretStore(path, SecretBox(SecretBox.generate_key())))
     await first.update(provider="exa", consent=True, key=("exa", "exa-key-123456789"))
-    other_key = WebService(store, SecretBox(SecretBox.generate_key()))  # the key file was replaced
+    # the key file was replaced: the same store file, another key
+    other_key = WebService(store, FileSecretStore(path, SecretBox(SecretBox.generate_key())))
     with pytest.raises(WebError) as e:
         await other_key._provider()
     assert e.value.code == "needs_key" and "Enter it again" in e.value.message
@@ -174,3 +178,42 @@ async def test_a_corrupt_setting_falls_back_to_the_safe_default():
     assert st["provider"] == "duckduckgo" and st["consented"] is False
     store.values[KEY] = "not even a dict"
     assert (await svc.status())["consented"] is False
+
+
+# ---- on a service: an admin keeps the service and keys; each person allows it
+
+
+class Who:
+    def __init__(self, user: str) -> None:
+        self.tenant_id, self.user_id = "t1", user
+
+
+async def test_on_a_service_each_person_allows_searching_for_themself():
+    svc, _, _ = service(per_person=True)
+    ann, bob = Who("ann"), Who("bob")
+    assert (await svc.status(ann))["consented"] is False
+    await svc.update(consent=True, who=ann)
+    assert (await svc.status(ann))["consented"] is True
+    assert (await svc.status(bob))["consented"] is False  # not for anyone else
+    assert (await svc.readiness(bob)).state == "needs_setup"
+    assert (await svc.readiness(ann)).state == "ready"
+    assert "from this service" in (await svc.status(ann))["consent_text"]
+    await svc.update(consent=False, who=ann)
+    assert (await svc.status(ann))["consented"] is False
+
+
+async def test_on_a_service_a_run_searches_for_the_person_whose_run_it_is(ctx):
+    svc, _, usage = service(per_person=True)
+    with pytest.raises(WebError):  # u1 has not allowed it
+        await svc.search("fox")
+    await svc.update(consent=True, who=Who("u1"))
+    found = await svc.search("fox")
+    assert found.results and usage.events
+
+
+async def test_a_different_service_asks_each_person_again():
+    svc, _, _ = service(per_person=True)
+    ann = Who("ann")
+    await svc.update(consent=True, who=ann)
+    await svc.update(provider="tavily")  # an admin's change
+    assert (await svc.status(ann))["consented"] is False

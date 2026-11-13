@@ -25,17 +25,22 @@ import httpx
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from wasifyai_platform_sdk import Identity
+from wasifyai_platform_sdk import Identity, SecretStore, SecretsUnavailable
 
 from wasifyai_api.desktop_fit import Fit, Machine, assess_fit, need_of_image, need_of_language
 from wasifyai_api.desktop_models import DownloadError, ModelEntry, ModelFile
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.services import services_of
+from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 
 HF = "https://huggingface.co"
 KEY = "desktop.hub"
+TOKEN = "hf.token"  # the person's Hugging Face token in the secret store (ADR-0092)
+# the environment variables that answer `hf.token` when the store has none (a developer's shell)
+TOKEN_ALIASES: dict[str, tuple[str, ...]] = {TOKEN: ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN")}
+TOKEN_PATTERN = re.compile(r"^hf_[A-Za-z0-9]{20,200}$")
 SHELF_FILE = Path(__file__).with_name("hub-shelf.yaml")
 CACHE_TTL_S = 600
 SEARCH_FIELDS = (
@@ -79,13 +84,6 @@ def capability_of(pipeline: str | None, tags: list[str], name: str = "") -> str:
     if pipe in ("text-to-video", "image-to-video", "video-to-video"):
         return "video"
     return "other"
-
-
-def license_of(tags: list[str], card: dict[str, Any] | None) -> str:
-    lic = (card or {}).get("license")
-    if isinstance(lic, str) and lic:
-        return lic
-    return next((t.split(":", 1)[1] for t in tags if t.startswith("license:")), "")
 
 
 def quant_of(name: str) -> str:
@@ -167,6 +165,10 @@ class HubClient:
     def token(self) -> str | None:
         return self._token
 
+    @token.setter
+    def token(self, value: str | None) -> None:
+        self._token = value or None
+
     async def get(self, path: str, params: Any = None, *, fresh: bool = False) -> tuple[Any, bool]:
         """(json, stale)."""
         key = path + "?" + repr(sorted(params.items()) if isinstance(params, dict) else params)
@@ -234,10 +236,16 @@ def load_shelf(path: Path = SHELF_FILE) -> list[dict[str, Any]]:
 
 
 class HubService:
-    def __init__(self, store: SettingsStore, client: HubClient | None = None):
+    def __init__(
+        self,
+        store: SettingsStore,
+        client: HubClient | None = None,
+        secrets: SecretStore | None = None,
+    ):
         self._store = store
-        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-        self.client = client or HubClient(token=token)
+        self._secrets = secrets  # where the token lives; the environment answers when it has none
+        self.client = client or HubClient()
+        self.token_set = False  # a token is in the store (not merely in the environment)
         self.enabled = False
         self.shelf = load_shelf()
         self.models: Any = None  # ModelsService: the folder, the download manager
@@ -247,6 +255,48 @@ class HubService:
         saved = await self._store.get(KEY)
         if isinstance(saved, dict):
             self.enabled = bool(saved.get("enabled", False))
+        await self._apply_token()
+
+    # ---- the token (ADR-0092): kept in the secret store, shown as set or not, never read back ---
+
+    @property
+    def can_save_token(self) -> bool:
+        return bool(self._secrets is not None and self._secrets.ready)
+
+    async def _apply_token(self) -> None:
+        """Give the hub client and the downloader the token the store (or the environment) has."""
+        token: str | None = None
+        if self._secrets is not None:
+            try:
+                token = await self._secrets.get(TOKEN)
+            except SecretsUnavailable as e:
+                log.warning("the Hugging Face token cannot be read: %s", e)
+            self.token_set = TOKEN in await self._secrets.names()
+        if token is None:
+            token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN") or None
+        self.client.token = token
+        if self.models is not None:
+            self.models.downloads._token = token  # noqa: SLF001 - one place for the token
+
+    async def set_token(self, value: str) -> None:
+        value = value.strip()
+        if not TOKEN_PATTERN.match(value):
+            raise HubError(
+                "bad_token",
+                "That does not look like a Hugging Face token: it starts with hf_ and has no "
+                "spaces.",
+                400,
+            )
+        if not self.can_save_token:
+            raise HubError("no_store", "Tokens cannot be saved on this computer.", 400)
+        assert self._secrets is not None
+        await self._secrets.put(TOKEN, value)
+        await self._apply_token()
+
+    async def clear_token(self) -> None:
+        if self._secrets is not None:
+            await self._secrets.delete(TOKEN)
+        await self._apply_token()
 
     async def set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
@@ -302,7 +352,6 @@ class HubService:
                     "downloads": int(m.get("downloads") or 0), "likes": int(m.get("likes") or 0),
                     "updated": m.get("lastModified"), "capability": cap,
                     "pipeline": m.get("pipeline_tag"), "gated": bool(m.get("gated")),
-                    "license": license_of(tags, None),
                     "gguf": "gguf" in tags or m.get("library_name") == "gguf",
                     # only the app's engine can run what is a GGUF language or embedding model
                     "runnable": cap in ("language", "embedding") and ("gguf" in tags),
@@ -324,7 +373,7 @@ class HubService:
         return {
             "id": repo, "commit": data.get("sha"), "stale": stale,
             "capability": cap, "pipeline": data.get("pipeline_tag"),
-            "license": license_of(tags, data.get("cardData")), "gated": bool(data.get("gated")),
+            "gated": bool(data.get("gated")),
             "downloads": int(data.get("downloads") or 0), "likes": int(data.get("likes") or 0),
             "updated": data.get("lastModified"), "tags": [t for t in tags if ":" not in t][:12],
             "architecture": gguf.get("architecture"), "context_length": gguf.get("context_length"),
@@ -388,7 +437,6 @@ class HubService:
             id=f"hub:{repo}",
             product_id="hub",
             title=repo,
-            licence=detail["license"] or "unknown",
             source=f"huggingface.co/{repo}",
             note="",
             approx_ram_gb=0,
@@ -402,7 +450,7 @@ router = APIRouter(prefix="/desktop/hub", tags=["desktop"])
 
 
 def _hub(request: Request) -> HubService:
-    svc = getattr(request.app.state, "desktop_hub", None)
+    svc = services_of(request).desktop_hub
     if svc is None:
         raise HTTPException(404, "not available in this deployment")
     return svc
@@ -414,6 +462,10 @@ def _http(exc: HubError) -> HTTPException:
 
 class Consent(BaseModel):
     enabled: bool
+
+
+class TokenIn(BaseModel):
+    token: str = Field(min_length=1, max_length=300)
 
 
 class DownloadRequest(BaseModel):
@@ -429,7 +481,30 @@ async def hub_state(request: Request, _: Identity = Depends(get_identity)) -> di
     return {
         "enabled": svc.enabled, "has_token": svc.client.has_token, "shelf": svc.shelf,
         "capabilities": list(CAPABILITIES),
+        "token_set": svc.token_set, "can_save_token": svc.can_save_token,
     }  # fmt: skip
+
+
+@router.put("/token")
+async def hub_token(
+    body: TokenIn, request: Request, _: Identity = Depends(get_identity)
+) -> dict[str, bool]:
+    """Keep the person's Hugging Face token. It is never answered back, only whether one is set."""
+    svc = _hub(request)
+    try:
+        await svc.set_token(body.token)
+    except HubError as exc:
+        raise _http(exc) from None
+    return {"token_set": svc.token_set}
+
+
+@router.delete("/token")
+async def hub_token_delete(
+    request: Request, _: Identity = Depends(get_identity)
+) -> dict[str, bool]:
+    svc = _hub(request)
+    await svc.clear_token()
+    return {"token_set": svc.token_set}
 
 
 @router.put("/consent")
@@ -537,7 +612,7 @@ async def hub_remove(
     """Delete a model this app downloaded. Only files under the app's own `language` folder; a file
     another tool keeps is never touched."""
     svc = _hub(request)
-    discovery = getattr(request.app.state, "desktop_discovery", None)
+    discovery = services_of(request).desktop_discovery
     item = next((i for i in (discovery.items if discovery else []) if i.id == item_id), None)
     if svc.models is None or item is None or item.tool != "app":
         raise HTTPException(404, "That file is not one this app downloaded.")

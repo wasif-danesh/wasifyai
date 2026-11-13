@@ -6,11 +6,11 @@ from typing import Any
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
-from video_rig import make_rig, mp4, put_upload, verdict
+from video_rig import make_rig, mp4, put_upload
 from wasifyai_platform_sdk import JobError, JobFailed, JobOutput, JobResult, RunError, object_key
 from wasifyai_video.graphs.video import build_video_graph
 from wasifyai_video.schemas import LENGTHS, SHAPES
-from wasifyai_video.videos import FixedQuota, InMemoryVideoStore, VideoRecord
+from wasifyai_video.videos import InMemoryVideoStore, VideoRecord
 
 CONFIG: Any = {"configurable": {"thread_id": "th-1"}}
 
@@ -18,12 +18,10 @@ CONFIG: Any = {"configurable": {"thread_id": "th-1"}}
 class Story:
     """Drives a run: start it, play the media worker."""
 
-    def __init__(self, rig, quota=None, videos=None):
+    def __init__(self, rig, videos=None):
         self.rig = rig
         self.videos = videos or InMemoryVideoStore()
-        self.graph = build_video_graph(
-            rig.caps, InMemorySaver(), self.videos, rig.uploads, quota or FixedQuota(0)
-        )
+        self.graph = build_video_graph(rig.caps, InMemorySaver(), self.videos, rig.uploads)
         self.state: dict = {}
 
     async def start(self, input: Any):
@@ -106,12 +104,12 @@ async def test_text_to_video_from_description_to_saved_clip(tmp_path, ctx, shape
     assert created[0].meta["seconds"] == seconds
 
 
-async def test_the_defaults_are_landscape_and_two_seconds(tmp_path, ctx):
+async def test_the_defaults_are_landscape_and_five_seconds(tmp_path, ctx):
     rig = make_rig(tmp_path)
     await Story(rig).start({"mode": "text", "prompt": "a fox"})
     job = rig.sink.submitted[0]
     assert (job.prompt["width"], job.prompt["height"]) == SHAPES["landscape"]
-    assert job.prompt["length"] == LENGTHS[2]
+    assert job.prompt["length"] == LENGTHS[5] == 121
 
 
 # ---- image to video ----------------------------------------------------------------------
@@ -134,7 +132,27 @@ async def test_image_to_video_uses_the_picture_and_deletes_it_afterwards(tmp_pat
         not await exists(rig, up.key)
         and await rig.uploads.find("t1", "wasifyai-video", "u1", up.key) is None
     )
-    assert len(rig.picture_checks()) == 1  # the model looked at the picture
+    assert rig.asked() == []  # nothing judges the picture
+
+
+async def test_a_draft_clip_takes_fewer_steps_on_a_smaller_picture(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    up = await put_upload(rig)
+    await Story(rig).start(
+        {"mode": "image", "prompt": "snow falls", "image_key": up.key, "quality": "draft"}
+    )
+    job = rig.sink.submitted[0]
+    assert (job.prompt["steps"], job.prompt["megapixels"]) == (15, 0.125)
+    final = make_rig(tmp_path / "final")
+    up = await put_upload(final)
+    await Story(final).start({"mode": "image", "prompt": "snow falls", "image_key": up.key})
+    assert "megapixels" not in final.sink.submitted[0].prompt
+
+
+async def test_only_animate_has_a_draft_setting(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "quality": "draft"})
+    assert s.state["status"] == "refused" and rig.sink.submitted == []
 
 
 async def test_a_missing_or_foreign_picture_is_refused_up_front(tmp_path, ctx):
@@ -159,11 +177,12 @@ async def exists_for(rig, user, rel):
 @pytest.mark.parametrize(
     ("input", "message"),
     [
-        ({"mode": "nope", "prompt": "x"}, "text to video or image to video"),
+        ({"mode": "nope", "prompt": "x"}, "what kind of video"),
         ({"mode": "text", "prompt": "   "}, "describe the video"),
         ({"mode": "text", "prompt": "x" * 501}, "under 500"),
         ({"mode": "text", "prompt": "x", "shape": "huge"}, "video shapes"),
-        ({"mode": "text", "prompt": "x", "seconds": 10}, "2 or 5 seconds"),
+        ({"mode": "text", "prompt": "x", "seconds": 10}, "5 or 8 seconds"),
+        ({"mode": "text", "prompt": "x", "seconds": 2}, "5 or 8 seconds"),
     ],
 )
 async def test_bad_input_is_refused_before_any_model_is_asked(tmp_path, ctx, input, message):
@@ -171,31 +190,6 @@ async def test_bad_input_is_refused_before_any_model_is_asked(tmp_path, ctx, inp
     s = await Story(rig).start(input)
     assert s.state["status"] == "refused" and message in s.state["refusal"]["message"]
     assert rig.sink.submitted == [] and rig.asked() == [] and s.videos.videos == []
-
-
-async def test_an_unsafe_description_is_refused_with_the_fixed_text(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate=[verdict(False, "sexual_content", "nope")])
-    s = await Story(rig).start({"mode": "text", "prompt": "something unsafe"})
-    assert s.state["status"] == "refused"
-    assert s.state["refusal"]["code"] == "sexual_content"
-    assert "nudity" in s.state["refusal"]["message"] and "nope" not in s.state["refusal"]["message"]
-    assert rig.sink.submitted == [] and s.videos.videos == []
-
-
-async def test_an_unsafe_picture_is_refused_and_the_upload_is_deleted(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate_image=[verdict(False, "minors")])
-    up = await put_upload(rig)
-    s = await Story(rig).start({"mode": "image", "prompt": "he smiles", "image_key": up.key})
-    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "minors"
-    assert not await exists(rig, up.key) and rig.sink.submitted == []
-
-
-async def test_a_moderator_that_cannot_answer_fails_closed(tmp_path, ctx):
-    rig = make_rig(tmp_path, moderate=["garbage"])
-    with pytest.raises(RunError) as e:
-        await Story(rig).start({"mode": "text", "prompt": "a fox"})
-    assert e.value.code == "moderation_unavailable" and e.value.retryable
-    assert rig.sink.submitted == []
 
 
 async def test_only_one_clip_is_made_at_a_time(tmp_path, ctx):
@@ -230,16 +224,6 @@ async def test_only_one_clip_is_made_at_a_time(tmp_path, ctx):
     assert s2.state.get("status") != "refused" and len(rig.sink.submitted) == 1
 
 
-async def test_the_daily_quota_is_checked_before_any_model_is_asked(tmp_path, ctx):
-    rig = make_rig(tmp_path)
-    s = await Story(rig, quota=FixedQuota(5)).start({"mode": "text", "prompt": "a fox"})
-    assert (
-        s.state["refusal"]["code"] == "quota_exceeded"
-        and "limit of 5 videos" in s.state["refusal"]["message"]
-    )
-    assert rig.asked() == [] and rig.sink.submitted == []
-
-
 # ---- failures ----------------------------------------------------------------------------
 
 
@@ -253,6 +237,24 @@ async def test_a_failed_job_marks_the_row_failed_and_deletes_the_picture(tmp_pat
     assert row.status == "failed" and row.error == "The generation failed on the GPU."
     assert not await exists(rig, up.key)
     assert not [e for e in rig.usage.events if e.kind == "video.created"]
+
+
+async def test_a_run_stopped_while_its_clip_is_made_does_not_leave_a_working_row(tmp_path, ctx):
+    """Stage J3: Stop while the media worker has the clip never reaches `await_job`; the graph's
+    `on_cancel` gets the run's last state, so the row is not held "being made" (blocking the next
+    clip for 90 minutes) and the picture is not kept."""
+    rig = make_rig(tmp_path)
+    up = await put_upload(rig)
+    s = await Story(rig).start({"mode": "image", "prompt": "snow falls", "image_key": up.key})
+    assert s.waiting.get("kind") == "job"
+    (row,) = s.videos.videos
+    assert row.status == "working"
+    snapshot = await s.graph.aget_state(CONFIG)
+    await s.graph.on_cancel(dict(snapshot.values))  # type: ignore[attr-defined]
+    (row,) = s.videos.videos
+    assert row.status == "failed" and row.error == "Stopped. Nothing was kept."
+    assert not await exists(rig, up.key)
+    assert await s.videos.working_count("t1", "u1") == 0  # the next clip may start
 
 
 async def test_a_clip_that_cannot_be_read_fails_the_row_and_the_run(tmp_path, ctx):
@@ -277,3 +279,203 @@ async def test_a_picture_job_that_cannot_be_queued_does_not_leave_a_working_row(
     with pytest.raises(ConnectionError):
         await Story(rig).start({"mode": "image", "prompt": "snow", "image_key": up.key})
     assert not await exists(rig, up.key)
+
+
+# ---- looks the person taught (ADR-0073, video amendment) -----------------------------------
+
+
+@pytest.mark.parametrize("mode", ["text", "image"])
+async def test_looks_reach_the_job_in_both_modes(tmp_path, ctx, mode):
+    rig = make_rig(tmp_path)
+    looks = [{"name": "wasify-video-ena-1a2b3c4d.safetensors", "weight": 1.5}]
+    request: dict[str, Any] = {
+        "mode": mode,
+        "prompt": "enav7qx, a woman on a beach",
+        "seconds": 5,
+        "loras": looks,
+    }
+    if mode == "image":
+        request["image_key"] = (await put_upload(rig)).key
+    await Story(rig).start(request)
+    job = rig.sink.submitted[0]
+    assert job.prompt["loras"] == looks
+
+
+async def test_a_run_without_looks_sends_none(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+    await Story(rig).start({"mode": "text", "prompt": "a red fox", "seconds": 5})
+    assert "loras" not in rig.sink.submitted[0].prompt
+
+
+@pytest.mark.parametrize(
+    ("looks", "words"),
+    [
+        ("a look", "choose the looks"),
+        ([{"name": "../x.safetensors"}], "cannot be used"),
+        ([{"name": "x.ckpt"}], "cannot be used"),
+        ([{"name": "a.safetensors", "weight": "high"}], "must be a number"),
+        ([{"name": "a.safetensors", "weight": 9}], "between 0.1 and 2.5"),
+        ([{"name": "a.safetensors"}, {"name": "a.safetensors"}], "once"),
+        ([{"name": f"{c}.safetensors"} for c in "abc"], "at most 2"),
+    ],
+)
+async def test_looks_that_cannot_be_used_are_refused_in_words_before_any_work(
+    tmp_path, ctx, looks, words
+):
+    rig = make_rig(tmp_path)
+    s = await Story(rig).start(
+        {"mode": "text", "prompt": "a red fox", "seconds": 5, "loras": looks}
+    )
+    assert s.state["status"] == "refused" and s.state["refusal"]["code"] == "invalid_request"
+    assert words in s.state["refusal"]["message"] and rig.sink.submitted == []
+
+
+async def test_on_the_web_a_look_is_found_among_the_persons_own_and_its_file_goes_to_the_job(
+    tmp_path, ctx
+):
+    rig = make_rig(tmp_path)
+    asked: list[tuple[str, str, list[str]]] = []
+
+    async def mine(tenant, user, names):
+        asked.append((tenant, user, names))
+        return {n: f"{tenant}/wasifyai-training/{user}/train/looks/r1/{n}" for n in names}
+
+    rig.caps.extras["person_looks"] = mine
+    name = "wasify-video-ena-1a2b3c4d.safetensors"
+    await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "loras": [{"name": name, "weight": 1.5}]}
+    )
+    job = rig.sink.submitted[0]
+    assert asked == [("t1", "u1", [name])]
+    assert job.prompt["lora_files"] == {name: f"t1/wasifyai-training/u1/train/looks/r1/{name}"}
+
+
+async def test_a_look_that_is_not_the_persons_own_is_refused_before_any_work(tmp_path, ctx):
+    rig = make_rig(tmp_path)
+
+    async def nobody(tenant, user, names):
+        return None
+
+    rig.caps.extras["person_looks"] = nobody
+    s = await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "loras": [{"name": "x.safetensors"}]}
+    )
+    assert s.state["status"] == "refused" and "not yours" in s.state["refusal"]["message"]
+    assert rig.sink.submitted == []
+
+
+# ---- choosing a model (ADR-0097) -----------------------------------------------------------
+
+MODELS = [
+    {"id": "ltx", "settings": {"frames_per_second": 24}, "capabilities": {
+        verb: {"provider": "fake", "defaults": {"made_by": "ltx"}}
+        for verb in ("video.generate", "video.animate", "video.extend")}},
+    {"id": "wan", "settings": {"frames_per_second": 16, "frame_step": 4, "frame_offset": 1,
+                              "draft": False, "looks": False},
+     "capabilities": {
+        "video.generate": {"provider": "fake", "defaults": {"made_by": "wan"}},
+        "video.animate": {"provider": "fake", "defaults": {"made_by": "wan"}}}},
+]  # fmt: skip
+
+
+async def test_the_chosen_model_makes_the_clip_at_its_own_frame_rate(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+    await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "wan", "seconds": 5})
+    job = rig.sink.submitted[0]
+    assert job.prompt["made_by"] == "wan" and job.prompt["length"] == 81  # 16 a second, and one
+    await Story(rig).start({"mode": "text", "prompt": "a fox", "seconds": 8})  # none: the first
+    job = rig.sink.submitted[1]
+    assert job.prompt["made_by"] == "ltx" and job.prompt["length"] == LENGTHS[8] == 193
+
+
+async def test_the_admins_model_is_used_when_a_request_names_none_and_it_can_do_it(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+
+    async def chosen():
+        return "wan"
+
+    rig.caps.extras["chosen_model"] = chosen  # the web: Admin > Media chose Wan (MV6)
+    await Story(rig).start({"mode": "text", "prompt": "a fox", "seconds": 5})
+    assert rig.sink.submitted[0].prompt["made_by"] == "wan"
+    await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "ltx", "seconds": 5})
+    assert rig.sink.submitted[1].prompt["made_by"] == "ltx"  # a request's own choice wins
+
+
+async def test_a_video_model_not_offered_or_that_cannot_do_it_is_refused(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "model": "nope"})
+    assert "choose one of the video models" in s.state["refusal"]["message"]
+    s = await Story(rig).start(
+        {"mode": "extend", "prompt": "more", "source_id": "x", "model": "wan"}
+    )
+    assert s.state["refusal"]["message"] == "This model cannot extend a video."
+    assert rig.sink.submitted == []
+
+
+async def test_a_model_without_a_draft_or_looks_says_so_before_any_work(tmp_path, ctx):
+    rig = make_rig(tmp_path, models=MODELS)
+    s = await Story(rig).start(
+        {
+            "mode": "text",
+            "prompt": "a fox",
+            "model": "wan",
+            "loras": [{"name": "wasify-video-ena-1a2b3c4d.safetensors", "weight": 1}],
+        }
+    )
+    assert "taught on" in s.state["refusal"]["message"]
+    assert rig.sink.submitted == []
+
+
+def test_a_clip_is_the_fewest_frames_the_model_can_make_at_its_rate():
+    class Video:
+        def __init__(self, **s):
+            self.s = s
+
+        def setting(self, model, name, default=None):
+            return self.s.get(name, default)
+
+    class Caps:
+        def __init__(self, **s):
+            self.video = Video(**s)
+
+    from wasifyai_video.graphs.video import frames_for as real
+
+    def frames_for(caps: Any, model: str | None, seconds: int) -> int:
+        return real(caps, model, seconds)  # a stand-in for the capabilities
+
+    assert [frames_for(Caps(), None, s) for s in (5, 8)] == [121, 193]  # LTX, the default
+    wan = Caps(frames_per_second=16, frame_step=4, frame_offset=1)
+    assert [frames_for(wan, "wan", s) for s in (5, 8)] == [81, 129]
+    minimax = Caps(frames_per_second=24, frame_step=17, frame_offset=5)
+    assert [frames_for(minimax, "m", s) for s in (5, 8)] == [124, 192]
+
+
+async def test_a_look_is_used_only_with_the_video_model_it_was_taught_on(tmp_path, ctx):
+    two = [MODELS[0], {**MODELS[0], "id": "ltx2"}]  # two models that both take looks
+    rig = make_rig(tmp_path, models=two)
+    asked: list[list[str]] = []
+
+    async def taught_on(tenant, user, names):
+        asked.append(names)
+        # a file it does not know is left to the other checks
+        return {"on-ltx2.safetensors": "ltx2"}
+
+    rig.caps.extras["look_models"] = taught_on
+    look = [{"name": "on-ltx2.safetensors", "weight": 1.5}]
+    s = await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "model": "ltx", "loras": look}
+    )
+    assert s.state["status"] == "refused" and "taught on" in s.state["refusal"]["message"]
+    s = await Story(rig).start({"mode": "text", "prompt": "a fox", "seconds": 5, "loras": look})
+    # no model named: the first one, which it was not taught on
+    assert s.state["status"] == "refused"
+    assert rig.sink.submitted == []
+    await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "model": "ltx2", "loras": look}
+    )
+    other = [{"name": "by-hand.safetensors", "weight": 1.0}]
+    await Story(rig).start(
+        {"mode": "text", "prompt": "a fox", "seconds": 5, "model": "ltx", "loras": other}
+    )
+    assert [j.prompt["loras"] for j in rig.sink.submitted] == [look, other]
+    assert asked[-1] == ["by-hand.safetensors"]

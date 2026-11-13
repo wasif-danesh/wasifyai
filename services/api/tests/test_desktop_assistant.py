@@ -70,8 +70,11 @@ class H(http.server.BaseHTTPRequestHandler):
                 return {"tool_calls": [{"index": 0, "id": "call_1", "type": "function",
                                         "function": fn}]}
             events.append(chunk({"content": "Let me draw that. "}))
-            events.append(chunk(call("generate_image", "")))
-            half = json.dumps({"prompt": "a red teapot on a table", "size": "square"})
+            events.append(chunk(call("propose_action", "")))
+            half = json.dumps(
+                {"action_id": "image.generate",
+                 "params": {"prompt": "a red teapot on a table", "size": "square"}}
+            )
             for piece in (half[:12], half[12:]):
                 fn = {"arguments": piece}
                 events.append(chunk({"tool_calls": [{"index": 0, "function": fn}]}))
@@ -172,7 +175,8 @@ def choose_the_model(c: TestClient) -> None:
 
 
 def ask(c: TestClient, text: str, conversation_id: str | None = None) -> list:
-    graph_input: dict[str, str] = {"text": text}
+    """A turn in a chat where the person let the assistant make things without a card."""
+    graph_input: dict[str, object] = {"text": text, "approval": "auto"}
     if conversation_id:
         graph_input["conversation_id"] = conversation_id
     body = {"input": graph_input}
@@ -231,8 +235,11 @@ def test_asking_for_a_picture_makes_one_through_the_image_product(data_dir):
         assert names.index("tool_call") < names.index("tool_result") < names.index("done")
 
         call = next(d for e, d in events if e == "tool_call")
-        assert call["name"] == "generate_image"
-        assert call["arguments"] == {"prompt": "a red teapot on a table", "size": "square"}
+        assert call["name"] == "propose_action"
+        assert call["arguments"] == {
+            "action_id": "image.generate",
+            "params": {"prompt": "a red teapot on a table", "size": "square"},
+        }
         result = next(d for e, d in events if e == "tool_result")
         assert result["status"] == "ok" and result["id"] == call["id"]
         image_id = result["output"]["image_id"]
@@ -257,7 +264,7 @@ def test_nothing_chosen_ends_the_run_with_a_sentence_that_says_what_to_do(data_d
         events = ask(c, "Hello")
         last_name, last = events[-1]
         assert last_name == "error" and last["code"] == "no_language_model"
-        assert "Models" in last["message"]
+        assert "Model hub" in last["message"]
 
 
 def test_another_persons_conversation_is_not_reachable_through_a_run(data_dir):
@@ -287,6 +294,7 @@ def test_the_window_names_the_run_and_the_two_messages_and_the_engine_keeps_thos
         body = {
             "input": {
                 "text": "Please draw a red teapot",
+                "approval": "auto",
                 "client_message_id": UID,
                 "client_reply_id": RID,
             },
@@ -362,7 +370,7 @@ def test_web_search_is_off_until_allowed_then_cites_the_web_and_keeps_keys_encry
     base = "/products/wasifyai-assistant"
     with TestClient(create_app()) as c:
         choose_the_model(c)
-        web = c.app.state.web  # type: ignore[attr-defined]
+        web = c.app.state.services.web  # type: ignore[attr-defined]
         web._ddg = DuckDuckGoProvider(  # no real search is made by a test
             min_gap_s=0,
             run=lambda q, n: [
@@ -433,7 +441,7 @@ def test_a_picture_asked_for_after_the_web_was_read_waits_for_a_click_then_is_ma
     base = "/products/wasifyai-assistant"
     with TestClient(create_app()) as c:
         choose_the_model(c)
-        web = c.app.state.web  # type: ignore[attr-defined]
+        web = c.app.state.services.web  # type: ignore[attr-defined]
         web._ddg = DuckDuckGoProvider(
             min_gap_s=0,
             run=lambda q, n: [{"title": "Fox", "href": "https://wiki.test/fox", "body": "Foxes."}],
@@ -467,7 +475,7 @@ def test_a_picture_asked_for_after_the_web_was_read_waits_for_a_click_then_is_ma
         names = [e for e, _ in resumed]
         assert "job_progress" in names and names[-1] == "done", names
         result = next(d for e, d in resumed if e == "tool_result")
-        assert result["name"] == "generate_image" and result["status"] == "ok"
+        assert result["name"] == "propose_action" and result["status"] == "ok"
         assert (
             c.post(
                 f"/runs/{run_id}/resume", json={"value": {"approved": True}}, headers=auth()
@@ -558,4 +566,75 @@ def test_documents_and_pictures_are_attached_kept_with_the_chat_and_deleted_with
         assert c.delete(f"{base}/conversations/{cid2}", headers=auth()).status_code == 204
         assert c.get(f"{base}/conversations/{cid2}", headers=auth()).status_code == 404
         assert c.get(link["url"].replace(BASE, "")).status_code == 404  # the picture went with it
+        c.post("/desktop/language-engine/stop", headers=auth())
+
+
+def test_the_picture_reader_is_offered_with_its_size_fetched_only_when_confirmed_and_picked_up(
+    data_dir, monkeypatch
+):
+    """CO2 follow-up: a model without a projector can be given one from the shelf. Nothing is
+    fetched until the person confirms the exact size; the file must match its checksum."""
+    import hashlib
+
+    from wasifyai_api import desktop_vision
+
+    payload = b"GGUF" + b"\0" * 5000  # a stand-in for the 918 MB file
+    entry = desktop_vision.ProjectorEntry(
+        id="demo", match=("demo-q4",), title="Demo picture reader",
+        source="huggingface.co", url="https://huggingface.co/x/y/resolve/main/mmproj-F16.gguf",
+        name="mmproj-F16.gguf", size=len(payload), sha256=hashlib.sha256(payload).hexdigest(),
+    )  # fmt: skip
+    monkeypatch.setattr(desktop_vision, "load_shelf", lambda path=desktop_vision.SHELF: [entry])
+    base = "/products/wasifyai-assistant"
+    with TestClient(create_app()) as c:
+        choose_the_model(c)
+        offered = c.get(f"{base}/options", headers=auth()).json()["attach"]
+        assert offered["images"] is False
+        assert offered["picture_reader"]["state"] == "available"
+        assert offered["picture_reader"]["bytes"] == len(payload)
+        assert offered["picture_reader"]["from"] == "huggingface.co"
+
+        # the size must be the one that was shown
+        wrong = c.post("/desktop/vision/download", json={"bytes": 1}, headers=auth())
+        assert wrong.status_code == 409
+        manager = c.app.state.services.desktop_models.downloads  # type: ignore[attr-defined]
+        assert manager.latest() is None  # nothing was fetched
+
+        # serve the stand-in instead of the network
+        class FakeClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            def stream(self, method, url, headers=None):
+                class R:
+                    status_code = 200
+
+                    async def __aenter__(self):
+                        return self
+
+                    async def __aexit__(self, *a):
+                        return False
+
+                    async def aiter_bytes(self):
+                        yield payload
+
+                return R()
+
+        manager._client_factory = lambda: FakeClient()  # noqa: SLF001
+        started = c.post("/desktop/vision/download", json={"bytes": len(payload)}, headers=auth())
+        assert started.status_code == 200, started.text
+        state: dict = {}
+        for _ in range(100):
+            state = c.get("/desktop/vision", headers=auth()).json()["vision"]
+            if state["state"] == "ready":
+                break
+            time.sleep(0.05)
+        assert state["state"] == "ready"
+        shelf = data_dir / "models" / "projectors" / "demo" / "mmproj-F16.gguf"
+        assert shelf.is_file()  # under the app's own folder, not inside another tool's
+        after = c.get(f"{base}/options", headers=auth()).json()["attach"]
+        assert after["images"] is True and after["picture_reader"] is None
         c.post("/desktop/language-engine/stop", headers=auth())

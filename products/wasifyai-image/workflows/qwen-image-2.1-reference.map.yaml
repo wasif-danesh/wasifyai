@@ -1,0 +1,25 @@
+workflow: qwen-image-2.1-reference.json
+notes: >
+  A new picture from two with Qwen-Image 2.1 (int8): the template image_qwen_image_2_1_image_edit (ComfyUI 0.44.2)
+  with both pictures, its prompt rewriter removed, and an empty latent of the request's size in place of the
+  first picture's size.
+models:
+  - diffusion_models/qwen_image_2.1_int8_convrot.safetensors
+  - text_encoders/qwen3vl_8b_int8_convrot.safetensors
+  - vae/qwen_image_2.1_vae_bf16.safetensors
+inputs:
+  prompt: { node: "7", field: prompt }
+  seed: { node: "5", field: seed }
+  steps: { node: "5", field: steps }
+  width: { node: "11", field: width }
+  height: { node: "11", field: height }
+  image: { node: "9", field: image }
+  image2: { node: "10", field: image }
+outputs:
+  image: { node: "8", type: image }
+lora_chain:
+  loader: LoraLoaderModelOnly
+  max: 8
+  from: { node: "1", output: 0 }
+  to:
+    - { node: "6", field: model }

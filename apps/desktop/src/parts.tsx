@@ -3,19 +3,17 @@
 // screen and by Settings.
 import { Button, JobMeter, Notice, Spinner } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
+import { componentInstall, componentStatus, onComponentStatus } from "./components";
 import {
   COMFYUI,
   type ComponentStatus,
   type EngineStatus,
   LLAMACPP,
   type UpdateStatus,
-  componentInstall,
-  componentStatus,
   engineRepair,
   engineRestart,
   humanBytes,
   installFraction,
-  onComponentStatus,
   updateCheck,
   updateInstall,
 } from "./engine";

@@ -1,0 +1,34 @@
+name: video-builder-nightly
+# The two 90 second Video Builder renders (time and memory), as a person gets the component. About 7
+# minutes each on a runner with no GPU, so they run here each night instead of on every push
+# (desktop.yml's video-builder job skips them). Run it by hand after a change to the renderer.
+on:
+  schedule:
+    - cron: "30 1 * * *"   # 01:30 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: video-builder-nightly
+  cancel-in-progress: true
+
+jobs:
+  long-renders:
+    runs-on: macos-latest   # Apple silicon: where the component is supported
+    timeout-minutes: 40
+    env:
+      WASIFYAI_LONG_RENDERS: "1"
+      WASIFYAI_SESSION_TIMEOUT_S: "2400"   # the watchdog in conftest.py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-packages
+      - name: Install the component
+        run: |
+          home="$(uv run python scripts/ci-video-builder.py "$RUNNER_TEMP/video-builder-data" | tail -1)"
+          echo "WASIFYAI_VIDEO_BUILDER_HOME=$home" >> "$GITHUB_ENV"
+      - name: The 90 second renders
+        run: uv run pytest -s services/api/tests/test_video_builder_templates.py -k 90_second
+      - if: failure()
+        name: Where the watchdog stopped a hung test
+        shell: bash
+        run: cat "$RUNNER_TEMP/test-watchdog.txt" 2>/dev/null || echo "the watchdog did not stop anything"

@@ -44,16 +44,12 @@ const VOICE_TASKS = [
 const VOICE_MODEL = (task: string) => ({
   id: `hosted-${task}`,
   title: `Model for ${task}`,
-  licence: "provider terms",
   engine: "remote",
   family: "hosted",
   tasks: [task],
   recommended: [task],
   languages: ["en"],
   sample_rate: 24000,
-  commercial_use: "yes",
-  licence_evidence: "https://openrouter.ai/terms",
-  reviewed: "2026-10-18",
   measured: { platform: "hosted", speed_x: null, memory_gb: null, load_s: null },
   voices: [{ id: "alloy", label: "Alloy", language: "en", gender: "female" }],
   default_voice: "alloy",
@@ -171,11 +167,27 @@ export async function mockApi(
   page: Page,
   opts: { unreadableSources?: boolean } = {},
 ): Promise<void> {
+  // one afternoon for every spec, so the home's greeting and words such as "today" do not change with the hour the
+  // specs run at; timers still run
+  await page.clock.setFixedTime(new Date(2026, 9, 28, 14, 0));
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^\/api/, "");
     const method = route.request().method();
 
+    if (path === "/models/in-use" && method === "GET") {
+      const flux = {
+        id: "wasifyai-image:0",
+        title: "FLUX.2 klein 4B",
+        plain: "Set up on this service by an admin.",
+        ready: true,
+      };
+      return json(route, {
+        chat: [{ ...flux, id: "default-chat", title: "gemma4:e4b" }],
+        images: [flux],
+        video: [{ ...flux, id: "wasifyai-video:0", title: "LTX-Video 2B" }],
+      });
+    }
     if (path === "/products/wasifyai-image/images" && method === "GET") {
       return json(route, { images: IMAGES, next_before: null });
     }

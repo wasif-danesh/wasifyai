@@ -30,7 +30,7 @@ export type StoredPart =
       url?: string;
     }
   /** a card that waits for the person's answer (ADR-0071): stored when the turn parks, updated when it is answered */
-  | {
+  | ({
       type: "interrupt";
       kind: string;
       status: "pending" | "approved" | "declined";
@@ -40,7 +40,7 @@ export type StoredPart =
       title?: string;
       summary?: string;
       params?: Record<string, unknown>;
-    }
+    } & CardDetails)
   | {
       type: "tool_result";
       id: string;
@@ -89,6 +89,17 @@ export type AttachOptions = {
   documents: boolean;
   /** why a picture will not work, in words, when it will not */
   images_note: string;
+  /** the app can get this model's picture reader: what it is and how big (absent: nothing to offer) */
+  picture_reader?: PictureReader | null;
+};
+
+/** The picture reader of the chosen model (ADR-0083, CO2), which the app can fetch once the person agrees. */
+export type PictureReader = {
+  state: "available" | "downloading";
+  title: string;
+  from: string;
+  bytes: number;
+  download?: { status: string; bytes_done: number; bytes_total: number; error: string };
 };
 
 /** What the chat box can offer with the model in use (ADR-0083). */
@@ -139,6 +150,11 @@ export type AssistantApi = {
   updateSearch(update: SearchUpdate): Promise<SearchStatus>;
   /** Send a picture (PNG, JPEG, WebP) or a document to the engine to attach to the next message. Refused in words. */
   attach(file: Blob, name: string): Promise<UploadedAttachment>;
+  /** The picture reader of the chosen model (desktop): how it stands, and fetching it (the size the person was shown). */
+  pictureReader?: {
+    status(): Promise<PictureReader | { state: "ready" | "unavailable" } | null>;
+    start(bytes: number): Promise<void>;
+  };
   /** Take back a file that was sent but not used. Failures are not worth showing: the engine clears unused ones after a day. */
   unattach(id: string): Promise<void>;
   list(limit?: number): Promise<ConversationSummary[]>;
@@ -200,6 +216,21 @@ export function createAssistantApi(transport: Transport): AssistantApi {
         truncated: r.truncated,
       };
     },
+    pictureReader: {
+      async status() {
+        const r = await json<{ vision: PictureReader | { state: "ready" | "unavailable" } | null }>(
+          "/desktop/vision",
+        );
+        return r.vision;
+      },
+      async start(bytes) {
+        await json<unknown>("/desktop/vision/download", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ bytes }),
+        });
+      },
+    },
     async unattach(id) {
       try {
         await transport.fetch(
@@ -242,6 +273,39 @@ export function createAssistantApi(transport: Transport): AssistantApi {
 
 export type ToolStatus = "ok" | "refused" | "error";
 
+/** One editable field of a confirm card, drawn from the action's own schema (ADR-0071 decision 4). */
+export type CardField = {
+  name: string;
+  label: string;
+  kind: "text" | "long_text" | "number" | "bool" | "choice";
+  required: boolean;
+  description?: string;
+  choices?: string[];
+  min?: number;
+  max?: number;
+  max_length?: number;
+  /** what the assistant proposed */
+  value?: string | number | boolean;
+};
+
+/** What a confirm card knows about its action, beyond the title and summary (all plain values). */
+export type CardDetails = {
+  action_id?: string;
+  effect?: string;
+  badges?: string[];
+  /** a `needs_consent` action: the statement the person agrees to before it runs */
+  consent?: string;
+  fields?: CardField[];
+  /** the screen that does the same thing (a menu item id) */
+  screen?: string;
+  /** how long this took for this person lately, on this computer (the median of the last few runs) */
+  estimate?: { seconds: number; runs: number };
+  /** running it takes the one memory slot: the chat model pauses while it runs (ADR-0056) */
+  pauses_chat?: boolean;
+  /** why the card asks when outside text is in the chat: "after reading a result from github" (ADR-0070) */
+  provenance?: string;
+};
+
 /** A tool call that waits for the person's answer (an `interrupt` event: the `confirm_action` card of ADR-0071). */
 export type ToolApproval = {
   /** the interrupt's id (a stored card: the approval's id) */
@@ -253,7 +317,50 @@ export type ToolApproval = {
   title?: string;
   summary?: string;
   params?: Record<string, unknown>;
-};
+} & CardDetails;
+
+/** The card's details, read from a stored part or an event payload (unknown shapes are dropped). */
+export function cardDetails(raw: Record<string, unknown>): CardDetails {
+  const out: CardDetails = {};
+  if (typeof raw.action_id === "string") out.action_id = raw.action_id;
+  if (typeof raw.effect === "string") out.effect = raw.effect;
+  if (typeof raw.consent === "string" && raw.consent) out.consent = raw.consent;
+  if (typeof raw.screen === "string") out.screen = raw.screen;
+  if (raw.pauses_chat === true) out.pauses_chat = true;
+  if (typeof raw.provenance === "string" && raw.provenance) out.provenance = raw.provenance;
+  const est = raw.estimate;
+  if (est && typeof est === "object") {
+    const e = est as Record<string, unknown>;
+    if (typeof e.seconds === "number" && typeof e.runs === "number")
+      out.estimate = { seconds: e.seconds, runs: e.runs };
+  }
+  if (Array.isArray(raw.badges)) out.badges = raw.badges.filter((b) => typeof b === "string");
+  if (Array.isArray(raw.fields)) {
+    const fields = raw.fields.flatMap((f): CardField[] => {
+      if (!f || typeof f !== "object") return [];
+      const r = f as Record<string, unknown>;
+      if (typeof r.name !== "string") return [];
+      const kind = String(r.kind);
+      const kinds: CardField["kind"][] = ["text", "long_text", "number", "bool", "choice"];
+      const field: CardField = {
+        name: r.name,
+        label: typeof r.label === "string" ? r.label : r.name,
+        kind: kinds.includes(kind as CardField["kind"]) ? (kind as CardField["kind"]) : "text",
+        required: r.required === true,
+      };
+      if (typeof r.description === "string") field.description = r.description;
+      if (Array.isArray(r.choices)) field.choices = r.choices.map(String);
+      if (typeof r.min === "number") field.min = r.min;
+      if (typeof r.max === "number") field.max = r.max;
+      if (typeof r.max_length === "number") field.max_length = r.max_length;
+      if (["string", "number", "boolean"].includes(typeof r.value))
+        field.value = r.value as string | number | boolean;
+      return [field];
+    });
+    out.fields = fields;
+  }
+  return out;
+}
 
 /** A file attached to a message, as a message shows it. */
 export type AttachmentInfo = {
@@ -392,6 +499,7 @@ export function fromStored(messages: StoredMessage[]): ChatMessage[] {
                     title: card.title,
                     summary: card.summary,
                     params: card.params,
+                    ...cardDetails(card as unknown as Record<string, unknown>),
                   },
                 }
               : {}),

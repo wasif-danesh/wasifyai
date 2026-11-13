@@ -34,12 +34,11 @@ What exists:
 3. **Hardening comes first and is always on** (extends ADR-0035/0043): size caps (100 MB, page and cell limits),
    content sniffing rather than names, zip-bomb checks for DOCX/PPTX/XLSX, no macros or scripts executed, parsers
    run in a **subprocess with a timeout and memory limit**, extracted text is capped, nothing is trusted.
-4. **Parsing stack, permissive licences preferred.** Candidates, to be confirmed in a spike on a mixed corpus
+4. **Parsing stack.** Candidates, to be confirmed in a spike on a mixed corpus
    (English plus at least Bengali and Hindi): `pypdf` or `pdfminer.six`, `pdfplumber` for tables, `python-docx`,
    `python-pptx`, `openpyxl`/`csv`, an HTML text extractor, Tesseract for OCR (external binary, off by default,
-   page-capped, language configurable). **PyMuPDF** (used by Unsloth) is AGPL-3.0; the owner accepts AGPL for the
-   product (ADR-0061), so it is allowed, and Unsloth's parsers, chunker and locators are imported as a unit.
-   Docling (layout and tables) is a heavier option to evaluate. Licences are confirmed before adoption.
+   page-capped, language configurable). **PyMuPDF** (used by Unsloth) is allowed, and Unsloth's parsers, chunker and locators are imported as a unit.
+   Docling (layout and tables) is a heavier option to evaluate.
 5. **Chunking is structure-aware:** by heading, page and paragraph, about 300 to 500 tokens with small overlap,
    tables kept whole when they fit. Every chunk keeps a **locator** (document, page, heading path, character
    range) so an answer can cite and open the source.
@@ -91,6 +90,6 @@ transcripts as documents (they arrive with their verticals, ADR-0043), editing d
 1. Is OCR on by default for scanned PDFs (it is off in Unsloth)? Measured: a scanned PDF fails with a clear
    message unless Tesseract and its language data are installed. Suggested: bundle Tesseract (English) and ask at
    upload, page-capped, or decline scanned files with that message.
-2. Parsing stack and its licences (spike).
+2. Parsing stack (spike).
 3. Vector store for desktop: `sqlite-vec` or LanceDB (spike, by measured latency).
 4. Which presentation and PDF templates are in the first release.

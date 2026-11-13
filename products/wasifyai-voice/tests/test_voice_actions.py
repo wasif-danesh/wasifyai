@@ -15,6 +15,7 @@ from wasifyai_platform_sdk import RouteDeps, RunError
 from wasifyai_platform_sdk.actions import (
     ActionExecutor,
     ActionRegistry,
+    ApprovalPolicy,
     LibraryItem,
     LibraryKind,
     builtin_actions,
@@ -158,14 +159,11 @@ async def test_voices_are_described_listed_cloned_and_used(tmp_path, ctx):  # no
     assert (bad.status, bad.code) == ("refused", "bad_description")
 
     sid = await a_speech(h, LONG)
-    params = {"source_kind": "speech", "source_id": sid, "name": "Me", "voice_is": "own"}
-    needs = await h.go("voice.clone", params)  # a person's word comes first, every time
-    assert needs.status == "needs_approval" and "my own voice" in needs.text
-    assert h.store.list_voices("t1", "u1", "clone") == []
-    cloned = await h.go("voice.clone", params, person_approved=True)
+    params = {"source_kind": "speech", "source_id": sid, "name": "Me"}
+    cloned = await h.go("voice.clone", params)  # nothing is asked about whose voice it is
     assert cloned.ok and cloned.output["kind"] == "clone"
     saved = h.store.get_voice("t1", "u1", cloned.output["voice_id"])
-    assert saved["consent"]["basis"] == "own"  # the record travels with the voice
+    assert "consent" not in saved
 
     listed = await h.go("voice.list", {})
     assert {v["kind"] for v in listed.output["voices"]} == {"design", "clone"}
@@ -193,7 +191,7 @@ async def test_a_voice_is_changed_and_words_are_edited(tmp_path, ctx):  # noqa: 
     h = Harness(tmp_path)
     await library_track(h.rig, rate=22050, channels=1)
     sid = await a_speech(h, LONG)
-    params = {"source_kind": "speech", "source_id": sid, "name": "Ann", "voice_is": "permission"}
+    params = {"source_kind": "speech", "source_id": sid, "name": "Ann"}
     voice = (await h.go("voice.clone", params, person_approved=True)).output["voice_id"]
 
     r = await h.go(
@@ -320,29 +318,77 @@ async def test_a_book_is_planned_then_read_one_track_per_chapter(tmp_path, ctx):
 # ---- lip sync ---------------------------------------------------------------------------------
 
 
-async def test_a_picture_talks_only_after_the_person_gives_their_word(tmp_path, ctx):  # noqa: F811
+async def test_a_picture_talks_without_being_asked_whose_it_is(tmp_path, ctx):  # noqa: F811
     h = Harness(tmp_path)
-    params = {"image_id": "img1", "text": "Welcome to the show, everybody.", "picture_is": "drawn"}
-    asked = await h.go("lipsync.make", params)
-    assert asked.status == "needs_approval" and "AI-generated" in asked.text
-    assert h.engine.lipsynced == [] and h.host.runs == []
-
+    params = {"image_id": "img1", "text": "Welcome to the show, everybody."}
     r = await h.go("lipsync.make", params, person_approved=True)
     assert r.ok, r.text
     assert set(r.output) == {"clip_id", "title", "seconds", "uri"}
+    assert "AI-generated" not in r.text
     clip = h.store.get_clip("t1", "u1", r.output["clip_id"])
-    assert clip["consent"]["picture"] == "drawn" and clip["consent"]["voice"] == "generated"
-    assert clip["consent"]["mark"] == "AI-generated"
+    assert "consent" not in clip
 
     for bad in (
-        {"image_id": "img1", "picture_is": "drawn"},  # neither words nor a recording
-        {"image_id": "img1", "text": "x", "source_id": "s", "source_kind": "track",
-         "picture_is": "drawn"},  # both
-        {"image_id": "img1", "source_id": "s", "source_kind": "track", "picture_is": "drawn"},
+        {"image_id": "img1"},  # neither words nor a recording
+        {"image_id": "img1", "text": "x", "source_id": "s", "source_kind": "track"},  # both
+        {"image_id": "img1", "source_id": "s"},  # a recording without its kind
     ):  # fmt: skip
         again = await h.go("lipsync.make", bad, person_approved=True)
         assert (again.status, again.code) == ("refused", "invalid_input"), bad
     ghost = await h.go("lipsync.make", params | {"image_id": "ghost"}, person_approved=True)
+    assert (ghost.status, ghost.code) == ("refused", "not_found")
+
+
+async def test_a_picture_sings_only_the_part_of_a_song_it_is_given(tmp_path, ctx):  # noqa: F811
+    from wasifyai_voice.actions import library_kinds as kinds
+
+    h = Harness(tmp_path)
+    await library_track(h.rig, seconds=4.0)
+    part = {
+        "image_id": "img1", "source_kind": "track", "source_id": "song", "start": 1.0, "end": 2.5,
+    }  # fmt: skip
+    r = await h.go("lipsync.make", part, person_approved=True)
+    assert r.ok, r.text
+    assert h.engine.lipsynced[-1][1].voice_seconds == pytest.approx(1.5, abs=0.01)
+    whole = await h.go("lipsync.make", {**part, "start": None, "end": None}, person_approved=True)
+    assert whole.ok and h.engine.lipsynced[-1][1].voice_seconds == pytest.approx(4.0, abs=0.01)
+    for bad in (
+        {**part, "end": 1.2},  # under half a second
+        {"image_id": "img1", "text": "Hello there.", "start": 1.0},  # a part of words
+    ):  # fmt: skip
+        again = await h.go("lipsync.make", bad, person_approved=True)
+        assert (again.status, again.code) == ("refused", "invalid_input"), bad
+    # Creative Studio's cut reads it
+    assert next(k for k in kinds() if k.kind == "lipsync").read is not None
+
+
+async def test_speeches_are_joined_into_one_recording_with_the_times_of_each(tmp_path, ctx):  # noqa: F811
+    from wasifyai_voice.audio_input import wav_facts
+
+    h = Harness(tmp_path)
+    a = await a_speech(h, "Mira found the key.")
+    b = await a_speech(h, "It still fits.")
+    r = await h.go(
+        "speech.join",
+        {"parts": [{"speech_id": a, "pause": 0.5}, {"speech_id": b, "pause": 1.0}],
+         "title": "The key", "text": "Mira found the key. It still fits."},
+    )  # fmt: skip
+    assert r.ok, r.text
+    (s1, e1), (s2, e2) = r.output["times"]
+    assert s1 == 0.0 and s2 == pytest.approx(e1 + 0.5, abs=0.01) and e2 > s2
+    assert r.output["seconds"] == pytest.approx(e2 + 1.0, abs=0.01)
+    track = h.store.get_track("t1", "u1", r.output["track_id"])
+    assert track is not None
+    assert (track["title"], track["mode"]) == ("The key", "joined")
+    assert "It still fits" in track["lyrics"]
+    storage = h.rig.caps.storage
+    assert storage is not None
+    facts = wav_facts(await storage.get(track["audio_key"]))
+    assert facts is not None
+    rate, channels, seconds = facts
+    assert (rate, channels) == (24000, 1)
+    assert seconds == pytest.approx(r.output["seconds"], abs=0.01)
+    ghost = await h.go("speech.join", {"parts": [{"speech_id": "ghost"}], "title": "x"})
     assert (ghost.status, ghost.code) == ("refused", "not_found")
 
 
@@ -390,3 +436,95 @@ def test_every_voice_action_is_run_in_this_file():
     source = Path(__file__).read_text()
     missing = [a.id for a in actions() if f'"{a.id}"' not in source]
     assert not missing, f"no test runs {missing}"
+
+
+# ---- a file from a connection's folder (ADR-0069 decision 6, stage M2) ------------------------
+
+
+async def test_a_connection_transcribes_a_file_under_its_folder_and_nothing_outside(tmp_path, ctx):  # noqa: F811
+    from voice_rig import wav
+    from wasifyai_platform_sdk import AllowedFolders, Principal
+
+    h = Harness(tmp_path)
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "meeting.wav").write_bytes(wav(1.0))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "private.wav").write_bytes(wav(1.0))
+    codex = Principal(
+        "connection", "t1", "u1", scopes=frozenset({"read", "make"}), origin="mcp:Codex",
+        folders=AllowedFolders.of(read=[str(inbox)]),
+    )  # fmt: skip
+    ok = await h.ex.run_action(
+        "speech.transcribe", {"path": str(inbox / "meeting.wav")}, codex.origin, actor=codex,
+        policy=ApprovalPolicy(make="auto"),
+    )  # fmt: skip
+    assert ok.status == "ok", ok.text
+    assert ok.output["title"] == "meeting.wav" and h.engine.transcribed
+    outside = await h.ex.run_action(
+        "speech.transcribe", {"path": str(elsewhere / "private.wav")}, codex.origin, actor=codex,
+        policy=ApprovalPolicy(make="auto"),
+    )  # fmt: skip
+    assert (outside.status, outside.code) == ("refused", "outside")
+    relative = await h.ex.run_action(
+        "speech.transcribe", {"path": "meeting.wav"}, codex.origin, actor=codex,
+        policy=ApprovalPolicy(make="auto"),
+    )  # fmt: skip
+    assert (relative.status, relative.code) == ("refused", "not_absolute")
+    # the person in the window has no read folders: a path is not for them
+    window = await h.go("speech.transcribe", {"path": str(inbox / "meeting.wav")})
+    assert (window.status, window.code) == ("refused", "not_allowed")
+    both = await h.go("speech.transcribe", {"source_id": "x", "path": str(inbox / "meeting.wav")})
+    assert (both.status, both.code) == ("refused", "invalid_input")
+    neither = await h.go("speech.transcribe", {})
+    assert (neither.status, neither.code) == ("refused", "invalid_input")
+
+
+# ---- the beats of a song (ADR-0090 CS1) --------------------------------------------------------
+
+
+class FakeAnalysis:
+    """The analysis tool's answer; the real one runs in its own environment."""
+
+    supported = True
+    Failed = RuntimeError
+
+    def __init__(self):
+        self.calls = 0
+
+    def ready(self):
+        return True
+
+    async def analyse(self, data: bytes):
+        self.calls += 1
+        return {
+            "seconds": 8.0, "bpm": 120.0, "beats": [0.5, 1.0, 1.5], "downbeats": [0.5],
+            "sections": [{"start": 0.0, "end": 8.0, "energy": 0.1, "label": "mid"}], "tool": "fake",
+        }  # fmt: skip
+
+
+async def test_the_beats_of_a_song_are_found_once_and_kept_with_it(tmp_path, ctx):  # noqa: F811
+    h = Harness(tmp_path)
+    tool = FakeAnalysis()
+    h.rig.state.music_analysis = tool
+    made = await h.go(
+        "music.generate", {"description": "a song about the sea", "instrumental": True}
+    )
+    assert made.ok, made.text
+    song = made.output["track_id"]
+    first = await h.go("music.analyse", {"track_id": song, "lyrics": "[verse]\nOne line sung\n"})
+    assert first.ok, first.text
+    assert first.output["bpm"] == 120.0 and first.output["beats"] == [0.5, 1.0, 1.5]
+    assert [x["text"] for x in first.output["lines"]] == [
+        "One line sung"
+    ]  # the typed words, no mark
+    again = await h.go("music.analyse", {"track_id": song, "lyrics": "[verse]\nOne line sung\n"})
+    assert again.ok and tool.calls == 1
+
+
+async def test_beats_of_a_song_that_is_not_there_is_an_answer_not_a_crash(tmp_path, ctx):  # noqa: F811
+    h = Harness(tmp_path)
+    h.rig.state.music_analysis = FakeAnalysis()
+    r = await h.go("music.analyse", {"track_id": "nope"})
+    assert not r.ok

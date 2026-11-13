@@ -13,7 +13,7 @@ See whether one model is ready, how far a download is, and the free disk space.
 
 ## Steps in the app
 
-1. Open **Models**.
+1. Open **Model hub**.
 
 ## Fields
 

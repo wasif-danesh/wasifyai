@@ -8,6 +8,7 @@ from image_rig import png
 from wasifyai_image.images import ImageRecord, InMemoryImageStore
 from wasifyai_image.routes import build_routes, file_name
 from wasifyai_platform_sdk import (
+    EngineServices,
     Identity,
     RouteDeps,
     RunContext,
@@ -42,7 +43,7 @@ def put(client, user: str, rel: str, data: bytes):
     async def go():
         token = set_context(RunContext("t1", "wasifyai-image", user))
         try:
-            await client.app.state.storage.put(rel, data, "image/png")
+            await client.app.state.services.storage.put(rel, data, "image/png")
         finally:
             reset_context(token)
 
@@ -57,10 +58,12 @@ def client(tmp_path):
         image(5, user="someone-else"), image(6, tenant="other-tenant"),
     ]  # fmt: skip
     app = FastAPI()
-    app.state.storage = ScopedStorage(memory_storage())
-    app.state.export_dir = tmp_path / "Downloads"
+    app.state.services = EngineServices()
+    app.state.services.storage = ScopedStorage(memory_storage())
+    app.state.services.export_dir = tmp_path / "Downloads"
     app.include_router(
-        build_routes(RouteDeps(app.state, identity), store), prefix="/products/wasifyai-image"
+        build_routes(RouteDeps(app.state.services, identity), store),
+        prefix="/products/wasifyai-image",
     )
     c = TestClient(app)
     c.store = store  # type: ignore[attr-defined]
@@ -137,7 +140,7 @@ def test_deleting_removes_the_files_and_the_record_for_the_owner_only(client):
     async def files_left() -> list[bool]:
         token = set_context(RunContext("t1", "wasifyai-image", "u1"))
         try:
-            s = client.app.state.storage
+            s = client.app.state.services.storage
             return [await s.exists(f"{uid(1)}/image.png"), await s.exists(f"{uid(1)}/thumb.jpg")]
         finally:
             reset_context(token)
@@ -190,8 +193,36 @@ def test_export_copies_the_file_and_never_overwrites(client, tmp_path):
     assert second["name"] == "image-number-2-2.png" and saved.exists()
 
 
+def test_export_writes_where_the_save_as_box_chose(client, tmp_path):
+    chosen = tmp_path / "Pictures" / "mine.png"
+    chosen.parent.mkdir()
+    r = client.post(f"{BASE}/{uid(2)}/export", json={"path": str(chosen)})
+    assert r.status_code == 200 and r.json()["path"] == str(chosen) and chosen.read_bytes()
+    bad = client.post(f"{BASE}/{uid(2)}/export", json={"path": str(tmp_path / "x" / "y.png")})
+    assert bad.status_code == 422 and "does not exist" in bad.json()["detail"]
+
+
 def test_export_is_only_for_the_owner_and_only_where_a_folder_is_set(client):
     other = client.post(f"{BASE}/{uid(2)}/export", headers={"x-user": "someone-else"})
     assert other.status_code == 404
-    del client.app.state.export_dir  # the web profile never sets one
+    del client.app.state.services.export_dir  # the web profile never sets one
     assert client.post(f"{BASE}/{uid(2)}/export").status_code == 404
+
+
+def test_a_picture_says_what_it_was_made_from_and_the_list_finds_what_was_made_from_one(client):
+    from dataclasses import replace
+
+    client.store.images.append(replace(image(7), mode="image", source_id=uid(1)))
+    put(client, "u1", f"{uid(7)}/image.png", png((64, 48)))
+    put(client, "u1", f"{uid(7)}/thumb.jpg", b"jpegbytes")
+    got = client.get(f"{BASE}/{uid(7)}").json()
+    assert got["source_id"] == uid(1)
+    assert client.get(f"{BASE}/{uid(1)}").json()["source_id"] is None
+    made_from = client.get(BASE, params={"source": uid(1)}).json()["images"]
+    assert [i["id"] for i in made_from] == [uid(7)]
+    assert client.get(BASE, params={"source": uid(2)}).json()["images"] == []
+    # another person's list never shows it
+    assert client.get(BASE, params={"source": uid(1)}, headers={"x-user": "u2"}).json() == {
+        "images": [],
+        "next_before": None,
+    }

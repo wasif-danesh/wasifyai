@@ -3,7 +3,9 @@
 import {
   type AssistantApi,
   type ChatOptions,
+  type CreationsApi,
   type DictationReadiness,
+  type ExternalApi,
   type ImagesApi,
   type ReadAloudReadiness,
   type SpeechModelOffer,
@@ -13,12 +15,18 @@ import {
 } from "@wasifyai/client";
 import { Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { ChatScreen, type ChatScreenProps } from "./ChatScreen";
+import { ConfirmDialog, NameDialog } from "../components/dialog";
+import type { Entry as CreationEntry } from "../creations/model";
+import { useChoicesVersion } from "../models/context";
+import type { TrayJob } from "../shell/job-tray";
+import type { ChatScreenProps } from "./ChatScreen";
+import { HomeStart, type QuickStartId } from "./HomeStart";
 import type { TrackLookup } from "./ToolCard";
 import type { ComposerOptionsAvailable } from "./composer-options";
 import { startRecording } from "./dictation/recorder";
 import type { MicControl, MicSetup } from "./dictation/use-dictation";
 import type { ReadAloudControl } from "./read-aloud/use-read-aloud";
+import type { ExternalControl } from "./servers-panel";
 import { conversationsChanged } from "./use-conversations";
 
 export function greeting(hour: number): string {
@@ -28,10 +36,8 @@ export function greeting(hour: number): string {
   return "Good evening";
 }
 
-// The new chat is a separate chunk: it brings assistant-ui and streamdown, which a person who has not turned it on never needs.
-const ChatScreenNext = lazy(() =>
-  import("./ChatScreenNext").then((m) => ({ default: m.ChatScreenNext })),
-);
+// The chat is a separate chunk: it brings assistant-ui and streamdown, so the first paint does not wait for them.
+const ChatScreen = lazy(() => import("./ChatScreen").then((m) => ({ default: m.ChatScreen })));
 
 const EXAMPLES = [
   "Draw a lighthouse at sunrise",
@@ -52,11 +58,17 @@ export type AssistantHomeProps = {
   onNewChat: () => void;
   /** Setup notices (no model chosen yet, and so on). */
   notices?: ReactNode;
+  /** The model picker, in the title bar (the window's; ADR-0086). */
+  modelPicker?: ReactNode;
   blockedReason?: string | null;
   onNeedModel?: () => void;
   onOpenCreation?: (kind: string, id: string) => void;
   /** Take the person to Settings, where the search service and its key are chosen (ADR-0083). */
   onOpenSettings?: () => void;
+  /** Open a screen of the app by its menu item id (the assistant's open_screen button; ADR-0071). */
+  onOpenScreen?: (screenId: string) => void;
+  /** Take the person to the notebooks (a document too long for the chat can be added to one). */
+  onOpenNotebooks?: () => void;
   /** Which options of the box the chat offers; by default what the engine says the model in use can do (ADR-0083). */
   composerOptions?: ChatScreenProps["composerOptions"];
   /**
@@ -66,8 +78,18 @@ export type AssistantHomeProps = {
   voice?: VoiceApi;
   /** Fetch the speech model (desktop only: the web has no models to fetch). Reports how far it is, 0 to 1. */
   getSpeechModel?: (modelId: string, onProgress: (fraction: number) => void) => Promise<void>;
-  /** Which chat screen to show: the one built on our own components (the default) or the new one on assistant-ui (Labs). */
-  screen?: "classic" | "next";
+  /** the outside servers the person connected (ADR-0070): the box offers their resources and prompts */
+  external?: ExternalApi;
+  /** A quick start under the box (ADR-0093 U9): open that tool, with the box's words when there are some. */
+  onQuickStart?: (id: QuickStartId, text: string) => void;
+  /** which quick starts this app offers (all of them when not said) */
+  quickStarts?: QuickStartId[];
+  /** what runs now, for the line under the quick starts (the tray's own list) */
+  running?: () => Promise<TrayJob[]>;
+  /** the Library, for the last things made under the quick starts */
+  creations?: CreationsApi;
+  onOpenEntry?: (entry: CreationEntry) => void;
+  onOpenLibrary?: () => void;
 };
 
 /** The assistant is the home screen (ADR-0057): a greeting and "Ask anything", then the conversation, with
@@ -81,19 +103,31 @@ export function AssistantHome({
   onAdopt,
   onNewChat,
   notices,
+  modelPicker,
   blockedReason,
   onNeedModel,
   onOpenCreation,
   onOpenSettings,
+  onOpenScreen,
+  onOpenNotebooks,
   composerOptions,
   voice,
   getSpeechModel,
-  screen = "classic",
+  external,
+  onQuickStart,
+  quickStarts,
+  running,
+  creations,
+  onOpenEntry,
+  onOpenLibrary,
 }: AssistantHomeProps) {
   const [title, setTitle] = useState("");
   // what the box can offer with the model in use (a Thinking switch only for a model that can think, a Search switch
   // only when this engine can search at all)
   const [offered, setOffered] = useState<ChatOptions | null>(null);
+  // read again when a model is chosen or fetched: the options belong to the model in use (can it think, can it read pictures)
+  const models = useChoicesVersion();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `models` only says "ask again"
   useEffect(() => {
     let gone = false;
     assistant
@@ -103,7 +137,7 @@ export function AssistantHome({
     return () => {
       gone = true;
     };
-  }, [assistant]);
+  }, [assistant, models]);
   const allowSearch = useCallback(async () => {
     const st = await assistant.updateSearch({ consent: true });
     const chosen = st.providers.find((p) => p.id === st.provider);
@@ -150,7 +184,6 @@ export function AssistantHome({
       fetchModel: NonNullable<typeof getSpeechModel>,
     ): MicSetup & { languages: string[] } => ({
       title: model.title,
-      licence: model.licence,
       from: model.from,
       languages: model.languages,
       bytes: model.bytes + runtimeBytes,
@@ -188,12 +221,66 @@ export function AssistantHome({
     if (!getSpeechModel) return undefined; // nothing here can fetch a model (the web): no button
     return { ...base, setup: setupFor(voiceReady.model, voiceReady.runtimeBytes, getSpeechModel) };
   }, [voice, voiceReady, getSpeechModel, setupFor]);
+  // the picture reader of the chosen model, when the app can get it: one click, then the options are read again
+  const reader = useMemo(() => {
+    const r = offered?.attach?.picture_reader;
+    const api = assistant.pictureReader;
+    if (!r || !api) return undefined;
+    return {
+      title: r.title,
+      from: r.from,
+      bytes: r.bytes,
+      run: async (onProgress: (fraction: number | null) => void) => {
+        onProgress(null);
+        if (r.state !== "downloading") await api.start(r.bytes);
+        for (;;) {
+          const st = await api.status();
+          if (st?.state === "ready") break;
+          if (st?.state === "unavailable")
+            throw new Error("This model has no picture reader to get.");
+          if (st?.state === "downloading" && st.download) {
+            if (st.download.status === "failed") throw new Error(st.download.error);
+            const { bytes_done: done, bytes_total: total } = st.download;
+            onProgress(total ? done / total : null);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        setOffered(await assistant.options());
+      },
+    };
+  }, [offered, assistant]);
+  const externalControl = useMemo<ExternalControl | undefined>(
+    () =>
+      external
+        ? {
+            servers: async () =>
+              (await external.list()).servers
+                .filter((s) => s.trust !== "blocked" && !s.unhealthy)
+                .map((s) => ({ id: s.id, name: s.name })),
+            resources: async (id) => (await external.resources(id)).resources,
+            attachResource: async (id, uri) => {
+              const r = await external.attachResource(id, uri);
+              return {
+                id: r.id,
+                kind: "document",
+                name: r.name,
+                chars: r.chars,
+                truncated: r.truncated,
+              };
+            },
+            prompts: async (id) => (await external.prompts(id)).prompts,
+            promptText: async (id, name, args) => (await external.promptText(id, name, args)).text,
+          }
+        : undefined,
+    [external],
+  );
   const engineOptions = useMemo<ComposerOptionsAvailable>(() => {
     const s = offered?.search;
     const a = offered?.attach;
     return {
       mic,
       readAloud,
+      external: externalControl,
       // files: only where the engine can keep them (a model that cannot read pictures still takes documents)
       attach: a?.available
         ? {
@@ -202,6 +289,8 @@ export function AssistantHome({
             imagesNote: a.images_note,
             upload: (file, name) => assistant.attach(file, name),
             discard: (id) => assistant.unattach(id),
+            pictureReader: reader,
+            onOpenNotebooks,
           }
         : undefined,
       thinking: offered?.thinking,
@@ -218,7 +307,17 @@ export function AssistantHome({
           }
         : undefined,
     };
-  }, [offered, allowSearch, onOpenSettings, mic, readAloud, assistant]);
+  }, [
+    offered,
+    allowSearch,
+    onOpenSettings,
+    onOpenNotebooks,
+    mic,
+    readAloud,
+    assistant,
+    reader,
+    externalControl,
+  ]);
   // the hour is read in the browser, so a page rendered on a server says the same as the person's clock
   const [hour, setHour] = useState<number | null>(null);
   useEffect(() => setHour(new Date().getHours()), []);
@@ -229,19 +328,25 @@ export function AssistantHome({
       return;
     }
     let gone = false;
-    assistant
-      .list(100)
-      .then((l) => !gone && setTitle(l.find((c) => c.id === conversationId)?.title ?? ""))
-      .catch(() => {});
+    const read = () =>
+      assistant
+        .list(100)
+        .then((l) => !gone && setTitle(l.find((c) => c.id === conversationId)?.title ?? ""))
+        .catch(() => {});
+    void read();
+    // renamed from the Recents list: the title above the chat follows
+    window.addEventListener("wasifyai:conversations-changed", read);
     return () => {
       gone = true;
+      window.removeEventListener("wasifyai:conversations-changed", read);
     };
   }, [conversationId, assistant]);
 
-  async function rename() {
+  // the questions are the app's own dialogs: the desktop window shows no browser prompts
+  const [asking, setAsking] = useState<"rename" | "delete" | null>(null);
+
+  async function rename(next: string) {
     if (!conversationId) return;
-    const next = window.prompt("Name this chat", title)?.trim();
-    if (!next) return;
     try {
       const c = await assistant.rename(conversationId, next);
       setTitle(c.title);
@@ -253,7 +358,6 @@ export function AssistantHome({
 
   async function remove() {
     if (!conversationId) return;
-    if (!window.confirm("Delete this chat? What it made stays in your library.")) return;
     try {
       await assistant.remove(conversationId);
       conversationsChanged();
@@ -287,10 +391,24 @@ export function AssistantHome({
     },
     hero,
     examples: conversationId ? [] : EXAMPLES,
+    start:
+      conversationId || !(onQuickStart || running || creations) ? undefined : (
+        <HomeStart
+          offered={quickStarts}
+          onStart={onQuickStart}
+          running={running}
+          creations={creations}
+          onOpenEntry={onOpenEntry}
+          onOpenLibrary={onOpenLibrary}
+        />
+      ),
     notices,
+    model: modelPicker,
     blockedReason,
     onNeedModel,
     onOpenCreation,
+    onOpenSettings,
+    onOpenScreen,
     composerOptions: composerOptions ?? engineOptions,
     title: conversationId ? title || "Chat" : undefined,
     actions: conversationId ? (
@@ -299,7 +417,7 @@ export function AssistantHome({
           type="button"
           aria-label="Rename this chat"
           className="rounded-md p-2 text-muted-foreground hover:bg-accent"
-          onClick={() => void rename()}
+          onClick={() => setAsking("rename")}
         >
           <Pencil className="size-4" />
         </button>
@@ -307,7 +425,7 @@ export function AssistantHome({
           type="button"
           aria-label="Delete this chat"
           className="rounded-md p-2 text-muted-foreground hover:bg-accent"
-          onClick={() => void remove()}
+          onClick={() => setAsking("delete")}
         >
           <Trash2 className="size-4" />
         </button>
@@ -315,11 +433,34 @@ export function AssistantHome({
     ) : undefined,
   };
 
-  return screen === "next" ? (
-    <Suspense fallback={null}>
-      <ChatScreenNext {...shared} />
-    </Suspense>
-  ) : (
-    <ChatScreen {...shared} />
+  return (
+    <>
+      <Suspense fallback={null}>
+        <ChatScreen {...shared} />
+      </Suspense>
+      {asking === "rename" ? (
+        <NameDialog
+          title="Rename this chat"
+          label="Name"
+          initial={title}
+          onSubmit={(name) => {
+            setAsking(null);
+            void rename(name);
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
+      {asking === "delete" ? (
+        <ConfirmDialog
+          title="Delete this chat?"
+          message="What it made stays in your library."
+          onConfirm={() => {
+            setAsking(null);
+            void remove();
+          }}
+          onCancel={() => setAsking(null)}
+        />
+      ) : null}
+    </>
   );
 }

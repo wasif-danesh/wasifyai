@@ -65,9 +65,11 @@ class Rig:
             WeightFile("RapidOcr/two.onnx", "https://e.test/two", 20, "1" * 64),
         ]
         self.dir = tmp_path / "components" / "reader"
+        lock = tmp_path / "lock"
+        lock.write_text("docling==2 --hash=sha256:abc\n")  # the build ships one for the platform
         self.installer = ReaderInstaller(
             reader_dir=self.dir,
-            lock=tmp_path / "lock",
+            lock=lock,
             weights=self.weights,
             worker_script=tmp_path / "worker.py",
             uv="uv",

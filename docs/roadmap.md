@@ -6,7 +6,7 @@ prove them while the code is small.
 
 **ON HOLD (2026-10-19, by the owner): all spikes and new features, until the problems found in the owner's testing are fixed. Exception, lifted 2026-10-20 by the owner: the chat UI on assistant-ui (spike CU0, then CU1).** Specs and ADRs stay as written; nothing new starts. **Current focus (2026-10-18): the desktop app.** Next: `docs/phase4-agent-plan.md` (an MCP server, an MCP client and an
 assistant that knows the product; ADR-0068 to ADR-0071, Accepted) and `docs/phase5-agent-training-video-builder-plan.md`
-(an agent on Hermes, training, Video Builder; ADR-0072 to ADR-0077, Proposed). **The chat box gets Attach, Search (DuckDuckGo first), Thinking and Mic (ADR-0083, Accepted, on hold until the owner says start; `docs/composer-options-plan.md`, CO0 spike first).** **The chat UI moves to assistant-ui (ADR-0082, Accepted 2026-10-19; plan `docs/chat-ui-migration-plan.md`, CU0 spike first).** **The design system (ADR-0081): DS0 to DS2 done 2026-10-19: `design/DESIGN.md` is the single source of the look and blue replaces violet; DS3 (catalogue, accessibility checks, content guide) is next.** What is unverified or open on the web side is in
+(training, Video Builder; ADR-0073 to ADR-0077; the agent on Hermes, ADR-0072, was dropped by the owner on 2026-10-28). **The chat box gets Attach, Search (DuckDuckGo first), Thinking and Mic (ADR-0083, Accepted, on hold until the owner says start; `docs/composer-options-plan.md`, CO0 spike first).** **The chat UI moves to assistant-ui (ADR-0082, Accepted 2026-10-19; plan `docs/chat-ui-migration-plan.md`, CU0 spike first).** **The design system (ADR-0081): DS0 to DS2 done 2026-10-19: `design/DESIGN.md` is the single source of the look and blue replaces violet; DS3 (catalogue, accessibility checks, content guide) is next.** What is unverified or open on the web side is in
 `docs/backlog.md`.
 
 ## v1 plan (decided 2026-10-10)
@@ -19,10 +19,10 @@ then take it down again. Four stages, each with an exit criterion:
 | 1 | **End to end on local kind** (`make kind-up`) | All 6 products (music, image, video, text to speech, speech to text, lip sync) work in the cluster, with placeholder media from the worker and the CPU speech servers; a smoke test creates something with each; CI is green. |
 | 2 | **Monitoring** (built, ADR-0048 accepted) | Metrics and dashboards for job queues, failures, GPU seconds and request rates, with alerts to Telegram and an outside heartbeat; installed on kind with `make monitoring-up`, fire drill with `make monitoring-drill` (passed 2026-10-10: alert, Telegram notification, resolve). Runbook: `docs/runbooks/monitoring.md`. |
 | 3 | **Staging on the 24 GB NVIDIA box, built with OpenTofu** | The box already runs Linux with NVIDIA drivers. One `tofu apply` goes from that to k3s, Argo CD and the chart, running the real models (ComfyUI, Ollama, MuseTalk). Needs a CUDA image for the lip sync server and a ComfyUI image. |
-| 4 | **GCP test, then shutdown** | The same OpenTofu against GCP, on one spot GPU, private (no public address), safeguards **on** (ADR-0047, `safeguards.forceOn: true`), a budget alert, and `tofu destroy` leaves nothing billing. The deployment is then shut down: nothing is promoted to production in v1. |
+| 4 | **GCP test, then shutdown** | The same OpenTofu against GCP, on one spot GPU, private (no public address), a budget alert, and `tofu destroy` leaves nothing billing. The deployment is then shut down: nothing is promoted to production in v1. |
 
-Decisions: the safeguards switch is on in the GCP test and off in staging (a private home lab). Terms of Use,
-takedown handling and billing stay out of v1 because there is no public launch.
+Decisions: v1 has no safeguards, marks, consent gates, terms or licence data (owner, 2026-10-29, ADR-0094); billing
+stays out of v1.
 
 **Stage 1 status (2026-10-10): met, with nothing native.** `make kind-up` (default `KIND_MODE=full`) puts every service
 in a pod: Ollama with its models, the CPU speech servers (Kokoro, Whisper), the lip sync server (MuseTalk, CPU) and
@@ -158,9 +158,8 @@ Built, and since replaced by the voice product (ADR-0067); its spec was removed 
       ADR-0047) and run for real only on the placeholder backend. The spike showed the Mac is far too slow (about 4
       minutes of compute per second of video, out of memory past one window). Next: a CUDA host, then the language,
       guardrail and audio evaluations of the ADR, and the Enhance button for the style hint
-- [ ] Safeguards switch (ADR-0047): done; before the studio is public, Terms of Use and takedown handling
+- [x] Safeguards switch (ADR-0047): built, then removed with every check, limit and mark (ADR-0094, 2026-10-29)
 - [ ] Audio uploads (the image upload endpoint exists; ADR-0035): designed in ADR-0043
-- [ ] Screen finished images and clips before showing them; measure the picture guardrail on unsafe pictures
 - [ ] Evaluate audio input on real recordings, not only synthetic speech (ADR-0020)
 - [ ] Pin the SeaweedFS image to a version instead of `:latest`
 - [ ] Roll out new staging images automatically (pinned tags or Image Updater)

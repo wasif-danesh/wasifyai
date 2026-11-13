@@ -7,11 +7,13 @@ Remote backends run no GPU work here: the processor skips the GPU lock for them.
 import asyncio
 import base64
 import logging
+import mimetypes
 import time
 from typing import Any
 
 import httpx
 from wasifyai_platform_sdk import (
+    PICTURE_SLOTS,
     JobRequest,
     MediaBinding,
     MediaBindingStore,
@@ -19,6 +21,8 @@ from wasifyai_platform_sdk import (
     SecretsUnavailable,
     input_image_name,
 )
+from wasifyai_platform_sdk.cloud_queues import RunwareTasks, WaveSpeedQueue
+from wasifyai_platform_sdk.fal import FAL_QUEUE, FalError, FalQueue
 
 from wasifyai_media_worker.comfy import ComfyClient, ComfyError, ProgressFn, use_picture
 from wasifyai_media_worker.settings import WorkerSettings
@@ -86,9 +90,10 @@ class ComfyApiRunner:
         self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
     ) -> Files:
         graph = job.prompt
-        if files and "image" in files:
-            name = input_image_name(job.job_id)
-            graph = use_picture(graph, name, await self._upload(name, files["image"]))
+        for slot in PICTURE_SLOTS:
+            if files and slot in files:
+                name = input_image_name(job.job_id, slot)
+                graph = use_picture(graph, name, await self._upload(name, files[slot]))
         r = await self._http.post(
             f"{self._base}/api/v2/jobs", json={"workflow": graph}, headers=self._headers
         )
@@ -114,7 +119,7 @@ class ComfyApiRunner:
             if self._headers
             else {},
             data={"type": "input", "overwrite": "true"},
-            files={"image": (name, data, "image/png")},
+            files={"image": (name, data, mimetypes.guess_type(name)[0] or "image/png")},
         )
         raise_for_backend(r)
         return str(r.json().get("name", name))
@@ -256,6 +261,209 @@ class OpenAIImagesRunner:
         return {name: (data, ctype, _EXT.get(ctype, "png"))}
 
 
+# ---- fal.ai, on the person's own key (ADR-0095, stage K3) -------------------------------------
+
+# the endpoint a capability uses, from the model the person chose for the product (its text-to-X
+# endpoint). A capability with no entry for that model cannot run on the key.
+FAL_EDIT = {"fal-ai/flux-2": "fal-ai/flux-2/edit"}
+FAL_ANIMATE = {"fal-ai/ltx-2/text-to-video/fast": "fal-ai/ltx-2/image-to-video/fast"}
+FAL_VIDEO_SECONDS = (6, 8, 10)  # what LTX-2 on fal.ai makes at 1080p
+NOT_WITH_KEY = {
+    "image.inpaint": "Painting over part of a picture",
+    "video.extend": "Making a clip longer",
+}
+
+
+def _fal_failed(e: FalError) -> Exception:
+    """The worker's own error for a fal.ai failure: a busy service is retried."""
+    if e.code == "unavailable":
+        return BackendUnavailable(e.message)
+    return ComfyError(e.code, e.message)
+
+
+class FalRunner:
+    """One picture or clip on fal.ai with the person's key, through `FalQueue`."""
+
+    backend = "fal"
+    local_gpu = False
+
+    def __init__(
+        self,
+        key: str,
+        model: str,
+        http: httpx.AsyncClient,
+        timeout_s: float,
+        poll_s: float = 2.0,
+        base_url: str = FAL_QUEUE,
+    ):
+        self._queue = FalQueue(key, http, timeout_s, poll_s, base_url)
+        self._headers = self._queue._headers
+        self._model = model
+
+    async def _request(
+        self, job: JobRequest, files: InputFiles | None
+    ) -> tuple[str, dict[str, Any]]:
+        """The endpoint and the body for this job, from what was asked (`job.inputs`). A picture
+        goes up to fal.ai's file store first and the body names its address: one sent inside the
+        request can be refused as too long (a voice was, in the owner's real run of 2026-11-12)."""
+        what = NOT_WITH_KEY.get(job.capability)
+        if what:
+            raise ComfyError(
+                "not_with_key",
+                f"{what} is not done with your key yet. Run it on this computer: Settings › "
+                "Your keys.",
+            )
+        if job.inputs.get("loras"):
+            raise ComfyError(
+                "not_with_key",
+                "Styles and looks made on this computer cannot be used with your key.",
+            )
+        prompt = job.inputs.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ComfyError("invalid_input", "The request has no description.")
+        body: dict[str, Any] = {"prompt": prompt}
+        seed = job.inputs.get("seed")
+        cap = job.capability
+        if cap in ("image.generate", "image.edit", "image.reference"):
+            w, h = job.inputs.get("width"), job.inputs.get("height")
+            if isinstance(w, int) and isinstance(h, int):
+                body["image_size"] = {"width": w, "height": h}
+            if isinstance(seed, int):
+                body["seed"] = seed
+            if cap == "image.generate":
+                return self._model, body
+            pictures = [files[n] for n in ("image", "image2") if files and n in files]
+            if not pictures:
+                raise ComfyError("invalid_input", "The picture for this job is missing.")
+            endpoint = self._endpoint(FAL_EDIT, "Changing a picture")  # nothing goes up if not
+            body["image_urls"] = [
+                await self._queue.upload(p, f"picture{i}.png") for i, p in enumerate(pictures)
+            ]
+            return endpoint, body
+        if cap in ("video.generate", "video.animate"):
+            frames = job.inputs.get("length")
+            want = round(frames / 24) if isinstance(frames, int) else 6
+            body["duration"] = next((s for s in FAL_VIDEO_SECONDS if s >= want), 10)
+            body["generate_audio"] = False
+            if cap == "video.generate":
+                return self._model, body
+            if not files or "image" not in files:
+                raise ComfyError("invalid_input", "The picture for this job is missing.")
+            endpoint = self._endpoint(FAL_ANIMATE, "Animating a picture")
+            body["image_url"] = await self._queue.upload(files["image"], "picture.png")
+            return endpoint, body
+        raise ComfyError("not_with_key", "This is not done with your key.")
+
+    def _endpoint(self, table: dict[str, str], what: str) -> str:
+        # a model named for the job itself (an admin's row for Change a picture: fal-ai/flux-2/edit)
+        found = table.get(self._model) or (self._model if self._model in table.values() else None)
+        if found is None:
+            raise ComfyError(
+                "not_with_key",
+                f"{what} needs a model fal.ai can do it with; {self._model} cannot. Choose "
+                "another model, or run it on this computer: Settings › Your keys.",
+            )
+        return found
+
+    async def run(
+        self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
+    ) -> Files:
+        name, kind = next(
+            ((n, s.get("type", "image")) for n, s in job.outputs.items()), ("output", "image")
+        )
+        try:
+            endpoint, body = await self._request(job, files)
+            result = await self._queue.call(endpoint, body, on_progress)
+            item = (
+                (result.get("images") or [{}])[0] if kind == "image" else result.get("video") or {}
+            )
+            await on_progress(0.9)
+            fallback = "video/mp4" if kind == "video" else "image/png"
+            data, ctype = await self._queue.fetch(item, fallback)
+        except FalError as e:
+            raise _fal_failed(e) from None
+        await on_progress(1.0)
+        return {name: (data, ctype, _EXT.get(ctype, "mp4" if kind == "video" else "png"))}
+
+
+# ---- WaveSpeed and Runware, on the person's own key (ADR-0095, amendment of 2026-11-11) ----------
+
+
+def _sixty_four(side: Any) -> int:
+    """Runware's sides: a multiple of 64 from 128 to 2048."""
+    n = side if isinstance(side, int) else 1024
+    return min(2048, max(128, round(n / 64) * 64))
+
+
+class CloudImageRunner:
+    """A picture made from a description on WaveSpeed or Runware with the person's key. Only
+    making is offered there in this app; changing and combining pictures, and video, run on fal.ai
+    or on this computer (`docs/own-keys-cloud-tab-plan.md`)."""
+
+    local_gpu = False
+
+    def __init__(
+        self,
+        provider: str,
+        key: str,
+        model: str,
+        http: httpx.AsyncClient,
+        timeout_s: float,
+        poll_s: float = 2.0,
+        base_url: str = "",
+    ):
+        self.backend = provider
+        self._model = model
+        queue = WaveSpeedQueue if provider == "wavespeed" else RunwareTasks
+        self._queue = queue(key, http, timeout_s, poll_s, *([base_url] if base_url else []))
+
+    def _body(self, job: JobRequest) -> dict[str, Any]:
+        if job.capability != "image.generate":
+            raise ComfyError(
+                "not_with_key",
+                f"Only making a picture runs on {self._queue.title} in this app. Choose a fal.ai "
+                "or a computer model in the picker for this.",
+            )
+        if job.inputs.get("loras"):
+            raise ComfyError(
+                "not_with_key", "Styles and looks made on this computer cannot be used with a key."
+            )
+        prompt = job.inputs.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ComfyError("invalid_input", "The request has no description.")
+        w, h = job.inputs.get("width"), job.inputs.get("height")
+        seed = job.inputs.get("seed")
+        if self.backend == "wavespeed":
+            body: dict[str, Any] = {"prompt": prompt, "output_format": "png"}
+            if isinstance(w, int) and isinstance(h, int):  # WaveSpeed takes 256 to 1536 a side
+                body["size"] = f"{min(1536, max(256, w))}*{min(1536, max(256, h))}"
+            if isinstance(seed, int):
+                body["seed"] = seed
+            return body
+        task: dict[str, Any] = {
+            "taskType": "imageInference", "positivePrompt": prompt, "numberResults": 1,
+            "outputFormat": "PNG",
+            "width": _sixty_four(w), "height": _sixty_four(h),
+        }  # fmt: skip
+        if isinstance(seed, int):
+            task["seed"] = seed
+        return task
+
+    async def run(
+        self, job: JobRequest, on_progress: ProgressFn, files: InputFiles | None = None
+    ) -> Files:
+        name = next(iter(job.outputs), "output")
+        body = self._body(job)
+        try:
+            data, ctype, _ = await self._queue.make(
+                self._model, body, "images", "image/png", on_progress
+            )
+        except FalError as e:
+            raise _fal_failed(e) from None
+        await on_progress(1.0)
+        return {name: (data, ctype, _EXT.get(ctype, "png"))}
+
+
 class BackendRouter:
     """Chooses the runner for each job: the admin's binding if there is one, else the default."""
 
@@ -321,6 +529,15 @@ class BackendRouter:
                     cfg.get("base_url") or "https://cloud.comfy.org", self._secret(b),
                     self._s.job_timeout_s, self._http, self._poll,
                 )  # fmt: skip
+            case "fal":  # ADR-0095 K5: the admin's fal.ai key and model for this capability
+                key = self._secret(b)
+                if not key:
+                    raise ComfyError(
+                        "backend_misconfigured", "The generation backend is not set up correctly."
+                    )
+                return FalRunner(
+                    key, cfg.get("model", ""), self._http, self._s.job_timeout_s, self._poll
+                )
             case "openai-images":
                 return OpenAIImagesRunner(
                     cfg.get("base_url") or "https://api.openai.com/v1", cfg.get("model", ""),
@@ -333,8 +550,10 @@ class BackendRouter:
                 )
 
     def _video_url(self, job: JobRequest) -> str:
-        """The separate ComfyUI for video jobs, if set (never in stub mode)."""
-        if job.capability.startswith("video.") and self._s.comfyui_mode != "stub":
+        """The separate ComfyUI for video jobs, if set (never in stub mode, and never when this
+        worker runs the desktop's own ComfyUI: that one serves video too)."""
+        own = self._s.comfyui_mode in ("stub", "sidecar")
+        if job.capability.startswith("video.") and not own:
             return self._s.comfyui_video_base_url
         return ""
 

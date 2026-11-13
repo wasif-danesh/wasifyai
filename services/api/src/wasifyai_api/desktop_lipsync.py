@@ -11,12 +11,13 @@ from wasifyai_platform_sdk import Identity
 from wasifyai_api.audio_runtime import AudioEngine, InstallError
 from wasifyai_api.identity import get_identity
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
+from wasifyai_api.services import services_of
 
 router = APIRouter(prefix="/desktop/lipsync", tags=["desktop"])
 
 
 def _sidecar(request: Request) -> LipSyncSidecar:
-    engine: AudioEngine | None = getattr(request.app.state, "audio", None)
+    engine: AudioEngine | None = services_of(request).audio
     sidecar = engine.lipsync_sidecar if engine is not None else None
     if sidecar is None:
         raise HTTPException(404, "not available in this deployment")

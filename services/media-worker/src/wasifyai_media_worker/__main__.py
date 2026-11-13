@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 import signal
+from pathlib import Path
 
 import httpx
 from redis.asyncio import Redis
@@ -14,7 +16,9 @@ from wasifyai_platform_sdk import (
     UsageRecorder,
     memory_storage,
     s3_storage,
+    tracing,
 )
+from wasifyai_platform_sdk.jobqueue import RedisCancels
 
 from wasifyai_media_worker.backends import BackendRouter
 from wasifyai_media_worker.comfy import ComfyClient
@@ -23,7 +27,23 @@ from wasifyai_media_worker.gpu import RedisGpuLock
 from wasifyai_media_worker.metrics import WORKER_UP, serve, watch_queue
 from wasifyai_media_worker.processor import ComfyRunner, JobProcessor, StubRunner
 from wasifyai_media_worker.settings import WorkerSettings
+from wasifyai_media_worker.sidecar import ComfySidecar, SidecarConfig, SidecarRunner
 from wasifyai_media_worker.state import RedisJobState
+
+
+def build_sidecar(s: WorkerSettings) -> ComfySidecar:
+    """The desktop app's ComfyUI, run by this worker (`COMFYUI_MODE=sidecar`)."""
+    if not s.desktop_data_dir:
+        raise SystemExit(
+            "COMFYUI_MODE=sidecar needs DESKTOP_DATA_DIR (the desktop app's data folder)"
+        )
+    data = Path(s.desktop_data_dir).expanduser()
+    models = Path(s.desktop_models_dir).expanduser() if s.desktop_models_dir else data / "models"
+    extra = tuple(
+        Path(p).expanduser() for p in s.desktop_extra_model_dirs.split(os.pathsep) if p.strip()
+    )
+    return ComfySidecar(SidecarConfig(data, models, extra))
+
 
 # redis-py defaults to 5 s; blocking queue reads must not hit that.
 REDIS_SOCKET_TIMEOUT_S = 60
@@ -32,6 +52,7 @@ REDIS_SOCKET_TIMEOUT_S = 60
 async def main() -> None:
     s = WorkerSettings()
     logging.basicConfig(level=s.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    tracing.setup("wasifyai-media-worker")  # OTLP to Tempo when OTEL_EXPORTER_OTLP_ENDPOINT is set
     log = logging.getLogger("wasifyai_media_worker")
 
     redis = Redis.from_url(
@@ -55,9 +76,18 @@ async def main() -> None:
         log.warning("DATABASE_URL is unset: usage events are not persisted")
 
     comfy = ComfyClient(s.comfyui_base_url)
+    sidecar = None
     if s.comfyui_mode == "stub":
         log.warning("COMFYUI_MODE=stub: producing placeholder files, no GPU work")
         runner = StubRunner()
+    elif s.comfyui_mode == "sidecar":
+        sidecar = build_sidecar(s)
+        runner = SidecarRunner(sidecar, s.job_timeout_s)
+        log.info(
+            "COMFYUI_MODE=sidecar: ComfyUI from %s, models in %s",
+            s.desktop_data_dir,
+            sidecar.model_roots(),
+        )
     else:
         runner = ComfyRunner(comfy, s.job_timeout_s)
 
@@ -79,6 +109,7 @@ async def main() -> None:
         RedisGpuLock(redis, s.gpu_id),
         RedisJobState(redis),
         http,
+        cancels=RedisCancels(redis),  # a job the person stopped is not run, or stops (stage J3)
     )
     worker = Worker(redis, processor)
 
@@ -96,12 +127,15 @@ async def main() -> None:
     finally:
         WORKER_UP.set(0)
         queue_task.cancel()
+        if sidecar is not None:  # ComfyUI is this worker's own process
+            await sidecar.stop()
         await comfy.aclose()
         await router.aclose()
         await http.aclose()
         await redis.aclose()
         if engine:
             await engine.dispose()
+        tracing.flush()
 
 
 if __name__ == "__main__":

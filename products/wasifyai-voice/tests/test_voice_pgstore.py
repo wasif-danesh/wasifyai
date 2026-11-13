@@ -99,9 +99,9 @@ def test_pictures_and_clips_belong_to_their_owner(new_store):
     clip = s.add_clip(
         T, U, title="Hello", model_id="m", picture_key="pic/a.png", video_key="clip/a.mp4",
         voice={"kind": "speech"}, script="hi", seconds=3.25, fps=25, width=512, height=512,
-        consent={"picture": "own"}, load_s=0, elapsed_s=2, clip_id="c1",
+        load_s=0, elapsed_s=2, clip_id="c1",
     )  # fmt: skip
-    assert clip["voice"] == {"kind": "speech"} and clip["consent"] == {"picture": "own"}
+    assert clip["voice"] == {"kind": "speech"} and "consent" not in clip
     assert s.update_clip(T, U, "c1", title="Renamed", favourite=True)["favourite"]
     for tenant, user in OTHERS:
         with pytest.raises(NotFound):

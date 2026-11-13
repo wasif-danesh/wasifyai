@@ -19,6 +19,13 @@ done
 step "Applying migrations"
 (cd services/api && uv run alembic upgrade head)
 
+# The workers run the models for the web (ADR-0087): speech, music and lip sync, and images and video through the desktop's
+# ComfyUI. On a Mac they run here, natively, because the models use the Apple GPU; they need the desktop app's data folder.
+if [ "$PLATFORM" = "darwin" ]; then
+  step "Workers"
+  "$ROOT/scripts/worker.sh" start || warn "the workers did not start; the web offers only the hosted speech models and placeholder pictures"
+fi
+
 printf '\n%sReady.%s Open %shttp://localhost:3000%s   (API: http://localhost:8000/docs)\n' "$GREEN" "$RESET" "$BOLD" "$RESET"
 printf 'Following logs (Ctrl-C stops the log view, not the stack). Stop the stack with: make down\n\n'
 exec "$CONTAINER_ENGINE" compose logs -f

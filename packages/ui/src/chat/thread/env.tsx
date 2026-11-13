@@ -10,12 +10,20 @@ export type ThreadEnv = {
   images: ImagesApi;
   tracks?: TrackLookup;
   onOpenCreation?: (kind: string, id: string) => void;
+  /** Take the person to Settings (a search service that fails: add a key there) */
+  onOpenSettings?: () => void;
   /** origins a markdown picture may load from (none by default) */
   imageOrigins?: string[];
   /** Thinking is on for this chat: a pending answer says it takes longer */
   thinkingOn?: boolean;
-  /** The person answered a card that waits for them (ADR-0071): yes or no */
-  onDecide?: (approved: boolean) => void;
+  /** The person answered a card that waits for them (ADR-0071): yes or no, with the fields as they edited them */
+  onDecide?: (approved: boolean, params?: Record<string, unknown>) => void;
+  /** Open a screen of the app by its menu item id (the assistant's open_screen button, ADR-0071) */
+  onOpenScreen?: (screenId: string) => void;
+  /** The person ticked "Don't ask again in this chat" on a card: the chat stops asking before it makes things */
+  onAutoRun?: () => void;
+  /** A change the assistant made in a screen it is docked in: can it still be undone from its card, and how */
+  undoOfTool?: (toolId: string) => { undone: boolean; undo: () => void } | null;
   /** The notebook chat (CU4) is a plain back-and-forth: no edit, no "answer again", no versions. */
   linear?: boolean;
   /** What a waiting answer says (default: "Thinking…"). */

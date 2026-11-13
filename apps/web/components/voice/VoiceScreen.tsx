@@ -1,6 +1,7 @@
 "use client";
 
 import { webVoice } from "@/lib/library";
+import { remembered } from "@/lib/remembered";
 import { webClient } from "@/lib/run-client";
 import { TARGETS, type VoiceScreenName, voicePath } from "@/lib/voice-screens";
 import {
@@ -9,7 +10,6 @@ import {
   LipSyncPage,
   LyricsPage,
   MusicPage,
-  type Remembered,
   SpeakPage,
   ToolPage,
   TracksPage,
@@ -19,24 +19,6 @@ import {
   VoicesPage,
 } from "@wasifyai/ui";
 import { useRouter } from "next/navigation";
-
-// Small choices (the model last used) and hand-offs between screens, kept in this browser. Never required.
-const remembered: Remembered = {
-  get(key) {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  set(key, value) {
-    try {
-      localStorage.setItem(key, value);
-    } catch {
-      // forgotten
-    }
-  },
-};
 
 /** One voice screen: the same page the desktop window shows, with the web's engine and navigation. */
 export function VoiceScreen({ screen }: { screen: VoiceScreenName }) {

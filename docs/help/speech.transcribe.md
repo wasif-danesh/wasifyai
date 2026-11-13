@@ -1,7 +1,7 @@
 ---
 action: speech.transcribe
 screen: voice.transcribe
-synonyms: [transcribe, write down, speech to text, captions, subtitles]
+synonyms: [transcribe, write down, speech to text, captions, recording to text, words from a recording, what was said, subtitles]
 ---
 # Speech to text
 
@@ -14,13 +14,15 @@ Write down what a recording in your library says and keep it as a transcript.
 ## Steps in the app
 
 1. Open **Voice › Speech to text**.
-2. Choose a recording or add a file.
-3. Choose Transcribe. The transcript appears in your library.
+2. Drop a recording on the screen or choose **Choose a recording**.
+3. Choose **Transcribe**. The text appears with its times, with Copy and Save (.txt, .srt or .vtt), and
+   joins Recent transcripts.
 
 ## Fields
 
 - `source_kind`: track or speech.
 - `source_id`: The recording.
+- `path`: For another app connected to Wasify AI: the full path of an audio or video file inside a folder that connection may read (Settings › Other apps), instead of a recording of the library.
 - `title`: Optional name.
 
 ## Limits

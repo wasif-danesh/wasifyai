@@ -63,7 +63,7 @@ ComfyUI environment, only its model files.
 | Broad model support quickly (new families appear in ComfyUI first) | Process supervision, port and crash handling are ours |
 | Same engine as our web staging and as users' mental model of "ComfyUI" | No documented stable embedding API; internals change between releases (pin and test) |
 | LoRA files trained here load without conversion (after the one key rename) | Custom nodes run arbitrary code in the process; registry nodes have had vulnerabilities |
-| Official project shows the pattern works | GPL-3.0: keep it a separate process, ship its notice and source offer (NOTICE already records this) |
+| Official project shows the pattern works | keep it a separate process |
 | Headless mode and localhost default are documented | Cold start is slower than an in-process engine; memory is separate from the Python engine |
 
 ## Consequences

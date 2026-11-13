@@ -4,8 +4,8 @@ import { Sidebar, SidebarContent, SidebarRail } from "@/components/ui/sidebar";
 import { useVoiceOffer } from "@/hooks/use-voice-offer";
 import { webAssistant } from "@/lib/library";
 import { resolveWebItem } from "@/lib/menu";
-import { SideMenu, useConversations } from "@wasifyai/ui";
-import { Compass, ShieldCheck } from "lucide-react";
+import { SideMenu, conversationsChanged, useConversations } from "@wasifyai/ui";
+import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
@@ -15,27 +15,21 @@ import type { ReactNode } from "react";
 export function AppSidebar({
   isAdmin,
   footer,
-  notebooks = false,
-  voice = false,
 }: {
   isAdmin: boolean;
   footer: ReactNode;
-  /** notebooks are on in this deployment (`NOTEBOOKS_ENABLED`) */
-  notebooks?: boolean;
-  /** the voice product is on in this deployment (`VOICE_ENABLED`) */
-  voice?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const show = useSearchParams()?.get("show") ?? null;
   const chats = useConversations(webAssistant);
-  const voiceScreens = useVoiceOffer(voice);
+  const voiceScreens = useVoiceOffer();
   const chatId = /^\/chat\/([\w-]+)$/.exec(pathname)?.[1];
   return (
     <Sidebar collapsible="offcanvas">
       <SidebarContent className="gap-0 overflow-hidden">
         <SideMenu
-          resolve={resolveWebItem(pathname, show, { notebooks, voice, voiceScreens })}
+          resolve={resolveWebItem(pathname, show, { voiceScreens, isAdmin })}
           link={Link}
           brandHref="/"
           recents={{
@@ -44,10 +38,19 @@ export function AppSidebar({
               title: c.title,
               current: chatId === c.id,
               onSelect: () => router.push(`/chat/${c.id}`),
+              rename: async (name: string) => {
+                await webAssistant.rename(c.id, name);
+                conversationsChanged();
+              },
+              remove: async () => {
+                await webAssistant.remove(c.id);
+                conversationsChanged();
+                if (chatId === c.id) router.push("/"); // the chat on the screen is gone: a new one
+              },
             })),
           }}
           extra={[
-            { id: "explore", label: "Explore", icon: Compass, href: "/explore" },
+            // Explore is the site's page for people who are not in the app yet (ADR-0093 decision 5): not in the menu
             ...(isAdmin
               ? [
                   {

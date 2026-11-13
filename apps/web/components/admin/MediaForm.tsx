@@ -21,14 +21,19 @@ import { useActionState, useId, useState } from "react";
 const IDLE: MediaFormState = { status: "idle" };
 
 /** Choose what runs one media capability. The API key box is write-only and always starts empty. */
+/** A row that has a key saved, offered as "Use the key saved for …" to rows on the same service. */
+export type KeyRow = { id: string; backend: string; label: string };
+
 export function MediaForm({
   item,
   backends,
   secretsReady,
+  keyRows = [],
 }: {
   item: MediaView;
   backends: MediaBackend[];
   secretsReady: boolean;
+  keyRows?: KeyRow[];
 }) {
   const id = useId();
   const allowed = backends.filter((b) => item.allowed_backends.includes(b.id));
@@ -40,6 +45,8 @@ export function MediaForm({
   const backend = allowed.find((b) => b.id === backendId) ?? allowed[0];
   const same = backend?.id === item.backend;
   const secret = backend?.fields.find((f) => f.secret);
+  const borrowable = keyRows.filter((r) => r.backend === backend?.id);
+  const [keyFrom, setKeyFrom] = useState("");
 
   return (
     <form action={action} className={cn(panel, "gap-6")} aria-busy={pending}>
@@ -96,7 +103,7 @@ export function MediaForm({
               maxLength={512}
               autoComplete="off"
               spellCheck={false}
-              disabled={!secretsReady}
+              disabled={!secretsReady || keyFrom !== ""}
               aria-describedby={`${id}-key-hint`}
               placeholder={
                 same && item.key_set
@@ -108,6 +115,32 @@ export function MediaForm({
               {secretsReady
                 ? "Sent once, stored encrypted, and never shown again."
                 : "Saving keys is off: set MEDIA_SECRETS_KEY (run make setup) and restart."}
+            </FieldDescription>
+          </Field>
+        ) : null}
+
+        {secret && borrowable.length > 0 ? (
+          <Field key={`${backend?.id}-key-from`}>
+            <FieldLabel htmlFor={`${id}-key-from`}>Or use a key already saved</FieldLabel>
+            <Select
+              name="key_from"
+              value={keyFrom || "none"}
+              onValueChange={(v) => setKeyFrom(v === "none" ? "" : v)}
+            >
+              <SelectTrigger id={`${id}-key-from`} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No, use the key above</SelectItem>
+                {borrowable.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    Use the key saved for {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription>
+              The key is copied inside the service; it is never shown.
             </FieldDescription>
           </Field>
         ) : null}
@@ -160,7 +193,8 @@ function Result({ state }: { state: MediaFormState }) {
     case "reset":
       return (
         <Notice tone="ok" title="Back to the default">
-          The next job runs the product's own ComfyUI workflow again.
+          The next job runs on the default again: the product's own ComfyUI workflow, or the engine
+          workers for speaking and 3D models.
         </Notice>
       );
     case "error":

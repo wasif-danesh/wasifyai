@@ -1,12 +1,10 @@
 import { type Page, expect, test } from "@playwright/test";
 import { mockApi } from "./mock-api";
 
-// Dictation in the chat box (ADR-0083, decision 5), on the usual chat and the new one (Labs). Chromium gives the page a fake microphone
+// Dictation in the chat box (ADR-0083, decision 5), on the chat. Chromium gives the page a fake microphone
 // (a steady beep), so the real recorder runs: the worklet is fetched from the app's own `/recorder-worklet.js`, the clip is averaged
 // down to a 16 kHz mono WAV in the page, and what is posted to the engine is checked byte for byte at the header. The engine's answer
 // is scripted. `@layout` cases run in CI.
-
-const KEY = "wasifyai.labs.chat-next";
 
 test.use({
   permissions: ["microphone"],
@@ -15,15 +13,8 @@ test.use({
   },
 });
 
-async function setup(page: Page, next: boolean) {
+async function setup(page: Page) {
   await mockApi(page);
-  await page.addInitScript(
-    ([k, on]) => {
-      if (on) localStorage.setItem(k as string, "1");
-      else localStorage.removeItem(k as string);
-    },
-    [KEY, next],
-  );
   await page.route("**/api/products/wasifyai-assistant/options", (route) =>
     route.fulfill({ json: { thinking: false } }),
   );
@@ -40,13 +31,11 @@ async function noSideScroll(page: Page) {
   expect(wide, "the page scrolls sideways").toBeLessThanOrEqual(1);
 }
 
-for (const next of [false, true]) {
-  const which = next ? "the new chat" : "the usual chat";
-
-  test(`${which}: record, stop, and the words land in the box without being sent @layout`, async ({
+test.describe("the chat", () => {
+  test("record, stop, and the words land in the box without being sent @layout", async ({
     page,
   }) => {
-    await setup(page, next);
+    await setup(page);
     const posted: { type: string; wav: Buffer }[] = [];
     let runs = 0;
     await page.route("**/api/products/wasifyai-assistant/runs", (route) => {
@@ -112,8 +101,8 @@ for (const next of [false, true]) {
     await noSideScroll(page);
   });
 
-  test(`${which}: a refused microphone is said in plain words @layout`, async ({ page }) => {
-    await setup(page, next);
+  test("a refused microphone is said in plain words @layout", async ({ page }) => {
+    await setup(page);
     await page.addInitScript(() => {
       navigator.mediaDevices.getUserMedia = () =>
         Promise.reject(new DOMException("denied", "NotAllowedError"));
@@ -126,23 +115,23 @@ for (const next of [false, true]) {
     await expect(mic(page)).toBeEnabled();
   });
 
-  test(`${which} looks right while it listens @visual`, async ({ page }) => {
-    await setup(page, next);
+  test("looks right while it listens @visual", async ({ page }) => {
+    await setup(page);
     await page.goto("/");
     await expect(mic(page)).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     await mic(page).click();
     await expect(page.getByText(/Listening with/)).toBeVisible();
-    await expect(page).toHaveScreenshot(`dictation-${next ? "next" : "usual"}-listening.png`);
+    await expect(page).toHaveScreenshot("dictation-next-listening.png");
   });
 
   for (const scheme of ["light", "dark"] as const) {
-    test(`${which}, ${scheme}, 320 px: the Mic and the recording card fit and nothing scrolls sideways @layout`, async ({
+    test(`${scheme}, 320 px: the Mic and the recording card fit and nothing scrolls sideways @layout`, async ({
       page,
     }) => {
       await page.emulateMedia({ colorScheme: scheme });
       await page.setViewportSize({ width: 320, height: 640 });
-      await setup(page, next);
+      await setup(page);
       await page.route("**/api/products/wasifyai-voice/dictation", (route) =>
         route.fulfill({ json: { text: "hello", seconds: 1, model: "m", displaced: null } }),
       );
@@ -165,4 +154,4 @@ for (const next of [false, true]) {
       await noSideScroll(page);
     });
   }
-}
+});

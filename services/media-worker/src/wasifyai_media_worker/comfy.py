@@ -4,6 +4,7 @@ outputs. Protocol: POST /prompt, WS /ws?clientId=..., GET /history/{id}, GET /vi
 import asyncio
 import json
 import logging
+import mimetypes
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -133,7 +134,7 @@ class ComfyClient:
         r = await self._http.post(
             f"{self._base}/upload/image",
             data={"type": "temp", "overwrite": "true"},
-            files={"image": (name, data, "image/png")},
+            files={"image": (name, data, mimetypes.guess_type(name)[0] or "image/png")},
         )
         r.raise_for_status()
         return f"{r.json().get('name', name)} [temp]"

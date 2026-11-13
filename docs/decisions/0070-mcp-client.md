@@ -28,7 +28,7 @@ an extension, **multi round-trip requests** for anything a server needs from the
 `input_required`), Roots, Sampling and Logging **deprecated**, HTTP+SSE **deprecated**, OAuth 2.1 with **Client
 ID Metadata Documents** preferred over Dynamic Client Registration, results from `tools/list` carry `ttlMs` and
 `cacheScope`. Tool **annotations** (read-only, destructive, open-world) are hints, and untrusted unless the server
-is. The official Python SDK `mcp` 2.x (MIT) is a client as well as a server.
+is. The official Python SDK `mcp` 2.x is a client as well as a server.
 
 The model rule from ADR-0057 and the evaluation (11 of 11 with Qwen3 4B on four tools) also matter: a **small
 local model degrades as the number of tools grows**, and a third-party server may bring forty tools.
@@ -74,7 +74,7 @@ local model degrades as the number of tools grows**, and a third-party server ma
    file, a log or an environment dump. The engine reads them through one small module so the mechanism can be
    swapped. OAuth 2.1 with PKCE uses the person's browser, a loopback callback, **Client ID Metadata Documents**
    where the server supports them and Dynamic Client Registration only as a fallback. Needs a dependency: Python
-   `keyring` (MIT) in the engine, or the shell storing secrets and handing them over on the engine's stdin; decided
+   `keyring` in the engine, or the shell storing secrets and handing them over on the engine's stdin; decided
    in spike S4.
 8. **How the assistant sees remote tools.** Not one model tool per remote tool. The assistant's meta-tools
    (ADR-0071) include `external_tools(query)`, which searches the connected servers' tool descriptions (with the
@@ -137,3 +137,110 @@ local model degrades as the number of tools grows**, and a third-party server ma
 Servers added by the assistant or by any text; remote servers that need a browser session the app cannot hold; a
 marketplace; sampling (servers asking our model to think for them); running servers on a schedule; sharing
 connections between people; the web deployment.
+
+## Built 2026-10-27 (stage C1: the client, read-only trust levels)
+
+- **Decision 1:** `services/api/src/wasifyai_api/mcp_client/` on the SDK's client (`mcp` 2.3.0): Streamable HTTP
+  and stdio. One session per server, held by a task of its own (the SDK's transport must be left by the task that
+  entered it); calls come from the assistant's tasks. A session idle for ten minutes is closed, and every session
+  when the engine stops. HTTP+SSE and WebSocket are not offered.
+- **Decision 2:** Settings > Other apps > "Tools from other apps" (`packages/ui/src/connections/ExternalServers.tsx`,
+  routes `/external`): name, kind (an address, or a program), address or command with arguments, the variables a
+  program needs (names on the row, values in the secret store), a token for an address (the secret store), trust,
+  Test, Remove. The routes take the person's own token only (`require_person`): a connection or a key is refused,
+  and the assistant has no tool that adds one. Import from other clients' configs waits for C3.
+- **Decision 3:** the form says that adding a program is installing software and asks for the name typed again
+  (the engine refuses without it); the program runs as the user with the variables listed (over the SDK's safe
+  subset: `PATH`, `HOME` and the like), in `<app data>/mcp-servers/<id>`, and is stopped when idle or when the app
+  quits. Its output is not yet size-limited or logged; no sandbox (open question 2 stands).
+- **Decision 4:** trust `ask` and `blocked`. `external.call` is a `make` that `leaves_device`, so on an `ask` server
+  every call shows the chat's card, whatever the tool's annotations say; a `blocked` server lists no tools and is
+  never called. `trusted_read_only` arrives with C2.
+- **Decision 5, the part that is in C1:** a result is text only, control characters stripped, cut at 20,000
+  characters, handed to the model under a label that names the server and says it is untrusted; an image is
+  named with its size and not shown, a `resource_link` is named and never followed, an embedded resource is not
+  read. The taint rule itself (every action that is not a read asks for the rest of the turn) already held for the
+  web and now counts `call_external` too; the provenance on the card ("after reading a result from github") is C2.
+- **Decision 6:** `https` only except loopback, no credentials in the address, a name that resolves to a private
+  or link-local address refused unless the person typed that address (checked when added and again when
+  connecting), certificates verified, and a redirect to another host not followed (the SDK follows only within
+  the origin). The row shows the host, the counters of calls and bytes sent and received, and the tools with their
+  annotations after a Test.
+- **Decision 7:** values go to the secret store of ADR-0092 (`mcp.client.<id>.token`, `mcp.client.<id>.env.<name>`),
+  the keychain on the desktop; removing a server removes them. **OAuth 2.1 is not built:** a server that takes a
+  bearer token works with the token pasted in Settings; the browser flow (PKCE, a loopback callback, CIMD) is
+  left for a later stage, because it cannot be tested here without an authorization server to run against.
+- **Decision 8:** the assistant has `external_tools(query)` (at most five matches, by the words of the query against
+  tool names and descriptions, not yet the embedder) and `call_external(connection, tool, arguments)`, which
+  proposes the one catalogue action `external.call`: arguments validated against the tool's input schema
+  (`jsonschema`, which `mcp` brings), the card, the executor's audit entry and usage event. The model's tool list
+  grows by two whatever is connected. The prompt tells the model what outside text is.
+- **Decision 9:** a per-server timeout (5 to 600 s, default 60) the person sets, at most four calls in flight per
+  server, three failures in a row mark the server unhealthy until Test clears it, `tools/list` cached for its
+  `ttlMs` and at least 30 s. A cancel button and the refusal of oversized results before they are read are not
+  built: a result is cut after it arrives.
+- **Decision 11:** every call writes an activity entry (server, tool, status, duration, bytes each way; the
+  arguments and the first 4,000 characters of the result only when "keep the content" is on for that server) and,
+  through the executor, a usage event. The web deployment gets no client (decision 10 of the plan; the engine
+  creates it on the desktop only).
+- **Tested** (`services/api/tests/test_mcp_client.py`) against a malicious fake server (`fake_external_server.py`:
+  a 100,000-character result, hidden instructions with control characters, a tool whose annotation lies, a slow
+  tool, an image, a link, a failing tool) over stdio and over HTTP on loopback with a token; a redirect to another
+  host; the address rules; the secret store; the SQL store; the routes on the desktop engine; the assistant's two
+  meta-tools at the tool level (a card first, the labelled text once run); the prompt and the taint. Not driven
+  with a real language model or a real third-party server yet (C2's evaluation).
+- **Not built in C1:** OAuth; resources, prompts, elicitation and tasks (C3); import from other clients' configs
+  (C3); `trusted_read_only`, the provenance on the card, the stdio output limit and log (C2); the embedder in
+  `external_tools`; a cancel button.
+
+## Built 2026-10-27 (stage C2: the taint's provenance, trusted read-only, the evaluation)
+
+- **Decision 4, the third level:** `trusted_read_only` ("runs the tools it says only read, without asking"). A tool
+  whose `readOnlyHint` is true on such a server runs with no card, taint or not; on an `ask` server the hint still
+  decides nothing. The check is the host's (`external_trusted`), read when the assistant is about to call.
+- **Decision 5, the provenance:** the card carries `provenance` ("after reading a result from github", "after
+  reading the web", "after reading a file the person attached"), kept with the turn so a resumed card still says it;
+  the window shows "Asking because this came after reading a result from github". The source is the last outside
+  text read.
+- **Decision 3, the output:** a program's stderr goes to `stderr.log` under its folder, kept to the last million
+  characters, shown in Settings ("Its output").
+- **Decision 8, what the model is told:** the prompt names the connected servers (those not blocked or unhealthy),
+  and `external_tools` returns each tool's signature. Both came out of the evaluation: without the names the model
+  said it could not reach Slack; without the signatures it could not form the arguments.
+- **The evaluation** (`docs/spikes/assistant-c2.md`): on Qwen3 8B, the right outside tool in 8 of 10 asks with a
+  catalogue of 5 and of 40 alike, no wrong tool, no unfitting arguments; the app's own actions and guides unchanged
+  with 40 tools connected; the outside result that orders a delete obeyed by nothing. **Outside tools are offered to
+  local models.** Qwen3 4B and a hosted tier were not run.
+- **Tested:** trusted read-only at the client and the policy (`test_mcp_client.py`), the provenance and the taint
+  source, the log; the runner's catalogue and judge (`test_eval_runner.py`).
+- **Not built in C2:** a cancel button for a running outside call; the embedder in `external_tools`; a sandbox for
+  programs (open question 2).
+
+## Built 2026-10-27 (stage C3: reach)
+
+- **Decision 10, resources:** the box has a "Servers" button (`packages/ui/src/chat/servers-panel.tsx`): each
+  connected server's resources with Attach. Attaching reads the resource on the engine
+  (`POST /external/{id}/resources/attach`), cleans and cuts it like an attached document (200,000 characters) and
+  keeps it as the same upload record an attached file gets, so the chat gives it to the model the same way and the
+  taint rule counts it as a file. A binary resource is refused: only text reaches the model.
+- **Decision 10, prompts:** the same panel lists each server's prompts with Use; a prompt with arguments asks for
+  them first, then its text is put in the box for the person to send or change (`POST /external/{id}/prompts/get`).
+  Nothing is sent by the panel.
+- **Decision 10, elicitation:** a server's question mid-call (`elicitation/create` in form mode, which on 2026-07-28
+  rides the `input_required` round trip) becomes a card in the window (`ElicitationCards.tsx`): the message and a
+  form drawn from the requested schema (text, number, yes/no, a choice), Send or Decline. The engine raises an
+  `elicitation` event on `GET /desktop/events`, the card reads the pending list (`GET /external/forms`) and answers
+  (`POST /external/forms/{id}`); the values are checked against the schema; a form nobody answers within five
+  minutes is a cancel. The assistant never answers for the person. The per-round server timeout still holds; the
+  call itself may wait for the person.
+- **Decision 2, import:** Settings > Tools from other apps > "Already set up elsewhere?": the definitions in Claude
+  Code's `.mcp.json` (a project folder) or `~/.claude.json`, Claude Desktop's `claude_desktop_config.json` and
+  Codex's `config.toml` are listed with their command or address and the names of their variables, never the
+  values; each is added on its own click, as the file has it, its variables and bearer token going to the secret
+  store on the engine (`mcp_client/imports.py`). An HTTP+SSE definition is shown with why it cannot be added.
+- **Tested** against the fake server (a text and a binary resource, a prompt with arguments, a tool that asks for a
+  name and greets by it: accept, decline, nobody answers) at the client and through the routes, the three config
+  formats, and the window side (the panel, the form card's fields and values, the import rows).
+- **Not built:** the tasks extension (the SDK's client claims none; a slow outside tool is bounded by the server's
+  timeout); a macOS sandbox for programs (spike S5 was not run); OAuth (still a pasted token); resource templates
+  and a server's `prompts/list_changed` refresh.

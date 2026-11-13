@@ -1,11 +1,10 @@
 # The search model of notebooks (ADR-0065 decision 8): turns a passage and a question into vectors so
 # a question finds the passage that means the same. Listed in the Models panel and downloaded only after
-# a click that shows the files, sizes, source and licence. The files are pinned by size and SHA-256; the
+# a click that shows the files, sizes and source. The files are pinned by size and SHA-256; the
 # URLs name a commit of the repository, so they cannot change under the pin.
 models:
   - id: bge-small-en-v1.5
     title: BGE small English (search model for notebooks)
-    licence: MIT
     source: https://huggingface.co/Qdrant/bge-small-en-v1.5-onnx-Q
     note: Finds the passages of your documents that match a question. English. Runs on the processor.
     approx_ram_gb: 1

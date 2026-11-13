@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { cn } from "../../cn";
 import { Button } from "../../components/button";
 import { Notice } from "../../components/notice";
+import { PageHeader } from "../../window-bar";
 import type { ComposerOption } from "../composer-options";
 import { type AttachBox, Composer, ExampleChip } from "./Composer";
 import { AssistantMessage, UserMessage } from "./Message";
@@ -17,6 +18,8 @@ export type ThreadProps = {
   hero?: ReactNode;
   /** Suggestions under the box while the chat is empty. */
   examples?: string[];
+  /** Under the box while the chat is empty, in place of the suggestions: the home's quick starts, Running now and Recent */
+  start?: ReactNode;
   /** Setup notices (no model chosen yet, and so on). */
   notices?: ReactNode;
   blockedReason?: string | null;
@@ -27,6 +30,8 @@ export type ThreadProps = {
   /** Title bar actions (rename, delete). */
   actions?: ReactNode;
   title?: string;
+  /** The model picker, in the title bar (the window's; ADR-0086). */
+  model?: ReactNode;
   /** The turn went wrong. */
   error: { code: string; message: string; retryable: boolean } | null;
   onRetry: () => void;
@@ -47,12 +52,14 @@ export function Thread({
   empty,
   hero,
   examples = [],
+  start,
   notices,
   blockedReason,
   options,
   attach,
   actions,
   title,
+  model,
   error,
   onRetry,
   onNeedModel,
@@ -61,14 +68,19 @@ export function Thread({
 }: ThreadProps) {
   return (
     <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
-      {title || actions ? (
-        <header
-          data-tauri-drag-region
+      {title || actions || model ? (
+        <PageHeader
           className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6 pt-1"
+          pageOnly={<div className="flex items-center gap-1">{actions}</div>}
+          title={Boolean(title)}
         >
-          <h1 className="min-w-0 truncate ps-2 font-medium text-sm">{title}</h1>
-          <div className="flex items-center gap-1">{actions}</div>
-        </header>
+          {title ? (
+            <h1 className="pointer-events-none min-w-0 max-w-[24rem] truncate ps-2 font-medium text-sm">
+              {title}
+            </h1>
+          ) : null}
+          {model}
+        </PageHeader>
       ) : null}
 
       {empty ? (
@@ -112,8 +124,10 @@ export function Thread({
       </div>
 
       {empty ? (
-        <div key="examples" className="min-h-0 flex-1 px-8 pt-4">
-          {examples.length ? (
+        <div key="examples" className="min-h-0 flex-1 overflow-auto px-6 pt-4 pb-6">
+          {start ? (
+            start
+          ) : examples.length ? (
             <ul className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2">
               {examples.map((ex) => (
                 <li key={ex}>

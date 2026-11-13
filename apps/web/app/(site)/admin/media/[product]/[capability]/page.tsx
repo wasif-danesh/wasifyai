@@ -44,14 +44,26 @@ export default async function EditMedia({ params }: Params) {
           {item.product_id} · {item.capability}
         </h2>
         <p className={muted}>
-          {item.workflow ? `The product's ComfyUI workflow is ${item.workflow}. ` : ""}Other
-          services run the same workflow where they can, or work from the prompt alone.
+          {item.workflow
+            ? `The product's ComfyUI workflow is ${item.workflow}. Other services run the same workflow where they can, or work from the prompt alone.`
+            : "By default the service's engine workers run this. fal.ai can run it instead with your key."}
         </p>
         <p>
           Now runs on <strong>{current}</strong> ({item.source}).
         </p>
       </header>
-      <MediaForm item={item} backends={list.backends} secretsReady={list.secrets_ready} />
+      <MediaForm
+        item={item}
+        backends={list.backends}
+        secretsReady={list.secrets_ready}
+        keyRows={list.items
+          .filter((i) => i.key_set && i !== item)
+          .map((i) => ({
+            id: `${i.product_id}/${i.capability}`,
+            backend: i.backend,
+            label: `${i.product_id} · ${i.capability}`,
+          }))}
+      />
     </>
   );
 }

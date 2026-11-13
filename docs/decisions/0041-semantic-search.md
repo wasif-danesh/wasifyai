@@ -35,7 +35,7 @@ every product keeps its own table (`songs`, `images`, `videos`), so a cross-prod
   `(tenant_id, product_id, item_id)`. It is the platform's own table, not a product's, because it serves the
   library page, which belongs to no single product. Products keep owning their items; the index holds only a copy
   of the words.
-- **A multilingual embedder of its own: `bge-m3`** (MIT licence, 1024 dimensions, 8192-token context, about
+- **A multilingual embedder of its own: `bge-m3`** (1024 dimensions, 8192-token context, about
   1.2 GB), behind a new alias **`creation-embedder`** (seeded like the others, ADR-0025, editable at
   `/admin/models`). The existing `embedder` alias (`nomic-embed-text`, 768 dimensions) stays for the RAG helper,
   whose table is fixed at 768 (migration 0003); moving RAG to a multilingual model needs its own migration and is

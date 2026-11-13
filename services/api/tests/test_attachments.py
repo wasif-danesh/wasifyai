@@ -32,9 +32,10 @@ def parts(tmp_path):
 
 
 def client_for(parts, per_hour=60):
+    # a fixed clock: the limit is per clock hour, and the top of the hour would reset it
     app = mem_app(
         hello_registry(), parts["tmp"], parts["usage"], storage=parts["storage"],
-        uploads=parts["store"], upload_limiter=InMemoryUploadLimiter(per_hour),
+        uploads=parts["store"], upload_limiter=InMemoryUploadLimiter(per_hour, clock=lambda: 0.0),
     )  # fmt: skip
     return TestClient(app)
 

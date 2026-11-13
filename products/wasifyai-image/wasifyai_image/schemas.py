@@ -1,11 +1,10 @@
-"""The run's input contract and the structured output of the guardrail."""
+"""The run's input contract."""
 
-from typing import Any, Literal
-
-from pydantic import BaseModel
+from typing import Literal
 
 MAX_PROMPT_CHARS = 500
-Mode = Literal["text", "image"]
+Mode = Literal["text", "image", "reference", "inpaint"]
+MODES: tuple[Mode, ...] = ("text", "image", "reference", "inpaint")
 
 # size name -> (width, height). Multiples of 16, which FLUX.2 needs; about one megapixel each.
 SIZES: dict[str, tuple[int, int]] = {
@@ -16,39 +15,3 @@ SIZES: dict[str, tuple[int, int]] = {
     "tall": (768, 1344),  # 9:16
 }
 DEFAULT_SIZE = "square"
-
-CATEGORIES = [
-    "ok",
-    "sexual_content",
-    "minors",
-    "graphic_violence",
-    "hate",
-    "real_person_misuse",
-    "disallowed_content",
-]
-
-
-class Moderation(BaseModel):
-    allowed: bool
-    category: Literal[
-        "ok",
-        "sexual_content",
-        "minors",
-        "graphic_violence",
-        "hate",
-        "real_person_misuse",
-        "disallowed_content",
-    ]
-    reason: str = ""
-
-
-MODERATION_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "allowed": {"type": "boolean"},
-        "category": {"type": "string", "enum": CATEGORIES},
-        "reason": {"type": "string"},
-    },
-    "required": ["allowed", "category", "reason"],
-    "additionalProperties": False,
-}

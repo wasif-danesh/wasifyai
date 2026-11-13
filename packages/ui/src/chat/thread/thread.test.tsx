@@ -5,7 +5,7 @@ import { act, render, renderHook, screen, waitFor } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import type { AssistantApi, ImagesApi, OnEvent, ParsedEvent } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
-import { ChatScreenNext } from "../ChatScreenNext";
+import { ChatScreen } from "../ChatScreen";
 import { Announcer, plainText } from "./announcer";
 import { toLikeMessage } from "./convert";
 import { useThreadChat } from "./use-thread-chat";
@@ -172,14 +172,14 @@ describe("useThreadChat", () => {
   });
 });
 
-describe("ChatScreenNext", () => {
+describe("ChatScreen", () => {
   it("shows Stop and Thinking while the answer is pending, and Stop reaches the engine", async () => {
     const runs = runsThat(
       (_on, signal) =>
         new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve())),
     );
     const user = userEvent.setup();
-    render(<ChatScreenNext runs={runs} assistant={assistant} images={images} />);
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
     await user.type(screen.getByRole("textbox", { name: "Message" }), "hello{Enter}");
     expect(await screen.findByText("Thinking…")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
@@ -195,7 +195,7 @@ describe("ChatScreenNext", () => {
       on(DONE);
     });
     const user = userEvent.setup();
-    render(<ChatScreenNext runs={runs} assistant={assistant} images={images} />);
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
     const box = screen.getByRole("textbox", { name: "Message" });
     expect(box).toHaveAttribute("dir", "auto");
     await user.type(box, "مرحبا{Enter}");
@@ -212,12 +212,7 @@ describe("ChatScreenNext", () => {
     const write = vi.fn(async () => {});
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: write } });
     render(
-      <ChatScreenNext
-        runs={runs}
-        assistant={assistant}
-        images={images}
-        examples={["Draw a fox"]}
-      />,
+      <ChatScreen runs={runs} assistant={assistant} images={images} examples={["Draw a fox"]} />,
     );
     await user.click(screen.getByRole("button", { name: "Draw a fox" }));
     const box = screen.getByRole("textbox", { name: "Message" });
@@ -234,7 +229,7 @@ describe("ChatScreenNext", () => {
       on(DONE);
     });
     const user = userEvent.setup();
-    render(<ChatScreenNext runs={runs} assistant={assistant} images={images} />);
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
     const before = screen.getByRole("textbox", { name: "Message" });
     await user.type(before, "hi{Enter}");
     await screen.findByText("ok");
@@ -254,7 +249,7 @@ describe("ChatScreenNext", () => {
       );
     });
     const user = userEvent.setup();
-    render(<ChatScreenNext runs={runs} assistant={assistant} images={images} />);
+    render(<ChatScreen runs={runs} assistant={assistant} images={images} />);
     await user.type(screen.getByRole("textbox", { name: "Message" }), "delete them{Enter}");
     expect(await screen.findByText("Delete 3 pictures")).toBeInTheDocument();
   });

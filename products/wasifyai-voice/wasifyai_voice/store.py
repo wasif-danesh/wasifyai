@@ -6,7 +6,7 @@ under `voices/` that the speech runtime reads. A transcript keeps its text and i
 not the recording it came from."""
 
 import json
-import sqlite3
+import tempfile
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -14,23 +14,28 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 5
+from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb
+
+SCHEMA_VERSION = 6
 
 _SPEECHES = """
 CREATE TABLE speeches(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
   mode TEXT NOT NULL DEFAULT 'speak', saved_voice_id TEXT,
   text TEXT NOT NULL, model_id TEXT NOT NULL, voice TEXT, options TEXT NOT NULL DEFAULT '{}',
-  seconds REAL NOT NULL, sample_rate INTEGER NOT NULL, audio_key TEXT NOT NULL,
-  load_s REAL NOT NULL DEFAULT 0, elapsed_s REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
+  seconds DOUBLE PRECISION NOT NULL, sample_rate INTEGER NOT NULL, audio_key TEXT NOT NULL,
+  load_s DOUBLE PRECISION NOT NULL DEFAULT 0, elapsed_s DOUBLE PRECISION NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL);
 CREATE INDEX speeches_owner ON speeches(tenant_id, user_id, created_at DESC);
 """
 _TRANSCRIPTS = """
 CREATE TABLE transcripts(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
   title TEXT NOT NULL, source_name TEXT NOT NULL DEFAULT '', model_id TEXT NOT NULL,
-  text TEXT NOT NULL, segments TEXT NOT NULL DEFAULT '[]', seconds REAL NOT NULL DEFAULT 0,
-  elapsed_s REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  text TEXT NOT NULL, segments TEXT NOT NULL DEFAULT '[]',
+  seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
+  elapsed_s DOUBLE PRECISION NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL);
 CREATE INDEX transcripts_owner ON transcripts(tenant_id, user_id, created_at DESC);
 """
 _VOICES = """
@@ -38,7 +43,7 @@ CREATE TABLE voices(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
   name TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('design', 'clone')),
   description TEXT NOT NULL DEFAULT '', reference_key TEXT,
-  reference_text TEXT NOT NULL DEFAULT '', reference_seconds REAL,
+  reference_text TEXT NOT NULL DEFAULT '', reference_seconds DOUBLE PRECISION,
   consent TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX voices_owner ON voices(tenant_id, user_id, created_at DESC);
 """
@@ -48,20 +53,30 @@ CREATE TABLE tracks(
   title TEXT NOT NULL, mode TEXT NOT NULL, description TEXT NOT NULL,
   lyrics TEXT NOT NULL DEFAULT '', instrumental INTEGER NOT NULL DEFAULT 0,
   model_id TEXT NOT NULL, options TEXT NOT NULL DEFAULT '{}',
-  seed INTEGER, seconds REAL NOT NULL, sample_rate INTEGER NOT NULL, audio_key TEXT NOT NULL,
-  load_s REAL NOT NULL DEFAULT 0, elapsed_s REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+  seed BIGINT, seconds DOUBLE PRECISION NOT NULL, sample_rate INTEGER NOT NULL,
+  audio_key TEXT NOT NULL,
+  load_s DOUBLE PRECISION NOT NULL DEFAULT 0, elapsed_s DOUBLE PRECISION NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL, favourite INTEGER NOT NULL DEFAULT 0, parent_id TEXT,
   edit TEXT NOT NULL DEFAULT '{}');
 CREATE INDEX tracks_owner ON tracks(tenant_id, user_id, created_at DESC);
+"""
+# what was found in a song (ADR-0090): kept with the song, so it is only worked out once
+_ANALYSES = """
+CREATE TABLE IF NOT EXISTS track_analyses (
+    track_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
+    analysis TEXT NOT NULL, lyrics TEXT NOT NULL DEFAULT '', lines TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
 """
 _CLIPS = """
 CREATE TABLE clips(
   id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL,
   title TEXT NOT NULL, model_id TEXT NOT NULL, picture_key TEXT NOT NULL,
   video_key TEXT NOT NULL, voice TEXT NOT NULL DEFAULT '{}', script TEXT NOT NULL DEFAULT '',
-  seconds REAL NOT NULL, fps INTEGER NOT NULL, width INTEGER NOT NULL DEFAULT 0,
+  seconds DOUBLE PRECISION NOT NULL, fps INTEGER NOT NULL, width INTEGER NOT NULL DEFAULT 0,
   height INTEGER NOT NULL DEFAULT 0, consent TEXT NOT NULL DEFAULT '{}',
-  load_s REAL NOT NULL DEFAULT 0, elapsed_s REAL NOT NULL DEFAULT 0,
+  load_s DOUBLE PRECISION NOT NULL DEFAULT 0, elapsed_s DOUBLE PRECISION NOT NULL DEFAULT 0,
   favourite INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX clips_owner ON clips(tenant_id, user_id, created_at DESC);
 CREATE TABLE pictures(
@@ -69,7 +84,7 @@ CREATE TABLE pictures(
   width INTEGER NOT NULL, height INTEGER NOT NULL, created_at TEXT NOT NULL);
 """
 _SCHEMA = "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);" + (
-    _SPEECHES + _TRANSCRIPTS + _VOICES + _TRACKS + _CLIPS
+    _SPEECHES + _TRANSCRIPTS + _VOICES + _TRACKS + _CLIPS + _ANALYSES
 )
 # what version 2 adds to a version 1 file: how a speech was made, and saved voices
 _V2_UPGRADE = (
@@ -97,11 +112,59 @@ def new_id() -> str:
     return uuid.uuid4().hex
 
 
+LOCK_KEY = 0x766F6963  # "voic": the advisory lock that serialises schema creation on Postgres
+
+
 class VoiceStore:
-    def __init__(self, root: Path):
+    """One store class on either database (stage J2: `wasifyai_platform_sdk.sqlstore`): the
+    desktop's `voice.db`, or the web's own Postgres schema (`voice`) whose plain table names
+    (`speeches`, `tracks`) cannot meet another product's. The audio is not in the database: its key
+    is, and the file is beside it on the desktop and in object storage on the web."""
+
+    def __init__(self, db: StoreDb, root: Path):
+        """`root` is the desktop's folder (a cloned voice's recording is read from a file there);
+        on the web nothing offers cloning yet, so it is only where `reference_path` would point."""
+        self.db = db
         self.root = Path(root)
-        self.path = self.root / "voice.db"
         self.root.mkdir(parents=True, exist_ok=True)
+        try:
+            self._init_postgres() if db.dialect == "postgres" else self._init_sqlite()
+        except BaseException:
+            db.close()
+            raise
+
+    @classmethod
+    def in_folder(cls, root: Path) -> "VoiceStore":
+        """The desktop's `voice.db` under `root`, a connection per call."""
+        root = Path(root)
+        return cls(SqliteStoreDb(root / "voice.db", timeout_s=5, shared=False), root)
+
+    @classmethod
+    def on_postgres(
+        cls, dsn: str, *, schema: str = "voice", max_connections: int = 8
+    ) -> "VoiceStore":
+        """The web's store, in its own schema of the deployment's Postgres."""
+        root = Path(tempfile.gettempdir()) / "voice-references"
+        return cls(PostgresStoreDb(dsn, schema, max_connections=max_connections), root)
+
+    @property
+    def path(self) -> Path | None:
+        return getattr(self.db, "path", None)
+
+    @property
+    def schema(self) -> str:
+        return str(getattr(self.db, "schema", ""))
+
+    def close(self) -> None:
+        self.db.close()
+
+    def drop_schema(self) -> None:
+        """Remove every table of this store (tests, and a deployment that starts over)."""
+        drop = getattr(self.db, "drop", None)
+        if drop is not None:
+            drop()
+
+    def _init_sqlite(self) -> None:
         with self._connect() as db:
             have = db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='meta'"
@@ -122,25 +185,51 @@ class VoiceStore:
                     db.executescript("BEGIN;" + _V4_UPGRADE + "COMMIT;")
                 if version < 5:  # version 5 adds lip sync clips and the pictures they are made from
                     db.executescript("BEGIN;" + _CLIPS + "COMMIT;")
+                if version < 6:  # version 6 keeps what was found in a song (ADR-0090)
+                    db.executescript("BEGIN;" + _ANALYSES + "COMMIT;")
                 if version < SCHEMA_VERSION:
                     db.execute(
                         "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
                     )
 
+    def _init_postgres(self) -> None:
+        with self.db.transaction() as conn:
+            conn.execute("SELECT pg_advisory_xact_lock(?)", (LOCK_KEY,))
+            conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.schema}"')
+            fresh = (
+                conn.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = ? AND table_name = 'meta'",
+                    (self.schema,),
+                ).fetchone()
+                is None
+            )
+            if fresh:
+                conn.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+                for ddl in (_SPEECHES, _TRANSCRIPTS, _VOICES, _TRACKS, _CLIPS, _ANALYSES):
+                    conn.execute(ddl)
+                conn.execute("INSERT INTO meta VALUES ('schema', ?)", (str(SCHEMA_VERSION),))
+                return
+            row = conn.execute("SELECT value FROM meta WHERE key = 'schema'").fetchone()
+        version = int(row["value"]) if row else 0
+        if version > SCHEMA_VERSION or version < 1:
+            raise RuntimeError("the voice tables were made by a newer version of this app")
+        if version < 6:
+            with self.db.transaction() as conn:
+                conn.execute(_ANALYSES)
+                conn.execute(
+                    "UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),)
+                )
+
     @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
-        db = sqlite3.connect(self.path, timeout=5, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA journal_mode = WAL")
-        try:
+    def _connect(self) -> Iterator[Any]:
+        with self.db.connect() as db:
             yield db
-        finally:
-            db.close()
 
     # ---- speeches ---------------------------------------------------------------------------
 
     @staticmethod
-    def _speech(r: sqlite3.Row) -> dict[str, Any]:
+    def _speech(r: Any) -> dict[str, Any]:
         d = dict(r)
         d["options"] = json.loads(d["options"])
         return d
@@ -194,7 +283,7 @@ class VoiceStore:
     # ---- transcripts ------------------------------------------------------------------------
 
     @staticmethod
-    def _transcript(r: sqlite3.Row, *, body: bool = True) -> dict[str, Any]:
+    def _transcript(r: Any, *, body: bool = True) -> dict[str, Any]:
         d = dict(r)
         d["segments"] = json.loads(d["segments"])
         if not body:
@@ -255,9 +344,9 @@ class VoiceStore:
     # ---- voices -----------------------------------------------------------------------------
 
     @staticmethod
-    def _voice(r: sqlite3.Row) -> dict[str, Any]:
+    def _voice(r: Any) -> dict[str, Any]:
         d = dict(r)
-        d["consent"] = json.loads(d["consent"])
+        d.pop("consent", None)  # a column of older versions, no longer used
         return d
 
     def reference_path(self, voice_id: str) -> Path:
@@ -269,18 +358,16 @@ class VoiceStore:
     def add_voice(
         self, tenant: str, user: str, *, kind: str, name: str, description: str = "",
         reference_key: str | None = None, reference_text: str = "",
-        reference_seconds: float | None = None, consent: dict[str, Any] | None = None,
-        voice_id: str | None = None,
+        reference_seconds: float | None = None, voice_id: str | None = None,
     ) -> dict[str, Any]:  # fmt: skip
         vid, stamp = voice_id or new_id(), now()
         with self._connect() as db:
             db.execute(
                 "INSERT INTO voices(id, tenant_id, user_id, name, kind, description, "
-                "reference_key, reference_text, reference_seconds, consent, created_at, "
-                "updated_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "reference_key, reference_text, reference_seconds, created_at, updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (vid, tenant, user, name, kind, description, reference_key, reference_text,
-                 reference_seconds, json.dumps(consent or {}), stamp, stamp),
+                 reference_seconds, stamp, stamp),
             )  # fmt: skip
         return self.get_voice(tenant, user, vid)
 
@@ -333,7 +420,7 @@ class VoiceStore:
     # ---- tracks (music) ---------------------------------------------------------------------
 
     @staticmethod
-    def _track(r: sqlite3.Row) -> dict[str, Any]:
+    def _track(r: Any) -> dict[str, Any]:
         d = dict(r)
         d["options"] = json.loads(d["options"])
         d["instrumental"] = bool(d["instrumental"])
@@ -403,7 +490,35 @@ class VoiceStore:
         gone = self.get_track(tenant, user, tid)
         with self._connect() as db:
             db.execute("DELETE FROM tracks WHERE id = ?", (tid,))
+            db.execute("DELETE FROM track_analyses WHERE track_id = ?", (tid,))
         return gone
+
+    # ---- what was found in a song (ADR-0090) ---------------------------------------------------
+
+    def get_analysis(self, tenant: str, user: str, tid: str) -> dict[str, Any] | None:
+        with self._connect() as db:
+            r = db.execute(
+                "SELECT * FROM track_analyses WHERE track_id = ? AND tenant_id = ? AND user_id = ?",
+                (tid, tenant, user),
+            ).fetchone()
+        if r is None:
+            return None
+        return {
+            "analysis": json.loads(r["analysis"]),
+            "lyrics": r["lyrics"],
+            "lines": json.loads(r["lines"]),
+        }
+
+    def set_analysis(
+        self, tenant: str, user: str, tid: str, analysis: dict[str, Any], lyrics: str,
+        lines: list[dict[str, Any]],
+    ) -> None:  # fmt: skip
+        with self._connect() as db:
+            db.execute("DELETE FROM track_analyses WHERE track_id = ?", (tid,))
+            db.execute(
+                "INSERT INTO track_analyses VALUES (?,?,?,?,?,?,?)",
+                (tid, tenant, user, json.dumps(analysis), lyrics, json.dumps(lines), now()),
+            )
 
     # ---- lip sync clips (V5) ----------------------------------------------------------------
 
@@ -444,28 +559,27 @@ class VoiceStore:
             ]
 
     @staticmethod
-    def _clip(r: sqlite3.Row) -> dict[str, Any]:
+    def _clip(r: Any) -> dict[str, Any]:
         d = dict(r)
         d["voice"] = json.loads(d["voice"])
-        d["consent"] = json.loads(d["consent"])
+        d.pop("consent", None)  # a column of older versions, no longer used
         d["favourite"] = bool(d["favourite"])
         return d
 
     def add_clip(
         self, tenant: str, user: str, *, title: str, model_id: str, picture_key: str,
         video_key: str, voice: dict[str, Any], script: str, seconds: float, fps: int,
-        width: int, height: int, consent: dict[str, Any], load_s: float, elapsed_s: float,
+        width: int, height: int, load_s: float, elapsed_s: float,
         clip_id: str | None = None,
     ) -> dict[str, Any]:  # fmt: skip
         cid, stamp = clip_id or new_id(), now()
         with self._connect() as db:
             db.execute(
                 "INSERT INTO clips(id, tenant_id, user_id, title, model_id, picture_key, "
-                "video_key, voice, script, seconds, fps, width, height, consent, load_s, "
-                "elapsed_s, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "video_key, voice, script, seconds, fps, width, height, load_s, elapsed_s, "
+                "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (cid, tenant, user, title, model_id, picture_key, video_key, json.dumps(voice),
-                 script, seconds, fps, width, height, json.dumps(consent), load_s, elapsed_s,
-                 stamp, stamp),
+                 script, seconds, fps, width, height, load_s, elapsed_s, stamp, stamp),
             )  # fmt: skip
         return self.get_clip(tenant, user, cid)
 

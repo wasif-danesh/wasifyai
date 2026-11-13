@@ -1,14 +1,26 @@
 "use client";
-// The options of the chat box (ADR-0083): one bar, token-styled, shared by the current composer and the assistant-ui one. A button is
-// there only when it can work (a model that cannot think has no Thinking button), and every disabled button says why. Attach, Search and
-// Mic plug into the same bar in the next stages.
-import { Brain, Globe, type LucideIcon, Mic, Square } from "lucide-react";
+// The options of the chat box (ADR-0083, ADR-0093 decision 7): three pills (Attach, Mic, and when the assistant asks first) and a "+"
+// menu for the rest (Thinking, Search, Servers). A button is there only when it can work (a model that cannot think has no Thinking),
+// every disabled button says why, and an option of the menu that is on shows as a pill too, so it is never on unseen.
+import {
+  Brain,
+  Check,
+  Globe,
+  type LucideIcon,
+  Mic,
+  Plug,
+  Plus,
+  ShieldCheck,
+  Square,
+} from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
+import { Menu } from "../components/menu";
 import { type AttachControl, useAttachments } from "./attachments/use-attachments";
 import { type MicControl, useDictation } from "./dictation/use-dictation";
 import type { ReadAloudControl } from "./read-aloud/use-read-aloud";
+import { ComposerServersPanel, type ExternalControl } from "./servers-panel";
 
 export type ComposerOption = {
   id: string;
@@ -20,16 +32,41 @@ export type ComposerOption = {
   /** what the button does, and why it is disabled when it is */
   hint: string;
   onPress: () => void;
+  /** in the "+" menu rather than a pill of its own (shown as a pill too while it is on) */
+  more?: boolean;
 };
 
 export function ComposerOptions({ options }: { options: ComposerOption[] }) {
   if (!options.length) return null;
+  const pills = options.filter((o) => !o.more || o.pressed);
+  const more = options.filter((o) => o.more);
   return (
     <fieldset
       aria-label="Options for this message"
       className="m-0 flex min-w-0 flex-wrap items-center gap-2 border-0 p-0"
     >
-      {options.map(({ id, label, Icon, pressed, disabled, hint, onPress }) => (
+      {more.length ? (
+        <Menu
+          align="start"
+          trigger={
+            <button
+              type="button"
+              aria-label="More options: thinking, search and the like"
+              title="More options"
+              className="inline-flex size-8 items-center justify-center rounded-full border text-muted-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 [@media(pointer:coarse)]:size-11"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+            </button>
+          }
+          items={more.map((o) => ({
+            label: o.pressed ? `${o.label}: on` : o.label,
+            onSelect: o.onPress,
+            disabled: o.disabled,
+            icon: o.pressed ? <Check aria-hidden="true" /> : <o.Icon aria-hidden="true" />,
+          }))}
+        />
+      ) : null}
+      {pills.map(({ id, label, Icon, pressed, disabled, hint, onPress }) => (
         <button
           key={id}
           type="button"
@@ -83,6 +120,8 @@ export type ComposerOptionsAvailable = {
   /** reading a reply aloud: absent where this engine has no voice to offer (no button under a reply). Not a button of the box, but it
    * comes from the same engine facts and reaches both chat screens the same way. */
   readAloud?: ReadAloudControl;
+  /** outside servers (ADR-0070): their resources to attach and prompts to use; absent where there is no MCP client */
+  external?: ExternalControl;
 };
 
 /** The card that asks before a search is first allowed, or says what is missing. Plain words, no jargon. */
@@ -124,7 +163,22 @@ function SearchNotice({
 const KEY = "wasifyai.composer.options";
 const KEEP = 200;
 
-type Saved = { thinking?: boolean; search?: boolean };
+/** When the assistant asks before making things in a chat (ADR-0071 decision 5). */
+export type Approval = "ask" | "ask_costly" | "auto";
+const APPROVALS: Approval[] = ["ask", "ask_costly", "auto"];
+const APPROVAL_LABEL: Record<Approval, string> = {
+  ask: "Ask me first",
+  ask_costly: "Ask for big things",
+  auto: "Just do it",
+};
+const APPROVAL_HINT: Record<Approval, string> = {
+  ask: "The assistant shows a card before it makes or changes anything, and you press Make it. Press to ask only for things that take a while or leave this computer.",
+  ask_costly:
+    "The assistant asks only before things that take a while or leave this computer. Press to let it make things without asking.",
+  auto: "The assistant makes things in this chat without asking. Deleting and anything that needs your word still ask. Press to ask first again.",
+};
+
+type Saved = { thinking?: boolean; search?: boolean; approval?: Approval };
 
 function readAll(): Record<string, Saved> {
   try {
@@ -190,6 +244,17 @@ export function useComposerOptions(
     },
     [key, saved],
   );
+  const setApproval = useCallback(
+    (value: Approval) => {
+      const next = { ...saved, approval: value };
+      setSaved(next);
+      write(key, next);
+    },
+    [key, saved],
+  );
+  const approval: Approval = APPROVALS.includes(saved.approval as Approval)
+    ? (saved.approval as Approval)
+    : "ask";
 
   const control = available.search?.available ? available.search : undefined;
   const [asking, setAsking] = useState<"consent" | "key" | null>(null);
@@ -199,6 +264,24 @@ export function useComposerOptions(
 
   const attach = useAttachments(available.attach);
   const attachOption = attach.option;
+  const external = available.external;
+  const [serversOpen, setServersOpen] = useState(false);
+  // the Servers pill is shown only once a server is connected (Settings > Other apps): until then it
+  // could only open a notice that says there is none
+  const [hasServers, setHasServers] = useState(false);
+  useEffect(() => {
+    if (!external) return;
+    let gone = false;
+    external
+      .servers()
+      .then((list) => {
+        if (!gone) setHasServers(list.length > 0);
+      })
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [external]);
   const dictation = useDictation(available.mic, onDictation);
   const { phase: micPhase, toggle: toggleMic } = dictation;
   const hasMic = Boolean(available.mic);
@@ -210,6 +293,7 @@ export function useComposerOptions(
       out.push({
         id: "thinking",
         label: "Thinking",
+        more: true,
         Icon: Brain,
         pressed: thinking,
         hint: thinking
@@ -221,6 +305,7 @@ export function useComposerOptions(
       out.push({
         id: "search",
         label: "Search",
+        more: true,
         Icon: Globe,
         pressed: searching,
         hint: searching
@@ -236,6 +321,25 @@ export function useComposerOptions(
           else if (!control.ready) setAsking("key");
           else setSearch(!searching);
         },
+      });
+    out.push({
+      id: "approval",
+      label: APPROVAL_LABEL[approval],
+      Icon: ShieldCheck,
+      pressed: approval !== "ask",
+      hint: APPROVAL_HINT[approval],
+      onPress: () =>
+        setApproval(APPROVALS[(APPROVALS.indexOf(approval) + 1) % APPROVALS.length] ?? "ask"),
+    });
+    if (external && hasServers)
+      out.push({
+        id: "servers",
+        label: "Servers",
+        more: true,
+        Icon: Plug,
+        pressed: serversOpen,
+        hint: "What the servers you connected offer: attach something they hold, or use one of their prompts.",
+        onPress: () => setServersOpen((o) => !o),
       });
     if (hasMic) {
       const recording = micPhase === "recording";
@@ -262,10 +366,23 @@ export function useComposerOptions(
     control,
     searching,
     setSearch,
+    approval,
+    setApproval,
     hasMic,
     micPhase,
     toggleMic,
+    external,
+    hasServers,
+    serversOpen,
   ]);
+  const serversNotice: ReactNode =
+    external && serversOpen ? (
+      <ComposerServersPanel
+        control={external}
+        onAttach={(done) => attach.addUploaded(done)}
+        onClose={() => setServersOpen(false)}
+      />
+    ) : null;
 
   const searchNotice: ReactNode =
     control && asking === "consent" ? (
@@ -305,10 +422,12 @@ export function useComposerOptions(
       />
     ) : null;
   const notice: ReactNode =
-    searchNotice || dictation.notice ? (
+    searchNotice || dictation.notice || attach.notice || serversNotice ? (
       <>
         {searchNotice}
+        {serversNotice}
         {dictation.notice}
+        {attach.notice}
       </>
     ) : null;
 
@@ -318,9 +437,10 @@ export function useComposerOptions(
     () => ({
       ...(thinking ? { thinking: true } : {}),
       ...(searching ? { search: true } : {}),
+      ...(approval !== "ask" ? { approval } : {}),
       ...attachInput,
     }),
-    [thinking, searching, attachInput],
+    [thinking, searching, approval, attachInput],
   );
-  return { bar, thinking, searching, notice, runInput, attach };
+  return { bar, thinking, searching, approval, setApproval, notice, runInput, attach };
 }

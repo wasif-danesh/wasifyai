@@ -52,6 +52,14 @@ export const STUDIO_TILES: StudioTile[] = [
   },
 ];
 
+/** The Studio's makers in four groups by what the person does with the result (ADR-0093, stage U10). */
+export const STUDIO_GROUPS: { name: string; keys: StudioFormat[] }[] = [
+  { name: "Read", keys: ["report", "study_guide", "flashcards", "quiz"] },
+  { name: "Show", keys: ["mindmap", "infographic", "slides", "datatable"] },
+  { name: "Hear", keys: ["audio"] },
+  { name: "Export", keys: ["word", "pdf"] },
+];
+
 export const FORMAT_LABEL: Record<StudioFormat, string> = Object.fromEntries(
   STUDIO_TILES.map((t) => [t.key, t.label]),
 ) as Record<StudioFormat, string>;

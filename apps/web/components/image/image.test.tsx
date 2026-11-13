@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ImageSummary } from "@wasifyai/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ImageLibraryScreen, ImageScreen } from "./ImageScreens";
+import { ImageScreen } from "./ImageScreens";
 import { ImageView } from "./ImageView";
 
 const push = vi.fn();
@@ -97,7 +97,7 @@ const ready = {
 };
 
 describe("ImageScreen (the web app's mount of the shared screen)", () => {
-  it("goes through the BFF, and offers the download and the library", async () => {
+  it("goes through the BFF, and offers the download (the library is a tab of the top bar)", async () => {
     const user = userEvent.setup();
     routes({
       "/api/products/wasifyai-image/runs": () =>
@@ -108,15 +108,14 @@ describe("ImageScreen (the web app's mount of the shared screen)", () => {
     });
     render(<ImageScreen mode="text" />);
     await user.type(await screen.findByRole("textbox"), "a lighthouse");
-    await user.click(screen.getByRole("button", { name: /generate/i }));
+    await user.click(screen.getByRole("button", { name: /make the picture/i }));
 
     expect(await screen.findByRole("img", { name: "a lighthouse" })).toBeInTheDocument();
+    // Download is one of the stage's actions, a real link to the BFF's download address
     expect(screen.getByRole("link", { name: /download/i })).toHaveAttribute(
       "href",
       "/api/products/wasifyai-image/images/i9/download",
     );
-    await user.click(screen.getByRole("button", { name: /library/i }));
-    expect(push).toHaveBeenCalledWith("/image/library");
   });
 
   it("starts from a recipe sent from the library, once", async () => {
@@ -127,36 +126,5 @@ describe("ImageScreen (the web app's mount of the shared screen)", () => {
     unmount();
     render(<ImageScreen mode="text" />);
     await waitFor(() => expect(screen.getByRole("textbox")).toHaveValue(""));
-  });
-});
-
-describe("ImageLibraryScreen", () => {
-  it("lists images with a download, and sends a recipe to Create to make it again", async () => {
-    const user = userEvent.setup();
-    const made = {
-      ...img("i1", "a lighthouse"),
-      recipe: {
-        v: 1,
-        mode: "text",
-        prompt: "a lighthouse",
-        size: "square",
-        width: 1024,
-        height: 1024,
-        seed: 5,
-      },
-    };
-    routes({
-      "/api/products/wasifyai-image/images?limit=36": () =>
-        Response.json({ images: [made], next_before: null }),
-    });
-    render(<ImageLibraryScreen />);
-    await user.click(await screen.findByRole("button", { name: /open: a lighthouse/i }));
-    expect(screen.getByRole("link", { name: /download/i })).toHaveAttribute(
-      "href",
-      "/api/products/wasifyai-image/images/i1/download",
-    );
-    await user.click(screen.getByRole("button", { name: /make it again/i }));
-    expect(push).toHaveBeenCalledWith("/image");
-    expect(takeHandoff<{ seed: number }>("image-again")?.seed).toBe(5);
   });
 });

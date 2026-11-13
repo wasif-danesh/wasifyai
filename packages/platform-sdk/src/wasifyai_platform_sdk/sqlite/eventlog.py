@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from wasifyai_platform_sdk.sqlite.engine import ensure_tables, now_iso, to_iso
+from wasifyai_platform_sdk.sqlite.engine import Migration, migrate, now_iso, to_iso
 
 TTL = timedelta(days=7)
 POLL_S = 0.25  # a writer in another process cannot wake a reader here, so readers also poll
@@ -30,6 +30,9 @@ _DDL = (
     """,
     "CREATE INDEX IF NOT EXISTS ix_run_events_created ON run_events (created_at)",
 )
+
+# the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
+_MIGRATIONS = (Migration(1, _DDL),)
 
 _APPEND = text(
     """
@@ -51,7 +54,7 @@ class SqliteEventLog:
         self._changed: dict[tuple[str, str], asyncio.Event] = {}
 
     async def append(self, tenant_id: str, run_id: str, event: dict[str, Any]) -> int:
-        await ensure_tables(self._engine, "run_events", _DDL)
+        await migrate(self._engine, "run_events", _MIGRATIONS)
         async with self._engine.begin() as conn:
             seq = (
                 await conn.execute(
@@ -67,7 +70,7 @@ class SqliteEventLog:
         self, tenant_id: str, run_id: str, after: int, block_ms: int
     ) -> list[dict[str, Any]]:
         """Events with seq > `after`. Waits up to `block_ms` for one if none exist yet."""
-        await ensure_tables(self._engine, "run_events", _DDL)
+        await migrate(self._engine, "run_events", _MIGRATIONS)
         loop = asyncio.get_running_loop()
         deadline = loop.time() + max(block_ms, 1) / 1000
         key = (tenant_id, run_id)
@@ -91,7 +94,7 @@ class SqliteEventLog:
                 pass
 
     async def last_seq(self, tenant_id: str, run_id: str) -> int:
-        await ensure_tables(self._engine, "run_events", _DDL)
+        await migrate(self._engine, "run_events", _MIGRATIONS)
         async with self._engine.connect() as conn:
             value = (
                 await conn.execute(
@@ -106,7 +109,7 @@ class SqliteEventLog:
 
     async def prune(self, now: datetime | None = None) -> int:
         """Drop events older than the retention window. Returns how many rows went."""
-        await ensure_tables(self._engine, "run_events", _DDL)
+        await migrate(self._engine, "run_events", _MIGRATIONS)
         cutoff = to_iso((now or datetime.now(UTC)) - TTL)
         async with self._engine.begin() as conn:
             result = await conn.execute(

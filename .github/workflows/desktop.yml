@@ -56,11 +56,14 @@ jobs:
       fail-fast: false
       matrix: { os: [macos-latest, ubuntu-latest, windows-latest] }
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20   # a normal run is about 2 minutes; a hang (the first run of the 3D commit hung on Windows) stops here
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --all-packages
       - name: Engine tests under the desktop profile
+        # the watchdog (conftest.py) must fire before the job's 20 minutes, or a hang is cancelled with no stack
+        env: { WASIFYAI_TEST_TIMEOUT_S: "300", WASIFYAI_SESSION_TIMEOUT_S: "900" }
         run: >
           uv run pytest -v
           packages/platform-sdk/tests/test_sqlite_adapters.py
@@ -69,6 +72,24 @@ jobs:
           services/api/tests/test_desktop_profile.py
           services/api/tests/test_local_embedder.py
           products/wasifyai-image/tests/test_image_sqlite.py
+      - if: failure()
+        name: Where the watchdog stopped a hung test
+        shell: bash
+        run: cat "$RUNNER_TEMP/test-watchdog.txt" 2>/dev/null || echo "the watchdog did not stop anything"
+
+  parity:
+    # The release gate (ADR-0087, P8): every item of the desktop's side menu and every action's screen has a row for
+    # the web, and a row that is not live was accepted by someone. The packaged app waits for it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install
+      - run: pnpm --filter web exec vitest run lib/parity.test.ts lib/nav.test.ts
+      - name: The ledger is the release page
+        run: cat docs/web-parity-ledger.md >> "$GITHUB_STEP_SUMMARY"
 
   shell:
     strategy:
@@ -183,6 +204,7 @@ jobs:
         run: cat "${{ runner.temp }}/wasifyai-data/logs/provision.log" || true
 
   package:
+    needs: parity
     # The packaged app: the engine bundle inside the app's resources, a first run on a machine with no
     # checkout (WASIFYAI_REPO points nowhere), the self-test, and the numbers it prints (SMOKE_METRICS:
     # time to ready with the install included, engine and shell memory). Unsigned: no signing in Phase 1.
@@ -336,6 +358,32 @@ jobs:
         run: |
           echo "--- self-test"; cat "$WASIFYAI_SMOKE_OUT" || true
           echo "--- installer log"; tail -n 40 "$WASIFYAI_DATA_DIR/logs/provision.log" || true
+
+  video-builder:
+    # The Video Builder component as a person gets it (ADR-0077, V1a): the pinned downloads with every hash
+    # checked (FFmpeg and ffprobe come with it: the runner has none), then hostile compositions rendered through the real adapter with the real pinned browser (V1b).
+    # Each page attacks while HyperFrames renders it; a service on loopback must hear nothing and the filter
+    # must refuse what the page asks for. Apple-silicon macOS only: that is where the component is supported.
+    runs-on: macos-latest
+    timeout-minutes: 60   # about 12 minutes; the 90 second renders (7 minutes each here) run nightly in video-builder-nightly.yml
+    env:
+      WASIFYAI_SESSION_TIMEOUT_S: "3000"   # the watchdog in conftest.py: this job's tests run longer than the others'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-packages
+      - name: Install the component
+        run: |
+          home="$(uv run python scripts/ci-video-builder.py "$RUNNER_TEMP/video-builder-data" | tail -1)"
+          echo "WASIFYAI_VIDEO_BUILDER_HOME=$home" >> "$GITHUB_ENV"
+      - name: Hostile compositions, the filter and the guard
+        run: uv run pytest -s services/api/tests/test_video_builder_hostile.py services/api/tests/test_video_builder_sandbox.py services/api/tests/test_video_builder_runtime.py
+      - name: The five templates, the exact-text check and the alpha files (MG1)
+        run: uv run pytest -s services/api/tests/test_video_builder_templates.py
+      - if: failure()
+        name: Where the watchdog stopped a hung test
+        shell: bash
+        run: cat "$RUNNER_TEMP/test-watchdog.txt" 2>/dev/null || echo "the watchdog did not stop anything"
 
   comfyui:
     # The optional image engine, as a person gets it: press "Set up image generation" (the window's

@@ -19,8 +19,20 @@ env:
   COMFYUI_BASE_URL: ""                   # Phase 4
   COMFYUI_VIDEO_BASE_URL: ""             # a separate ComfyUI for video (ADR-0037); empty = the one above
 
-safeguards:
-  forceOn: false        # true in production (ADR-0047): moderation and quotas always apply, the admin cannot turn them off
+tracing:
+  # Traces (stage O1): the OTLP/HTTP endpoint of Tempo (scripts/monitoring-up.sh installs it in `monitoring`,
+  # http://tempo.monitoring:4318). Empty: the pods send no traces.
+  otlpEndpoint: ""
+  sampleRatio: "1.0"    # the share of new traces kept; a trace started by the BFF keeps its decision
+
+langfuse:
+  # LLM traces (ADR-0050): on when baseUrl is set and the Secret holds LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY.
+  # Langfuse itself is installed apart (scripts/langfuse-up.sh), never with an ingress.
+  baseUrl: ""           # e.g. http://langfuse-web.observability:3000
+  captureContent: false # prompts and outputs stored: true only in development and staging (ADR-0050)
+
+jobs:
+  maxPerUser: 1         # ADR-0088: one job in the line per person across everything; admins are never limited; 0 = no limit
 
 auth:
   mode: jwt             # jwt = real sign-in; stub = every request is the dev user (local clusters only)
@@ -43,12 +55,12 @@ web:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { memory: 512Mi }
 
-# Products that run only on the web profile (docs/phase3-web-parity-plan.md). Off until the pieces they need are
-# there: notebooks need the worker below and the gateway's `creation-embedder` alias; voice needs the gateway's
-# `voice-speak` and `voice-transcribe` aliases bound to a speech provider in the admin Models page (the provider
-# receives the text and the recordings). Both need object storage and the platform Postgres (with pgvector).
+# Products of the web profile (docs/phase3-web-parity-plan.md). They are always on, with no switch: notebooks need the
+# worker below and the gateway's `creation-embedder` alias; voice needs the gateway's `voice-speak` and
+# `voice-transcribe` aliases bound to a speech provider in the admin Models page (the provider receives the text and
+# the recordings; until they are bound the speech models say they are not available). Both need object storage and
+# the platform Postgres (with pgvector).
 notebooks:
-  enabled: false
   schema: notebooks
   embedModel: creation-embedder
   embedDimension: 1024
@@ -60,7 +72,6 @@ notebooks:
       requests: { cpu: 250m, memory: 1Gi }
       limits: { memory: 4Gi }
 voice:
-  enabled: false
   schema: voice
   modelsFile: ""        # your own descriptors; empty = the product's hosted-models.yaml
 

@@ -5,7 +5,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { AssistantApi, Conversation, ImagesApi, OnEvent, ParsedEvent } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
-import { ChatScreenNext } from "../ChatScreenNext";
+import { ChatScreen } from "../ChatScreen";
 
 const ev = (event: string, seq: number, data: Record<string, unknown> = {}): ParsedEvent =>
   ({ event, data: { run_id: "r9", seq, ...data } }) as unknown as ParsedEvent;
@@ -35,7 +35,12 @@ const waiting: Conversation = {
       parent_id: "u",
       parts: [
         { type: "text", text: "Let me draw it." },
-        { type: "tool_call", id: "t1", name: "generate_image", arguments: { prompt: "a fox" } },
+        {
+          type: "tool_call",
+          id: "t1",
+          name: "propose_action",
+          arguments: { action_id: "image.generate", params: { prompt: "a fox" } },
+        },
       ],
     },
     {
@@ -54,6 +59,7 @@ const waiting: Conversation = {
           run_id: "r9",
           title: "Make a picture",
           summary: "Make a picture",
+          effect: "make",
           params: { prompt: "a fox in <b>snow</b>" },
         },
       ],
@@ -98,9 +104,9 @@ function runs(resumed: object[] = [], started: object[] = []) {
       on(
         ev("tool_result", 5, {
           id: "t1",
-          name: "generate_image",
+          name: "propose_action",
           status: "ok",
-          output: { image_id: "i1" },
+          output: { action_id: "image.generate", image_id: "i1" },
         }),
       );
       on(ev("token", 6, { text: "Here is your fox." }));
@@ -109,33 +115,162 @@ function runs(resumed: object[] = [], started: object[] = []) {
   };
 }
 
+const withFields: Conversation = {
+  ...waiting,
+  messages: waiting.messages.map((m) =>
+    m.id === "t"
+      ? {
+          ...m,
+          parts: [
+            {
+              ...(m.parts[0] as Extract<(typeof m.parts)[number], { type: "interrupt" }>),
+              action_id: "image.generate",
+              effect: "make",
+              badges: ["takes a while"],
+              fields: [
+                {
+                  name: "prompt",
+                  label: "What the picture shows",
+                  kind: "long_text",
+                  required: true,
+                  max_length: 500,
+                  value: "a fox in snow",
+                },
+                {
+                  name: "size",
+                  label: "Size",
+                  kind: "choice",
+                  required: false,
+                  choices: ["square", "wide"],
+                  value: "square",
+                },
+              ],
+            },
+          ],
+        }
+      : m,
+  ),
+};
+
 describe("the confirm card", () => {
   it("comes back after a reload with what will be made, as plain text", async () => {
-    render(<ChatScreenNext runs={runs()} assistant={api()} images={images} conversationId="c1" />);
+    render(<ChatScreen runs={runs()} assistant={api()} images={images} conversationId="c1" />);
     const card = await screen.findByRole("region", { name: "Make a picture" });
     expect(card).toHaveTextContent("a fox in <b>snow</b>"); // shown as text, never as markup
     expect(card.querySelector("b")).toBeNull();
-    expect(screen.getByRole("button", { name: "Go ahead" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Make it" })).toBeEnabled();
   });
 
-  it("a click on Go ahead answers the run and the turn goes on in the same message", async () => {
+  it("a click on Run answers the run and the turn goes on in the same message", async () => {
     const resumed: object[] = [];
     const user = userEvent.setup();
     render(
-      <ChatScreenNext runs={runs(resumed)} assistant={api()} images={images} conversationId="c1" />,
+      <ChatScreen runs={runs(resumed)} assistant={api()} images={images} conversationId="c1" />,
     );
-    await user.click(await screen.findByRole("button", { name: "Go ahead" }));
+    await user.click(await screen.findByRole("button", { name: "Make it" }));
     await waitFor(() => expect(resumed).toEqual([{ approved: true }]));
     expect(await screen.findByText("Here is your fox.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Go ahead" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Make it" })).toBeNull();
     expect(screen.getByText("Let me draw it.")).toBeInTheDocument(); // one message, not two
+  });
+
+  it("shows the action's fields, and Run sends them when the person changed one", async () => {
+    const resumed: object[] = [];
+    const user = userEvent.setup();
+    const a = api();
+    a.get = vi.fn(async () => withFields);
+    render(<ChatScreen runs={runs(resumed)} assistant={a} images={images} conversationId="c1" />);
+    const card = await screen.findByRole("region", { name: "Make a picture" });
+    expect(card).toHaveTextContent("takes a while");
+    const prompt = screen.getByRole("textbox", { name: /what the picture shows/i });
+    expect(prompt).toHaveValue("a fox in snow");
+    await user.clear(prompt);
+    await user.type(prompt, "a red fox");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Size" }), "wide");
+    await user.click(screen.getByRole("button", { name: "Make it" }));
+    await waitFor(() =>
+      expect(resumed).toEqual([{ approved: true, params: { prompt: "a red fox", size: "wide" } }]),
+    );
+  });
+
+  it("shows how long it took last time and that the chat model pauses, and 'Don't ask again' stops the asking", async () => {
+    const resumed: object[] = [];
+    const started: object[] = [];
+    const user = userEvent.setup();
+    const a = api();
+    const told: Conversation = {
+      ...withFields,
+      messages: withFields.messages.map((m) =>
+        m.id === "t"
+          ? {
+              ...m,
+              parts: [
+                {
+                  ...(m.parts[0] as Extract<(typeof m.parts)[number], { type: "interrupt" }>),
+                  estimate: { seconds: 12, runs: 3 },
+                  pauses_chat: true,
+                },
+              ],
+            }
+          : m,
+      ),
+    };
+    a.get = vi.fn(async () => told);
+    render(
+      <ChatScreen
+        runs={runs(resumed, started)}
+        assistant={a}
+        images={images}
+        conversationId="c1"
+      />,
+    );
+    const card = await screen.findByRole("region", { name: "Make a picture" });
+    expect(card).toHaveTextContent("Takes about 12 s on this computer (your last 3 runs).");
+    expect(card).toHaveTextContent("Pauses the chat model while it runs.");
+    await user.click(screen.getByRole("checkbox", { name: /don't ask again in this chat/i }));
+    await user.click(screen.getByRole("button", { name: "Make it" }));
+    await waitFor(() => expect(resumed).toEqual([{ approved: true }]));
+    await screen.findByText("Here is your fox.");
+    await user.type(screen.getByRole("textbox", { name: "Message" }), "another{Enter}");
+    await waitFor(() => expect(started).toHaveLength(1));
+    expect(started[0]).toMatchObject({ text: "another", approval: "auto" }); // this chat no longer asks
+    expect(screen.getByRole("button", { name: /^Just do it/ })).toBeInTheDocument();
+  });
+
+  it("Make it is held back until a required field is filled and the consent is ticked", async () => {
+    const consent: Conversation = {
+      ...withFields,
+      messages: withFields.messages.map((m) =>
+        m.id === "t"
+          ? {
+              ...m,
+              parts: [
+                {
+                  ...(m.parts[0] as Extract<(typeof m.parts)[number], { type: "interrupt" }>),
+                  consent: "I have the right to use this voice.",
+                },
+              ],
+            }
+          : m,
+      ),
+    };
+    const user = userEvent.setup();
+    const a = api();
+    a.get = vi.fn(async () => consent);
+    render(<ChatScreen runs={runs()} assistant={a} images={images} conversationId="c1" />);
+    const run = await screen.findByRole("button", { name: "Make it" });
+    expect(run).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /right to use this voice/i }));
+    expect(run).toBeEnabled();
+    await user.clear(screen.getByRole("textbox", { name: /what the picture shows/i }));
+    expect(run).toBeDisabled();
   });
 
   it("Not now says no, and nothing is shown as approved", async () => {
     const resumed: object[] = [];
     const user = userEvent.setup();
     render(
-      <ChatScreenNext runs={runs(resumed)} assistant={api()} images={images} conversationId="c1" />,
+      <ChatScreen runs={runs(resumed)} assistant={api()} images={images} conversationId="c1" />,
     );
     await user.click(await screen.findByRole("button", { name: "Not now" }));
     await waitFor(() => expect(resumed).toEqual([{ approved: false }]));
@@ -146,14 +281,14 @@ describe("the confirm card", () => {
     const started: object[] = [];
     const user = userEvent.setup();
     render(
-      <ChatScreenNext
+      <ChatScreen
         runs={runs(resumed, started)}
         assistant={api()}
         images={images}
         conversationId="c1"
       />,
     );
-    await screen.findByRole("button", { name: "Go ahead" });
+    await screen.findByRole("button", { name: "Make it" });
     await user.type(screen.getByRole("textbox", { name: "Message" }), "never mind{Enter}");
     await waitFor(() => expect(started).toHaveLength(1));
     expect(resumed).toEqual([{ approved: false, expired: true }]);

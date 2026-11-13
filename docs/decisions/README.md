@@ -48,14 +48,14 @@
 | [0044](0044-lip-sync.md) | Lip Sync (MuseTalk; character image plus voice, song or script; safety policy) | Accepted |
 | [0045](0045-ui-components.md) | UI components for forms and data grids (shadcn/ui, TanStack Table) | Accepted |
 | [0046](0046-product-side-panel.md) | Product side panel (navigation inside a product) | Accepted |
-| [0047](0047-safeguards-switch.md) | A system-wide safeguards switch (Admin on/off) | Accepted |
+| [0047](0047-safeguards-switch.md) | A system-wide safeguards switch (Admin on/off) | Superseded by 0094 |
 | [0048](0048-monitoring-and-alerting.md) | Monitoring and alerting (Prometheus stack in cluster, Telegram, external heartbeat) | Accepted |
 | [0049](0049-data-inspection-tools.md) | Redis and Postgres viewers in every environment | Accepted |
 | [0050](0050-langfuse-llm-observability.md) | LLM observability, analytics and cost tracking with Langfuse | Accepted |
-| [0051](0051-model-catalog-variants-and-lora-chain.md) | Model catalog, capability variants and the LoRA chain | Withdrawn (moved to wasifyai-art) |
-| [0052](0052-image-studio-loras-and-remix.md) | Image studio: base model, LoRAs, stored parameters and Remix | Withdrawn (moved to wasifyai-art) |
-| [0053](0053-ai-tools-product.md) | AI Tools: a manifest-driven product, and Change Clothes | Withdrawn (moved to wasifyai-art) |
-| [0054](0054-lora-training-product.md) | LoRA training: dataset, captions, trainer service, publish (Mac first) | Withdrawn (moved to wasifyai-art) |
+| [0051](0051-model-catalog-variants-and-lora-chain.md) | Model catalog, capability variants and the LoRA chain | Withdrawn |
+| [0052](0052-image-studio-loras-and-remix.md) | Image studio: base model, LoRAs, stored parameters and Remix | Withdrawn |
+| [0053](0053-ai-tools-product.md) | AI Tools: a manifest-driven product, and Change Clothes | Withdrawn |
+| [0054](0054-lora-training-product.md) | LoRA training: dataset, captions, trainer service, publish (Mac first) | Withdrawn |
 | [0055](0055-rename-to-wasifyai.md) | Rename the project and every product from `wd-*` to `wasifyai` | Proposed |
 | [0056](0056-desktop-app-and-web-share-one-engine.md) | The desktop app and the web product share one engine; image first | Accepted |
 | [0057](0057-ai-assistant-chat-first-shell.md) | An AI assistant, ChatGPT-style, on desktop and web | Accepted |
@@ -73,7 +73,7 @@
 | [0069](0069-mcp-server.md) | An MCP server: Claude Code, Codex and OpenCode can use the app | Accepted |
 | [0070](0070-mcp-client.md) | An MCP client: the assistant can use other people's MCP servers | Accepted |
 | [0071](0071-assistant-that-knows-the-product.md) | An assistant that knows the product, guides, and runs it when the person clicks | Accepted |
-| [0072](0072-agent-system-on-hermes.md) | An agent system for long tasks, built on Hermes Agent | Accepted |
+| 0072 | An agent system for long tasks, built on Hermes Agent (removed 2026-10-28 by the owner: its component of about 660 MB is not practical in the app; the number is not reused, and ADRs that mention it predate the removal) | Removed |
 | [0073](0073-training-platform.md) | Training in the app, made simple: one platform, Unsloth as the trainer, three simple cards | Accepted |
 | [0074](0074-language-model-training.md) | Teach my assistant to write like me: language-model fine-tuning for non-technical people | Accepted |
 | [0075](0075-decision-model-training.md) | Training a decision model: teach the app to sort and judge things | Accepted |
@@ -81,9 +81,24 @@
 | [0077](0077-video-builder-programmatic-video.md) | Video Builder (experimental): videos written as code, rendered deterministically | Accepted |
 | [0078](0078-one-default-model-qwen35-9b.md) | One default model for the app: Qwen3.5-9B (switch alias by alias after checks) | Accepted |
 | [0079](0079-text-to-motion-graphics.md) | Text to motion graphics: describe it, get an animated title, chart or overlay (motion-skills as reviewed content) | Accepted |
-| [0080](0080-text-and-image-to-3d.md) | Text and image to 3D with Pixal3D through pixal3d.cpp (runs on the Mac; one licence gate: DINOv3) | Accepted |
+| [0080](0080-text-and-image-to-3d.md) | Text and image to 3D with Pixal3D through pixal3d.cpp (runs on the Mac) | Accepted |
 | [0081](0081-design-system-from-design-md.md) | A design system with design/DESIGN.md as the single source of the look (blue accent; DS0 to DS2 built 2026-10-19) | Accepted |
 | [0082](0082-chat-ui-on-assistant-ui.md) | The chat UI is built on assistant-ui (and streamdown), not on our own components; amends ADR-0057 decision 7 | Accepted (assistant-ui); other dependencies to approve in CU0 |
 | [0083](0083-composer-options-attach-search-thinking-mic.md) | The chat box gets Attach, Search (DuckDuckGo first), Thinking and Mic | Accepted (CO0 on hold) |
+| [0086](0086-one-simple-model-picker.md) | One simple way to choose, get and use a model | Accepted |
+| [0087](0087-engine-workers-run-the-desktops-capabilities-for-the-web.md) | Engine workers run the desktop's capabilities for the web | Accepted for P0 and P1 |
+| [0088](0088-one-job-per-person-before-go-live.md) | One job per person across everything before go live, built so the rule can loosen | Accepted (not built) |
+| [0089](0089-models-page-as-tabs-and-tables.md) | The Models page is tabs with a table each, on the desktop and the web | Accepted |
+| [0090](0090-creative-studio.md) | Creative Studio: one project from an idea to a finished video (a plan, shots, a cut), Maestro's concepts built on our own parts; nothing copied | Accepted (2026-10-24; CS0 done, CS1 and the screen amendment's first stage built 2026-10-31, CS2 to CS5 and the web built 2026-11-02) |
+| [0091](0091-styles-in-the-image-screens.md) | Styles (LoRAs) in the image screens: add, check, stack and reuse them (Unsloth's features as ideas, nothing copied) | Accepted (2026-10-25; nothing built, S0 waits for the owner) |
+| [0092](0092-principals-scopes-and-the-secret-store.md) | Principals, scopes and the secret store: who is calling, what they may do, where keys live (stages F3 and F4 of the 2026-10-27 plan; API keys were dropped on 2026-10-28) | Proposed (F3 and F4 built 2026-10-27) |
+| [0093](0093-one-shell-one-make-screen.md) | One shell and one make screen for every product: the UI audit of 2026-10-27 and its plan (`docs/ui-improvement-plan.md`, stages U0 to U12) | Accepted (2026-10-30; U0 to U12 built) |
+| [0094](0094-no-safeguards-marks-or-licence-data-in-v1.md) | No safeguards, marks, consent gates, terms or licence data in v1 | Accepted (2026-10-29) |
+| [0095](0095-own-provider-keys-per-product.md) | The person's own provider keys, one per product (mockup `docs/spikes/own-keys-mockup.html`) | Proposed (mockup approved 2026-10-29; real-key tests at release) |
+| [0096](0096-motion-graphics-scene-editor.md) | Motion graphics becomes a scene editor for promotion and social content, with the assistant built in (mockup `docs/spikes/motion-editor-mockup.html`) | Accepted (2026-10-31; mockup approved; MX1 to MX7 built) |
+| [0097](0097-several-image-and-video-models.md) | Images and Video offer several models, each taught with AI Toolkit (plan `docs/image-video-models-plan.md`) | Accepted (2026-11-07) |
+| [0098](0098-writing-training-on-windows-and-linux.md) | Teaching writing on Windows and Linux: PEFT + TRL on CUDA PyTorch, mlx-lm stays on the Mac (spike `docs/spikes/writing-peft-wp0.md`) | Proposed |
+| [0099](0099-fal-only-v1-web-on-cloud-models.md) | OpenRouter for text models, fal.ai for media models in v1; the desktop runs local and cloud models, the web only cloud models (plan `docs/fal-only-v1-plan.md`) | Accepted; changed by ADR-0100 |
+| [0100](0100-haiku-text-and-cheapest-media-provider.md) | Text on Claude Haiku 5.5 by default with the person's choice of vendor; media on the cheapest of Runware, WaveSpeed and fal.ai (plan `docs/cloud-v1-plan.md`) | Accepted (2026-11-12) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

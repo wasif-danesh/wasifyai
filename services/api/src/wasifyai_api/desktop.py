@@ -14,16 +14,27 @@ import json
 import logging
 import mimetypes
 import os
+import shutil
 import socket
 import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncEngine
-from wasifyai_platform_sdk import LocalFileStorage, RunStore, ScopedStorage, SecretBox
+from wasifyai_platform_sdk import (
+    EnvSecretStore,
+    FileSecretStore,
+    KeychainSecretStore,
+    LayeredSecretStore,
+    LocalFileStorage,
+    RunStore,
+    ScopedStorage,
+    SecretBox,
+    SecretStore,
+)
 from wasifyai_platform_sdk.sqlite import (
     SqliteEventLog,
     SqliteJobQueue,
@@ -37,18 +48,40 @@ from wasifyai_api.audio_runtime import AudioEngine, AudioInstaller, AudioServer
 from wasifyai_api.comfy_music import ComfyMusic
 from wasifyai_api.config import Settings
 from wasifyai_api.creation_index import IndexStore
+from wasifyai_api.decision_setup import DecisionSetup
+from wasifyai_api.decision_setup import lock_name as decision_lock_name
 from wasifyai_api.desktop_discovery import DiscoveryService
 from wasifyai_api.desktop_fit import assess_fit, need_declared, process_rss_bytes
-from wasifyai_api.desktop_hub import HubService
+from wasifyai_api.desktop_hub import TOKEN_ALIASES, HubService
 from wasifyai_api.desktop_language import LanguageService
+from wasifyai_api.desktop_model3d import Model3dService
 from wasifyai_api.desktop_models import ModelsService, load_catalogue
+from wasifyai_api.desktop_styles import StylesService
+from wasifyai_api.desktop_video_builder import VideoBuilderService
+from wasifyai_api.desktop_vision import VisionService
 from wasifyai_api.jobs_consumer_local import LocalCompletionConsumer
+from wasifyai_api.language_setup import LOCK_NAME as LANGUAGE_LOCK_NAME
+from wasifyai_api.language_setup import LanguageSetup
 from wasifyai_api.lipsync_runtime import LipSyncSidecar
 from wasifyai_api.llama_server import LlamaServer
+from wasifyai_api.music_analysis_setup import LOCK_NAME as ANALYSIS_LOCK_NAME
+from wasifyai_api.music_analysis_setup import MusicAnalysis
+from wasifyai_api.own_keys import OwnKeysService
+from wasifyai_api.own_keys_media import KeyedMediaRouter
 from wasifyai_api.runs import RunManager
-from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.services import services_of
+from wasifyai_api.settings_store import SettingsStore
 from wasifyai_api.sqlite_stores import SqliteIndexStore, SqliteSettingsStore, SqliteUserStore
+from wasifyai_api.training_setup import HUB, PictureSetup
+from wasifyai_api.video_setup import LOCK_NAME as VIDEO_LOCK_NAME
+from wasifyai_api.video_setup import VideoSetup
 from wasifyai_api.web_search import WebService, load_or_create_key
+
+if TYPE_CHECKING:  # the trainers need the training product, which a web build leaves out
+    from wasifyai_api.desktop_decision_training import LayaTrainer
+    from wasifyai_api.desktop_language_training import MlxLmTrainer
+    from wasifyai_api.desktop_video_aitk import VideoTrainers
+    from wasifyai_api.desktop_video_training import LtxTrainer
 
 log = logging.getLogger("wasifyai_api.desktop")
 
@@ -76,11 +109,31 @@ class DesktopBackends:
     _worker_cleanup: Any = None
     models: ModelsService | None = None
     discovery: DiscoveryService | None = None
+    styles: StylesService | None = None  # the styles (LoRAs) of the image screens (ADR-0091)
     llama: LlamaServer | None = None
     language: LanguageService | None = None
+    vision: VisionService | None = None  # the picture reader of the chosen chat model (ADR-0083)
     hub: HubService | None = None
     web: WebService | None = None  # web search: the person's choices and keys (ADR-0083)
+    secrets: SecretStore | None = None  # keys and tokens: the keychain or the file (ADR-0092)
+    own_keys: OwnKeysService | None = None  # the person's own provider keys (ADR-0095)
     audio: AudioEngine | None = None
+    video_builder: VideoBuilderService | None = (
+        None  # the render engine, installed on request (ADR-0077)
+    )
+    model3d: Model3dService | None = None  # the 3D engine, installed on request (ADR-0080)
+    training_setup: PictureSetup | None = None  # the trainer's component, set up on request
+    language_setup: LanguageSetup | None = None  # the writing trainer's component
+    writing: "MlxLmTrainer | None" = None  # the language trainer: mlx-lm on a Mac (ADR-0074)
+    decision_setup: DecisionSetup | None = None  # the decision trainer's component
+    music_analysis: MusicAnalysis | None = None  # the song analysis component (ADR-0090)
+    deciding: "LayaTrainer | None" = None  # the decision trainer: Laya on a Mac (ADR-0075)
+    video_setup: VideoSetup | None = None  # the video trainer's component
+    teaching_video: "LtxTrainer | None" = None  # the video trainer: diffusers on a Mac (ADR-0073)
+    # what the video product teaches with: LTX-Video 2B's own trainer and AI Toolkit for the newer
+    # video models (ADR-0097, MV5)
+    video_trainers: "VideoTrainers | None" = None
+    training: Any = None  # the trainer: a preview until the real one is installed (ADR-0073)
     slot: Any = None  # the SlotManager of the running worker (set by start)
 
     async def start(self, runs: RunManager) -> None:
@@ -94,6 +147,15 @@ class DesktopBackends:
         if self.discovery is not None:
             await self.discovery.load()
             self.discovery.start()  # a background scan of the known folders (ADR-0063)
+        if self.training is not None and self.discovery is not None:
+            # a model just taught (or removed) is a style the image engine can use: look again
+            self.training.on_published = self.discovery.scan
+        if self.teaching_video is not None and self.discovery is not None:
+            self.teaching_video.on_published = (
+                self.discovery.scan
+            )  # and a look the video engine can use
+        if self.video_trainers is not None and self.discovery is not None:
+            self.video_trainers.aitk.on_published = self.discovery.scan
         worker, self._worker_cleanup, self.slot = _build_worker(self)
         self._worker_task = asyncio.create_task(worker.run_forever())
         self._consumer = LocalCompletionConsumer(self.queue, runs, self.run_store)
@@ -116,6 +178,23 @@ class DesktopBackends:
             await asyncio.gather(self._worker_task, return_exceptions=True)
         if self._worker_cleanup:
             await self._worker_cleanup()
+
+
+KEYCHAIN_SERVICE = "Wasify AI"
+
+
+def make_secret_store(root: Path, settings: Settings, box: SecretBox) -> SecretStore:
+    """Where the desktop keeps keys and tokens (ADR-0092): the operating system's store (the
+    macOS keychain, the Windows Credential Manager, the Linux Secret Service) when the shell
+    asks for it (`DESKTOP_SECRET_STORE=keychain`) and this computer has one, else one encrypted
+    file under `secrets.key`. The environment answers behind either, so a developer's
+    `HF_TOKEN` still counts."""
+    env = EnvSecretStore(TOKEN_ALIASES)
+    if settings.desktop_secret_store == "keychain" and KeychainSecretStore.available():
+        return LayeredSecretStore(
+            KeychainSecretStore(KEYCHAIN_SERVICE, root / "secrets.names.json"), env
+        )
+    return LayeredSecretStore(FileSecretStore(root / "secrets.json", box), env)
 
 
 def open_desktop(settings: Settings) -> DesktopBackends:
@@ -154,20 +233,90 @@ def open_desktop(settings: Settings) -> DesktopBackends:
     discovery = DiscoveryService(SqliteSettingsStore(engine), models)
     language = LanguageService(SqliteSettingsStore(engine), llama, models, discovery)
     discovery.language = language
-    hub = HubService(SqliteSettingsStore(engine))
+    vision = VisionService(language, models)
+    box = SecretBox(load_or_create_key(root / "secrets.key"))
+    secrets = make_secret_store(root, settings, box)
+    hub = HubService(SqliteSettingsStore(engine), secrets=secrets)
     hub.models, hub.language = models, language
-    models.downloads._token = hub.client.token  # noqa: SLF001 - one place for the token
-    web = WebService(
-        SqliteSettingsStore(engine),
-        SecretBox(load_or_create_key(root / "secrets.key")),
+    web = WebService(SqliteSettingsStore(engine), secrets, legacy_box=box)
+    own_keys = OwnKeysService(SqliteSettingsStore(engine), secrets)
+    cache = root / "engine" / "cache"
+    setup = PictureSetup(
+        root,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+        base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
+    )
+    language_setup = LanguageSetup(
+        root,
+        lock=products / "wasifyai-training" / "trainer" / LANGUAGE_LOCK_NAME,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+        base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
+    )
+    decision_setup = DecisionSetup(
+        root,
+        lock=products / "wasifyai-training" / "trainer" / decision_lock_name(),
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+        base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
+    )
+    music_analysis = MusicAnalysis(
+        root,
+        lock=products / "wasifyai-voice" / "analysis" / ANALYSIS_LOCK_NAME,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+    )
+    video_setup = VideoSetup(
+        root,
+        lock=products / "wasifyai-training" / "trainer" / VIDEO_LOCK_NAME,
+        uv=os.environ.get("WASIFYAI_UV") or shutil.which("uv"),
+        cache_dir=cache if cache.is_dir() else None,
+        base_url=(os.environ.get("HF_ENDPOINT") or HUB).rstrip("/"),
+    )
+    # here, not at the top: the web's engine imports this module and has no training product
+    from wasifyai_api.desktop_decision_training import make_decision_trainer
+    from wasifyai_api.desktop_language_training import make_language_trainer
+    from wasifyai_api.desktop_training import make_trainer
+    from wasifyai_api.desktop_video_aitk import AitkVideoTrainer, VideoTrainers
+    from wasifyai_api.desktop_video_training import VIDEO_MODEL, make_video_trainer
+
+    video_entry = models.catalogue.get(VIDEO_MODEL)
+    video_setup.video_model_bytes = video_entry.total_bytes if video_entry is not None else 0
+    teaching_video = make_video_trainer(settings.desktop_dir, models)
+    if teaching_video is not None:
+        video_setup.video_model = teaching_video.model_files
+    trainer = make_trainer(settings.desktop_dir, settings.models_dir, setup, models)
+    if trainer is not None:
+        trainer.hub_token = lambda: hub.client.token  # fetches a recipe's gated repos
+    video_trainers = (
+        VideoTrainers(teaching_video, AitkVideoTrainer(trainer, teaching_video))
+        if trainer is not None and teaching_video is not None
+        else None
     )
     return DesktopBackends(
         web=web,
+        secrets=secrets,
+        own_keys=own_keys,
         models=models,
         discovery=discovery,
+        styles=StylesService(settings.models_dir / "loras", SqliteSettingsStore(engine)),
         llama=llama,
         audio=audio,
+        video_builder=VideoBuilderService(settings.desktop_dir),
+        model3d=Model3dService(settings.desktop_dir),
+        training_setup=setup,
+        training=trainer,
+        language_setup=language_setup,
+        writing=make_language_trainer(settings.desktop_dir),
+        decision_setup=decision_setup,
+        music_analysis=music_analysis,
+        deciding=make_decision_trainer(settings.desktop_dir),
+        video_setup=video_setup,
+        teaching_video=teaching_video,
+        video_trainers=video_trainers,
         language=language,
+        vision=vision,
         hub=hub,
         engine=engine,
         event_log=log_,
@@ -250,6 +399,9 @@ def _build_worker(d: DesktopBackends):
         metrics_port=0,
         ollama_base_url="",
         unload_llm=False,
+        # on this computer a long clip may take most of an hour; the person can stop it (the web
+        # keeps the shorter limit of a shared GPU)
+        job_timeout_s=3600,
     )
     http = httpx.AsyncClient(timeout=30)
     sidecar = ComfySidecar(SidecarConfig(s.desktop_dir, s.models_dir, s.extra_model_dirs))
@@ -272,6 +424,8 @@ def _build_worker(d: DesktopBackends):
 
     if mode != "stub" and models is not None:
         runner = FitGuardRunner(runner, sidecar, models, ComfyError)
+    if d.own_keys is not None:  # a product on the person's key runs on its provider (ADR-0095, K3)
+        runner = KeyedMediaRouter(runner, d.own_keys, http, ws.job_timeout_s)
 
     # one big model in memory at a time; the image engine unloads through ComfyUI's /free
     owners: dict[str, Any] = {"image": sidecar.unload_models}
@@ -282,6 +436,16 @@ def _build_worker(d: DesktopBackends):
             await llama.stop()
 
         owners["chat"] = unload_chat
+    if d.model3d is not None:
+        owners["model3d"] = d.model3d.stop  # a 3D run holds about 19 GB: the biggest owner
+    if d.training is not None:
+        owners["training"] = d.training.stop  # a training run holds most of the GPU
+    if d.writing is not None:
+        owners["writing"] = d.writing.stop  # so does teaching a writing model
+    if d.deciding is not None:
+        owners["deciding"] = d.deciding.stop  # and teaching it to decide
+    if d.teaching_video is not None:
+        owners["teaching_video"] = d.teaching_video.stop  # and teaching the video model
     if d.audio is not None:
         owners["audio"] = d.audio.stop  # the speech runtime is another owner of the one slot
         if d.audio.lipsync_sidecar is not None:
@@ -297,11 +461,21 @@ def _build_worker(d: DesktopBackends):
 
     slot = SlotManager(owners, idle_unload_s=s.desktop_idle_unload_s, can_share=can_share)
     if models is not None:
-        models.sidecar, models.slot = sidecar, slot
+        models.attach(sidecar, slot)
     if d.language is not None:
         d.language.slot = slot
     if d.audio is not None:
         d.audio.slot = slot
+    if d.model3d is not None:
+        d.model3d.slot = slot
+    if d.training is not None:
+        d.training.slot = slot
+    if d.writing is not None:
+        d.writing.slot = slot
+    if d.deciding is not None:
+        d.deciding.slot = slot
+    if d.teaching_video is not None:
+        d.teaching_video.slot = slot
     processor = JobProcessor(
         ws,
         d.event_log,
@@ -311,6 +485,7 @@ def _build_worker(d: DesktopBackends):
         slot.lock_for("image"),
         InMemoryJobState(),
         http,
+        cancels=d.queue,  # a picture or clip the person stopped stops here too (stage J3)
     )
 
     async def cleanup() -> None:
@@ -329,7 +504,7 @@ files_router = APIRouter(tags=["files"])
 async def get_file(key: str, e: int, s: str, request: Request) -> Response:
     """A stored file for a link signed by this engine. The signature is the authorisation, the way
     a presigned S3 link is, so an `<img>` can use it."""
-    files: LocalFileStorage = request.app.state.local_files
+    files: LocalFileStorage = services_of(request).local_files
     if not files.verify(key, e, s):
         raise HTTPException(403, "this link is not valid or has expired")
     try:
@@ -345,6 +520,11 @@ async def get_file(key: str, e: int, s: str, request: Request) -> Response:
 
 
 # ---- entry point ----------------------------------------------------------------------------
+
+
+# seconds a stop gives open requests (a run's stream, the window's events) before ending them;
+# well inside the shell's own grace before it signals the engine (GRACE in src-tauri/src/engine.rs)
+SHUTDOWN_GRACE_S = 3
 
 
 def _bind(port: int) -> socket.socket:
@@ -368,7 +548,13 @@ async def _serve() -> None:
     from wasifyai_api.main import create_app
 
     server = uvicorn.Server(
-        uvicorn.Config(create_app(), log_level=os.environ.get("LOG_LEVEL", "info").lower())
+        uvicorn.Config(
+            create_app(),
+            log_level=os.environ.get("LOG_LEVEL", "info").lower(),
+            # a stop waits this long for open requests, then ends them: the window's event stream
+            # (`/desktop/events`) never ends by itself, so without a limit a stop waited for ever
+            timeout_graceful_shutdown=SHUTDOWN_GRACE_S,
+        )
     )
 
     async def announce() -> None:

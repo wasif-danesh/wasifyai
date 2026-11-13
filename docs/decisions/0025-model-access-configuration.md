@@ -1,6 +1,7 @@
 # ADR-0025: Model access configuration (local by default, admin-configurable)
 
 - **Status:** Accepted (2026-10-08). The LiteLLM mechanism in decision 2 is subject to a spike; see Follow-ups
+- **Superseded in part:** by ADR-0094 (2026-10-29): the product checks (canaries) before an alias changes, and the protected aliases, are removed.
 - **Date:** 2026-10-08
 - **Replaces:** the earlier draft "Hosted inference: no GPU in the cloud or home lab" (never accepted)
 
@@ -19,7 +20,7 @@ should not change.
   header. Needs a paid subscription. Credits are charged for active GPU time. v1 is deprecated in
   favour of Comfy API v2. Inputs and outputs are kept 24 hours, so results must be copied to our
   storage at once. Unconfirmed: that it has our exact model files, credits per song, concurrency
-  limits, commercial-use terms.
+  limits.
 - **Free LLM tiers:** Gemini's free tier may use prompts to improve Google products and cannot serve
   users in the EEA, Switzerland or the UK. Groq and Cerebras free tiers are for prototyping
   (about 30 requests per minute).

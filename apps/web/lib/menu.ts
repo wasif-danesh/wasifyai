@@ -10,17 +10,12 @@ const inArea = (pathname: string, href: string) =>
   pathname === href || pathname.startsWith(`${href}/`);
 
 /** What the menu does for each item, given the page being shown. `show` is the My creations filter;
- * `served` says what this deployment offers beyond the always-on products (notebooks need a reading
- * worker and speech needs the gateway's voice aliases, so they are switched on with
- * `NOTEBOOKS_ENABLED` and `VOICE_ENABLED`). */
+ * `served` says which voice screens the deployment's models can run: a screen is linked only when a ready model can do
+ * what it needs. There are no switches for products: notebooks and speech are always there. */
 export function resolveWebItem(
   pathname: string,
   show: string | null,
-  served: {
-    notebooks?: boolean;
-    voice?: boolean;
-    voiceScreens?: readonly VoiceScreenName[];
-  } = {},
+  served: { voiceScreens?: readonly VoiceScreenName[]; isAdmin?: boolean } = {},
 ): ItemResolver {
   // one page of a product: its create page, edit page or library (a saved result counts as the library)
   const page = (href: string, also?: string): ItemView => ({
@@ -30,7 +25,7 @@ export function resolveWebItem(
 
   // a voice screen the deployment's models can run (the older pages stay where it cannot)
   const voiceScreen = (name: VoiceScreenName): ItemView | undefined =>
-    served.voice && served.voiceScreens?.includes(name) ? page(voicePath(name)) : undefined;
+    served.voiceScreens?.includes(name) ? page(voicePath(name)) : undefined;
   const byItem = new Map(
     (Object.keys(VOICE_SCREENS) as VoiceScreenName[]).map((n) => [VOICE_SCREENS[n].item, n]),
   );
@@ -46,36 +41,51 @@ export function resolveWebItem(
         return live("image") ? page("/image") : undefined;
       case "images.edit":
         return live("image") ? page("/image/edit") : undefined;
-      case "images.library":
-        return live("image") ? page("/image/library", "/image/creations") : undefined;
+      case "images.inpaint":
+        return live("image") ? page("/image/inpaint") : undefined;
+      case "images.reference":
+        return live("image") ? page("/image/reference") : undefined;
       case "video.create":
         return live("video") ? page("/video") : undefined;
       case "video.animate":
         return live("video") ? page("/video/animate") : undefined;
-      case "video.library":
-        return live("video") ? page("/video/library", "/video/creations") : undefined;
+      case "video.extend":
+        return live("video") ? page("/video/extend") : undefined;
       case "voice.speak":
         // with the voice product on, one screen serves both apps and the older page redirects to it
-        return served.voice ? page("/voice/speak") : undefined;
+        return page("/voice/speak");
       case "voice.transcribe":
-        return served.voice ? page("/voice/transcribe") : undefined;
+        return page("/voice/transcribe");
       case "notebook.create":
-        return served.notebooks ? page("/notebooks/new") : undefined;
+        return page("/notebooks/new");
       case "notebook.list":
-        return served.notebooks
-          ? {
-              href: "/notebooks",
-              current:
-                pathname === "/notebooks" ||
-                (pathname.startsWith("/notebooks/") && pathname !== "/notebooks/new"),
-            }
-          : undefined;
+        return {
+          href: "/notebooks",
+          current:
+            pathname === "/notebooks" ||
+            (pathname.startsWith("/notebooks/") && pathname !== "/notebooks/new"),
+        };
       case "chat":
         return { href: "/", current: pathname === "/" }; // an open chat is marked in Recents
+      case "motion":
+        return live("video") ? page("/video/builder") : undefined;
+      case "model3d":
+        return live("image") ? page("/image/3d") : undefined; // still the image product's page (D25)
+      case "train":
+        return page("/train");
+      case "creative":
+        return page("/creative");
       case "library":
-        return { href: "/creations", current: pathname === "/creations" && !show };
-      case "models": // models are chosen by the deployment's admin, not by each person
-        return { hidden: true };
+        // the one Library, whichever kind it shows, and the page of one picture or clip in it (ADR-0093, U8)
+        return {
+          href: "/creations",
+          current:
+            pathname === "/creations" ||
+            pathname.startsWith("/image/creations/") ||
+            pathname.startsWith("/video/creations/"),
+        };
+      case "models": // the models of the workers are an admin's to manage; everyone else uses the pickers
+        return served.isAdmin ? page("/admin/workers", "/admin/workers") : { hidden: true };
       default:
         return undefined;
     }

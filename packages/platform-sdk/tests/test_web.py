@@ -189,7 +189,38 @@ async def test_duckduckgo_spaces_searches_and_says_when_it_is_limiting_them():
     assert other.value.code == "search_failed"
     with pytest.raises(WebError) as challenged:
         await p.search("fourth", 5)
-    assert challenged.value.code == "search_busy"  # an empty row is a refusal, not "nothing found"
+    # an empty row is a refusal, not "nothing found"; the third failure in a row stops saying wait
+    assert challenged.value.code == "search_unreliable"
+    assert "Add a search key in Settings" in challenged.value.message
+
+
+async def test_a_success_starts_the_count_of_failures_again():
+    answers: list[Any] = [
+        Exception("No results found."),
+        Exception("No results found."),
+        [{"title": "Fox", "href": "https://a.test/fox", "body": "Foxes."}],
+        Exception("No results found."),
+        Exception("No results found."),
+    ]
+
+    def run(query: str, n: int) -> list[dict[str, Any]]:
+        a = answers.pop(0)
+        if isinstance(a, Exception):
+            raise a
+        return a
+
+    async def no_sleep(s: float) -> None:
+        return None
+
+    p = DuckDuckGoProvider(min_gap_s=0, run=run, sleep=no_sleep)
+    codes = []
+    for q in ("a", "b", "c", "d", "e"):
+        try:
+            await p.search(q, 3)
+            codes.append("ok")
+        except WebError as e:
+            codes.append(e.code)
+    assert codes == ["search_busy", "search_busy", "ok", "search_busy", "search_busy"]
 
 
 def test_a_provider_is_made_by_its_id_and_an_unknown_one_is_refused():

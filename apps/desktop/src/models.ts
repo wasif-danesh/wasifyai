@@ -30,7 +30,6 @@ export type ModelEntry = {
   /** the product the model belongs to (`wasifyai-image`, `wasifyai-video`, `wasifyai-voice`) */
   product_id: string;
   title: string;
-  licence: string;
   source: string;
   note: string;
   approx_ram_gb: number;
@@ -41,7 +40,9 @@ export type ModelEntry = {
   memory_warning: string | null;
   fit: Fit | null;
   /** the descriptor of a speech model (ADR-0066); null for other models */
-  voice?: { tasks: string[]; commercial_use: string } | null;
+  voice?: { tasks: string[] } | null;
+  /** what the product's model of this id can do (`image.edit` ...), ADR-0097; empty for a product of one model */
+  can?: string[];
 };
 
 export type DownloadState = {
@@ -134,6 +135,18 @@ export function createModelsApi(transport: Transport) {
         headers: JSON_HEADERS,
         body: JSON.stringify({ models_dir: modelsDir, extra_dirs: extraDirs }),
       }),
+    /** Keep the image or video model the person chose in the engine too: what the engine makes on its own
+     * (Creative's stills and clips, the assistant) names no model and uses this one (ADR-0097). */
+    choose: (productId: string, modelId: string) =>
+      json<{ product_id: string; chosen: string }>(
+        transport,
+        `/desktop/models/chosen/${productId}`,
+        {
+          method: "PUT",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ model_id: modelId }),
+        },
+      ),
     engine: () => json<EngineInfo>(transport, "/desktop/engine"),
     unload: () =>
       json<{ unloaded: boolean }>(transport, "/desktop/engine/unload", { method: "POST" }),

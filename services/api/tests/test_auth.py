@@ -4,6 +4,7 @@ from uuid import uuid4
 import jwt
 import pytest
 from fastapi.testclient import TestClient
+from wasifyai_api.assemble import Injected
 from wasifyai_api.auth import AuthError, verify_token
 from wasifyai_api.config import get_settings
 from wasifyai_api.main import create_app
@@ -176,10 +177,12 @@ def test_jwt_mode_without_a_secret_refuses_to_start(monkeypatch, products):
     try:
         with pytest.raises(RuntimeError, match="API_AUTH_SECRET"):
             create_app(
-                hello_registry(),
-                products,
-                event_log=InMemoryEventLog(),
-                run_store=InMemoryRunStore(),
+                Injected(
+                    registry=hello_registry(),
+                    products_dir=products,
+                    event_log=InMemoryEventLog(),
+                    run_store=InMemoryRunStore(),
+                )
             )
     finally:
         monkeypatch.undo()

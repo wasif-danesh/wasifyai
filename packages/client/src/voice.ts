@@ -14,10 +14,6 @@ export type VoiceTask =
   | "transcribe"
   | "lipsync";
 
-/** `yes` and `conditional` may be used commercially; `no` and `unreviewed` are shown with a badge
- * and are never a default. */
-export type CommercialUse = "yes" | "conditional" | "no" | "unreviewed";
-
 /** Why a model cannot be used yet, and what to do: the dropdown's honest states (ADR-0066). */
 export type ModelState = "ready" | "needs_runtime" | "can_install" | "not_available";
 
@@ -51,16 +47,14 @@ export type MusicEditRules = { actions: EditAction[]; max_ranges: number; max_so
 export type VoiceModelInfo = {
   id: string;
   title: string;
-  licence: string;
   engine: string;
   family: string;
   tasks: VoiceTask[];
   recommended: VoiceTask[];
   languages: string[];
   sample_rate: number;
-  commercial_use: CommercialUse;
-  licence_evidence: string;
-  reviewed: string;
+  /** where the files come from (a URL), when they are downloaded */
+  source?: string;
   measured: {
     platform: string;
     speed_x: number | null;
@@ -75,7 +69,25 @@ export type VoiceModelInfo = {
   separate?: { stems?: string[]; max_source_s?: number };
   convert?: { reference_seconds?: [number, number]; max_source_s?: number };
   speech_edit?: { max_changes?: number; max_source_s?: number };
-  lipsync?: { max_voice_s?: number; max_side?: number; fps?: number; mark?: string };
+  /** `sizes` are the short sides of the videos it makes (480 is 480p) */
+  lipsync?: {
+    max_voice_s?: number;
+    sizes?: number[];
+    default_size?: number;
+    /** the video's width times height when `measured.speed_x` was measured */
+    speed_pixels?: number;
+    fps?: number;
+    mark?: string;
+    /** a cloud model: its provider ("fal.ai"), its listed dollars per video second and the seconds of
+     * work each video second took when measured, both by size ("480"); a size not measured is missing */
+    where?: string;
+    price_per_s?: Record<string, number>;
+    work_per_s?: Record<string, number>;
+    /** a cloud model's own frame, measured: "square" whatever picture it is sent, or "shape" (the
+     * picture's shape at a size it picks); and its short side in pixels by size ("480") */
+    frame?: "square" | "shape";
+    frame_short?: Record<string, number>;
+  };
   state: ModelState;
   files_ready: boolean;
   runtime_ready: boolean;
@@ -111,7 +123,7 @@ export type AudioRuntime = {
   install: RuntimeInstall;
 };
 
-/** The lip sync engine (MuseTalk): an optional component, set up on a click after its size is shown. */
+/** The lip sync engine (EchoMimic v3): an optional component, set up on a click after its size is shown. */
 export type LipSyncEngine = {
   installed: boolean;
   source: "managed" | "env" | null;
@@ -120,10 +132,7 @@ export type LipSyncEngine = {
   install: RuntimeInstall;
 };
 
-export type PictureBasis = "drawn" | "own" | "permission";
-export type VoiceBasis = "generated" | "own" | "permission";
-
-/** A talking video made here. The picture and the voice basis are what the person said about them. */
+/** A talking video made here. */
 export type Clip = {
   id: string;
   title: string;
@@ -134,14 +143,6 @@ export type Clip = {
   fps: number;
   width: number;
   height: number;
-  consent: {
-    picture?: PictureBasis;
-    voice?: VoiceBasis;
-    mark?: string;
-    accepted_at?: string;
-    picture_statement?: string;
-    voice_statement?: string;
-  };
   favourite: boolean;
   load_s: number;
   elapsed_s: number;
@@ -154,7 +155,6 @@ export type Clip = {
 export type AddedPicture = { id: string; width: number; height: number; url: string };
 
 export type VoiceKind = "design" | "clone";
-export type ConsentBasis = "own" | "permission";
 
 /** A voice the person saved: described in words, or cloned from a recording. It works with any model
  * that can do that (the dropdown shows those), not with one model only. */
@@ -167,7 +167,6 @@ export type SavedVoice = {
   reference_seconds: number | null;
   /** a link to play the recording of a cloned voice */
   reference_url?: string;
-  consent: { basis?: ConsentBasis; statement?: string; accepted_at?: string };
   created_at: string;
   updated_at: string;
 };
@@ -282,7 +281,6 @@ export type ReadAloudPart = {
 export type SpeechModelOffer = {
   id: string;
   title: string;
-  licence: string;
   from: string;
   bytes: number;
   /** the languages it speaks or reads (codes such as "en-us") */
@@ -328,8 +326,7 @@ function readiness(
     model: {
       id: pick.id,
       title: pick.title,
-      licence: pick.licence,
-      from: hostOf(pick.licence_evidence),
+      from: hostOf(pick.source ?? ""),
       bytes: pick.bytes_missing,
       languages: pick.languages ?? [],
     },
@@ -546,11 +543,10 @@ export function createVoiceApi(transport: Transport, options: VoiceApiOptions = 
       (await json<{ items: SavedVoice[] }>(`${base}/voices${kind ? `?kind=${kind}` : ""}`)).items,
     designVoice: (name: string, description: string) =>
       json<SavedVoice>(`${base}/voices/design`, post({ name, description })),
-    cloneVoice(file: File, name: string, consent: ConsentBasis, referenceText?: string) {
+    cloneVoice(file: File, name: string, referenceText?: string) {
       const form = new FormData();
       form.append("file", file, file.name);
       form.append("name", name);
-      form.append("consent", consent);
       if (referenceText) form.append("reference_text", referenceText);
       return json<SavedVoice>(`${base}/voices/clone`, { method: "POST", body: form });
     },
@@ -1027,17 +1023,50 @@ export function editWords(
 export type ClipRequest = {
   /** the id of a picture added with `addPicture` */
   picture: string;
-  /** what the person said the picture is */
-  pictureBasis: PictureBasis;
   /** a recording of the library, or ... */
   source?: AudioSource;
   /** ... words to be spoken here (then the voice is always "generated") */
   text?: string;
   voice?: string;
-  voiceBasis: VoiceBasis;
   model?: string;
   title?: string;
+  /** the video's shape: the picture's own when left out */
+  shape?: ClipShape;
+  /** the short side of the video (480 is 480p): the model's default when left out */
+  size?: number;
 };
+
+export type ClipShape = "picture" | "9:16" | "16:9" | "1:1" | "4:5";
+
+/** The video's width and height for a picture, a shape and a size: the engine's own rule
+ * (`lipsync_frame` in the platform SDK), so the screen can show what will be made. */
+export function clipFrame(
+  picture: { width: number; height: number },
+  shape: ClipShape,
+  size: number,
+): { width: number; height: number } {
+  const ratios: Record<ClipShape, number | null> = {
+    picture: null,
+    "9:16": 9 / 16,
+    "16:9": 16 / 9,
+    "1:1": 1,
+    "4:5": 4 / 5,
+  };
+  const own = Math.min(16 / 9, Math.max(9 / 16, picture.width / Math.max(1, picture.height)));
+  const aspect = ratios[shape] ?? own;
+  const [w, h] = aspect >= 1 ? [size * aspect, size] : [size, size / aspect];
+  const r16 = (n: number) => Math.max(16, roundHalfEven(n / 16) * 16);
+  return { width: r16(w), height: r16(h) };
+}
+
+/** Python's round(): halves go to the even number, so both sides agree on every size */
+function roundHalfEven(n: number): number {
+  const f = Math.floor(n);
+  const d = n - f;
+  if (d > 0.5) return f + 1;
+  if (d < 0.5) return f;
+  return f % 2 === 0 ? f : f + 1;
+}
 
 export type ClipResult =
   | { ok: true; clip: { id: string; title: string; seconds: number; video_url: string } }
@@ -1060,8 +1089,6 @@ export async function makeClip(
   const input: Record<string, unknown> = {
     task: "lipsync",
     picture: request.picture,
-    picture_basis: request.pictureBasis,
-    voice_basis: request.voiceBasis,
   };
   if (request.text?.trim()) {
     input.text = request.text;
@@ -1069,6 +1096,8 @@ export async function makeClip(
   } else if (request.source) Object.assign(input, sourceInput(request.source));
   if (request.model) input.model = request.model;
   if (request.title?.trim()) input.title = request.title;
+  if (request.shape && request.shape !== "picture") input.shape = request.shape;
+  if (request.size) input.size = request.size;
   await runs.startRun(VOICE_PRODUCT, input, signal, (e) => {
     const data = e.data as unknown as Record<string, unknown>;
     if (e.event === "node" && typeof data.label === "string") onStep?.(data.label);
@@ -1190,7 +1219,6 @@ export async function dubScript(
 }
 
 export type VoiceFrom = "speaker" | "saved" | "builtin";
-export type SpeakerBasis = "own" | "permission";
 
 export type DubRequest = {
   source: AudioSource;
@@ -1198,8 +1226,6 @@ export type DubRequest = {
   /** the script, as the person left it */
   segments: DubLine[];
   voiceFrom: VoiceFrom;
-  /** copying the speaker's voice needs the person's word that it is theirs or allowed */
-  speakerBasis?: SpeakerBasis;
   savedVoice?: string;
   voice?: string;
   model?: string;
@@ -1234,7 +1260,6 @@ export async function makeDub(
     segments: request.segments,
     voice_from: request.voiceFrom,
   };
-  if (request.speakerBasis) input.speaker_basis = request.speakerBasis;
   if (request.savedVoice) input.saved_voice = request.savedVoice;
   if (request.voice) input.voice = request.voice;
   if (request.model) input.model = request.model;

@@ -1,13 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The notebooks database: one SQLite file (`notebooks.db`) with FTS5 and sqlite-vec (ADR-0065
-decision 5). Notebooks, folders, documents and their passages with a keyword index and a vector
-index. Synchronous: the engine calls it from a thread.
+"""The notebooks database (ADR-0065 decision 5): notebooks, folders, documents and their passages
+with a keyword index and a vector index. Synchronous: the engine calls it from a thread.
+
+One store class on either database (stage J2: `wasifyai_platform_sdk.sqlstore`). On the desktop one
+SQLite file (`notebooks.db`) with FTS5 and sqlite-vec; on the web its own Postgres schema
+(`notebooks`), where each passage keeps its terms (as the same tokenizer cuts them) in an array with
+a GIN index and its vector in a pgvector column, so deleting a passage deletes its vector and a
+search filters by notebook and source before it ranks (docs/phase3-web-parity-plan.md, W4). The
+schema is the product's own (ADR-0065), made when the store starts, with an advisory lock so several
+replicas can start together.
 
 Ownership (rule 7, ADR-0030): a notebook belongs to a tenant and a user, and every read or write of
 a notebook or what is in it is scoped by both. Another person's notebook is simply not found.
 """
 
 import json
+import logging
 import sqlite3
 import unicodedata
 import uuid
@@ -18,11 +26,16 @@ from pathlib import Path
 from typing import Any
 
 import sqlite_vec
+from wasifyai_platform_sdk.pg import vector_text
+from wasifyai_platform_sdk.sqlstore import PostgresStoreDb, SqliteStoreDb, StoreDb
 
 from wasifyai_notebooks.chunking import Passage
-from wasifyai_notebooks.tokenizer import TOKENIZER
+from wasifyai_notebooks.tokenizer import TOKENIZER, terms
 
 SCHEMA_VERSION = 4
+log = logging.getLogger(__name__)
+PRODUCT_ID = "wasifyai-notebooks"
+LOCK_KEY = 0x6E6F7465  # "note": the advisory lock that serialises schema creation on Postgres
 MAX_FOLDER_DEPTH = 8
 
 PENDING, PROCESSING, READY, FAILED, CANCELLED = (
@@ -41,6 +54,13 @@ class NotFound(Exception):
 
 class Conflict(Exception):
     """The request is valid but the state does not allow it; `str(e)` is safe to show."""
+
+
+def _load_vectors(db: sqlite3.Connection) -> None:
+    """sqlite-vec on a desktop connection: the passages' vectors are a vec0 table."""
+    db.enable_load_extension(True)
+    sqlite_vec.load(db)
+    db.enable_load_extension(False)
 
 
 def now() -> str:
@@ -151,58 +171,171 @@ _GUIDE_COLUMNS = ("guide", "guide_key")  # added to `notebooks` in schema 4
 _OUTPUT_COLUMNS = ("request", "claimed_at")  # added to `artifacts` for a reader's queue
 
 
+def _pg_ddl(dimension: int) -> str:
+    """The tables on Postgres: the same, with the passages' terms and vector in their row."""
+    return f"""
+CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS notebooks(
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, user_id TEXT NOT NULL, title TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, opened_at TEXT,
+  guide TEXT, guide_key TEXT);
+CREATE INDEX IF NOT EXISTS notebooks_owner ON notebooks(tenant_id, user_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS folders(
+  id TEXT PRIMARY KEY,
+  notebook_id TEXT NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+  parent_id TEXT REFERENCES folders(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, name_key TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS folders_name
+  ON folders(notebook_id, COALESCE(parent_id, ''), name_key);
+
+CREATE TABLE IF NOT EXISTS documents(
+  id TEXT PRIMARY KEY,
+  notebook_id TEXT NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+  folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('file', 'note')),
+  status TEXT NOT NULL,
+  error TEXT,
+  priority INTEGER NOT NULL DEFAULT 100,
+  mime TEXT, suffix TEXT, size_bytes BIGINT, sha256 TEXT, pages INTEGER,
+  content TEXT,
+  embedder TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS documents_dedup
+  ON documents(notebook_id, COALESCE(folder_id, ''), sha256) WHERE sha256 IS NOT NULL;
+CREATE INDEX IF NOT EXISTS documents_notebook ON documents(notebook_id, created_at);
+CREATE INDEX IF NOT EXISTS documents_queue ON documents(status, priority DESC, created_at);
+
+CREATE TABLE IF NOT EXISTS chunks(
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL, content TEXT NOT NULL, start_line INTEGER, end_line INTEGER,
+  terms TEXT[] NOT NULL DEFAULT '{{}}',
+  embedding vector({dimension}),
+  UNIQUE(document_id, position));
+CREATE INDEX IF NOT EXISTS chunks_terms ON chunks USING GIN (terms);
+
+CREATE TABLE IF NOT EXISTS conversations(
+  id TEXT PRIMARY KEY,
+  notebook_id TEXT NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS conversations_notebook ON conversations(notebook_id, updated_at);
+CREATE TABLE IF NOT EXISTS messages(
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  text TEXT NOT NULL,
+  citations TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  UNIQUE(conversation_id, seq));
+
+CREATE TABLE IF NOT EXISTS artifacts(
+  id TEXT PRIMARY KEY,
+  notebook_id TEXT NOT NULL REFERENCES notebooks(id) ON DELETE CASCADE,
+  format TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL,
+  error TEXT,
+  prompt TEXT NOT NULL DEFAULT '',
+  source_ids TEXT NOT NULL DEFAULT '[]',
+  body TEXT,
+  data TEXT,
+  file_name TEXT,
+  file_mime TEXT,
+  request TEXT,
+  claimed_at TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS artifacts_notebook ON artifacts(notebook_id, created_at);
+-- a schema made before outputs were queued gets the two columns
+ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS request TEXT;
+ALTER TABLE artifacts ADD COLUMN IF NOT EXISTS claimed_at TEXT;
+"""
+
+
 class NotebookStore:
-    # The few places where a database differs from SQLite: the error a violated constraint raises, a
-    # savepoint around a statement that may violate one, and how passages and vectors are written.
-    # `PostgresNotebookStore` (pgstore.py) overrides these and the connection, nothing else.
-    _INTEGRITY: tuple[type[Exception], ...] = (sqlite3.IntegrityError,)
+    # The few places where the two databases differ: the error a violated constraint raises, a
+    # savepoint around a statement that may violate one, how the schema is made, and how passages
+    # and their vectors are written. Everything else is the same SQL on both.
 
-    def _guard(self, db: Any) -> Any:
-        """A context in which a constraint error leaves the transaction usable (a savepoint where
-        the database aborts a transaction on error, nothing for SQLite)."""
-        return nullcontext()
-
-    def __init__(self, root: Path, *, dimension: int, embedder_id: str):
-        """`root` holds `notebooks.db`; `dimension` and `embedder_id` are what the index was built
-        with. An index built with another embedder is refused, not mixed (ADR-0065 decision 8)."""
-        self.root = Path(root)
-        self.path = self.root / "notebooks.db"
+    def __init__(self, db: StoreDb, *, dimension: int, embedder_id: str, root: Path | None = None):
+        """`dimension` and `embedder_id` are what the index was built with. An index built with
+        another embedder is refused, not mixed (ADR-0065 decision 8). `root` is the desktop's
+        folder of `notebooks.db`."""
+        self.db = db
+        self.root = Path(root) if root is not None else None
+        self.path = self.root / "notebooks.db" if self.root is not None else None
         self.dimension = dimension
         self.embedder_id = embedder_id
-        self.root.mkdir(parents=True, exist_ok=True)
-        self._init()
+        try:
+            self._init()
+        except BaseException:
+            db.close()
+            raise
+
+    @classmethod
+    def in_folder(cls, root: Path, *, dimension: int, embedder_id: str) -> "NotebookStore":
+        """The desktop's library: `notebooks.db` under `root`, a connection per call (the reading
+        worker writes while the window reads)."""
+        db = SqliteStoreDb(Path(root) / "notebooks.db", rows="tuple", timeout_s=5, shared=False,
+                           on_open=_load_vectors)  # fmt: skip
+        return cls(db, dimension=dimension, embedder_id=embedder_id, root=root)
+
+    @classmethod
+    def on_postgres(
+        cls, dsn: str, *, dimension: int, embedder_id: str, schema: str = "notebooks",
+        max_connections: int = 8,
+    ) -> "NotebookStore":  # fmt: skip
+        """The web's library, in its own schema of the deployment's Postgres. `dsn` is a libpq
+        string or URL (the SQLAlchemy `+asyncpg` form is accepted)."""
+        db = PostgresStoreDb(dsn, schema, rows="tuple", max_connections=max_connections)
+        return cls(db, dimension=dimension, embedder_id=embedder_id)
+
+    @property
+    def schema(self) -> str:
+        return str(getattr(self.db, "schema", ""))
+
+    @property
+    def _INTEGRITY(self) -> tuple[type[Exception], ...]:  # noqa: N802 (read as a constant)
+        if self.db.dialect == "postgres":
+            import psycopg
+
+            return (psycopg.IntegrityError,)
+        return (sqlite3.IntegrityError,)
+
+    def _guard(self, db: Any) -> Any:
+        """A context in which a constraint error leaves the transaction usable: a savepoint where
+        the database aborts a transaction on error (Postgres), nothing for SQLite."""
+        return db.transaction() if self.db.dialect == "postgres" else nullcontext()
+
+    def close(self) -> None:
+        self.db.close()
+
+    def drop_schema(self) -> None:
+        """Remove every table of this store (tests, and a deployment that starts over)."""
+        drop = getattr(self.db, "drop", None)
+        if drop is not None:
+            drop()
 
     # ---- connection -------------------------------------------------------------------------
 
-    def _open(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.path, timeout=5, isolation_level=None)
-        db.execute("PRAGMA foreign_keys = ON")
-        db.execute("PRAGMA journal_mode = WAL")
-        db.enable_load_extension(True)
-        sqlite_vec.load(db)
-        db.enable_load_extension(False)
-        return db
-
     @contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
-        db = self._open()
-        try:
+    def connect(self) -> Iterator[Any]:
+        with self.db.connect() as db:
             yield db
-        finally:
-            db.close()
 
     @contextmanager
-    def _tx(self) -> Iterator[sqlite3.Connection]:
-        with self.connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            try:
-                yield db
-            except BaseException:
-                db.execute("ROLLBACK")
-                raise
-            db.execute("COMMIT")
+    def _tx(self) -> Iterator[Any]:
+        with self.db.transaction() as db:
+            yield db
 
     def _init(self) -> None:
+        if self.db.dialect == "postgres":
+            self._init_postgres()
+            return
         with self.connect() as db:
             have = db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='meta'"
@@ -236,6 +369,39 @@ class NotebookStore:
                 # a file made by an earlier version: add what is new, then record the version
                 db.executescript("BEGIN;" + _CHAT_SCHEMA + _STUDIO_SCHEMA + "COMMIT;")
                 db.execute("UPDATE meta SET value = ? WHERE key = 'schema'", (str(SCHEMA_VERSION),))
+        if meta.get("embedder") != self.embedder_id or meta.get("dimension") != str(self.dimension):
+            raise Conflict(
+                f"This library was indexed with {meta.get('embedder')}; "
+                f"{self.embedder_id} needs the documents read again first."
+            )
+
+    def _init_postgres(self) -> None:
+        with self.db.transaction() as conn:
+            conn.execute("SELECT pg_advisory_xact_lock(?)", (LOCK_KEY,))
+            conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{self.schema}"')
+            have = conn.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'").fetchone()
+            if have is None:
+                # in `public`, where the migrations look for it: this connection's search path
+                # starts with the product's own schema, and an extension made there is invisible
+                # to them
+                conn.execute("CREATE EXTENSION IF NOT EXISTS vector SCHEMA public")
+            fresh = (
+                conn.execute(
+                    "SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema = ? AND table_name = 'meta'",
+                    (self.schema,),
+                ).fetchone()
+                is None
+            )
+            conn.execute(_pg_ddl(self.dimension))
+            if fresh:
+                conn.execute(
+                    "INSERT INTO meta(key, value) "
+                    "VALUES ('schema', ?), ('embedder', ?), ('dimension', ?)",
+                    (str(SCHEMA_VERSION), self.embedder_id, str(self.dimension)),
+                )
+                return
+            meta = dict(conn.execute("SELECT key, value FROM meta").fetchall())
         if meta.get("embedder") != self.embedder_id or meta.get("dimension") != str(self.dimension):
             raise Conflict(
                 f"This library was indexed with {meta.get('embedder')}; "
@@ -772,6 +938,14 @@ class NotebookStore:
         """A document's passages and their vectors, in place of what it had."""
         db.execute("DELETE FROM chunks WHERE document_id = ?", (did,))
         for position, (p, v) in enumerate(zip(passages, vectors, strict=True)):
+            if self.db.dialect == "postgres":  # terms and vector in the passage's own row
+                db.execute(
+                    "INSERT INTO chunks(document_id, position, content, start_line, end_line, "
+                    "terms, embedding) VALUES (?,?,?,?,?,?,CAST(? AS vector))",
+                    (did, position, p.text, p.start_line, p.end_line, terms(p.text),
+                     vector_text(v)),
+                )  # fmt: skip
+                continue
             cid = db.execute(
                 "INSERT INTO chunks(document_id, position, content, start_line, end_line) "
                 "VALUES (?,?,?,?,?)",
@@ -1203,7 +1377,22 @@ class NotebookStore:
     def record_usage(
         self, tenant: str, user: str, kind: str, quantity: float, unit: str, **meta: Any
     ) -> None:
-        """Note something billable done for a person (rule 9). The desktop has no billing."""
+        """Note something billable done for a person (rule 9): a row in the platform's
+        `usage_events` table on the web (what billing reads), best effort so a failure to note it
+        never fails the work. The desktop has no billing."""
+        if self.db.dialect != "postgres":
+            return
+        try:
+            with self.db.connect() as db:
+                db.execute(
+                    "INSERT INTO public.usage_events "
+                    "(id, tenant_id, product_id, user_id, kind, quantity, unit, meta) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS json))",
+                    (uuid.uuid4(), tenant, PRODUCT_ID, user, kind, quantity, unit,
+                     json.dumps(meta)),
+                )  # fmt: skip
+        except Exception:  # noqa: BLE001 - usage is noted, not required
+            log.warning("could not record usage", exc_info=True)
 
     def usage(self, tenant: str, user: str) -> dict[str, int]:
         """What a person holds: notebooks, sources and the bytes of their files and notes."""

@@ -15,11 +15,15 @@ exclude = ["products/hello", "products/media-demo", "services/comfyui"]   # conf
 [tool.uv.sources]
 wasifyai-api = { workspace = true }
 wasifyai-media-worker = { workspace = true }
+wasifyai-engine-worker = { workspace = true }
 wasifyai-contracts = { workspace = true }
 wasifyai-platform-sdk = { workspace = true }
 wasifyai-notebooks = { workspace = true }
 wasifyai-voice = { workspace = true }
 wasifyai-video = { workspace = true }
+wasifyai-model3d = { workspace = true }
+wasifyai-creative = { workspace = true }
+wasifyai-training = { workspace = true }
 
 [tool.ruff]
 line-length = 100
@@ -40,13 +44,15 @@ extend-immutable-calls = ["fastapi.Depends"]
 
 [tool.pyright]
 include = ["services", "packages", "products"]
-# its libraries (torch, MuseTalk) exist only inside its own environment
-exclude = ["services/api/src/wasifyai_api/lipsync_server", "services/comfyui", ".lipsync", "**/node_modules", "**/.venv"]
+# their libraries (torch, EchoMimic, AI Toolkit) exist only inside their own environments
+exclude = ["services/api/src/wasifyai_api/lipsync_server", "services/api/src/wasifyai_api/music_analysis_worker.py", "services/api/src/wasifyai_api/training_aitk_run.py", "services/comfyui", ".lipsync", "**/node_modules", "**/.venv"]
 typeCheckingMode = "standard"
 # Test helper modules (conftest, fake_comfyui) are imported by name; pytest puts their folders on
 # sys.path, so tell pyright too.
-extraPaths = ["products/wasifyai-image/tests", "products/wasifyai-video/tests", "products/wasifyai-assistant/tests", "products/wasifyai-notebooks/tests", "products/wasifyai-voice/tests", "services/media-worker/tests"]
+extraPaths = ["products/wasifyai-image/tests", "products/wasifyai-video/tests", "products/wasifyai-model3d/tests", "products/wasifyai-creative/tests", "products/wasifyai-training/tests", "products/wasifyai-assistant/tests", "products/wasifyai-notebooks/tests", "products/wasifyai-voice/tests", "services/media-worker/tests", "services/engine-worker/tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# a single test over 10 minutes dumps every thread's stack to the log (the slowest real one is about 2)
+faulthandler_timeout = 600
 testpaths = ["services", "packages", "products"]

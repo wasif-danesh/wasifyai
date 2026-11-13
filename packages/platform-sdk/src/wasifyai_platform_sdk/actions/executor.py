@@ -23,6 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from wasifyai_platform_sdk import tracing
 from wasifyai_platform_sdk.actions.audit import (
     ApprovalRecord,
     ApprovalStore,
@@ -42,6 +43,7 @@ from wasifyai_platform_sdk.actions.model import (
     Readiness,
     RunBinding,
     parse_origin,
+    scope_of,
     surface_of,
 )
 from wasifyai_platform_sdk.actions.policy import WINDOW_POLICY, ApprovalPolicy, decide
@@ -56,6 +58,7 @@ from wasifyai_platform_sdk.context import (
 )
 from wasifyai_platform_sdk.errors import RunError
 from wasifyai_platform_sdk.identity import Identity
+from wasifyai_platform_sdk.principal import Principal
 from wasifyai_platform_sdk.tools import ToolUnavailable
 from wasifyai_platform_sdk.usage import UsageEvent, UsageRecorder, record_safely
 
@@ -64,6 +67,7 @@ log = logging.getLogger(__name__)
 ACTION_RUN = "action.run"  # the usage event of every call that ran an action
 MAX_WAIT_SECONDS = 50.0  # below the 60 s tool limits of the agents' clients (ADR-0069 decision 7)
 APPROVAL_POLL_S = 0.2
+SETTLE_POLL_S = 1.0  # how often a kept job's run is read while waiting for it
 MAX_PROBLEMS = 5
 
 Emit = Callable[[dict[str, Any]], None]
@@ -79,6 +83,11 @@ class ActionContext:
     host: ActionHost
     executor: "ActionExecutor"
     emit: Emit
+    # the connection behind the call (ADR-0092), with its scopes and folders; None when
+    # the person in the window or the assistant asked
+    principal: Principal | None = None
+    # told the id of the product run a run binding starts (a job keeps it: stage J3)
+    on_run: Callable[[str], None] | None = None
 
     @property
     def deps(self) -> Any:
@@ -139,6 +148,7 @@ class ActionExecutor:
         self.usage = usage
         self.library: Mapping[str, LibraryKind] = library or {}
         self.jobs = jobs or JobBook()
+        self._writes: set[asyncio.Future[Any]] = set()  # job records being written
 
     # ---- readiness ----------------------------------------------------------------------
 
@@ -159,7 +169,7 @@ class ActionExecutor:
         params: Mapping[str, Any] | None,
         origin: str,
         *,
-        actor: Identity | None = None,
+        actor: "Identity | Principal | None" = None,
         policy: ApprovalPolicy | None = None,
         wait_seconds: float | None = None,
         on_event: Emit | None = None,
@@ -173,10 +183,46 @@ class ActionExecutor:
         answers `running` with a `job_id`. Without it the call waits for the end.
         `approval_id` is how a caller comes back with the person's yes (see `decide_approval`).
         `person_approved` is for the window only: its own click is the approval. Nothing that
-        comes from an agent can set it."""
+        comes from an agent can set it.
+        A `Principal` as `actor` (an MCP connection) is held to its scopes: an action
+        outside them is refused with `not_offered` (ADR-0092).
+        Each call is one span (stage O1), named by the action when the catalogue has it."""
+        known = action_id if self.registry.get(action_id) is not None else "unknown"
+        with tracing.span(
+            "action", {"action": known, "origin": str(origin).split(":", 1)[0]}
+        ) as current:
+            result = await self._run_action(
+                action_id, params, origin, actor=actor, policy=policy, wait_seconds=wait_seconds,
+                on_event=on_event, approval_id=approval_id, approval_wait_s=approval_wait_s,
+                person_approved=person_approved,
+            )  # fmt: skip
+            tracing.set_attrs(current, outcome=result.status, code=result.code or None)
+            if result.status == "error":
+                tracing.fail(current, result.code or "error")
+            return result
+
+    async def _run_action(
+        self,
+        action_id: str,
+        params: Mapping[str, Any] | None,
+        origin: str,
+        *,
+        actor: "Identity | Principal | None",
+        policy: ApprovalPolicy | None,
+        wait_seconds: float | None,
+        on_event: Emit | None,
+        approval_id: str | None,
+        approval_wait_s: float,
+        person_approved: bool,
+    ) -> ActionResult:
         started = time.monotonic()
         origin = parse_origin(origin)
-        who = actor or _actor_of_current_run()
+        principal: Principal | None
+        who: Identity
+        if isinstance(actor, Principal):
+            principal, who = actor, actor.identity
+        else:
+            principal, who = None, actor or _actor_of_current_run()
         emit = on_event or _ignore
         action = self.registry.get(action_id)
         if action is None:
@@ -198,6 +244,11 @@ class ActionExecutor:
                 action, who, origin, started,
                 _refused(action, "not_offered", f"{action.title} is not available here."),
             )  # fmt: skip
+        if principal is not None and not principal.may(scope_of(action)):
+            return await self._finish(
+                action, who, origin, started,
+                _refused(action, "not_offered", principal.refusal(scope_of(action))),
+            )  # fmt: skip
         try:
             model = action.input.model_validate(dict(params or {}))
         except ValidationError as e:
@@ -208,7 +259,7 @@ class ActionExecutor:
 
         token = _ensure_context(who, action)
         try:
-            ctx = ActionContext(who, origin, action, self.host, self, emit)
+            ctx = ActionContext(who, origin, action, self.host, self, emit, principal)
             ready = await self.readiness(action)
             if ready.state == "unavailable":
                 why = ready.reason or f"{action.title} is unavailable."
@@ -352,27 +403,50 @@ class ActionExecutor:
         graph_input = await made if asyncio.iscoroutine(made) else made
         assert isinstance(graph_input, dict)
         noun = bind.noun
-        async for ev in self.host.run_product(bind.product_id, graph_input):
-            kind = ev.get("event")
-            if kind == "job_progress":
-                ctx.emit(ev)
-            elif kind == "error":
-                return Outcome.error(
-                    f"The {noun} could not be made: {ev.get('message', 'it failed')}.",
-                    str(ev.get("code") or "failed"),
-                )
-            elif kind == "done":
-                outputs = ev.get("outputs") or {}
-                if outputs.get("status") == "refused":
-                    refusal = outputs.get("refusal") or {}
-                    reason = refusal.get("message", "it was not allowed")
-                    return Outcome(
-                        "refused", {"message": reason}, f"The {noun} was not made: {reason}",
-                        str(refusal.get("code") or "refused"),
-                    )  # fmt: skip
-                built = bind.result(outputs, model)
-                return built or Outcome.error(f"The {noun} could not be made.")
+        run_id: str | None = None
+        try:
+            async for ev in self.host.run_product(bind.product_id, graph_input):
+                if run_id is None and ev.get("run_id"):
+                    run_id = str(ev["run_id"])
+                    if ctx.on_run is not None:
+                        ctx.on_run(run_id)
+                kind = ev.get("event")
+                if kind == "job_progress":
+                    ctx.emit(ev)
+                elif kind in ("error", "done"):
+                    return self._ended(bind, model, ev)
+        except asyncio.CancelledError:
+            # whoever waited stopped: the run stops too, or it would go on making (and hold the
+            # one-clip-at-a-time rule) with nobody to take what it makes (ADR-0090 CS4). A job
+            # (`on_run`) is stopped by `cancel_job`, which stops its run first.
+            if run_id is not None and ctx.on_run is None:
+                try:
+                    await self.host.cancel_run(ctx.actor.tenant_id, run_id)
+                except Exception:
+                    log.warning("a stopped action's run could not be stopped")
+            raise
         return Outcome.error(f"The {noun} could not be made.")
+
+    def _ended(self, bind: RunBinding, model: BaseModel, ev: dict[str, Any]) -> Outcome:
+        """The outcome of a product run from its last event (`error` or `done`)."""
+        noun = bind.noun
+        if ev.get("event") == "error":
+            # a product's message is often a whole sentence already: one full stop, not two
+            reason = str(ev.get("message") or "it failed").rstrip().rstrip(".")
+            return Outcome.error(
+                f"The {noun} could not be made: {reason}.",
+                str(ev.get("code") or "failed"),
+            )
+        outputs = ev.get("outputs") or {}
+        if outputs.get("status") == "refused":
+            refusal = outputs.get("refusal") or {}
+            reason = refusal.get("message", "it was not allowed")
+            return Outcome(
+                "refused", {"message": reason}, f"The {noun} was not made: {reason}",
+                str(refusal.get("code") or "refused"),
+            )  # fmt: skip
+        built = bind.result(outputs, model)
+        return built or Outcome.error(f"The {noun} could not be made.")
 
     async def _as_job(
         self,
@@ -383,16 +457,21 @@ class ActionExecutor:
         approver: str,
         seconds: float,
     ) -> ActionResult:
-        job = self.jobs.start(
+        job = await self.jobs.start(
             action.id, ctx.actor.tenant_id, ctx.actor.user_id, ctx.origin,
-            cancellable=isinstance(action.bind, CallBinding),
+            cancellable=True, params=model.model_dump(mode="json"), product_id=action.product,
         )  # fmt: skip
 
         def note(ev: dict[str, Any]) -> None:
-            job.progress = {k: v for k, v in ev.items() if k != "event"}
+            self._keep(self.jobs.progressed(job, {k: v for k, v in ev.items() if k != "event"}))
             ctx.emit(ev)
 
-        job_ctx = ActionContext(ctx.actor, ctx.origin, action, self.host, self, note)
+        def ran(run_id: str) -> None:
+            self._keep(self.jobs.ran(job, run_id))
+
+        job_ctx = ActionContext(
+            ctx.actor, ctx.origin, action, self.host, self, note, ctx.principal, on_run=ran
+        )
 
         async def work() -> None:
             try:
@@ -400,13 +479,10 @@ class ActionExecutor:
                 result = _result_of(action, outcome).model_copy(update={"job_id": job.id})
                 status = result.status if result.status in ("ok", "refused", "error") else "error"
             except asyncio.CancelledError:
-                result = ActionResult(
-                    status="error", action_id=action.id, code="cancelled", job_id=job.id,
-                    text="It was stopped.",
-                )  # fmt: skip
+                result = _stopped(action.id, job.id)
                 status = "cancelled"
             await self._finish(action, ctx.actor, ctx.origin, started, result, approver, ran=True)
-            self.jobs.finish(job, status, result)  # type: ignore[arg-type]
+            await self.jobs.finish(job, status, result)  # type: ignore[arg-type]
 
         job.task = asyncio.create_task(work())
         if await self.jobs.wait(job, seconds) and job.result is not None:
@@ -418,14 +494,90 @@ class ActionExecutor:
         )  # fmt: skip
         return await self._finish(action, ctx.actor, ctx.origin, started, running, approver)
 
+    def _keep(self, write: Any) -> None:
+        """Write a job's change to the store without holding up the work (a failed write is
+        logged: the job goes on)."""
+        task = asyncio.ensure_future(write)
+        self._writes.add(task)
+
+        def done(t: asyncio.Future[Any]) -> None:
+            self._writes.discard(t)
+            if not t.cancelled() and t.exception() is not None:
+                log.warning("a job could not be saved: %s", t.exception())
+
+        task.add_done_callback(done)
+
     async def cancel_job(self, job: Job) -> bool:
-        """Stop a job that can be stopped. A child run of a product graph cannot be: once started
-        it finishes and is kept in the library."""
-        if job.status != "running" or not job.cancellable or job.task is None:
+        """Stop a job. A job that started a product run stops that run too (on this computer the
+        speech runtime is restarted; an engine worker is told to stop its job), so the work
+        stops, not only the waiting. A job a restarted engine kept is stopped through its run."""
+        if job.status != "running" or not job.cancellable:
             return False
-        job.task.cancel()
-        await asyncio.gather(job.task, return_exceptions=True)
+        if job.run_id is not None:
+            try:
+                await self.host.cancel_run(job.tenant_id, job.run_id)
+            except Exception:
+                log.warning("the run of job %s could not be stopped", job.id)
+        if job.task is not None:
+            job.task.cancel()
+            await asyncio.gather(job.task, return_exceptions=True)
+            return True
+        await self._close(job, "cancelled", _stopped(job.action_id, job.id))
         return True
+
+    async def settle(self, job: Job) -> Job:
+        """A job a restarted engine found running in the store: how it stands now. Its product
+        run says, once it has ended; work that ran in the engine's own process ended with it."""
+        if job.status != "running" or job.live:
+            return job
+        if job.run_id is None:
+            await self._close(job, "error", _interrupted(job.action_id, job.id))
+            return job
+        try:
+            state = await self.host.run_state(job.tenant_id, job.run_id)
+        except Exception:
+            log.warning("the run of job %s could not be read", job.id)
+            return job
+        status = state.get("status")
+        if status in ("running", "waiting_job", "waiting_input"):
+            return job
+        if status == "cancelled":
+            await self._close(job, "cancelled", _stopped(job.action_id, job.id))
+            return job
+        action = self.registry.get(job.action_id)
+        end = state.get("end")
+        if action is None or not isinstance(action.bind, RunBinding) or end is None:
+            await self._close(job, "error", _interrupted(job.action_id, job.id))
+            return job
+        try:
+            model = action.input.model_validate(job.params or {})
+            outcome = self._ended(action.bind, model, end)
+        except Exception:
+            log.exception("the end of job %s could not be read", job.id)
+            outcome = Outcome.error("That could not be done.", "failed")
+        result = _result_of(action, outcome).model_copy(update={"job_id": job.id})
+        kept = result.status if result.status in ("ok", "refused", "error") else "error"
+        await self._close(job, kept, result)
+        return job
+
+    async def wait_job(self, job: Job, seconds: float) -> Job:
+        """Wait for a job: this process's on its event, a kept one by reading its run."""
+        if job.live:
+            await self.jobs.wait(job, seconds)
+            return job
+        end = time.monotonic() + max(0.0, seconds)
+        while True:
+            await self.settle(job)
+            if job.status != "running" or time.monotonic() >= end:
+                return job
+            await asyncio.sleep(min(SETTLE_POLL_S, max(0.0, end - time.monotonic())))
+
+    async def _close(self, job: Job, status: str, result: ActionResult) -> None:
+        """End a kept job: its record, and the audit entry its first engine never wrote."""
+        action = self.registry.get(job.action_id)
+        who = Identity(job.tenant_id, job.user_id)
+        await self._finish(action, who, job.origin, time.monotonic(), result, ran=True)
+        await self.jobs.finish(job, status, result)  # type: ignore[arg-type]
 
     # ---- records ------------------------------------------------------------------------
 
@@ -496,6 +648,20 @@ def _waiting(action: Action, rec: ApprovalRecord) -> ActionResult:
         text=f"{action.title} needs the person's approval, which is asked for in the Wasify AI "
         f"window.{statement} Tell them to open the window, then try again.",
         output={"approval_id": rec.id},
+    )  # fmt: skip
+
+
+def _stopped(action_id: str, job_id: str) -> ActionResult:
+    return ActionResult(
+        status="error", action_id=action_id, code="cancelled", job_id=job_id,
+        text="It was stopped.",
+    )  # fmt: skip
+
+
+def _interrupted(action_id: str, job_id: str) -> ActionResult:
+    return ActionResult(
+        status="error", action_id=action_id, code="interrupted", job_id=job_id,
+        text="It stopped when the app closed, before it finished. Try again.",
     )  # fmt: skip
 
 

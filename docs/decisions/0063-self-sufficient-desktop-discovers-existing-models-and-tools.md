@@ -44,8 +44,7 @@ hand, and `external` mode for an already running ComfyUI. There is no discovery.
    shows the scanned folders with a switch to turn the scan off and to add or remove folders. The scan has a
    time and file-count budget, skips network and removable drives unless the person adds them, and avoids folders
    that make macOS ask for permission (Documents, Desktop, removable volumes) unless the person adds them.
-9. **Licences are shown, not granted.** The licence from the manifest or header is displayed when present.
-   We redistribute nothing from other tools.
+9. **We redistribute nothing from other tools.**
 
 ## Scope of the scan (owner decision, 2026-10-15)
 
@@ -98,5 +97,4 @@ the state changes from `later` to `can_use` when that stage ships.
 | 6 nothing used until selected | done for catalogue image files (one click); language models wait for stage D |
 | 7 running tools detected | detected and shown; selecting one as a provider is not built |
 | 8 private and bounded | done: local settings store, budgets, switch and extra folders in Settings, permission-gated folders offered |
-| 9 licences shown | done where the file says one |
 | (added) does it fit | done: `desktop_fit.py`; a model that cannot fit is not offered and is refused before it runs (see `docs/desktop-profile.md`) |

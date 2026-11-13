@@ -7,6 +7,7 @@ from wasifyai_platform_sdk import (
     SecretsUnavailable,
     backends_for,
     check_backend,
+    default_backend,
     family,
     validate_config,
 )
@@ -20,8 +21,17 @@ def test_which_backends_can_serve_which_capability():
         "comfyui-local",
         "comfy-api",
         "openai-images",
+        "fal",
     }
-    assert {b.id for b in backends_for("video.generate")} == {"comfyui-local", "comfy-api"}
+    assert {b.id for b in backends_for("video.generate")} == {"comfyui-local", "comfy-api", "fal"}
+    # fal.ai is not set up for painting over a picture or making a clip longer (ADR-0095)
+    assert "fal" not in {b.id for b in backends_for("image.inpaint")}
+    assert "fal" not in {b.id for b in backends_for("video.extend")}
+    # speech and 3D models: the service's engine workers, or fal.ai
+    for cap in ("speech.speak", "model3d.generate"):
+        assert {b.id for b in backends_for(cap)} == {"engine-workers", "fal"}
+        assert default_backend(cap) == "engine-workers"
+    assert default_backend("image.generate") == "comfyui-local"
     assert not BACKENDS["comfy-api"].local_gpu and BACKENDS["comfyui-local"].local_gpu
 
 
@@ -122,6 +132,39 @@ async def test_checks_use_the_configured_address_and_the_local_default():
     assert str(seen[1].url) == "http://local:8188/system_stats"
     await check_backend("comfy-api", {}, KEY, "x", http)
     assert str(seen[2].url).startswith("https://cloud.comfy.org/")
+
+
+@pytest.mark.parametrize(
+    ("status", "ok", "words"),
+    [(404, True, "fal.ai accepted the key"), (401, False, "did not accept the key"),
+     (403, False, "did not accept the key"), (429, False, "too many requests"),
+     (500, False, "answered 500")],
+)  # fmt: skip
+async def test_a_fal_key_is_checked_without_making_anything(status, ok, words):
+    http, seen = client(status)
+    out = await check_backend("fal", {"model": "fal-ai/ltx-2/text-to-video/fast"}, KEY, "x", http)
+    assert out.ok is ok and words in out.message and KEY not in out.message
+    assert str(seen[0].url) == (
+        "https://queue.fal.run/fal-ai/ltx-2/requests/00000000-0000-0000-0000-000000000000/status"
+    )
+    assert seen[0].headers["authorization"] == f"Key {KEY}"
+
+
+async def test_the_engine_workers_need_no_check():
+    http, seen = client(500)
+    assert (await check_backend("engine-workers", {}, None, "x", http)).ok and seen == []
+
+
+def test_fal_needs_a_model_and_a_key_and_is_offered_only_where_it_can_run():
+    config = validate_config("fal", "speech.speak", {"model": "fal-ai/kokoro"}, KEY, False)
+    assert config == {"model": "fal-ai/kokoro"}
+    for capability, cfg, key, words in [
+        ("image.generate", {}, KEY, "Model is required"),
+        ("image.generate", {"model": "fal-ai/flux-2"}, None, "fal.ai needs an api key"),
+        ("image.inpaint", {"model": "fal-ai/flux-2"}, KEY, "cannot serve image.inpaint"),
+    ]:
+        with pytest.raises(InvalidBackendConfig, match=words):
+            validate_config("fal", capability, cfg, key, False)
 
 
 async def test_an_unreachable_backend_is_reported_not_raised():

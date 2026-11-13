@@ -3,6 +3,8 @@ download, against a fake Hugging Face."""
 
 import asyncio
 import hashlib
+import json
+import logging
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,7 +28,8 @@ from wasifyai_api.desktop_hub import (
 )
 from wasifyai_api.desktop_models import DownloadManager, ModelsService
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.services import ApiServices
+from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_platform_sdk import Identity
 
 COMMIT = "a" * 40
@@ -210,9 +213,7 @@ async def test_search_keeps_what_the_app_can_run_and_names_the_rest(tmp_path):
         "acme/Demo-GGUF"
     ]  # the embedding model and the non-GGUF go
     item = out["items"][0]
-    assert (
-        item["runnable"] is True and item["license"] == "apache-2.0" and item["downloads"] == 1000
-    )
+    assert item["runnable"] is True and "license" not in item and item["downloads"] == 1000
     emb = await hub.search("embed", capability="embedding")
     assert [i["id"] for i in emb["items"]] == ["acme/Embed-GGUF"]
 
@@ -238,11 +239,11 @@ async def test_an_answer_is_cached_and_an_offline_hub_still_answers(tmp_path):
     assert out["stale"] is True and out["items"]
 
 
-async def test_a_repository_comes_with_its_variants_licence_and_template(tmp_path):
+async def test_a_repository_comes_with_its_variants_and_template(tmp_path):
     hub, _ = make(tmp_path, [])
     await hub.set_enabled(True)
     d = await hub.detail("acme/Demo-GGUF")
-    assert d["commit"] == COMMIT and d["license"] == "apache-2.0" and d["runnable"] is True
+    assert d["commit"] == COMMIT and "license" not in d and d["runnable"] is True
     assert (d["architecture"], d["context_length"], d["has_chat_template"]) == ("llama", 8192, True)
     assert [v["quant"] for v in d["variants"]] == ["", "Q4_K_M", "Q8_0"]
     with pytest.raises(HubError) as e:
@@ -261,7 +262,7 @@ async def test_the_confirmed_files_are_fetched_checked_and_placed_in_the_app_fol
     hub, models = make(tmp_path, calls)
     await hub.set_enabled(True)
     entry = await hub.build_download("acme/Demo-GGUF", ["Demo-Q4_K_M.gguf"], len(SMALL))
-    assert entry.id == "hub:acme/Demo-GGUF" and entry.licence == "apache-2.0"
+    assert entry.id == "hub:acme/Demo-GGUF"
     (f,) = entry.files
     assert f.url == f"https://huggingface.co/acme/Demo-GGUF/resolve/{COMMIT}/Demo-Q4_K_M.gguf"
     assert f.folder == "language/acme--Demo-GGUF" and f.sha256 == sha(SMALL)
@@ -302,9 +303,10 @@ async def test_a_gated_model_is_not_fetched_without_a_token(tmp_path):
 
 def app_for(hub: HubService, models: ModelsService) -> TestClient:
     app = FastAPI()
+    app.state.services = ApiServices()
     app.include_router(desktop_hub.router)
-    app.state.desktop_hub = hub
-    app.state.desktop_discovery = SimpleNamespace(items=[], running=True)
+    app.state.services.desktop_hub = hub
+    app.state.services.desktop_discovery = SimpleNamespace(items=[], running=True)
     app.dependency_overrides[get_identity] = lambda: Identity("local", "u1", "user")
     return TestClient(app)
 
@@ -360,3 +362,52 @@ async def test_only_files_this_app_downloaded_can_be_removed(tmp_path):
         await desktop_hub.remove_downloaded(models, models.models_dir / ".." / "elsewhere.gguf")
         is False
     )
+
+
+# ---- the token (stage F4; ADR-0092) -----------------------------------------------------------
+
+
+async def test_the_token_lives_in_the_secret_store_and_reaches_huggingface_only(tmp_path):
+    from wasifyai_platform_sdk import InMemorySecretStore
+
+    calls: list[str] = []
+    hub, models = make(tmp_path, calls)
+    secrets = InMemorySecretStore()
+    hub = HubService(hub._store, hub.client, secrets=secrets)
+    hub.models = models
+    await hub.load()
+    assert hub.token_set is False and hub.client.has_token is False
+    with pytest.raises(HubError) as e:
+        await hub.set_token("not a token")
+    assert e.value.code == "bad_token"
+    await hub.set_token("hf_abcdefghijklmnopqrstuvwxyz0123")
+    assert hub.token_set is True and hub.client.token == "hf_abcdefghijklmnopqrstuvwxyz0123"
+    assert models.downloads._token == "hf_abcdefghijklmnopqrstuvwxyz0123"
+    assert await secrets.names() == ["hf.token"]
+    again = HubService(hub._store, hub.client, secrets=secrets)
+    await again.load()
+    assert again.token_set is True  # found again after a restart
+    await hub.clear_token()
+    assert hub.token_set is False and hub.client.has_token is False
+
+
+def test_the_token_route_says_set_or_not_and_never_answers_the_token(tmp_path, caplog):
+    from wasifyai_platform_sdk import InMemorySecretStore
+
+    caplog.set_level(logging.DEBUG)
+    calls: list[str] = []
+    hub, models = make(tmp_path, calls)
+    hub = HubService(hub._store, hub.client, secrets=InMemorySecretStore())
+    hub.models = models
+    token = "hf_abcdefghijklmnopqrstuvwxyz0123"
+    with app_for(hub, models) as c:
+        state = c.get("/desktop/hub/state").json()
+        assert state["token_set"] is False and state["can_save_token"] is True
+        bad = c.put("/desktop/hub/token", json={"token": "nope"})
+        assert bad.status_code == 400 and "hf_" in bad.json()["detail"]
+        assert c.put("/desktop/hub/token", json={"token": token}).json() == {"token_set": True}
+        state = c.get("/desktop/hub/state").json()
+        assert state["token_set"] is True and state["has_token"] is True
+        assert token not in json.dumps(state)
+        assert c.delete("/desktop/hub/token").json() == {"token_set": False}
+    assert token not in caplog.text

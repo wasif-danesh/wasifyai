@@ -123,6 +123,42 @@ describe("the sources tree", () => {
     expect([...second]).toEqual(["s3"]);
   });
 
+  it("renames and removes in boxes of the page, never with window.confirm or window.prompt", async () => {
+    // the app window has neither: they answer "no" at once
+    vi.stubGlobal("confirm", () => {
+      throw new Error("window.confirm is not available in the app window");
+    });
+    vi.stubGlobal("prompt", () => {
+      throw new Error("window.prompt is not available in the app window");
+    });
+    const p = pane();
+    await userEvent.click(screen.getByLabelText("Rename s3.pdf"));
+    const field = screen.getByLabelText("Name");
+    expect(field).toHaveProperty("value", "s3.pdf");
+    await userEvent.clear(field);
+    await userEvent.type(field, "budget.pdf{Enter}");
+    expect(p.onRename).toHaveBeenCalledWith(expect.objectContaining({ id: "s3" }), "budget.pdf");
+
+    await userEvent.click(screen.getByLabelText("Remove s3.pdf"));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(p.onRemove).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByLabelText("Remove s3.pdf"));
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(p.onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: "s3" }));
+
+    await userEvent.click(screen.getByLabelText("Remove folder Reports"));
+    expect(screen.getByText(/and the 2 sources in it/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(p.onRemoveFolder).toHaveBeenCalledWith(expect.objectContaining({ id: "f1" }));
+    await userEvent.click(screen.getByLabelText("Rename Reports"));
+    await userEvent.type(screen.getByLabelText("Name"), "Reports 2025{Enter}"); // the name starts selected
+    expect(p.onRenameFolder).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "f1" }),
+      "Reports 2025",
+    );
+    vi.unstubAllGlobals();
+  });
+
   it("shows a half-ticked folder as mixed", () => {
     pane({ unticked: new Set(["s1"]) });
     const box = screen.getByLabelText("Use everything in Reports") as HTMLInputElement;
@@ -188,8 +224,8 @@ describe("answers with citations", () => {
         scope="2 sources"
       />,
     );
-    expect(screen.getByText(/Searched 2 sources, found 3 passages/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: /Source 1: budget.pdf/ }));
+    expect(await screen.findByText(/Searched 2 sources, found 3 passages/)).toBeTruthy();
+    await userEvent.click(await screen.findByRole("button", { name: /Source 1: budget.pdf/ }));
     expect(onOpen).toHaveBeenCalledWith(citation);
     expect(screen.getByText("[7]")).toBeTruthy(); // not a passage of this answer: plain text
   });
@@ -456,6 +492,41 @@ describe("the notebooks list", () => {
     await userEvent.click(screen.getByText("Misc"));
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: "n3" }));
   });
+
+  it("renames and deletes a notebook in boxes of the page, never with window.confirm or window.prompt", async () => {
+    // the app window has neither: they answer "no" at once
+    vi.stubGlobal("confirm", () => {
+      throw new Error("window.confirm is not available in the app window");
+    });
+    vi.stubGlobal("prompt", () => {
+      throw new Error("window.prompt is not available in the app window");
+    });
+    const onRename = vi.fn();
+    const onRemove = vi.fn();
+    render(
+      <NotebookList
+        notebooks={[nb("n1", "Thesis")]}
+        onOpen={vi.fn()}
+        onCreate={vi.fn()}
+        onRename={onRename}
+        onRemove={onRemove}
+      />,
+    );
+    await userEvent.click(screen.getByLabelText("Rename Thesis"));
+    const field = screen.getByLabelText("Name");
+    expect(field).toHaveProperty("value", "Thesis");
+    await userEvent.type(field, "Thesis 2026{Enter}"); // the name starts selected
+    expect(onRename).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }), "Thesis 2026");
+
+    await userEvent.click(screen.getByLabelText("Delete Thesis"));
+    expect(screen.getByText(/Its 2 sources will be deleted too/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onRemove).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByLabelText("Delete Thesis"));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(onRemove).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("a notebook", () => {
@@ -536,8 +607,8 @@ describe("a notebook", () => {
       );
     }
     render(<Harness />);
-    // a draft: the add-sources screen, and nothing to ask yet
-    expect(screen.getByText("Let’s start your notebook")).toBeTruthy();
+    // a draft: the add-sources screen, and nothing to ask yet (the chat is a separate chunk, so wait for it)
+    expect(await screen.findByText("Let’s start your notebook")).toBeTruthy();
     expect(screen.getAllByText("Add a source first.").length).toBeGreaterThan(0); // chat and Studio
     fireEvent.change(screen.getByLabelText("Choose files"), {
       target: { files: [new File(["x"], "budget.pdf")] },

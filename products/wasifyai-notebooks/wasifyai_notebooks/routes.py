@@ -17,19 +17,21 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
-from wasifyai_platform_sdk import Identity, RouteDeps, VoiceEngineError
+from wasifyai_platform_sdk import (
+    Identity,
+    RouteDeps,
+    SaveRefused,
+    SaveTo,
+    VoiceEngineError,
+    write_to_path,
+)
+from wasifyai_platform_sdk.actions.helpers import save_copy
 from wasifyai_platform_sdk.search import search_text
 
 from wasifyai_notebooks import hardening
 from wasifyai_notebooks.components import Unavailable
 from wasifyai_notebooks.files import FileStore, artifact_key, original_key
 from wasifyai_notebooks.overview import AUDIO_FILE, NotPossible, Voicer, choose_voices
-from wasifyai_notebooks.quotas import (
-    QuotaExceeded,
-    active_limits,
-    check_new_notebook,
-    check_new_source,
-)
 from wasifyai_notebooks.reader_install import InstallError
 from wasifyai_notebooks.retrieval import retrieve
 from wasifyai_notebooks.runtime import NotAvailable, Runtime, runtime_for
@@ -152,7 +154,7 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     async def reindex(identity: Identity, nid: str) -> None:
         """Keep the notebook findable in My creations search by its title and its sources' names
         (ADR-0041): at once, so it does not wait for the platform's periodic check. Best effort."""
-        index = getattr(deps.state, "creation_index", None)
+        index = deps.state.creation_index
         if index is None:
             return
         try:
@@ -181,8 +183,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             raise HTTPException(404, str(e)) from None
         except Conflict as e:
             raise HTTPException(409, str(e)) from None
-        except QuotaExceeded as e:
-            raise HTTPException(429, str(e)) from None
 
     # ---- components ------------------------------------------------------------------------
 
@@ -217,9 +217,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         body: NewNotebook, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         r = rt()
-        limits = await active_limits(deps.state)
-        if limits:
-            await call(check_new_notebook, limits, r.store, identity.tenant_id, identity.user_id)
         made = await call(
             r.store.create_notebook, identity.tenant_id, identity.user_id, body.title.strip()
         )
@@ -314,12 +311,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
         nid: str, body: NewNote, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
         r = rt()
-        limits = await active_limits(deps.state)
-        if limits:
-            await call(
-                check_new_source, limits, r.store, identity.tenant_id, identity.user_id, nid,
-                len(body.content.encode()),
-            )  # fmt: skip
         doc = await call(
             r.store.add_note, identity.tenant_id, identity.user_id, nid,
             title=body.title.strip(), content=body.content, folder_id=body.folder_id,
@@ -340,8 +331,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             raise HTTPException(404, "notebook not found")
         priority = BULK if len(files) > BULK_AFTER else INTERACTIVE
         fs = r.files_for(identity.tenant_id, identity.user_id)
-        limits = await active_limits(deps.state)
-        taken_bytes = 0
         created: list[dict[str, Any]] = []
         duplicates: list[dict[str, Any]] = []
         rejected: list[dict[str, str]] = []
@@ -355,17 +344,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
                         f"The file is larger than {hardening.MAX_BYTES // (1024 * 1024)} MB."
                     )
                 checked = await asyncio.to_thread(hardening.check_file, temp, name)
-                if limits:
-                    try:
-                        await call(
-                            check_new_source, limits, r.store, identity.tenant_id,
-                            identity.user_id, nid, size, adding=len(created),
-                            adding_bytes=taken_bytes,
-                        )  # fmt: skip
-                    except HTTPException as e:
-                        if e.status_code != 429:
-                            raise
-                        raise hardening.Refused(str(e.detail)) from None
                 from wasifyai_notebooks.store import new_id
 
                 did = new_id()
@@ -388,7 +366,6 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
                     duplicates.append(doc)
                 else:
                     created.append(doc)
-                    taken_bytes += size
             except hardening.Refused as e:
                 rejected.append({"name": name, "reason": str(e)})
             finally:
@@ -543,6 +520,41 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             "the file is no longer here",
         )  # fmt: skip
 
+    @router.post("/notebooks/{nid}/artifacts/{aid}/export")
+    async def export_artifact(
+        nid: str, aid: str, body: SaveTo | None = None, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, str]:
+        """Copy the output's file to the place the person chose in the Save As box (`path`), or
+        into the export folder when there is none: the desktop window cannot save a file by itself
+        (it has no download handler). The folder never overwrites; a copy gets a number."""
+        folder = deps.state.export_dir
+        if folder is None and not (body and body.path):
+            raise HTTPException(404, "saving to a folder is not available here")
+        r = rt()
+        art = await call(r.store.get_artifact, identity.tenant_id, identity.user_id, nid, aid)
+        if not art["file_name"]:
+            raise HTTPException(404, "this output has no file")
+        data = await asyncio.to_thread(
+            r.files_for(identity.tenant_id, identity.user_id).read_bytes,
+            artifact_key(nid, aid, art["file_name"]),
+        )
+        if data is None:
+            raise HTTPException(404, "the file is no longer here")
+        if body and body.path:
+            try:
+                path = await asyncio.to_thread(
+                    write_to_path, body.path, data, deps.state.desktop_dir
+                )
+            except SaveRefused as exc:
+                raise HTTPException(422, str(exc)) from None
+        else:
+            assert folder is not None  # the check above: no path means a folder
+            stem, _, ext = str(art["file_name"]).rpartition(".")
+            path = await asyncio.to_thread(
+                save_copy, Path(folder), stem or str(art["file_name"]), ext or "bin", data
+            )
+        return {"name": path.name, "path": str(path)}
+
     # ---- the audio overview's voices (ADR-0066, V2) ------------------------------------------
 
     voicer = Voicer()
@@ -564,7 +576,7 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
     ) -> dict[str, Any]:
         r = rt()
         art = await overview_art(identity, nid, aid)
-        engine = getattr(deps.state, "audio", None)
+        engine = deps.state.audio
         if engine is None:
             raise HTTPException(503, "Speech is not available in this deployment yet.")
         try:

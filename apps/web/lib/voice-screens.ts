@@ -37,7 +37,8 @@ export const VOICE_SCREENS: Record<VoiceScreenName, VoiceScreen> = {
   audiobook: { item: "voice.audiobook", title: "Audiobook", needs: ["speak"] },
   lipsync: { item: "voice.lipsync", title: "Lip sync", needs: ["lipsync"] },
   music: { item: "music.create", title: "Create music", needs: ["music"] },
-  tracks: { item: "music.library", title: "Your music", needs: ["music"] },
+  // "Your music" is the Library now (ADR-0093, U8): no menu item; its address goes to the Library
+  tracks: { item: "", title: "Your music", needs: ["music"] },
   lyrics: { item: "music.lyrics", title: "Lyrics", needs: ["music"] },
   separate: { item: "music.separate", title: "Split into parts", needs: ["separate"] },
 };
@@ -45,7 +46,8 @@ export const VOICE_SCREENS: Record<VoiceScreenName, VoiceScreen> = {
 export const isVoiceScreen = (name: string): name is VoiceScreenName =>
   Object.hasOwn(VOICE_SCREENS, name);
 
-export const voicePath = (name: VoiceScreenName) => `/voice/${name}`;
+export const voicePath = (name: VoiceScreenName) =>
+  name === "tracks" ? "/creations?show=songs" : `/voice/${name}`;
 
 /** What a page asks to open (the desktop's names) and where that is on the web. */
 export const TARGETS: Record<VoiceTarget, VoiceScreenName> = {

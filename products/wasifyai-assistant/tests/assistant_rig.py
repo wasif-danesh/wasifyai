@@ -44,6 +44,9 @@ class FakeHost:
         self.web_response: Any = None  # a `web.SearchResponse`
         self.web_page: Any = None  # a `web.WebPage`
         self.web_error: Exception | None = None
+        self.external: list[dict[str, Any]] = []  # what external_tools finds (ADR-0070)
+        self.external_searches: list[str] = []
+        self.trusted: set[tuple[str, str]] = set()  # (server, tool) pairs that run unasked
         self.passages: list[dict[str, Any]] = [
             {"notebook_id": "nb-1", "notebook": "Budget", "document_id": "d-1",
              "title": "plan.md", "text": "The launch budget is 40,000 dollars."}
@@ -65,6 +68,12 @@ class FakeHost:
         for ev in self.child_events:
             yield ev
 
+    async def run_state(self, tenant_id: str, run_id: str) -> dict[str, Any]:
+        return {"status": "unknown"}  # no runs outlive a test
+
+    async def cancel_run(self, tenant_id: str, run_id: str) -> bool:
+        return False
+
     async def search_creations(self, query: str, limit: int = 6) -> list[dict[str, Any]]:
         self.searches.append(query)
         return self.hits
@@ -77,6 +86,16 @@ class FakeHost:
 
     def facts(self) -> dict[str, Any]:
         return {}
+
+    async def external_tools(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        self.external_searches.append(query)
+        return list(self.external)[:limit]
+
+    async def external_servers(self) -> list[str]:
+        return sorted({str(t["server"]) for t in self.external})
+
+    async def external_trusted(self, connection: str, tool: str) -> bool:
+        return (connection, tool) in self.trusted
 
     async def web_search(self, query: str, limit: int = 5) -> Any:
         self.web_searches.append(query)
@@ -155,8 +174,10 @@ class Rig:
         return provider
 
     async def turn(self, text: str, conversation_id: str | None = None) -> tuple[dict, list[dict]]:
-        """Run one turn; return the final state and the custom events the run manager would emit."""
-        graph_input: dict[str, Any] = {"text": text}
+        """Run one turn in a chat where the person said the assistant may make things without a
+        card (`approval: "auto"`); return the final state and the custom events the run manager
+        would emit. `turn_with` is for a turn that tests the card."""
+        graph_input: dict[str, Any] = {"text": text, "approval": "auto"}
         if conversation_id:
             graph_input["conversation_id"] = conversation_id
         return await self.turn_with(graph_input)

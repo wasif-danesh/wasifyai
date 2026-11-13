@@ -10,7 +10,8 @@ import type {
   VoiceApi,
   VoiceModelInfo,
 } from "@wasifyai/client";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { SaveAsProvider } from "../save";
 import { MusicWorkspace } from "./MusicWorkspace";
 import { SpeakWorkspace } from "./SpeakWorkspace";
 import { TrackList } from "./TrackList";
@@ -24,16 +25,12 @@ const ev = (event: string, data: Record<string, unknown> = {}): ParsedEvent =>
 const model = (over: Partial<VoiceModelInfo> = {}): VoiceModelInfo => ({
   id: "kokoro-82m",
   title: "Kokoro 82M",
-  licence: "Apache-2.0",
   engine: "audiocpp",
   family: "kokoro_tts",
   tasks: ["speak"],
   recommended: ["speak"],
   languages: ["en-us"],
   sample_rate: 24000,
-  commercial_use: "yes",
-  licence_evidence: "https://huggingface.co/hexgrad/Kokoro-82M",
-  reviewed: "2026-10-16",
   measured: { platform: "darwin-arm64", speed_x: 8.6, memory_gb: 0.9, load_s: 4.7 },
   voices: [
     { id: "af_heart", label: "Heart", language: "en-us", gender: "female" },
@@ -150,39 +147,57 @@ describe("the model list", () => {
   it("names the recommended model, and says what a model that cannot be used yet needs", () => {
     const a = model();
     const b = model({ id: "vox", title: "VoxCPM2", recommended: [], state: "can_install" });
-    const c = model({ id: "nc", title: "NC", recommended: [], commercial_use: "no" });
+    const c = model({ id: "nc", title: "NC", recommended: [] });
     expect(modelOption(a, "speak")).toBe("Kokoro 82M (recommended)");
     expect(modelOption(b, "speak")).toBe("VoxCPM2 (not on this computer yet)");
-    expect(modelOption(c, "speak")).toBe("NC (not for commercial use)");
+    expect(modelOption(c, "speak")).toBe("NC"); // nothing is said about licences
     expect(pickModel([b, a], "speak")?.id).toBe("kokoro-82m");
     expect(pickModel([b, a], "speak", "vox")?.id).toBe("vox");
     expect(pickModel([], "speak")).toBeNull();
   });
 });
 
+// Radix's pointer handling and the media element need these in jsdom
+beforeAll(() => {
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
+  Element.prototype.scrollIntoView ??= () => {};
+  window.HTMLMediaElement.prototype.play = vi.fn(async () => {});
+  window.HTMLMediaElement.prototype.pause = vi.fn();
+});
+
+const stage = () => screen.getByRole("region", { name: "Result" });
+
 describe("text to speech", () => {
-  it("speaks with the chosen voice and option, then lists what was made", async () => {
-    const speeches = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([speech()]);
+  it("speaks with the chosen voice and option, then plays it on the stage", async () => {
+    const speeches = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([speech({ id: "s2", text: "Good morning", seconds: 3 })]);
     const runs = runsThat([ev("node", { label: "Making the speech" }), done]);
     const user = userEvent.setup();
     render(<SpeakWorkspace api={api({ speeches })} runs={runs} />);
-    await screen.findByLabelText("Model");
-    expect(screen.getByLabelText("Model")).toHaveValue("kokoro-82m");
-    expect(within(screen.getByLabelText("Built-in voice")).getAllByRole("option")).toHaveLength(2);
-    fireEvent.change(screen.getByLabelText(/Speed/), { target: { value: "1.5" } });
-    await user.selectOptions(screen.getByLabelText("Built-in voice"), "bm_george");
-    await user.type(screen.getByLabelText("Text"), "Good morning");
-    await user.click(screen.getByRole("button", { name: "Speak" }));
+    expect(await screen.findByRole("combobox", { name: "Model" })).toHaveTextContent("Kokoro 82M");
+    const voices = screen.getByRole("group", { name: "Voices" });
+    expect(within(voices).getAllByRole("radio")).toHaveLength(2);
+    expect(within(voices).getByRole("radio", { name: /Heart/ })).toBeChecked(); // the model's own default
+    await user.click(within(voices).getByRole("radio", { name: /George/ }));
+    await user.click(screen.getByText("For experts"));
+    fireEvent.keyDown(screen.getByRole("slider", { name: "Speed" }), { key: "ArrowRight" });
+    await user.type(screen.getByLabelText("What should it say?"), "Good morning");
+    await user.click(screen.getByRole("button", { name: "Make the speech" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[0]).toBe("wasifyai-voice");
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
       text: "Good morning",
       model: "kokoro-82m",
       voice: "bm_george",
-      options: { speed: 1.5 },
+      options: { speed: 1.05 },
     });
-    expect(await screen.findByText("Hello there")).toBeInTheDocument();
-    expect(screen.getByText("1:05")).toBeInTheDocument();
+    await waitFor(() => expect(stage()).toHaveAttribute("data-state", "result"));
+    expect(within(stage()).getByText("Good morning")).toBeInTheDocument();
+    expect(within(stage()).getByRole("button", { name: /Play Good morning/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open: Good morning" })).toBeInTheDocument(); // the recent strip
   });
 
   it("shows a refusal in words and keeps the text", async () => {
@@ -193,10 +208,10 @@ describe("text to speech", () => {
     ]);
     const user = userEvent.setup();
     render(<SpeakWorkspace api={api()} runs={runs} />);
-    await user.type(await screen.findByLabelText("Text"), "Hi");
-    await user.click(screen.getByRole("button", { name: "Speak" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("No such voice.");
-    expect(screen.getByLabelText("Text")).toHaveValue("Hi");
+    await user.type(await screen.findByLabelText("What should it say?"), "Hi");
+    await user.click(screen.getByRole("button", { name: "Make the speech" }));
+    expect(await screen.findByText("No such voice.")).toBeInTheDocument();
+    expect(screen.getByLabelText("What should it say?")).toHaveValue("Hi");
   });
 
   it("will not speak with a model that is not ready, and offers the way to get it", async () => {
@@ -204,31 +219,71 @@ describe("text to speech", () => {
     const models = vi.fn(async () => [model({ state: "can_install", bytes_missing: 189_549_408 })]);
     const user = userEvent.setup();
     render(<SpeakWorkspace api={api({ models })} runs={runsThat([])} onGetModel={onGet} />);
-    await user.type(await screen.findByLabelText("Text"), "Hi");
-    expect(screen.getByRole("button", { name: "Speak" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Get it in Models" }));
+    await user.type(await screen.findByLabelText("What should it say?"), "Hi");
+    expect(screen.getByRole("button", { name: "Make the speech" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Get it in the Model hub" }));
     expect(onGet).toHaveBeenCalledWith("kokoro-82m");
     expect(screen.getByText(/190 MB/)).toBeInTheDocument();
   });
 
-  it("warns plainly about a model that is not for commercial use", async () => {
-    const models = vi.fn(async () => [model({ commercial_use: "no", recommended: [] })]);
+  it("says nothing about the licence of a model", async () => {
+    const models = vi.fn(async () => [model({ recommended: [] })]);
     render(<SpeakWorkspace api={api({ models })} runs={runsThat([])} />);
-    expect(await screen.findByText("Not for commercial use")).toBeInTheDocument();
+    await screen.findByTestId("model-details");
+    expect(screen.queryByText(/commercial|licence/i)).toBeNull();
   });
 
-  it("deletes a speech from the list", async () => {
+  it("plays a voice heard before, and makes a sample of one never heard", async () => {
+    const runs = runsThat([done]);
+    const user = userEvent.setup();
+    render(
+      <SpeakWorkspace
+        api={api({ speeches: vi.fn(async () => [speech({ voice: "af_heart" })]) })}
+        runs={runs}
+      />,
+    );
+    expect(await screen.findByRole("button", { name: "Play Heart" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Hear a sample of George" }));
+    expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({
+      voice: "bm_george",
+      model: "kokoro-82m",
+    });
+    expect(await screen.findByRole("button", { name: "Stop George" })).toBeInTheDocument();
+  });
+
+  it("opens a speech from the recent strip, and deletes it after asking", async () => {
     const removeSpeech = vi.fn(async () => undefined);
+    const onTool = vi.fn();
     const user = userEvent.setup();
     render(
       <SpeakWorkspace
         api={api({ speeches: vi.fn(async () => [speech()]), removeSpeech })}
         runs={runsThat([])}
+        onTool={onTool}
       />,
     );
-    await user.click(await screen.findByRole("button", { name: "Delete" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Hello there" }));
+    expect(within(stage()).getByText("Hello there")).toBeInTheDocument();
+    expect(within(stage()).getAllByText(/1:05/).length).toBeGreaterThan(0);
+    await user.click(within(stage()).getByRole("button", { name: /Change the voice/ }));
+    expect(onTool).toHaveBeenCalledWith(expect.objectContaining({ id: "s1" }), "convert");
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Delete/ }));
+    expect(removeSpeech).not.toHaveBeenCalled(); // asks first
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(removeSpeech).toHaveBeenCalledWith("s1");
-    await waitFor(() => expect(screen.queryByText("Hello there")).not.toBeInTheDocument());
+    await waitFor(() => expect(stage()).toHaveAttribute("data-state", "empty"));
+  });
+
+  it("makes a voice without leaving the screen, and speaks with it", async () => {
+    const voices = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([saved({ id: "v9", name: "Calm" })]);
+    const user = userEvent.setup();
+    render(<SpeakWorkspace api={api({ voices })} runs={runsThat([])} />);
+    await user.click(await screen.findByRole("button", { name: "Make a voice" }));
+    expect(await screen.findByRole("dialog", { name: "Make a voice" })).toBeInTheDocument();
   });
 });
 
@@ -300,12 +355,15 @@ const asr = () =>
   });
 
 describe("speech to text", () => {
-  it("transcribes a chosen recording with the chosen model and shows the times", async () => {
+  it("transcribes a chosen recording with the chosen model and shows the times on the stage", async () => {
     const transcribe = vi.fn(async () => transcript());
     const user = userEvent.setup();
     render(<TranscribeWorkspace api={api({ models: vi.fn(async () => [asr()]), transcribe })} />);
-    const input = (await screen.findByLabelText("Recording")) as HTMLInputElement;
+    const input = (await screen.findByLabelText("Choose a recording")) as HTMLInputElement;
     await user.upload(input, new File(["x"], "board.wav", { type: "audio/wav" }));
+    expect(screen.getByText("board.wav")).toBeInTheDocument(); // chosen, not sent yet
+    expect(transcribe).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Transcribe" }));
     await waitFor(() => expect(transcribe).toHaveBeenCalled());
     const call = transcribe.mock.calls[0] as unknown as [File, string];
     expect(call[0].name).toBe("board.wav");
@@ -330,9 +388,43 @@ describe("speech to text", () => {
         })}
       />,
     );
-    await user.click(await screen.findByText("Board meeting"));
+    await user.click(await screen.findByRole("button", { name: "Open: Board meeting" }));
     await user.click(await screen.findByRole("button", { name: "Save .srt" }));
     expect(exportTranscript).toHaveBeenCalledWith("t1", "srt");
+  });
+
+  it("in the app window asks where to save a transcript and writes it there, or does nothing on cancel", async () => {
+    const exportTranscript = vi.fn(async () => new Blob(["1\n00:00"]));
+    const write = vi.fn(async (path: string) => ({ name: "board-meeting.txt", path }));
+    const choose = vi.fn<(name: string) => Promise<string | null>>(
+      async () => "/Users/me/Documents/b.txt",
+    );
+    const user = userEvent.setup();
+    render(
+      <SaveAsProvider value={{ choose, write }}>
+        <TranscribeWorkspace
+          api={api({
+            models: vi.fn(async () => [asr()]),
+            transcripts: vi.fn(async () => [transcript({ segments: [] })]),
+            transcript: vi.fn(async () => transcript()),
+            exportTranscript,
+          })}
+        />
+      </SaveAsProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Open: Board meeting" }));
+    await user.click(await screen.findByRole("button", { name: "Save .txt" }));
+    expect(choose).toHaveBeenCalledWith("board-meeting.txt");
+    await waitFor(() =>
+      expect(write).toHaveBeenCalledWith("/Users/me/Documents/b.txt", expect.any(Blob)),
+    );
+    choose.mockResolvedValueOnce(null); // the person cancels the box: nothing is fetched or written
+    exportTranscript.mockClear();
+    write.mockClear();
+    await user.click(screen.getByRole("button", { name: "Save .txt" }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(exportTranscript).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
   });
 
   it("says why a recording could not be read", async () => {
@@ -341,15 +433,17 @@ describe("speech to text", () => {
     });
     const user = userEvent.setup();
     render(<TranscribeWorkspace api={api({ models: vi.fn(async () => [asr()]), transcribe })} />);
-    await user.upload(await screen.findByLabelText("Recording"), new File(["x"], "a.mp3"));
+    await user.upload(await screen.findByLabelText("Choose a recording"), new File(["x"], "a.mp3"));
+    await user.click(screen.getByRole("button", { name: "Transcribe" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Install ffmpeg");
   });
 
-  it("does not take a recording until the model is ready", async () => {
+  it("does not transcribe until the model is ready", async () => {
     const models = vi.fn(async () => [{ ...asr(), state: "can_install" as const }]);
+    const user = userEvent.setup();
     render(<TranscribeWorkspace api={api({ models })} />);
-    expect(await screen.findByLabelText("Recording")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Choose a recording" })).toBeDisabled();
+    await user.upload(await screen.findByLabelText("Choose a recording"), new File(["x"], "a.wav"));
+    expect(screen.getByRole("button", { name: "Transcribe" })).toBeDisabled();
   });
 });
 
@@ -360,7 +454,6 @@ const saved = (over: Partial<SavedVoice> = {}): SavedVoice => ({
   description: "a deep, calm man",
   reference_text: "",
   reference_seconds: null,
-  consent: {},
   created_at: "2026-10-16T10:00:00Z",
   updated_at: "2026-10-16T10:00:00Z",
   ...over,
@@ -384,7 +477,7 @@ describe("your own voices", () => {
     expect(await screen.findByText("a deep, calm man")).toBeInTheDocument();
   });
 
-  it("will not save a cloned voice until it is said whose voice it is", async () => {
+  it("saves a cloned voice without asking whose voice it is", async () => {
     const cloneVoice = vi.fn(async () => saved({ kind: "clone" }));
     const user = userEvent.setup();
     render(<VoicesWorkspace api={api({ cloneVoice })} runs={runsThat([])} />);
@@ -392,20 +485,12 @@ describe("your own voices", () => {
     await user.type(screen.getByLabelText("Name"), "Me");
     await user.upload(screen.getByLabelText(/A recording of the voice/), new File(["x"], "me.wav"));
     await user.type(screen.getByLabelText("What is said in the recording"), "the words I say");
+    expect(screen.queryByText(/permission of the person/)).toBeNull();
     const save = screen.getByRole("button", { name: "Save voice" });
-    expect(save).toBeDisabled();
-    await user.click(
-      screen.getByLabelText("I have the permission of the person whose voice this is."),
-    );
     expect(save).toBeEnabled();
     await user.click(save);
-    const call = cloneVoice.mock.calls[0] as unknown as [File, string, string, string];
-    expect([call[0].name, call[1], call[2], call[3]]).toEqual([
-      "me.wav",
-      "Me",
-      "permission",
-      "the words I say",
-    ]);
+    const call = cloneVoice.mock.calls[0] as unknown as [File, string, string];
+    expect([call[0].name, call[1], call[2]]).toEqual(["me.wav", "Me", "the words I say"]);
   });
 
   it("plays a sample of a voice, and passes on what the engine says when it cannot", async () => {
@@ -418,27 +503,52 @@ describe("your own voices", () => {
     expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({ saved_voice: "v1" });
     expect(await screen.findByLabelText("Calm speaking")).toHaveAttribute("src", "http://x");
     const failing = runsThat([
-      ev("error", { code: "model_missing", message: "Get it in Models." }),
+      ev("error", { code: "model_missing", message: "Get it in the Model hub." }),
     ]);
     rerender(
       <VoicesWorkspace api={api({ voices: vi.fn(async () => [saved()]) })} runs={failing} />,
     );
     await user.click(await screen.findByRole("button", { name: "Hear a sample" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Get it in Models.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Get it in the Model hub.");
   });
 
-  it("shows a cloned voice with its recording, its words and what was said about whose it is", async () => {
+  it("shows a cloned voice with its recording and its words", async () => {
     const v = saved({
       kind: "clone",
       reference_text: "the words I say",
       reference_seconds: 65,
       reference_url: "http://x/ref.wav",
-      consent: { basis: "own", statement: "This is my own voice." },
     });
     render(<VoicesWorkspace api={api({ voices: vi.fn(async () => [v]) })} runs={runsThat([])} />);
     expect(await screen.findByText("cloned, 1:05")).toBeInTheDocument();
     expect(screen.getByText(/the words I say/)).toBeInTheDocument();
-    expect(screen.getByText("This is my own voice.")).toBeInTheDocument();
+  });
+
+  it("changes a recording's words in a box of the page, never with window.prompt", async () => {
+    // the app window has no window.prompt: it answers nothing at once
+    vi.stubGlobal("prompt", () => {
+      throw new Error("window.prompt is not available in the app window");
+    });
+    const v = saved({ kind: "clone", reference_text: "the words I say" });
+    const updateVoice = vi.fn(async () => ({ ...v, reference_text: "what I really say" }));
+    render(
+      <VoicesWorkspace
+        api={api({ voices: vi.fn(async () => [v]), updateVoice })}
+        runs={runsThat([])}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Change the words" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(updateVoice).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Change the words" }));
+    const field = screen.getByLabelText("The words spoken in the recording");
+    expect(field).toHaveProperty("value", "the words I say");
+    await userEvent.clear(field);
+    await userEvent.type(field, "what I really say");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(updateVoice).toHaveBeenCalledWith("v1", { reference_text: "what I really say" });
+    expect(await screen.findByText(/what I really say/)).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 });
 
@@ -464,11 +574,15 @@ describe("text to speech with a saved voice", () => {
       />,
     );
     await waitFor(() =>
-      expect(screen.getByLabelText("Model")).toHaveValue("qwen3-tts-1.7b-voicedesign"),
+      expect(screen.getByRole("combobox", { name: "Model" })).toHaveTextContent(
+        "Qwen3-TTS 1.7B VoiceDesign",
+      ),
     );
-    expect(screen.queryByLabelText("Built-in voice")).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText("Text"), "Good morning");
-    await user.click(screen.getByRole("button", { name: "Speak" }));
+    const voices = screen.getByRole("group", { name: "Voices" });
+    expect(within(voices).getAllByRole("radio")).toHaveLength(1); // only the saved voice: no built-in ones
+    expect(within(voices).getByRole("radio", { name: /Calm/ })).toBeChecked();
+    await user.type(screen.getByLabelText("What should it say?"), "Good morning");
+    await user.click(screen.getByRole("button", { name: "Make the speech" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
       text: "Good morning",
@@ -521,7 +635,6 @@ const stable = () =>
     title: "Stable Audio 3 Small (music)",
     tasks: ["music"],
     recommended: [],
-    commercial_use: "conditional",
     voices: [],
     default_voice: null,
     options: [],
@@ -541,50 +654,60 @@ describe("music", () => {
     },
   });
 
-  it("asks only what the chosen model takes, and makes music with it", async () => {
+  it("asks only what the chosen model takes, makes the song and plays it on the stage", async () => {
     const models = vi.fn(async () => [ace(), stable()]);
-    const tracks = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([track()]);
+    const tracks = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([track({ id: "t2", title: "Summer" })]);
     const runs = runsThat([ev("node", { label: "Making the music" }), doneTrack]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models, tracks })} runs={runs} />);
-    expect(await screen.findByLabelText("Model")).toHaveValue("ace-step-1.5-turbo");
+    expect(await screen.findByRole("combobox", { name: "Model" })).toHaveTextContent(
+      "ACE-Step 1.5 Turbo",
+    );
     expect(screen.getByLabelText(/Lyrics \(optional\)/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/No singing/)).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /No singing/ })).toBeInTheDocument();
     expect(screen.getByText(/About 15 seconds of work/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText("Describe the music"), "upbeat pop, summer");
-    await user.type(screen.getByLabelText(/Lyrics/), "la la la");
-    fireEvent.change(screen.getByLabelText(/Length/), { target: { value: "45" } });
-    await user.click(screen.getByRole("button", { name: "Make" }));
+    await user.type(screen.getByLabelText("Describe the song"), "upbeat");
+    await user.click(screen.getByRole("button", { name: "pop" })); // a style chip adds its word
+    expect(screen.getByLabelText("Describe the song")).toHaveValue("upbeat, pop");
+    await user.type(screen.getByLabelText(/Lyrics \(optional\)/), "la la la");
+    const length = screen.getByRole("slider", { name: "Length" });
+    for (let i = 0; i < 15; i++) fireEvent.keyDown(length, { key: "ArrowRight" });
+    await user.click(screen.getByRole("button", { name: "Make the song" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toEqual({
       task: "music",
-      text: "upbeat pop, summer",
+      text: "upbeat, pop",
       model: "ace-step-1.5-turbo",
       music_mode: "song",
       lyrics: "la la la",
       duration: 45,
     });
-    expect(await screen.findByText("Summer")).toBeInTheDocument();
+    await waitFor(() => expect(stage()).toHaveAttribute("data-state", "result"));
+    expect(within(stage()).getByText("Summer")).toBeInTheDocument();
+    expect(within(stage()).getByText("la la")).toBeInTheDocument(); // the lyrics under the player
   });
 
   it("hides the lyrics for a model that does not sing, and says what the model is", async () => {
     const models = vi.fn(async () => [ace(), stable()]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models })} runs={runsThat([])} />);
-    await user.selectOptions(await screen.findByLabelText("Model"), "stable-audio-3-small-music");
+    await user.click(await screen.findByRole("combobox", { name: "Model" }));
+    await user.click(await screen.findByRole("option", { name: /Stable Audio 3 Small \(music\)/ }));
     expect(screen.queryByLabelText(/Lyrics/)).not.toBeInTheDocument();
     expect(screen.getByText("This model makes music without singing.")).toBeInTheDocument();
-    expect(screen.getByText("Commercial use with conditions")).toBeInTheDocument();
   });
 
   it("leaves the singing out on request", async () => {
     const runs = runsThat([doneTrack]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [ace()]) })} runs={runs} />);
-    await user.type(await screen.findByLabelText("Describe the music"), "calm piano");
-    await user.click(screen.getByLabelText(/No singing/));
+    await user.type(await screen.findByLabelText("Describe the song"), "calm piano");
+    await user.click(screen.getByRole("checkbox", { name: /No singing/ }));
     expect(screen.queryByLabelText(/Lyrics/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Make" }));
+    await user.click(screen.getByRole("button", { name: "Make the song" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalled());
     expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({ instrumental: true });
     expect(runs.startRun.mock.calls[0]?.[1]).not.toHaveProperty("lyrics");
@@ -598,15 +721,14 @@ describe("music", () => {
     ]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [ace()]) })} runs={runs} />);
-    await user.type(await screen.findByLabelText("Describe the music"), "calm piano");
-    await user.click(screen.getByRole("button", { name: "Make" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("ACE-Step needs lyrics.");
+    await user.type(await screen.findByLabelText("Describe the song"), "calm piano");
+    await user.click(screen.getByRole("button", { name: "Make the song" }));
+    expect(await screen.findByText("ACE-Step needs lyrics.")).toBeInTheDocument();
   });
 
-  it("lists the music made, renames and deletes it", async () => {
+  it("opens the music made from the strip, renames and deletes it, asking first", async () => {
     const updateTrack = vi.fn(async () => track({ title: "Winter" }));
     const removeTrack = vi.fn(async () => undefined);
-    window.prompt = vi.fn(() => "Winter");
     const user = userEvent.setup();
     render(
       <MusicWorkspace
@@ -619,12 +741,19 @@ describe("music", () => {
         runs={runsThat([])}
       />,
     );
-    expect(await screen.findByText("Summer")).toBeInTheDocument();
-    expect(screen.getByText(/song · 0:31 · ACE-Step 1.5 Turbo/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Rename" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
+    expect(within(stage()).getByText(/song · 0:31 · ACE-Step 1.5 Turbo/)).toBeInTheDocument();
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Rename" }));
+    const name = await screen.findByRole("textbox", { name: "Name" });
+    await user.clear(name);
+    await user.type(name, "Winter{Enter}");
     expect(updateTrack).toHaveBeenCalledWith("t1", { title: "Winter" });
-    expect(await screen.findByText("Winter")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(await within(stage()).findByText("Winter")).toBeInTheDocument();
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Delete/ }));
+    expect(removeTrack).not.toHaveBeenCalled();
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(removeTrack).toHaveBeenCalledWith("t1");
   });
 });
@@ -661,11 +790,12 @@ describe("more music", () => {
     ]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]) })} runs={runs} />);
-    await user.type(await screen.findByLabelText("Describe the music"), "upbeat pop");
+    await user.type(await screen.findByLabelText("Describe the song"), "upbeat pop");
+    await user.click(screen.getByText("For experts"));
     fireEvent.change(screen.getByLabelText(/Tempo/), { target: { value: "96" } });
     await user.type(screen.getByLabelText(/Seed/), "10");
-    await user.selectOptions(screen.getByLabelText("Takes"), "3");
-    await user.click(screen.getByRole("button", { name: "Make 3" }));
+    await user.click(screen.getByRole("radio", { name: "3" }));
+    await user.click(screen.getByRole("button", { name: "Make the song (3)" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(3));
     const inputs = runs.startRun.mock.calls.map((c) => c[1] as Record<string, unknown>);
     expect(inputs.map((i) => i.seed)).toEqual([10, 11, 12]);
@@ -688,7 +818,8 @@ describe("more music", () => {
         runs={runs}
       />,
     );
-    await user.click(await screen.findByRole("button", { name: "Make it again" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
+    await user.click(screen.getByRole("button", { name: "Make it again" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(1));
     expect(runs.startRun.mock.calls[0]?.[1]).toMatchObject({
       text: "pop, upbeat",
@@ -697,6 +828,7 @@ describe("more music", () => {
       duration: 31,
       model: "ace-step-1.5-turbo",
     });
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
     await user.click(await screen.findByRole("button", { name: "Another take" }));
     await waitFor(() => expect(runs.startRun).toHaveBeenCalledTimes(2));
     expect(runs.startRun.mock.calls[1]?.[1]).not.toHaveProperty("seed");
@@ -709,8 +841,8 @@ describe("more music", () => {
     ]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]) })} runs={runs} />);
-    await user.type(await screen.findByLabelText("Describe the music"), "upbeat pop");
-    await user.click(screen.getByRole("button", { name: "Write lyrics for me" }));
+    await user.type(await screen.findByLabelText("Describe the song"), "upbeat pop");
+    await user.click(screen.getByRole("button", { name: "Write them for me" }));
     await user.type(screen.getByLabelText("What is the song about?"), "a summer day");
     await user.click(screen.getByRole("button", { name: "Write the lyrics" }));
     expect(await screen.findByLabelText(/The lyrics \(you can change them\)/)).toHaveValue(
@@ -734,7 +866,7 @@ describe("more music", () => {
     ]);
     const user = userEvent.setup();
     render(<MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]) })} runs={runs} />);
-    await user.click(await screen.findByRole("button", { name: "Write lyrics for me" }));
+    await user.click(await screen.findByRole("button", { name: "Write them for me" }));
     await user.type(screen.getByLabelText("What is the song about?"), "a summer day");
     await user.click(screen.getByRole("button", { name: "Write the lyrics" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Choose a chat model in Models.");
@@ -763,7 +895,9 @@ describe("more music", () => {
     render(
       <MusicWorkspace api={api({ models: vi.fn(async () => [aceEdit()]), tracks })} runs={runs} />,
     );
-    await user.click(await screen.findByRole("button", { name: "Change it" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Change a part/ }));
     const panel = await screen.findByRole("region", { name: "Change this music" });
     await user.type(within(panel).getByLabelText("What should it become?"), "a drum fill");
     fireEvent.change(within(panel).getByLabelText("Part 1 from"), { target: { value: "5" } });
@@ -791,7 +925,9 @@ describe("more music", () => {
         runs={runsThat([])}
       />,
     );
-    await user.click(await screen.findByRole("button", { name: "Change it" }));
+    await user.click(await screen.findByRole("button", { name: "Open: Summer" }));
+    await user.click(within(stage()).getByRole("button", { name: "More" }));
+    await user.click(await screen.findByRole("menuitem", { name: /Change a part/ }));
     expect(
       await screen.findByText(/None of the music models on this computer can change a clip yet/),
     ).toBeInTheDocument();

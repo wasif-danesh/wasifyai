@@ -20,13 +20,15 @@ dependencies = [
   "pyjwt>=2.9",
   "prometheus-client>=0.21",
   "langgraph-checkpoint-sqlite>=3.1.2",
+  "mcp==2.3.0",
+  "langfuse>=5.0.4,<6",
 ]
 
 [project.optional-dependencies]
 # The desktop profile runs the media worker inside the engine process (ADR-0056). The notebooks
 # product is named so that its own packages (the chunker, the search model runtime, Word and PDF
 # writers) and the video product's (a still from each clip) are in the hashed lock the app installs from (scripts/build-engine-bundle.sh).
-desktop = ["wasifyai-media-worker", "wasifyai-notebooks", "wasifyai-voice", "wasifyai-video"]
+desktop = ["wasifyai-media-worker", "wasifyai-notebooks", "wasifyai-voice", "wasifyai-video", "wasifyai-model3d", "wasifyai-training", "wasifyai-creative"]
 
 [build-system]
 requires = ["hatchling"]
@@ -34,3 +36,5 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wasifyai_api"]
+# git ignores *.safetensors; this one is EchoMimic's two prompts, encoded (lipsync_server/make_prompts.py)
+artifacts = ["src/wasifyai_api/lipsync_server/echomimic_prompts.safetensors"]

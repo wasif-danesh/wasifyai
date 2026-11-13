@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 from wasifyai_api.creation_index import InMemoryIndexStore
-from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_api.sqlite_stores import SqliteIndexStore, SqliteSettingsStore, SqliteUserStore
 from wasifyai_platform_sdk.sqlite import create_sqlite_engine
 

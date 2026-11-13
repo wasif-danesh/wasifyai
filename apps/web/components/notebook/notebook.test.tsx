@@ -1,8 +1,9 @@
+import { NEW_NOTEBOOK } from "@/lib/notebook-ids";
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NEW_NOTEBOOK, NotebookListScreen, NotebookScreen } from "./NotebookScreens";
+import { NotebookListScreen, NotebookScreen } from "./NotebookScreens";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({

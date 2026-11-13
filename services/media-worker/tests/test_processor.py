@@ -25,9 +25,9 @@ GRAPH = {
 
 
 def job(graph=None, **kw) -> JobRequest:
+    kw = {"product_id": "p1", **kw}
     return JobRequest(
         tenant_id="t1",
-        product_id="p1",
         user_id="u1",
         run_id=RUN,
         thread_id=THREAD,
@@ -98,7 +98,8 @@ async def test_redelivered_job_is_not_run_again(comfy_rig):
     n_events, n_submitted = len(await rig.events()), len(fake.submitted)
     again = await rig.p.process(job(job_id="same"))
 
-    assert again == first
+    # the same result; only its `trace` differs (each delivery is a span of its own)
+    assert again.model_copy(update={"trace": {}}) == first.model_copy(update={"trace": {}})
     assert len(fake.submitted) == n_submitted and len(await rig.events()) == n_events
 
 
@@ -238,6 +239,31 @@ async def test_the_users_picture_is_read_from_their_prefix_and_uploaded_to_temp(
     assert graph["5"]["inputs"]["image"] == "wasifyai-uploaded.png [temp]"
 
 
+async def test_a_clip_to_carry_on_is_uploaded_as_an_mp4_the_loader_can_read(comfy):
+    base, fake = comfy
+    rig = Rig(ComfyRunner(ComfyClient(base), 10))
+    clip = b"\x00\x00\x00 ftypisom" + b"the-users-clip"
+    await rig.storage.put(object_key("t1", "p1", "u1", "uploads/extend-a.mp4"), clip)
+    graph = {
+        "90": {"class_type": "LoadVideo", "inputs": {"file": "wasifyai-JOB1-video.mp4"}},
+        "10": {"class_type": "SaveImage", "inputs": {}},
+    }
+    job_ = job(graph).model_copy(
+        update={
+            "job_id": "JOB1",
+            "capability": "video.extend",
+            "inputs": {"prompt": "x", "video_key": "uploads/extend-a.mp4"},
+        }
+    )
+    result = await rig.p.process(job_)
+    assert result.status == "completed"
+    content_type, body = fake.uploads[0]
+    assert clip in body and b'filename="wasifyai-JOB1-video.mp4"' in body
+    assert b"Content-Type: video/mp4" in body
+    # the workflow loads it by whatever reference the engine gave (the fake always says .png)
+    assert fake.submitted[0]["prompt"]["90"]["inputs"]["file"] == "wasifyai-uploaded.png [temp]"
+
+
 async def test_another_users_picture_is_never_read(comfy):
     base, fake = comfy
     rig = Rig(ComfyRunner(ComfyClient(base), 10))
@@ -272,3 +298,152 @@ async def test_a_runner_that_takes_no_files_is_still_called_the_old_way():
     rig = Rig(Plain())
     result = await rig.p.process(job())  # no picture: no files argument
     assert result.status == "completed"
+
+
+# ---- a person's own look, for one job (ADR-0073, docs/train-web-plan.md) ----------
+
+
+class LookRunner:
+    """Notes the graph it was given and whether the look's file was there while it ran."""
+
+    backend = "look-test"
+    local_gpu = False
+
+    def __init__(self, root):
+        self.root, self.graph, self.seen = root, None, None
+
+    async def run(self, job, on_progress, files=None):
+        self.graph = job.prompt
+        name = job.prompt["90"]["inputs"]["lora_name"]
+        self.seen = (self.root / name).read_bytes() if (self.root / name).is_file() else None
+        return {"image": (b"\x89PNG", "image/png", "png")}
+
+
+LOOK = "wasify-video-ena-12345678.safetensors"
+LOOK_GRAPH = {
+    "90": {
+        "class_type": "LoraLoaderModelOnly",
+        "inputs": {"model": ["44", 0], "lora_name": LOOK, "strength_model": 1.5},
+    },
+    "10": {"class_type": "SaveImage", "inputs": {}},
+}  # fmt: skip
+
+
+def look_job(key: str, **over) -> JobRequest:
+    inputs = {"loras": [{"name": LOOK, "weight": 1.5}], "lora_files": {LOOK: key}}
+    return job(LOOK_GRAPH, inputs=inputs, **over)
+
+
+async def test_a_persons_own_look_is_there_while_the_job_runs_and_gone_after(tmp_path):
+    runner = LookRunner(tmp_path)
+    rig = Rig(
+        runner, WorkerSettings(max_attempts=1, ollama_base_url="", media_loras_dir=str(tmp_path))
+    )
+    key = object_key("t1", "wasifyai-training", "u1", "train", "looks", "r1") + f"/{LOOK}"
+    await rig.storage.put(key, b"LOOKBYTES")
+    result = await rig.p.process(look_job(key))
+    assert result.status == "completed", result
+    assert runner.seen == b"LOOKBYTES"
+    assert runner.graph is not None
+    staged = runner.graph["90"]["inputs"]["lora_name"]
+    assert staged.startswith("wasify-user/") and staged.endswith(f"-{LOOK}") and staged != LOOK
+    assert not any(p.is_file() for p in tmp_path.rglob("*.safetensors"))  # removed after the job
+
+
+@pytest.mark.parametrize(
+    "key_of",
+    [
+        lambda: (
+            object_key("t1", "wasifyai-training", "other", "train", "looks", "r1") + f"/{LOOK}"
+        ),  # another person's
+        lambda: (
+            object_key("t1", "wasifyai-training", "u1", "train", "models", "m1")
+            + "/adapter.safetensors"
+        ),  # not a look
+        lambda: (
+            object_key("t1", "wasifyai-training", "u1", "train", "looks", "r1")
+            + f"/../models/m1/{LOOK}"
+        ),
+    ],
+)
+async def test_a_look_that_is_not_the_persons_own_fails_the_job_and_reads_nothing(tmp_path, key_of):
+    runner = LookRunner(tmp_path)
+    rig = Rig(
+        runner, WorkerSettings(max_attempts=1, ollama_base_url="", media_loras_dir=str(tmp_path))
+    )
+    key = key_of()
+    await rig.storage.put(key, b"SECRET") if ".." not in key else None
+    result = await rig.p.process(look_job(key))
+    assert result.status == "failed" and result.error is not None
+    assert result.error.code == "invalid_input"
+    assert runner.graph is None and not list(tmp_path.rglob("*.safetensors"))
+
+
+async def test_a_style_the_admin_added_is_fetched_for_a_picture_and_only_for_a_picture(tmp_path):
+    """ADR-0091 S5: the service's styles live under the image product's `service` part."""
+    runner = LookRunner(tmp_path)
+    rig = Rig(
+        runner, WorkerSettings(max_attempts=1, ollama_base_url="", media_loras_dir=str(tmp_path))
+    )
+    key = object_key("t1", "wasifyai-image", "service", "styles", "ab12cd34ef56.safetensors")
+    await rig.storage.put(key, b"SERVICESTYLE")
+    result = await rig.p.process(look_job(key, product_id="wasifyai-image"))
+    assert result.status == "completed", result
+    assert runner.seen == b"SERVICESTYLE"
+    other = await rig.p.process(look_job(key, product_id="wasifyai-video"))  # not on a clip
+    assert other.status == "failed" and other.error is not None
+    elsewhere = object_key("t2", "wasifyai-image", "service", "styles", "x.safetensors")
+    await rig.storage.put(elsewhere, b"OTHERTENANT")
+    third = await rig.p.process(look_job(elsewhere, product_id="wasifyai-image"))
+    assert third.status == "failed"  # another tenant's service styles are not this one's
+
+
+async def test_a_worker_with_nowhere_to_put_a_look_says_so(tmp_path):
+    rig = Rig(LookRunner(tmp_path), WorkerSettings(max_attempts=1, ollama_base_url=""))
+    result = await rig.p.process(look_job("x"))
+    assert result.status == "failed" and result.error is not None
+    assert "cannot use a look" in result.error.message
+
+
+# ---- a stopped job (stage J3) ------------------------------------------------------------
+
+
+class Stops:
+    def __init__(self, *ids: str) -> None:
+        self.ids = set(ids)
+
+    async def is_cancelled(self, job_id: str) -> bool:
+        return job_id in self.ids
+
+
+async def test_a_job_stopped_while_it_waited_in_the_line_is_never_run(comfy):
+    base, fake = comfy
+    rig = Rig(ComfyRunner(ComfyClient(base), 10))
+    j = job()
+    rig.p.cancels = Stops(j.job_id)
+    result = await rig.p.process(j)
+    err = result.error
+    assert result.status == "failed" and err is not None
+    assert (err.code, err.retryable) == ("cancelled", False)
+    assert fake.submitted == []  # ComfyUI never saw it
+    assert "job.completed" not in {e.kind for e in rig.usage.events}
+
+
+async def test_a_job_stopped_while_running_interrupts_comfyui_and_frees_the_gpu(comfy, monkeypatch):
+    import wasifyai_media_worker.processor as processor
+
+    monkeypatch.setattr(processor, "CANCEL_POLL_S", 0.05)
+    base, fake = comfy
+    rig = Rig(ComfyRunner(ComfyClient(base), 30))
+    stops = Stops()
+    rig.p.cancels = stops
+    j = job({"1": {"class_type": "Slow", "inputs": {}}})  # never finishes on its own
+    work = asyncio.create_task(rig.p.process(j))
+    await asyncio.sleep(0.3)
+    stops.ids.add(j.job_id)
+    result = await asyncio.wait_for(work, 5)
+    assert (result.status, result.error.code) == ("failed", "cancelled")  # type: ignore[union-attr]
+    assert result.error.message == "Stopped."  # type: ignore[union-attr]
+    assert fake.interrupted == 1
+    # the GPU lock was given back: the next job runs
+    assert (await asyncio.wait_for(rig.p.process(job()), 5)).status == "completed"

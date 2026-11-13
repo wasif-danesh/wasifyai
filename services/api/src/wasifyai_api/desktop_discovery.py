@@ -40,7 +40,8 @@ from wasifyai_api.desktop_fit import (
 )
 from wasifyai_api.desktop_models import ModelEntry, ModelsService
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import SettingsStore
+from wasifyai_api.services import services_of
+from wasifyai_api.settings_store import SettingsStore
 
 log = logging.getLogger(__name__)
 
@@ -98,7 +99,6 @@ class Header:
     family: str = ""
     quant: str = ""
     name: str = ""
-    licence: str = ""
     context: int = 0
     tensors: int = -1  # GGUF only: 0 means a vocabulary file, not a model
     layers: int = 0
@@ -154,7 +154,7 @@ def _head_dim(meta: dict[str, Any], arch: str) -> int:
 
 
 def read_gguf(path: Path) -> Header | None:
-    """Architecture, name, quantisation and licence from a GGUF header; None when it is not one."""
+    """Architecture, name and quantisation from a GGUF header; None when it is not one."""
     try:
         with path.open("rb") as f:
             if f.read(4) != b"GGUF":
@@ -182,7 +182,6 @@ def read_gguf(path: Path) -> Header | None:
         family=family,
         quant=FTYPES.get(ftype, "") if isinstance(ftype, int) else "",
         name=str(meta.get("general.name") or ""),
-        licence=str(meta.get("general.license") or ""),
         context=int(meta.get(f"{arch}.context_length") or 0) if arch else 0,
         tensors=int(n_tensors),
         layers=int(meta.get(f"{arch}.block_count") or 0) if arch else 0,
@@ -251,6 +250,7 @@ def classify_tensors(names: list[str]) -> tuple[str, str]:
     if has("lora_down") or has("lora_up") or has(".lora_A") or has(".lora_B") or has("lora_unet_"):
         family = (
             "flux" if has("double_blocks") or has("single_blocks")
+            else "ltx-video" if starts("transformer_blocks.") and has("attn1.") and has("attn2.")
             else "wan" if has("patch_embedding")
             else "sdxl" if has("label_emb") or has("lora_unet_input_blocks") else ""
         )  # fmt: skip
@@ -301,7 +301,6 @@ def read_safetensors(path: Path) -> Header:
     return Header(
         kind=kind, family=family, quant=quant,
         name=str(meta.get("modelspec.title") or meta.get("name") or ""),
-        licence=str(meta.get("modelspec.license") or ""),
     )  # fmt: skip
 
 
@@ -336,7 +335,6 @@ class Found:
     path: str
     tool: str
     tool_title: str
-    licence: str = ""
     state: str = "later"  # ready, can_use, later, unsupported
     reason: str = ""
     use_root: str | None = None  # the folder `can_use` would add
@@ -484,7 +482,7 @@ def _file_item(
         id=_item_id(str(first)), name=display or _clean_name(first, h), kind=h.kind,
         family=h.family,
         format=fmt, quant=h.quant, size=size, path=str(first), tool=tool.id,
-        tool_title=tool.title, licence=h.licence, needs_gb=round(size * 1.15 / 1e9, 1),
+        tool_title=tool.title, needs_gb=round(size * 1.15 / 1e9, 1),
         layers=h.layers, kv_heads=h.kv_heads, head_dim=h.head_dim, context=h.context,
     )  # fmt: skip
 
@@ -497,6 +495,22 @@ def _scan_files_layout(root: Path, tool: Tool, budget: Budget) -> list[Found]:
         if item:
             out.append(item)
     return out
+
+
+_HASH_TAG = re.compile(r"[0-9a-f]{24,}", re.IGNORECASE)
+
+
+def _ollama_hash_name(doc: dict[str, Any], h: Header) -> str:
+    """A name for a model Ollama keeps under a hash ("llamacpp:9ba9cc2b…", made by an import):
+    the file's own name, else the model its other layers came from ("gpt-oss:20b"), else nothing
+    (the screen then says Unnamed model)."""
+    if h.name.strip():
+        return h.name.strip()
+    for layer in doc.get("layers", []):
+        base = str(layer.get("from") or "").strip() if isinstance(layer, dict) else ""
+        if base and not _HASH_TAG.search(base):
+            return base
+    return ""
 
 
 def _scan_ollama(root: Path, tool: Tool, budget: Budget) -> list[Found]:
@@ -522,6 +536,8 @@ def _scan_ollama(root: Path, tool: Tool, budget: Budget) -> list[Found]:
             continue
         name = "/".join(parts[1:-1]).removeprefix("library/") + f":{parts[-1]}"
         h = read_gguf(blob) or Header()
+        if _HASH_TAG.search(name):
+            name = _ollama_hash_name(doc, h) or name
         size = _size(blob)
         if h.tensors == 0 or size < MIN_BYTES:
             continue
@@ -530,7 +546,7 @@ def _scan_ollama(root: Path, tool: Tool, budget: Budget) -> list[Found]:
                 id=_item_id(str(blob)), name=name,
                 kind=h.kind if h.kind != "unknown" else "language",
                 family=h.family, format="gguf", quant=h.quant, size=size, path=str(blob),
-                tool=tool.id, tool_title=tool.title, licence=h.licence,
+                tool=tool.id, tool_title=tool.title,
                 needs_gb=round(size * 1.15 / 1e9, 1),
                 layers=h.layers, kv_heads=h.kv_heads, head_dim=h.head_dim, context=h.context,
             )
@@ -723,7 +739,13 @@ def _assess_lora(it: Found, path: Path, roots: list[Path]) -> None:
         used = any(root.resolve() == r.resolve() for r in roots if r.exists())
     except OSError:
         used = False
-    if used:
+    if it.family == "ltx-video":  # a look for the video model, chosen on the Video screens
+        if used:
+            it.state, it.reason = "ready", "The video engine can apply this look (LoRA)."
+        else:
+            it.state, it.use, it.use_root = "can_use", "folder", str(root)
+            it.reason = "One click lets the video engine read this look where it is."
+    elif used:
         it.state, it.reason = "ready", "The image engine can apply this style (LoRA)."
     else:
         it.state, it.use, it.use_root = "can_use", "folder", str(root)
@@ -867,28 +889,30 @@ async def probe_servers(
 ) -> list[dict[str, Any]]:
     """Which of the known local servers answer. Loopback addresses from our own list only."""
     own = client or httpx.AsyncClient(timeout=0.6)
-    found: list[dict[str, Any]] = []
+
+    async def one(tool: Tool, s: dict[str, str]) -> dict[str, Any] | None:
+        url = s["url"]
+        if not url.startswith("http://127.0.0.1:"):
+            return None
+        try:
+            r = await own.get(url + s["probe"])
+        except httpx.HTTPError:
+            return None
+        if r.status_code != 200:
+            return None
+        return {
+            "tool": tool.id, "title": tool.title, "url": url, "kind": s["kind"],
+            "models": _server_models(s["kind"], r),
+        }  # fmt: skip
+
     try:
-        for tool in tools:
-            for s in tool.servers:
-                url = s["url"]
-                if not url.startswith("http://127.0.0.1:"):
-                    continue
-                try:
-                    r = await own.get(url + s["probe"])
-                except httpx.HTTPError:
-                    continue
-                if r.status_code == 200:
-                    found.append(
-                        {
-                            "tool": tool.id, "title": tool.title, "url": url, "kind": s["kind"],
-                            "models": _server_models(s["kind"], r),
-                        }
-                    )  # fmt: skip
+        # all at once: a tool that is not running costs its timeout once,
+        # not once for every tool before it
+        answers = await asyncio.gather(*(one(t, s) for t in tools for s in t.servers))
     finally:
         if client is None:
             await own.aclose()
-    return found
+    return [a for a in answers if a is not None]
 
 
 # ---- the service ------------------------------------------------------------------------------
@@ -926,7 +950,14 @@ class DiscoveryService:
         self.scanned_at = saved.get("scanned_at")
         self.scanned = list(saved.get("scanned", []))
         self.truncated = bool(saved.get("truncated", False))
-        self.items = [Found(**i) for i in saved.get("items", []) if isinstance(i, dict)]
+        # a field an older app saved and this one no longer has (`licence`, ADR-0094) is left
+        # out, so a saved scan never stops the engine from starting
+        known = set(Found.__dataclass_fields__)
+        self.items = [
+            Found(**{k: v for k, v in i.items() if k in known})
+            for i in saved.get("items", [])
+            if isinstance(i, dict)
+        ]
 
     async def _save(self) -> None:
         await self._store.put(
@@ -945,8 +976,19 @@ class DiscoveryService:
             self._task = asyncio.create_task(self._later(delay))
 
     async def _later(self, delay: float) -> None:
+        # the running tools first, at once: a model chosen in Ollama or LM Studio is found
+        # before the window asks for it, not after the slower look through the folders
+        await self.probe()
         await asyncio.sleep(delay)
         await self.scan()
+
+    async def probe(self) -> None:
+        """Look again at which local tools run and what they offer (a few loopback requests)."""
+        try:
+            client = self._client_factory() if self._client_factory else None
+            self.servers = await probe_servers(self.tools, client)
+        except Exception:
+            log.exception("looking for running tools failed")
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -1037,7 +1079,7 @@ router = APIRouter(prefix="/desktop", tags=["desktop"])
 
 
 def _svc(request: Request) -> DiscoveryService:
-    svc = getattr(request.app.state, "desktop_discovery", None)
+    svc = services_of(request).desktop_discovery
     if svc is None:
         raise HTTPException(404, "not available in this deployment")
     return svc
@@ -1068,7 +1110,8 @@ async def loras(request: Request, _: Identity = Depends(get_identity)) -> dict[s
             "size": i.size, "tool": i.tool_title, "reason": i.reason, "use": i.use,
         }  # fmt: skip
 
-    kind = [i for i in items if i.kind == "lora" and i.lora_name]
+    # looks for the video model are chosen on the Video screens, not offered as picture styles
+    kind = [i for i in items if i.kind == "lora" and i.lora_name and i.family != "ltx-video"]
     return {
         "ready": [row(i) for i in kind if i.state == "ready"],
         "available": [row(i) for i in kind if i.state == "can_use"],

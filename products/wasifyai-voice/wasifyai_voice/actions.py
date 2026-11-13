@@ -2,8 +2,8 @@
 """What the voice product can do, for the action catalogue (ADR-0068): speech, saved voices, music,
 the audio tools, dubbing, audiobooks, lip sync, and the kinds of creation it keeps.
 
-Most actions are child runs of the product's graph (`task` in the graph input), so its checks,
-safeguards, quotas and queue are the ones the screens use. A few are direct functions on the
+Most actions are child runs of the product's graph (`task` in the graph input), so its checks
+and queue are the ones the screens use. A few are direct functions on the
 product's own store, the way its routes are (transcribing a recording of the library, saving a
 voice). Adding an action is adding to `actions()`."""
 
@@ -33,12 +33,15 @@ from wasifyai_platform_sdk.actions import (
     RunBinding,
     need_model,
     need_product,
+    need_runtime,
 )
 from wasifyai_platform_sdk.actions.helpers import need_deps, save_copy
+from wasifyai_platform_sdk.folders import PathRefused
+from wasifyai_platform_sdk.media_upload import process_audio
 from wasifyai_platform_sdk.uploads import UploadError
 from wasifyai_platform_sdk.voice_models import MAX_DESCRIPTION_CHARS, MAX_SPEAK_CHARS
 
-from wasifyai_voice import audio_input, audiobook, consent, dubbing, export, reference
+from wasifyai_voice import audio_input, audiobook, dubbing, export, lyric_timing, reference
 from wasifyai_voice.runtime import PRODUCT_ID, NotAvailable, engine_for, store_for
 from wasifyai_voice.store import NotFound, VoiceStore, new_id
 
@@ -48,7 +51,6 @@ TRANSCRIPT_INDEX_CHARS = 2000
 OUTPUT_TEXT_CHARS = 2000  # how much of a transcript an action returns: a model reads it
 PICTURE_MAX_SIDE = 1024
 SourceKind = Literal["track", "speech"]
-Basis = Literal["own", "permission"]
 
 
 class Strict(BaseModel):
@@ -228,9 +230,72 @@ class SourceIn(Strict):
     source_id: str = Field(min_length=1, max_length=64, description="The id of the recording.")
 
 
-class TranscribeIn(SourceIn):
+class TranscribeIn(Strict):
+    """A recording of the library (`source_kind` and `source_id`), or, for a connection with read
+    folders (ADR-0069 decision 6), a file under one of them (`path`)."""
+
+    source_kind: SourceKind = Field(
+        "track", description="Whether the recording is a track or a speech."
+    )
+    source_id: str | None = Field(
+        None, min_length=1, max_length=64, description="The id of the recording."
+    )
+    path: str | None = Field(
+        None,
+        max_length=4096,
+        description=(
+            "Instead of a recording of the library: the full path of an audio or video file "
+            "inside a folder this connection may read."
+        ),
+    )
     model: str | None = Field(None, max_length=100)
     title: str | None = Field(None, max_length=200)
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "TranscribeIn":
+        if bool(self.source_id) == bool(self.path):
+            raise ValueError("give either a recording of the library or a file path, not both")
+        return self
+
+
+MAX_FILE_BYTES = 100 * 1024 * 1024
+
+
+async def _file_recording(ctx: ActionContext, path: str) -> tuple[bytes, dict[str, Any]]:
+    """A file a connection named: inside one of its read folders (spike S2's rules), decoded the
+    way an upload is (the first bytes checked, a clean 16 kHz mono WAV made in a limited child
+    process), never the person's file itself."""
+    allowed = ctx.principal.folders if ctx.principal is not None else None
+    if allowed is None:
+        raise ActionRefused(
+            "not_allowed",
+            "Only a connection with read folders can name a file; choose a recording of the "
+            "library instead.",
+        )
+    try:
+        real = allowed.resolve(path, "read")
+    except PathRefused as e:
+        raise ActionRefused(e.code, e.message) from None
+    size = real.stat().st_size
+    rule: Any = None
+    rules = getattr(getattr(ctx.deps, "state", None), "upload_rules", None)
+    if callable(rules):
+        rule = rules(PRODUCT_ID, "audio")
+    max_bytes = rule.max_bytes if rule is not None else MAX_FILE_BYTES
+    max_seconds = rule.max_seconds if rule is not None else 1800
+    if size > max_bytes:
+        raise ActionRefused(
+            "too_large", f"That file is too large. The limit is {max_bytes // (1024 * 1024)} MB."
+        )
+    data = await asyncio.to_thread(real.read_bytes)
+    try:
+        audio = await asyncio.to_thread(process_audio, data, max_seconds)
+    except UploadError as e:
+        raise ActionRefused("bad_file", e.message) from None
+    return audio.wav, {"title": real.name, "seconds": audio.seconds}
+
+
+MAX_OUTPUT_SEGMENTS = 400
 
 
 class TranscriptOut(BaseModel):
@@ -240,6 +305,9 @@ class TranscriptOut(BaseModel):
     seconds: float
     text: str  # the start of it; the whole transcript is in the library
     truncated: bool = False
+    segments: list[dict[str, Any]] = Field(
+        default_factory=list, description="When each stretch was said: start, end, text."
+    )
 
 
 async def _recording(ctx: ActionContext, kind: str, item_id: str) -> tuple[bytes, dict[str, Any]]:
@@ -265,10 +333,20 @@ async def _check_source(p: SourceIn, ctx: ActionContext) -> None:
     await _recording(ctx, p.source_kind, p.source_id)
 
 
+async def _check_transcribe(p: TranscribeIn, ctx: ActionContext) -> None:
+    if p.path:
+        await _file_recording(ctx, p.path)
+    else:
+        await _recording(ctx, p.source_kind, str(p.source_id))
+
+
 @_in_engine
 async def _transcribe(p: TranscribeIn, ctx: ActionContext) -> Outcome:
     eng = _engine(ctx)
-    data, row = await _recording(ctx, p.source_kind, p.source_id)
+    if p.path:
+        data, row = await _file_recording(ctx, p.path)
+    else:
+        data, row = await _recording(ctx, p.source_kind, str(p.source_id))
     chosen = eng.resolve("transcribe", p.model)
     options = check_transcribe(chosen, None)
     try:
@@ -297,10 +375,95 @@ async def _transcribe(p: TranscribeIn, ctx: ActionContext) -> Outcome:
             "transcript_id": saved["id"], "uri": _uri("transcript", saved["id"]),
             "title": saved["title"], "seconds": float(saved["seconds"]),
             "text": text[:OUTPUT_TEXT_CHARS], "truncated": len(text) > OUTPUT_TEXT_CHARS,
+            "segments": [
+                {"start": round(s.start, 2), "end": round(s.end, 2), "text": s.text}
+                for s in result.segments[:MAX_OUTPUT_SEGMENTS]
+            ],
         },
         "The recording was written down and saved to the library as a transcript:\n"
         + text[:OUTPUT_TEXT_CHARS],
     )  # fmt: skip
+
+
+# ---- music.analyse ----------------------------------------------------------------------------
+
+
+class AnalyseIn(Strict):
+    track_id: str = Field(min_length=1, max_length=64, description="The song in Your music.")
+    lyrics: str | None = Field(
+        None, max_length=20000,
+        description="The words of the song, typed. Left out, the words the song was made with are "
+        "used. Speech recognition only gives their times; it never changes them.",
+    )  # fmt: skip
+
+
+class AnalyseOut(BaseModel):
+    track_id: str
+    title: str
+    seconds: float
+    bpm: float
+    beats: list[float]
+    downbeats: list[float]
+    sections: list[dict[str, Any]] = Field(
+        description="start, end and an energy label (low, mid, high). No names like verse or "
+        "chorus."
+    )
+    lines: list[dict[str, Any]] = Field(description="The typed lines: text, start, end.")
+    lines_timed: bool = Field(description="False when the times of the lines could not be found.")
+
+
+async def _line_times(ctx: ActionContext, data: bytes, lyrics: str) -> list[dict[str, Any]]:
+    """The typed lines with their times. A song that cannot be followed keeps its beats: a speech
+    model that is not there, or does not know the language, leaves the lines without times."""
+    if not lyric_timing.lyric_lines(lyrics):
+        return []
+    try:
+        eng = _engine(ctx)
+        chosen = eng.resolve("transcribe", None)
+        wav, _ = await audio_input.at_rate(data, "audio.wav", 16000, 1)
+        heard = await eng.transcribe(chosen, wav, check_transcribe(chosen, None))
+    except (ActionRefused, VoiceEngineError, VoiceRequestError, audio_input.AudioInputError):
+        log.info("the lines of a song could not be timed", exc_info=True)
+        return []
+    segments = [{"start": s.start, "end": s.end, "text": s.text} for s in heard.segments]
+    return lyric_timing.timed_lines(lyrics, segments)
+
+
+async def _analyse(p: AnalyseIn, ctx: ActionContext) -> Outcome:
+    state, store = _state(ctx), _store(ctx)
+    tool = state.music_analysis
+    data, row = await _recording(ctx, "track", p.track_id)
+    who = (ctx.actor.tenant_id, ctx.actor.user_id, p.track_id)
+    lyrics = row["lyrics"] if p.lyrics is None else p.lyrics
+    kept = await asyncio.to_thread(store.get_analysis, *who)
+    found = kept["analysis"] if kept else None
+    if found is None:
+        try:
+            found = await tool.analyse(data)
+        except tool.Failed as e:
+            return Outcome.error(str(e), "analysis_failed")
+    if kept and kept["lyrics"] == lyrics:
+        lines = kept["lines"]
+    else:
+        lines = await _line_times(ctx, data, lyrics)
+    if not kept or kept["lyrics"] != lyrics:
+        await asyncio.to_thread(store.set_analysis, *who, found, lyrics, lines)
+    timed = bool(lines)
+    if not timed:
+        lines = [
+            {"text": text, "start": None, "end": None} for text in lyric_timing.lyric_lines(lyrics)
+        ]
+    result = {
+        "track_id": p.track_id, "title": row["title"], "seconds": found["seconds"],
+        "bpm": found["bpm"], "beats": found["beats"], "downbeats": found["downbeats"],
+        "sections": found["sections"], "lines": lines, "lines_timed": timed,
+    }  # fmt: skip
+    return Outcome.ok(
+        result,
+        f"{row['title']}: about {found['bpm']:.0f} beats a minute, "
+        f"{len(found['sections'])} sections"
+        + (f", {len(lines)} lines with times." if timed else "; the lines have no times."),
+    )
 
 
 # ---- voice.* ----------------------------------------------------------------------------------
@@ -374,10 +537,6 @@ async def _voice_design(p: DesignIn, ctx: ActionContext) -> Outcome:
 
 class CloneIn(SourceIn):
     name: str = Field(min_length=1, max_length=100)
-    voice_is: Basis = Field(
-        description="Whose voice it is: 'own' (the person's own voice) or 'permission' (someone "
-        "who agreed)."
-    )  # fmt: skip
     reference_text: str = Field(
         "", max_length=1000, description="What the recording says, if known."
     )
@@ -401,7 +560,7 @@ async def _voice_clone(p: CloneIn, ctx: ActionContext) -> Outcome:
     v = await asyncio.to_thread(
         store.add_voice, ctx.actor.tenant_id, ctx.actor.user_id, kind="clone",
         name=p.name.strip(), reference_key=key, reference_text=" ".join(p.reference_text.split()),
-        reference_seconds=round(seconds, 2), consent=consent.record(p.voice_is), voice_id=vid,
+        reference_seconds=round(seconds, 2), voice_id=vid,
     )  # fmt: skip
     await _reindex(
         ctx, "voice", v["id"], search_text(v["name"], v["description"] or "cloned voice")
@@ -690,6 +849,73 @@ def _book_result(outputs: dict[str, Any], p: BookMakeIn) -> Outcome | None:
     return _tracks_result("tracks of the audiobook")(outputs, p)
 
 
+# ---- speech.join -------------------------------------------------------------------------------
+
+JOIN_RATE = 24000
+MAX_JOIN_PARTS = 400
+
+
+class JoinPart(Strict):
+    speech_id: str = Field(min_length=1, max_length=64, description="A speech of the library.")
+    pause: float = Field(0.3, ge=0, le=5, description="Seconds of quiet after it.")
+
+
+class JoinIn(Strict):
+    parts: list[JoinPart] = Field(min_length=1, max_length=MAX_JOIN_PARTS)
+    title: str = Field(min_length=1, max_length=120, description="What the recording is called.")
+    text: str = Field("", max_length=20000, description="What it says, so search finds it.")
+
+
+class JoinOut(BaseModel):
+    track_id: str
+    title: str
+    seconds: float
+    uri: str
+    times: list[list[float]]  # where each part starts and ends, in seconds
+
+
+async def _join(p: JoinIn, ctx: ActionContext) -> Outcome:
+    """Speeches one after another, with a pause after each, kept as one recording in Your music:
+    the narration of a story, where each line can be a different voice. Says where each part
+    starts, so pictures and captions can follow."""
+    deps = need_deps(ctx)
+    store = _store(ctx)
+    parts: list[tuple[bytes, float]] = []
+    for part in p.parts:
+        try:
+            row = await asyncio.to_thread(
+                store.get_speech, ctx.actor.tenant_id, ctx.actor.user_id, part.speech_id
+            )
+            with deps.acting_as(ctx.actor, PRODUCT_ID):
+                data = await deps.storage.get(row["audio_key"])
+        except (NotFound, FileNotFoundError):
+            return Outcome.refused("A speech to join is no longer there.", "not_found")
+        try:
+            wav, _ = await audio_input.at_rate(data, "part.wav", JOIN_RATE, 1)
+        except audio_input.AudioInputError as e:
+            return Outcome.refused(str(e), e.code)
+        parts.append((wav, part.pause))
+    joined, times = await asyncio.to_thread(audio_input.join_wavs, parts)
+    seconds = round(times[-1][1] + p.parts[-1].pause, 3)
+    track_id = new_id()
+    key = f"music/{track_id}.wav"
+    with deps.acting_as(ctx.actor, PRODUCT_ID):
+        await deps.storage.put(key, joined, "audio/wav")
+    title = p.title.strip()
+    await asyncio.to_thread(
+        store.add_track, ctx.actor.tenant_id, ctx.actor.user_id, title=title, mode="joined",
+        description="Speech joined into one recording", lyrics=p.text, instrumental=False,
+        model_id="joined", options={}, seed=None, seconds=seconds, sample_rate=JOIN_RATE,
+        audio_key=key, load_s=0, elapsed_s=0, track_id=track_id,
+    )  # fmt: skip
+    await _reindex(ctx, "track", track_id, search_text(title, p.text[:TRANSCRIPT_INDEX_CHARS]))
+    return Outcome.ok(
+        {"track_id": track_id, "title": title, "seconds": seconds, "uri": _uri("track", track_id),
+         "times": [[a, b] for a, b in times]},
+        f'"{title}" was joined ({seconds:.0f} seconds) and saved to Your music.',
+    )  # fmt: skip
+
+
 # ---- lip sync ---------------------------------------------------------------------------------
 
 
@@ -699,16 +925,18 @@ class LipSyncIn(Strict):
     source_kind: SourceKind | None = Field(None, description="Or a recording of the library.")
     source_id: str | None = Field(None, max_length=64)
     voice: str | None = Field(None, max_length=100, description="A built-in voice for the words.")
-    picture_is: Literal["drawn", "own", "permission"] = Field(
-        description="What the picture is: 'drawn' (artwork), 'own' (the person) or 'permission' "
-        "(someone who agreed)."
-    )  # fmt: skip
-    voice_is: Literal["generated", "own", "permission"] | None = Field(
-        None,
-        description="For a recording: whose voice: 'own' or 'permission'. Words are 'generated'.",
+    start: float | None = Field(
+        None, ge=0, le=36000, description="Only part of the recording: from this second."
     )
+    end: float | None = Field(None, gt=0, le=36000, description="And to this second.")
     title: str | None = Field(None, max_length=120)
     model: str | None = Field(None, max_length=100)
+    shape: Literal["picture", "9:16", "16:9", "1:1", "4:5"] | None = Field(
+        None, description="The video's shape: the picture's own (the default), or one to crop to."
+    )
+    size: int | None = Field(
+        None, ge=256, le=2048, description="The short side of the video, as 480 for 480p."
+    )
 
     @model_validator(mode="after")
     def _one_voice(self) -> "LipSyncIn":
@@ -716,8 +944,10 @@ class LipSyncIn(Strict):
             raise ValueError("Give either text for the face to say, or a recording (source_id).")
         if self.source_id and not self.source_kind:
             raise ValueError("Say whether the recording is a track or a speech (source_kind).")
-        if self.source_id and self.voice_is not in ("own", "permission"):
-            raise ValueError("For a recording, say whose voice it is: 'own' or 'permission'.")
+        if (self.start is not None or self.end is not None) and not self.source_id:
+            raise ValueError("A part (start and end) is only for a recording.")
+        if self.start is not None and self.end is not None and self.end - self.start < 0.5:
+            raise ValueError("The part must be at least half a second long.")
         return self
 
 
@@ -746,16 +976,18 @@ async def _lipsync_input(p: LipSyncIn, ctx: ActionContext) -> dict[str, Any]:
         _store(ctx).add_picture, ctx.actor.tenant_id, ctx.actor.user_id, key=key,
         width=clean.width, height=clean.height, picture_id=pid,
     )  # fmt: skip
-    graph: dict[str, Any] = {"task": "lipsync", "picture": pid, "picture_basis": p.picture_is}
+    graph: dict[str, Any] = {"task": "lipsync", "picture": pid}
     if p.text:
         graph["text"] = p.text
-        graph["voice_basis"] = "generated"
         if p.voice:
             graph["voice"] = p.voice
     else:
         assert p.source_kind and p.source_id
-        graph |= _source(p.source_kind, p.source_id) | {"voice_basis": p.voice_is}
-    return graph | _clean({"title": p.title, "model": p.model})
+        graph |= _source(p.source_kind, p.source_id)
+    return graph | _clean({
+        "title": p.title, "model": p.model, "start": p.start, "end": p.end,
+        "shape": p.shape, "size": p.size,
+    })  # fmt: skip
 
 
 async def _lipsync_check(p: LipSyncIn, ctx: ActionContext) -> None:
@@ -774,21 +1006,12 @@ def _lipsync_result(outputs: dict[str, Any], p: LipSyncIn) -> Outcome | None:
     return Outcome.ok(
         {"clip_id": outputs["clip_id"], "title": title, "seconds": secs,
          "uri": _uri("lipsync", outputs["clip_id"])},
-        f'The talking video "{title}" was made ({secs:.0f} seconds), marked as AI-generated, and '
-        "saved to the library.",
+        f'The talking video "{title}" was made ({secs:.0f} seconds) and saved to the library.',
     )  # fmt: skip
 
 
 # ---- the catalogue ----------------------------------------------------------------------------
 
-_CLONE_CONSENT = (
-    "I confirm this is my own voice, or that I have the permission of the person whose voice it is."
-)
-_LIPSYNC_CONSENT = (
-    "I confirm I may use this picture and this voice: the picture is artwork, a picture of me, or "
-    "of someone who agreed; the voice is made here from words, my own, or one I have permission "
-    "to use. The video is marked as AI-generated."
-)
 HERE = need_product(PRODUCT_ID)
 SAMPLE_ID = "0b7c1f9e-0000-4000-8000-000000000000"  # for the examples
 SAMPLE_VOICE = "5c1d0e2a-0000-4000-8000-000000000000"
@@ -825,7 +1048,7 @@ def actions() -> list[Action]:
             input=TranscribeIn, output=TranscriptOut,
             examples=({"source_kind": "track", "source_id": SAMPLE_ID},),
             effect="make", flags=("private",), requires=(HERE, need_model("transcribe")), long=True,
-            product=PRODUCT_ID, bind=CallBinding(_transcribe, check=_check_source),
+            product=PRODUCT_ID, bind=CallBinding(_transcribe, check=_check_transcribe),
             ui="voice.transcribe",
         ),
         Action(
@@ -856,14 +1079,13 @@ def actions() -> list[Action]:
             summary="Save a voice cloned from a recording.",
             description=(
                 "Save a voice cloned from a recording of the library (2 to 30 seconds of one "
-                "person speaking clearly). It needs the person's word, in the app window, that "
-                "the voice is their own or that they have permission. Returns the voice id."
+                "person speaking clearly). Returns the voice id."
             ),
             input=CloneIn, output=VoiceOut,
             examples=({"source_kind": "speech", "source_id": SAMPLE_ID,
-                       "name": "My voice", "voice_is": "own"},),
-            effect="make", flags=("needs_consent", "private"), requires=(HERE,), product=PRODUCT_ID,
-            consent=_CLONE_CONSENT, bind=CallBinding(_voice_clone, check=_check_source),
+                       "name": "My voice"},),
+            effect="make", flags=("private",), requires=(HERE,), product=PRODUCT_ID,
+            bind=CallBinding(_voice_clone, check=_check_source),
             ui="voice.voices",
         ),
         Action(
@@ -937,6 +1159,35 @@ def actions() -> list[Action]:
             bind=_run("parts", _separate_input, _tracks_result("parts"), _check_source),
         ),
         Action(
+            id="speech.join", title="Join speech",
+            summary="Join speeches into one recording, with a pause after each.",
+            description=(
+                "Put speeches of the library one after another, each followed by a pause, and "
+                "keep them as one recording in Your music: a narration where each line can be a "
+                "different voice. It says where each part starts and ends. It takes a few seconds."
+            ),
+            input=JoinIn, output=JoinOut,
+            examples=(
+                {"parts": [{"speech_id": SAMPLE_ID, "pause": 0.4}], "title": "The lighthouse"},
+            ),
+            effect="make", flags=("private",), requires=(HERE,), product=PRODUCT_ID,
+            bind=CallBinding(_join), ui="creative",
+        ),
+        Action(
+            id="music.analyse", title="Find the beats of a song",
+            summary="Find a song's beats, downbeats, sections and when its lines are sung.",
+            description=(
+                "Work out what a video needs to know about a song of the library: its tempo, beats "
+                "and downbeats, its sections (start, end, how loud, no names like verse or chorus) "
+                "and when each typed line is sung. Nothing leaves this computer. It takes a few "
+                "seconds and is kept with the song. Lines may have no times, for instance in a "
+                "language the speech model does not know."
+            ),
+            input=AnalyseIn, output=AnalyseOut, examples=({"track_id": SAMPLE_ID},),
+            effect="make", flags=("private",), requires=(HERE, need_runtime("music_analysis")),
+            long=True, product=PRODUCT_ID, bind=CallBinding(_analyse), ui="creative",
+        ),
+        Action(
             id="dub.script", title="Write the dub script",
             summary="Write down a recording and translate it, line by line, for a dub.",
             description=(
@@ -997,15 +1248,14 @@ def actions() -> list[Action]:
             summary="Make a picture talk.",
             description=(
                 "Make a picture of the library talk: a video of the face saying words (made into "
-                "speech here) or a recording. The video is always marked AI-generated. It needs "
-                "the person's word, in the app window, about the picture and the voice."
+                "speech here) or a recording."
             ),
             input=LipSyncIn, output=ClipOut,
             examples=({"image_id": SAMPLE_ID,
-                       "text": "Hello, I am your guide.", "picture_is": "drawn"},),
-            effect="make", flags=("needs_consent", "costly", "private"),
+                       "text": "Hello, I am your guide."},),
+            effect="make", flags=("costly", "private"),
             requires=(HERE, need_model("lipsync")), long=True, product=PRODUCT_ID,
-            consent=_LIPSYNC_CONSENT, ui="voice.lipsync",
+            ui="voice.lipsync",
             bind=_run("talking video", _lipsync_input, _lipsync_result, _lipsync_check),
         ),
     ]  # fmt: skip
@@ -1163,6 +1413,23 @@ async def _rename_clip(ctx: ActionContext, item_id: str, title: str) -> bool:
     return True
 
 
+def _reader(getter: str, key: str) -> Any:
+    """A recording's bytes, for what brings it somewhere else (a project of scenes, ADR-0096)."""
+
+    async def read(ctx: ActionContext, item_id: str) -> bytes | None:
+        deps = need_deps(ctx)
+        try:
+            row = await asyncio.to_thread(
+                getattr(_store(ctx), getter), ctx.actor.tenant_id, ctx.actor.user_id, item_id
+            )
+            with deps.acting_as(ctx.actor, PRODUCT_ID):
+                return await deps.storage.get(row[key])
+        except (KeyError, LookupError, FileNotFoundError):
+            return None
+
+    return read
+
+
 def _exporter(method: str, key: str, ext: str, name: str) -> Any:
     async def export_(ctx: ActionContext, item_id: str, folder: Path) -> Path | None:
         deps = need_deps(ctx)
@@ -1197,11 +1464,13 @@ def library_kinds() -> list[LibraryKind]:
             "speech", PRODUCT_ID, "speech", _lister("list_speeches", _speech_item),
             _getter("get_speech", _speech_item), _deleter("delete_speech", ("audio_key",)),
             None, _exporter("get_speech", "audio_key", "wav", "text"),
+            _reader("get_speech", "audio_key"),
         ),
         LibraryKind(
             "track", PRODUCT_ID, "song", _lister("list_tracks", _track_item),
             _getter("get_track", _track_item), _deleter("delete_track", ("audio_key",)),
             _rename_track, _exporter("get_track", "audio_key", "wav", "title"),
+            _reader("get_track", "audio_key"),
         ),
         LibraryKind(
             "transcript", PRODUCT_ID, "transcript", _lister("list_transcripts", _transcript_item),
@@ -1216,7 +1485,7 @@ def library_kinds() -> list[LibraryKind]:
             "lipsync", PRODUCT_ID, "talking video", _lister("list_clips", _clip_item),
             _getter("get_clip", _clip_item),
             _deleter("delete_clip", ("video_key", "picture_key")), _rename_clip,
-            _exporter("get_clip", "video_key", "mp4", "title"),
+            _exporter("get_clip", "video_key", "mp4", "title"), _reader("get_clip", "video_key"),
         ),
     ]  # fmt: skip
 

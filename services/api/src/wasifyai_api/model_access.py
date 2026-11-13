@@ -2,7 +2,7 @@
 
 The aliases and their defaults are in model_defaults.yaml. LiteLLM stores the live bindings (and
 encrypts the API keys); this module seeds the defaults, shows the current state without secrets,
-changes a binding after the product's checks pass, and tests one."""
+changes a binding, and tests one."""
 
 import ipaddress
 import logging
@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 from urllib.parse import urlsplit
 
 import yaml
@@ -28,6 +28,9 @@ STALE_CANDIDATE_MINUTES = 10
 NO_KEY = "none"  # what "no API key" is stored as; also what Ollama and local servers get
 
 
+ZAI_BASE = "https://api.z.ai/api/paas/v4"
+
+
 @dataclass(frozen=True)
 class Provider:
     id: str
@@ -37,20 +40,40 @@ class Provider:
     needs_base: bool
     hint: str  # an example model name, shown as a placeholder only
     embed_prefix: str | None = None  # when embeddings use another prefix
+    fixed_base: str | None = None  # a vendor reached through `openai/` at its own address (Z.ai)
 
 
 PROVIDERS: dict[str, Provider] = {
     p.id: p
     for p in (
-        Provider("ollama", "Ollama (local)", "ollama_chat/", False, True, "gemma4:e4b", "ollama/"),
-        Provider("gemini", "Google Gemini", "gemini/", True, False, "gemini-2.5-flash"),
-        Provider("groq", "Groq", "groq/", True, False, "llama-3.3-70b-versatile"),
-        Provider("cerebras", "Cerebras", "cerebras/", True, False, "llama-3.3-70b"),
-        Provider("openrouter", "OpenRouter", "openrouter/", True, False, "google/gemma-3-27b-it"),
+        # ADR-0100: the admin chooses the text vendors; Claude Haiku 5.5 on Anthropic is the
+        # default. Ollama and its OpenAI-compatible route are the stack's own local models, kept
+        # until the web runs on cloud models only (stage CP12 of docs/cloud-v1-plan.md).
+        Provider("anthropic", "Anthropic", "anthropic/", True, False, "claude-haiku-5-5"),
+        Provider("openai", "OpenAI", "openai/", True, False, "gpt-6-luna"),
+        Provider("gemini", "Google Gemini", "gemini/", True, False, "gemini-3.8-flash"),
+        Provider("deepseek", "DeepSeek", "deepseek/", True, False, "deepseek-flash"),
         Provider(
-            "openai_compatible", "OpenAI-compatible server", "openai/", False, True, "model-name"
+            "zai",
+            "Z.ai",
+            "openai/",
+            True,
+            False,
+            "glm-5.3-flash",
+            fixed_base=ZAI_BASE,
         ),
-        Provider("litellm", "Other (LiteLLM model string)", "", True, False, "provider/model-name"),
+        Provider(
+            "openrouter", "OpenRouter", "openrouter/", True, False, "anthropic/claude-haiku-5.5"
+        ),
+        Provider("ollama", "Ollama (local)", "ollama_chat/", False, True, "gemma4:e4b", "ollama/"),
+        Provider(
+            "openai_compatible",
+            "Ollama, OpenAI-compatible route (local)",
+            "openai/",
+            False,
+            True,
+            "gemma4:e4b",
+        ),
     )
 }
 
@@ -59,12 +82,6 @@ MODEL_NAME = re.compile(r"^[A-Za-z0-9._:/@+\-]{1,200}$")
 
 class ModelAccessError(Exception):
     """A request that cannot be accepted; the message is meant for the admin."""
-
-
-class CanaryFailed(ModelAccessError):
-    def __init__(self, failures: list[str]):
-        super().__init__("the product's checks failed for this model")
-        self.failures = failures
 
 
 class Binding(BaseModel):
@@ -78,7 +95,6 @@ class ModelView(BaseModel):
     alias: str
     purpose: str
     kind: str
-    protected: bool
     source: str  # "default", "custom" or "missing" (not seeded yet)
     provider: str | None
     model: str | None
@@ -103,12 +119,6 @@ class TestOutcome(BaseModel):
     error: str = ""
 
 
-class CheckRunner(Protocol):
-    async def run(self, alias: str, candidate: str) -> list[str]:
-        """Run every check for products that use `alias`, against `candidate`; return failures."""
-        ...
-
-
 def load_defaults(substitutions: dict[str, str], path: Path = DEFAULTS_FILE) -> dict[str, dict]:
     raw = yaml.safe_load(path.read_text())["aliases"]
     out: dict[str, dict] = {}
@@ -130,7 +140,11 @@ def _fill(value: str, substitutions: dict[str, str]) -> str:
 def describe(params: dict[str, Any]) -> tuple[str, str]:
     """(provider id, model name) for a LiteLLM model string."""
     model = str(params.get("model", ""))
-    if model.startswith("openai/") and params.get("api_base"):
+    base = str(params.get("api_base") or "").rstrip("/")
+    if model.startswith("openai/") and base:
+        for p in PROVIDERS.values():
+            if p.fixed_base and base == p.fixed_base:
+                return p.id, model.removeprefix("openai/")
         return "openai_compatible", model.removeprefix("openai/")
     for p in PROVIDERS.values():
         for prefix in (p.prefix, p.embed_prefix):
@@ -146,10 +160,10 @@ def validate_binding(b: Binding) -> Binding:
     model = b.model.strip()
     if not MODEL_NAME.match(model):
         raise ModelAccessError("the model name has characters that are not allowed")
-    api_base = (b.api_base or "").strip() or None
+    api_base = provider.fixed_base or (b.api_base or "").strip() or None
     if provider.needs_base and not api_base:
         raise ModelAccessError(f"{provider.label} needs a server address")
-    if api_base:
+    if api_base and not provider.fixed_base:
         _check_url(api_base)
     key = (b.api_key or "").strip() or None
     if key and (len(key) > 512 or re.search(r"\s", key)):
@@ -204,12 +218,10 @@ class ModelAccess:
         self,
         backend: ModelBackend,
         defaults: dict[str, dict],
-        checks: CheckRunner | None = None,
         now: Callable[[], str] = _now,
     ):
         self._backend = backend
         self._defaults = defaults
-        self._checks = checks
         self._now = now
 
     @staticmethod
@@ -278,7 +290,7 @@ class ModelAccess:
             views.append(
                 ModelView(
                     alias=alias, purpose=spec["purpose"], kind=spec["kind"],
-                    protected=bool(spec.get("protected")), source=meta.get("source", "missing"),
+                    source=meta.get("source", "missing"),
                     provider=meta.get("provider"), model=meta.get("model"),
                     api_base=meta.get("api_base"),
                     key_set=bool(meta.get("key_set")), updated_by=meta.get("updated_by"),
@@ -292,25 +304,14 @@ class ModelAccess:
             raise ModelAccessError(f"unknown alias {alias!r}")
         return self._defaults[alias]
 
-    async def set(self, alias: str, binding: Binding, actor: str) -> tuple[ModelView, str]:
-        """Point `alias` at a new provider and model. Returns the view and the canary outcome
-        ("passed" or "none" when no product has a check for this alias)."""
+    async def set(self, alias: str, binding: Binding, actor: str) -> ModelView:
+        """Point `alias` at a new provider and model."""
         spec = self._spec(alias)
         binding = validate_binding(binding)
         params = build_params(spec, binding, spec["kind"])
-        outcome = "none"
-        if self._checks is not None:
-            candidate = await self._add_candidate(alias, params, spec)
-            try:
-                failures = await self._checks.run(alias, candidate)
-            finally:
-                await self._backend.delete(candidate)
-            if failures:
-                raise CanaryFailed(failures)
-            outcome = "passed" if spec.get("protected") else "none"
         info = self._info(alias, "custom", params, params["api_key"] != NO_KEY, actor)
         await self._backend.update(self.model_id(alias), params, info)
-        return next(v for v in await self.list() if v.alias == alias), outcome
+        return next(v for v in await self.list() if v.alias == alias)
 
     async def reset(self, alias: str, actor: str) -> ModelView:
         spec = self._spec(alias)

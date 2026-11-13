@@ -13,7 +13,7 @@ Ask one notebook a question; the answer comes from its sources only, with number
 
 ## Steps in the app
 
-1. Open **Notebook › View Notebooks** and choose the notebook.
+1. Open **Notebook › View notebooks** and choose the notebook.
 2. Type the question in the chat.
 
 ## Fields

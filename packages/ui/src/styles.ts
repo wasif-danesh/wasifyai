@@ -11,7 +11,7 @@ export const eyebrow =
 /** The centred column every page sits in (on the home page it has more room above; a page with a
  * `data-workspace` element, such as the image and video screens, uses the whole width and height). */
 export const page =
-  "mx-auto grid w-[min(100%-2rem,70rem)] gap-(--space) pt-[clamp(1.5rem,4vw,3.5rem)] pb-20 sm:w-[min(100%-3rem,70rem)] has-[[data-home]]:gap-0 has-[[data-home]]:pt-[clamp(2.75rem,7vw,5rem)] has-[[data-home]]:pb-14 has-[[data-workspace]]:w-full has-[[data-workspace]]:gap-0 has-[[data-workspace]]:pt-0 has-[[data-workspace]]:pb-0";
+  "mx-auto grid grid-cols-[minmax(0,1fr)] w-[min(100%-2rem,70rem)] gap-(--space) pt-[clamp(1.5rem,4vw,3.5rem)] pb-20 sm:w-[min(100%-3rem,70rem)] has-[[data-home]]:gap-0 has-[[data-home]]:pt-[clamp(2.75rem,7vw,5rem)] has-[[data-home]]:pb-14 has-[[data-workspace]]:w-full has-[[data-workspace]]:gap-0 has-[[data-workspace]]:pt-0 has-[[data-workspace]]:pb-0";
 
 /** A row of buttons or small controls that wraps on a narrow screen. */
 export const actions = "flex flex-wrap items-center gap-2.5";

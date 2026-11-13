@@ -32,6 +32,15 @@ spec:
               valueFrom:
                 secretKeyRef: { name: {{ .Values.secrets.existingSecret }}, key: LITELLM_SALT_KEY }
             - { name: STORE_MODEL_IN_DB, value: "True" }
+            {{- with .Values.langfuse.baseUrl }}
+            - { name: LANGFUSE_HOST, value: {{ . | quote }} }
+            - name: LANGFUSE_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ $.Values.secrets.existingSecret }}, key: LANGFUSE_PUBLIC_KEY, optional: true }
+            - name: LANGFUSE_SECRET_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ $.Values.secrets.existingSecret }}, key: LANGFUSE_SECRET_KEY, optional: true }
+            {{- end }}
             {{- if .Values.postgres.enabled }}
             - name: POSTGRES_PASSWORD
               valueFrom:

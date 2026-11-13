@@ -1,6 +1,10 @@
 # ADR-0069: An MCP server: Claude Code, Codex and OpenCode can use the app
 
-- **Status:** Accepted (2026-10-18, by the owner), together with the new dependencies it names.
+- **Status:** Accepted (2026-10-18, by the owner), together with the new dependencies it names. Amended 2026-10-27 with
+  what spike S1 measured (section "Amendment after spike S1" below); the decisions stand, the sentences marked
+  *amended* are read with it. Stage M1 has not started.
+- **Owner answer (2026-10-29):** the launcher's name `wasify-mcp` is frozen: people's MCP configs depend on it, so it
+  is not renamed.
 - **Date:** 2026-10-18
 - **Depends on:** ADR-0068 (action catalogue), ADR-0056 (one engine, two shells; one memory slot), ADR-0047
   (safeguards), ADR-0066 (voice product; consent), ADR-0041 (search), ADR-0061 (how outside code enters).
@@ -24,7 +28,7 @@ version and client capabilities; servers must answer `server/discover`. Tasks le
 extension. Server-to-client requests (elicitation, sampling, roots) are replaced by **multi round-trip requests**
 (a result of `input_required` that the client answers by retrying). Roots, sampling and logging are deprecated,
 HTTP+SSE is deprecated, and Dynamic Client Registration is deprecated in favour of Client ID Metadata Documents.
-The Python SDK `mcp` 2.x (MIT, 2.3.0 on 2026-10-02) implements the new revision and serves the older ones.
+The Python SDK `mcp` 2.x (2.3.0 on 2026-10-02) implements the new revision and serves the older ones.
 
 Facts about our engine that decide the shape:
 
@@ -37,11 +41,11 @@ Facts about our engine that decide the shape:
 
 ## Decision
 
-1. **The server is part of the engine,** a Streamable HTTP endpoint (`/mcp`) on the engine's loopback port, built
+1. **The server is part of the engine,** *(amended below: revisions per client, `stateless_http=True`)* a Streamable HTTP endpoint (`/mcp`) on the engine's loopback port, built
    on the official `mcp` Python SDK 2.x, speaking revision 2026-07-28 and (through the SDK) the earlier ones
    (`2025-11-25`, `2025-06-18`). It is **stateless**, as the new revision is, so a restart of the engine loses
    nothing a client needs. It is **off by default**.
-2. **Clients reach it through a small stdio launcher, `wasify-mcp`,** shipped with the app (a Rust binary beside the
+2. **Clients reach it through a small stdio launcher, `wasify-mcp`,** *(amended below: what the launcher must do)* shipped with the app (a Rust binary beside the
    shell). The engine's port changes every launch, so a static client config cannot hold a URL. The launcher reads
    a runtime file that the shell writes when the engine is ready and deletes when it stops (new: `engine.json` in the
    app data folder with the pid, the port and the launcher's connection secret; mode 0600, the same
@@ -49,7 +53,7 @@ Facts about our engine that decide the shape:
    call with one clear tool result: "Open Wasify AI, then try again." (Starting the engine without a window is a
    later step, M3, and a shell decision.) A fixed-port HTTP URL for clients that cannot run a command is an option
    in Settings, off by default, with a token.
-3. **Settings > Connections** (desktop) is where it is controlled. The switch "Let other apps use Wasify AI" creates
+3. **Settings > Connections** (desktop) is where it is controlled *(amended below: generated snippets; a connection is a principal, ADR-0092)*. The switch "Let other apps use Wasify AI" creates
    a first **connection** for the launcher; the person can add more (a name, for example "Codex on my laptop").
    Each connection has: its secret (shown once, stored hashed), a **scope** (decision 5), an **approval setting**
    (ADR-0068 decision 4, with the same floor), the **folders** it may read from and write to (decision 6), a rate
@@ -66,7 +70,7 @@ Facts about our engine that decide the shape:
    `needs_consent`), `models` (status only), `admin` (delete, rename). A new connection gets **`make` and
    `models`**. `library` and `notebooks` are opt-in with a warning that what an agent reads goes to its model
    provider ("Claude Code sends this to Anthropic"). `voices`, `lipsync` and `destroy` are off until chosen.
-6. **Files: references out, allowed folders in and out.** Results are structured content plus `resource_link`
+6. **Files: references out, allowed folders in and out.** *(amended below: measured result limits)* Results are structured content plus `resource_link`
    items (`wasify://creation/<id>`); no bytes in a result, except an optional downscaled image preview of at most
    256 KB when `preview: true` (agents that can see pictures benefit; the 25,000-token limit of Claude Code is
    respected). To get a file, an agent calls `library_export` with a destination **inside a folder the connection
@@ -74,20 +78,20 @@ Facts about our engine that decide the shape:
    project folder). To give the app a file (a recording to transcribe), the path must be inside a folder the
    connection may read. Paths are resolved, symbolic links followed and checked, `..` refused. MCP **roots** are
    deprecated and are not used.
-7. **Long work is a handle.** A long action starts the job, waits up to `wait_seconds` (default 25, at most 50,
+7. **Long work is a handle.** *(amended below: progress every 5 s; the tasks extension is dropped from M1)* A long action starts the job, waits up to `wait_seconds` (default 25, at most 50,
    below the 60-second limits of Codex and the two-minute background rule of Claude Code) and returns the result
    or `{status: "running", job_id}`; `job_status`, `job_wait` and `job_cancel` follow it. Progress is sent as
    `notifications/progress` on the request's own stream when the client gave a progress token. Where a client
    supports the **tasks extension** (`io.modelcontextprotocol/tasks`), the same jobs are offered as tasks
    (decided in spike S1 against what the three clients actually do).
-8. **A person approves in the app, not through the agent.** An action that needs approval (ADR-0068 decision 4:
+8. **A person approves in the app, not through the agent.** *(amended below: `needs_approval` with an id; clients do prompt on their own)* An action that needs approval (ADR-0068 decision 4:
    `destroy`, `needs_consent`, a `make` the person chose to be asked about) returns the **`input_required`**
    result of the multi round-trip pattern when the client supports it, and in every case shows an **approval card
    in the Wasify window** ("Claude Code wants to make a 30-second song. Allow once / Always for this connection
    / Deny"); the tool call waits for the answer for a bounded time and then returns `needs_approval` with what
    to tell the person. Clients are unaffected by their own approval prompts: ours is the one that counts. A call
    made while the app is in the background raises a notification.
-9. **New dependencies, to be approved:** the Python `mcp` SDK 2.x (MIT, official) in the engine, and, for the
+9. **New dependencies, to be approved:** *(amended below: eight packages besides `mcp`)* the Python `mcp` SDK 2.x (official) in the engine, and, for the
    launcher, nothing beyond what the shell already builds with (an HTTP client already present, or
    `ureq`/`reqwest`: checked in M1). The launcher is about 300 lines.
 10. **The engine's rules apply unchanged.** Every call runs as the desktop user through the same child runs, so
@@ -95,12 +99,12 @@ Facts about our engine that decide the shape:
     queue is first in, first out with the window's own jobs; a connection has at most one running job and eight
     waiting; the window shows "from Codex" on its jobs and lets the person cancel any of them. What an agent
     made carries `origin` and is findable in My creations like anything else (ADR-0041).
-11. **Transport safety.** The endpoint accepts only `POST` to `/mcp` with `Authorization: Bearer <connection
+11. **Transport safety.** *(amended below: a Starlette route and an ASGI wrapper; 1 MiB explicit)* The endpoint accepts only `POST` to `/mcp` with `Authorization: Bearer <connection
     secret>`, rejects requests whose `Origin` is present and not the launcher's, checks `Host` against loopback
     (DNS rebinding), limits body size (1 MiB) and rate, and logs every call to an **activity log** (connection,
     action, result status, duration; never prompts or content) that Settings shows. A web page in a browser
     cannot call it: it has no secret and its `Origin` is refused.
-12. **A conformance suite.** Tests drive the endpoint with the SDK's client for each protocol revision we claim,
+12. **A conformance suite.** *(amended below: three revisions, three session shapes)* Tests drive the endpoint with the SDK's client for each protocol revision we claim,
     plus a recorded session from each of the three clients, replayed in CI. Manual checks against the three real
     clients are a release gate (plan, M2).
 
@@ -136,7 +140,9 @@ Facts about our engine that decide the shape:
 ## Open questions
 
 1. Does each of the three clients support `input_required` and tasks today? If not, approval waits inside the call
-   (decision 8) and jobs use handles (decision 7). The spike answers it, per client version.
+   (decision 8) and jobs use handles (decision 7). The spike answers it, per client version. **Answered by S1:** none
+   advertises tasks; `input_required` only on Claude Code (2026-07-28); approval waits inside the call and jobs use
+   handles in all three.
 2. Where the launcher lives on Windows and Linux (the desktop is Mac first); the runtime file's location follows
    the app data folder.
 3. Whether an agent may **start** the app. Wanted by users ("the agent opens it"), but it starts a window and loads
@@ -149,3 +155,141 @@ Facts about our engine that decide the shape:
 Windows and Linux launchers (after the Mac); a remote or multi-user MCP server; exposing the assistant itself as a
 tool (agents are assistants already); MCP **prompts** as slash commands (a generated list of useful prompts is M3);
 sampling, roots and logging (deprecated in the revision we build against); a public marketplace listing.
+
+## Amendment after spike S1 (2026-10-27; report: `docs/spikes/mcp-s1.md`, run 2026-10-19)
+
+Measured with `mcp` 2.3.0 against Claude Code 2.1.302, Codex 0.163.0 and OpenCode 1.19.3. Verdict for stage M1: **Go**,
+with these corrections. None changes a stage.
+
+1. **Decision 1, revisions.** Only Claude Code speaks 2026-07-28; Codex speaks 2025-06-18 and OpenCode 2025-11-25, and
+   both open sessions. The server runs with `stateless_http=True` (an engine restart loses nothing, no session table, no
+   replay in the launcher) and accepts that on the legacy revisions it cannot ask the client anything mid-call. If a
+   later feature needs that on Codex, switch to stateful and keep the launcher's re-initialize.
+2. **Decisions 1 and 11, mounting.** The endpoint is a Starlette `Route` around the SDK's `StreamableHTTPASGIApp`,
+   outside FastAPI dependencies; the engine's `/mcp` authentication, rate limit and activity log are an ASGI wrapper of
+   ours. `max_request_body_size` is set to 1 MiB explicitly (the SDK default is 4 MiB); the `Origin` and `Host` checks
+   come from the SDK when the host is loopback. With ADR-0092 the bearer resolves to a `Principal` of kind `connection`
+   with the connection's scopes, through the same `get_principal` as every other credential.
+3. **Decision 2, the launcher.** Requirements found by running it: derive the headers from `engine.json` read on the
+   open descriptor (mode checked there), stream the response, forward cancellation, answer locally per revision when
+   the app is closed, re-initialize on a 404 if ever stateful. About 300 lines of Rust; the Python prototype in the spike
+   is the reference. Open problem: with the app closed the launcher can only offer a stub tool list, and the clients
+   read the list once (open question 5 below).
+4. **Decision 7, long work.** `wait_seconds` default 25, at most 50, stays. Progress is sent **at least every 5 s**
+   (it resets Claude Code's idle limit and OpenCode's 60 s; Codex's explicit limit it does not). The **tasks extension is
+   dropped from M1**: no client advertises it and the SDK has no server side for it. Job handles work in all three.
+5. **Decision 8, approval.** Approval is decided in the Wasify window; the tool waits a bounded time and then returns
+   `needs_approval` with an `approval_id` that `job_wait` and `approval_status` follow. `input_required` is optional,
+   only on 2026-07-28 with `elicitation` declared; a cancel or decline from it means "not answered". The sentence
+   "clients are unaffected by their own approval prompts" is withdrawn: Codex asks or refuses per tool by
+   `readOnlyHint`, Claude Code has permission rules and `anthropic/requiresUserInteraction`, so decision 4's
+   annotations must be accurate, and the Codex snippet offers `default_tools_approval_mode` as a choice.
+6. **Decision 6, results.** Measured limits: Codex cuts text over about 12,000 characters in the middle; Claude Code and
+   OpenCode replace text over 50,000 characters with a file path; 500 KB is an error in Claude Code. Results stay under
+   about 10 KB, ids and links as written, and are a dict with a sentence in the text content (the SDK wraps a plain
+   string as `{"result": ...}`).
+7. **Decision 3, copy-for-client.** The snippets are generated from the spike's "Config snippets that worked": the
+   HTTP forms need a variable holding the secret, the stdio forms only the launcher path (and `WASIFY_ENGINE_JSON` when
+   the default location is not used); `claude mcp add` wants the name before `-e`.
+8. **Decision 9, dependencies.** Eight packages enter the lock besides `mcp`, one compiled (`rpds-py`); the hashed
+   engine bundle must carry them.
+
+Added open question: **5.** how the tool list refreshes once the app starts (`notifications/tools/list_changed`), since
+the clients read it once. Not verified by the spike: the clients' interactive screens, behaviour with a real model,
+Windows and Linux, the Rust launcher and its signing, OAuth, and the 1 MiB limit under load.
+
+## Built 2026-10-27 (stage M1, make-only; spike S2 first)
+
+- **Spike S2** (`docs/spikes/mcp-s2.md`): the file rules of decision 6 are `wasifyai_platform_sdk.folders`
+  (`AllowedFolders.resolve`), held under 26 hostile paths. The macOS folder prompt is noted, not measured.
+- **Decisions 1, 4, 5, 11, 12 and the amendment:** `services/api/src/wasifyai_api/mcp_server/`: the SDK's server
+  (`mcp` 2.3.0, `stateless_http=True`, 1 MiB body) behind an ASGI gate that turns a connection secret
+  (`wsc_<id>_<random>`, hashed with a salt per row) into the connection, holds its rate (429), logs each call
+  without content (`mcp_activity`), and refuses a missing or wrong secret (401; the SDK's own `Origin` 403 and
+  `Host` 421 stay). One tool per catalogue action offered to `mcp`, named `domain_verb`, with the action's schema and
+  annotations; which tools a connection sees follows its scopes (ADR-0092's groups; a new connection gets `make`,
+  `models` and `read`). The conformance tests drive it with the SDK's client on the legacy, auto and 2026-07-28
+  modes (`services/api/tests/test_mcp_server.py`).
+- **Decisions 7 and 8 as the amendment reads them:** a long action becomes a job after 25 s with progress at least
+  every 5 s; an action that needs the person's yes is parked on the **approval desk**, the window gets an event on
+  `GET /desktop/events` and shows a card (Allow once / Deny; never "always"), the answer runs the action with the
+  approval the executor recorded (as a job when long), and the agent follows it with `approval_status` and `job_wait`.
+  A call that is not answered within 25 s returns `needs_approval` with the id, as the amendment says.
+- **Decision 2:** `wasify-mcp` is a second binary of the shell's crate (`src/bin/wasify_mcp.rs`, about 330 lines of
+  Rust): reads `engine.json` on every request with the checks on the open descriptor (`O_NOFOLLOW`, owner, mode
+  0600, the folder not writable by others, loopback host, live pid), derives the three headers of 2026-07-28,
+  carries a legacy session and re-initializes it after an engine restart, streams server-sent events to stdout,
+  closes the request on `notifications/cancelled`, and answers `initialize`, `server/discover`, `tools/list` and
+  `tools/call` itself when the app is closed ("Open Wasify AI, then restart your agent"). Tested through the SDK's
+  stdio client on both eras, with the app closed, and with a readable-by-others, stale and non-loopback file.
+  `engine.json` is written by the **engine**, not the shell: the switch creates a launcher connection whose secret
+  lives in the secret store (ADR-0092), and each launch rewrites the file with the new port and pid.
+- **Decision 3:** Settings > Other apps (`packages/ui/src/connections/`): the switch, the generated snippets for the
+  three clients (the launcher's path comes from the shell, `WASIFYAI_MCP_LAUNCHER`), the connections with scopes in
+  words and the approval setting, a new secret shown once, revoke.
+- **Not built in M1:** the `library`, `notebooks` and `voices` groups are choosable but `library_export` and file
+  inputs (decision 6's folders) wait for M2; the opt-in fixed HTTP port; `input_required` as a courtesy; the
+  launcher is built beside the shell but not yet placed in the bundle (release work, Q2); Windows and Linux not run;
+  the `notifications/tools/list_changed` refresh after the app starts (open question 5) is still open.
+- **The three real clients, driven 2026-10-27** (`docs/spikes/mcp-m1-clients.md`): Claude Code 2.1.302, Codex 0.163.0
+  and OpenCode 1.19.3 through `wasify-mcp` against a desktop engine, with S1's scripted model: the tour (status,
+  models, a picture approved in the window, the job followed), a late approval (`needs_approval`, then
+  `approval_status`, then the job) and the app closed, all three clients, all three scenarios. The run changed two
+  things: the launcher's path is read from `WASIFYAI_MCP_LAUNCHER` (the name the shell sets), and every result's
+  sentence carries its `job_id` and `approval_id`, because OpenCode hands its model the text alone.
+
+## Built 2026-10-27 (stage M2: the rest of the groups, and files)
+
+- **Decision 6, files:** a connection's folders ride on its principal (`Principal.folders`, ADR-0092) and reach the
+  action through `ActionContext.principal`. `library_export` takes a `folder` that must be one of the connection's
+  write folders (resolved by spike S2's rules; a folder outside, missing or reached through a link is refused with
+  the rule named); `speech_transcribe` takes a `path` that must be a file under one of its read folders, decoded the
+  way an upload is (first bytes checked, a clean 16 kHz WAV made in a limited child process), so the person's file
+  itself is never used. The person in the window, who has no folders, keeps the app's own export folder and the
+  library's recordings. A new connection may write into `~/Documents/Wasify AI exports` (made when the connection
+  is) and read nothing until a folder is added in Settings.
+- **The groups:** `library`, `notebooks` and `voices` were already choosable; the audio, dub, audiobook and lip sync
+  actions are `make`; rename and delete are `library`. Settings > Other apps gained the three presets of the plan
+  ("Make things", "Make and use my library", "Everything": the last two differ only once an `admin` group exists)
+  and the read and write folders of each connection.
+- **Tested** on the real desktop engine through the SDK's client: an export lands in the connection's folder and
+  nowhere else; and at the action level, a connection transcribes a file under its read folder and is refused
+  outside it, a relative path, and a path from the window.
+- **Not built:** image previews of at most 256 KB and `resource_link` results (decision 6's "preview: true"); an
+  `admin` group of its own; the file path through the three real clients (the test engine has no speech model).
+
+## Built 2026-10-27 (stage M3: hardening and reach)
+
+- **Decision 10, quotas:** a connection runs **one job at a time** (a second long call while one runs is refused
+  with `busy` and the running `job_id`, so the agent waits for it with `job_wait` instead of piling up) and has a
+  **daily quota** of tool calls (`calls_per_day`, 1 to 100,000, default 1,000; Settings > Other apps, "Tool calls a
+  day, at most"), counted from the activity log (Alembic 0024; SQLite files from before get the column on first
+  use); over it, a call is refused with `quota` and a sentence that names Settings. The rate per minute (M1) stays.
+  "Eight waiting" is not built as a queue: refusing the second call is simpler and stricter.
+- **Decision 10, the label and the stop:** `GET /actions/jobs` lists the person's running jobs with `from` (the
+  connection's name when `origin` is `mcp:<name>`), and `POST /actions/jobs/{id}/cancel` stops one that can be
+  stopped. Settings > Other apps shows "Running now" ("image.generate from Codex", the seconds, Stop) while anything
+  runs. The library card does not yet say "from Codex" (the audit log holds the origin).
+- **Decision 2, the opt-in fixed port:** `PUT /connections/fixed-port {port}` opens a second loopback listener that
+  serves nothing but `/mcp` through the same gate and rate limiter; the port is kept in the settings store
+  (`mcp.fixed_port`) and opened again at the next launch; `{port: null}` closes and forgets it. The HTTP snippets
+  (Claude Code with `--transport http`, the secret in `WASIFY_MCP_SECRET`) name this port, never the engine's own.
+  Off by default; the client holds a connection secret of its own.
+- **A skill file for Claude Code:** `GET /connections/skill` is a `SKILL.md` generated from the catalogue for the
+  launcher's scopes (how calls behave: jobs, approvals, folders, `app_status` first; the tools by group with
+  "takes a while" and "asks the person in the app"; three example prompts). Settings shows it with where to save
+  it (`.claude/skills/wasify-ai/SKILL.md`). The alternative "skills instead of MCP" stays rejected: this is words
+  in addition to the connection.
+- **The security review:** `docs/mcp-security-review.md` goes through every row of the phase 4 checklist with the
+  control as built, where it lives, the test that holds it and what is open. Every server row is closed; the three
+  rows of ADR-0070 (remote tool results, outside stdio servers, SSRF) are reviewed before C1.
+- **Tested** on the real desktop engine: the quota refuses the third of two allowed calls; the one-job rule at the
+  seam (`over_the_limits`); the jobs list and the stop; the fixed port serves the SDK's client, refuses a bare
+  request, serves only `/mcp`, stops on request and refuses a port below 1024; the skill file names the launcher's
+  tools and not the library's. Settings: the quota field, "Running now" with Stop, the fixed port and the skill
+  file (`connections.test.tsx`).
+- **Not built:** notifications for background approvals (needs `tauri-plugin-notification`, a dependency the
+  owner has not approved; the card in the window is the only signal); Windows and Linux launchers (the Rust source
+  has the `cfg` branches but CI has no Rust job and a Linux build of the shell's crate needs WebKitGTK, so neither
+  was compiled); the self-test that makes a speech file through the launcher (the test engine has no speech model;
+  the three real clients were driven in M1 without files); the "from Codex" label on library cards.

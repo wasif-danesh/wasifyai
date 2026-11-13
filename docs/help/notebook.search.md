@@ -13,7 +13,7 @@ Find passages about a topic across all your notebooks.
 
 ## Steps in the app
 
-1. Open **Notebook › View Notebooks** and search inside a notebook, or ask the assistant.
+1. Open **Notebook › View notebooks** and search inside a notebook, or ask the assistant.
 
 ## Fields
 
@@ -33,4 +33,4 @@ Find passages about a topic across all your notebooks.
 
 ## Problems
 
-- **Search model missing** Open **Models** and get the search model.
+- **Search model missing** Open **Model hub** and get the search model.

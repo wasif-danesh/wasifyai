@@ -23,7 +23,8 @@ from wasifyai_api.desktop_models import (
     parse_catalogue,
 )
 from wasifyai_api.identity import get_identity
-from wasifyai_api.safeguards import InMemorySettingsStore
+from wasifyai_api.services import ApiServices
+from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_platform_sdk import Identity
 
 PRODUCTS = Path(__file__).resolve().parents[3] / "products"
@@ -106,9 +107,7 @@ def entry(origin: Origin) -> ModelEntry:
         f("text_encoders", "clip.safetensors", "/clip.bin"),
         f("vae", "vae.safetensors", "/vae.bin"),
     )
-    return ModelEntry(
-        "demo", "wasifyai-image", "Demo model", "Apache-2.0", "https://example.test", "", 24, files
-    )
+    return ModelEntry("demo", "wasifyai-image", "Demo model", "https://example.test", "", 24, files)
 
 
 async def finished(d, wait_s=10):
@@ -123,9 +122,26 @@ async def finished(d, wait_s=10):
 
 def test_the_shipped_catalogue_is_pinned_and_safe():
     entries = load_catalogue(PRODUCTS, ["wasifyai-image", "hello"])
-    assert [e.id for e in entries] == ["flux2-klein-4b"]
+    assert [e.id for e in entries] == [
+        "flux2-klein-4b", "qwen-image-2.1", "z-image-turbo", "hidream-o1", "ideogram-4",
+        "flux3-image-klein", "flux2-klein-9b",
+    ]  # fmt: skip
+    for entry in entries:  # every file of every model is pinned to a commit
+        for f in entry.files:
+            assert f.url.startswith("https://huggingface.co/") and "/main/" not in f.url
+            assert len(f.sha256) == 64 and f.size > 1_000_000
+    # what each model can do comes from the product's `models:` list (ADR-0097)
+    assert [e.can for e in entries] == [
+        ("image.edit", "image.generate", "image.inpaint", "image.reference"),
+        ("image.edit", "image.generate", "image.reference"),
+        ("image.generate",),
+        ("image.generate",),
+        ("image.generate",),
+        ("image.edit", "image.generate"),
+        ("image.edit", "image.generate", "image.inpaint", "image.reference"),
+    ]
     e = entries[0]
-    assert e.licence == "Apache-2.0" and e.approx_ram_gb == 24
+    assert e.approx_ram_gb == 24
     assert {f.name for f in e.files} == {
         "flux-2-klein-4b.safetensors", "qwen_3_4b.safetensors", "flux2-vae.safetensors"
     }  # fmt: skip
@@ -134,6 +150,28 @@ def test_the_shipped_catalogue_is_pinned_and_safe():
         assert len(f.sha256) == 64 and f.size > 1_000_000
         assert "/main/" not in f.url  # a commit, not a branch that can move
     assert 16_100_000_000 < e.total_bytes < 16_200_000_000
+
+
+def test_the_video_catalogue_lists_the_offered_models_and_what_each_can_do():
+    entries = load_catalogue(PRODUCTS, ["wasifyai-video"])
+    assert [e.id for e in entries] == ["ltx-video-2b", "wan2.2-14b", "minimax-h3", "ltx-2.5"]
+    assert [e.can for e in entries] == [
+        ("video.animate", "video.extend", "video.generate"),
+        ("video.generate",),
+        ("video.animate", "video.generate"),
+        ("video.animate", "video.generate"),
+    ]
+
+
+def test_a_pinned_model_the_product_does_not_offer_is_not_shown(tmp_path):
+    product = tmp_path / "p"
+    product.mkdir()  # Video's catalogue, with a product that offers only LTX-Video
+    (product / "models.yaml").write_text((PRODUCTS / "wasifyai-video" / "models.yaml").read_text())
+    (product / "product.yaml").write_text(
+        "id: p\nmodels:\n  - id: ltx-video-2b\n"
+        "    capabilities: { video.generate: { provider: fake } }\n"
+    )
+    assert [e.id for e in load_catalogue(tmp_path, ["p"])] == ["ltx-video-2b"]
 
 
 def test_a_catalogue_entry_cannot_name_a_path_outside_the_models_folder():
@@ -277,6 +315,22 @@ async def test_not_enough_disk_is_said_before_anything_is_fetched(tmp_path, orig
     assert origin.requests == []
 
 
+async def test_a_folder_the_app_may_not_write_is_said_not_blamed_on_the_connection(
+    tmp_path, origin
+):
+    svc = service(tmp_path, origin)
+    svc.models_dir.mkdir(parents=True, exist_ok=True)
+    svc.models_dir.chmod(0o500)  # as macOS does to an outside drive the app is not allowed on
+    try:
+        e = svc.catalogue["demo"]
+        d = svc.downloads.start(e, list(e.files), svc.models_dir)
+        await finished(d)
+    finally:
+        svc.models_dir.chmod(0o700)
+    assert d.status == "failed" and "not allowed to save" in d.error
+    assert str(svc.models_dir) in d.error and "connection" not in d.error
+
+
 async def test_one_download_at_a_time_and_cancel_keeps_the_partial_file(tmp_path, origin):
     origin.slow = 0.05
     svc = service(tmp_path, origin)
@@ -299,8 +353,9 @@ async def test_one_download_at_a_time_and_cancel_keeps_the_partial_file(tmp_path
 
 def app_for(svc: ModelsService) -> TestClient:
     app = FastAPI()
+    app.state.services = ApiServices()
     app.include_router(dm.router)
-    app.state.desktop_models = svc
+    app.state.services.desktop_models = svc
     app.dependency_overrides[get_identity] = lambda: Identity("local", "u1", "user")
     return TestClient(app)
 
@@ -351,6 +406,29 @@ def test_a_download_needs_the_exact_list_the_person_confirmed(tmp_path, origin):
         again = c.post("/desktop/models/demo/download", json={"files": names, "bytes": 550_000})
         assert again.status_code == 409 and "already on this computer" in again.json()["detail"]
         assert c.delete("/desktop/models/demo").json() == {"removed": 3}
+
+
+def test_saved_folders_reach_an_engine_built_after_they_were_loaded(tmp_path, origin):
+    store = InMemorySettingsStore()
+    asyncio.run(
+        store.put(
+            "desktop.model_folders",
+            {"models_dir": str(tmp_path / "models"), "extra_dirs": [str(tmp_path / "shared")]},
+            "window",
+        )
+    )
+    svc = ModelsService([entry(origin)], tmp_path / "models", (), store)
+    asyncio.run(svc.load())  # the worker does not exist yet
+
+    class Sidecar:
+        dirs = None
+
+        def set_model_dirs(self, models_dir, extra):
+            self.dirs = (models_dir, extra)
+
+    sidecar = Sidecar()
+    svc.attach(sidecar, object())
+    assert sidecar.dirs == (tmp_path / "models", (tmp_path / "shared",))
 
 
 def test_the_folders_can_be_changed_and_are_remembered(tmp_path, origin):

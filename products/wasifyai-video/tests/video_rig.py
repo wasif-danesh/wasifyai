@@ -1,7 +1,7 @@
 """Test helpers for the video product: a rig of scripted fake models and an in-memory queue."""
 
 import io
-import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -27,10 +27,6 @@ CTX = RunContext(
 )
 
 
-def verdict(allowed=True, category="ok", reason="") -> str:
-    return json.dumps({"allowed": allowed, "category": category, "reason": reason})
-
-
 def png(size=(640, 480), colour=(30, 120, 200)) -> bytes:
     out = io.BytesIO()
     Image.new("RGB", size, colour).save(out, "PNG")
@@ -50,25 +46,34 @@ def mp4(size=(128, 96), frames=12) -> bytes:
         return out.read_bytes()
 
 
+def frame_count(clip: bytes) -> int:
+    """How many frames a clip has, as ffmpeg decodes them."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "clip.mp4"
+        src.write_bytes(clip)
+        report = subprocess.run(
+            [ffmpeg_path(), "-hide_banner", "-i", str(src), "-f", "null", "-"],
+            capture_output=True, text=True, check=True,
+        ).stderr  # fmt: skip
+    return int(re.findall(r"frame=\s*(\d+)", report)[-1])
+
+
 class Rig:
     def __init__(self, caps, sink, usage, raw, uploads):
         self.caps, self.sink, self.usage, self.raw, self.uploads = caps, sink, usage, raw, uploads
 
     def asked(self) -> list:
-        """Everything the text models were asked, in order (one fake serves every capability)."""
-        return self.caps.text._bound["moderate"][1].prompts
+        """Everything the text models were asked, in order (one fake provider serves them all)."""
+        return self.caps.text._bound["enhance"][1].prompts
 
-    def word_checks(self) -> list:
-        return [p for p in self.asked() if isinstance(p, str) and "<request>" in p]
-
-    def picture_checks(self) -> list:
+    def pictures(self) -> list:
+        """What the models were shown with a picture: the instruction and the picture."""
         return [p for p in self.asked() if not isinstance(p, str)]
 
 
-def make_rig(
-    tmp_path: Path, moderate=None, moderate_image=None, quotas=None, enhance=None, describe=None
-):
-    """Capabilities for a throwaway `wasifyai-video` product with scripted replies."""
+def make_rig(tmp_path: Path, enhance=None, describe=None, models=None):
+    """Capabilities for a throwaway `wasifyai-video` product with scripted replies. `models`: the
+    product's models (ADR-0097) in place of its own video bindings."""
     d = tmp_path / "wasifyai-video"
     d.mkdir(parents=True, exist_ok=True)
     (d / "product.yaml").write_text(
@@ -76,15 +81,6 @@ def make_rig(
             {
                 "id": "wasifyai-video",
                 "capabilities": {
-                    "text.moderate": {
-                        "provider": "fake",
-                        "defaults": {"replies": moderate or [verdict()]},
-                    },
-                    "text.moderate_image": {
-                        "provider": "fake",
-                        "defaults": {"replies": moderate_image or [verdict()]},
-                        "inputs": ["text", "image"],
-                    },
                     "text.enhance": {
                         "provider": "fake",
                         "defaults": {"replies": enhance or ["A tidy prompt."]},
@@ -94,10 +90,17 @@ def make_rig(
                         "defaults": {"replies": describe or ["A blue square."]},
                         "inputs": ["text", "image"],
                     },
-                    "video.generate": {"provider": "fake"},
-                    "video.animate": {"provider": "fake"},
+                    **(
+                        {}
+                        if models
+                        else {
+                            "video.generate": {"provider": "fake"},
+                            "video.animate": {"provider": "fake"},
+                            "video.extend": {"provider": "fake"},
+                        }
+                    ),
                 },
-                "quotas": quotas if quotas is not None else {"videos_per_user_per_day": 5},
+                **({"models": models} if models else {}),
                 "uploads": {"image": {}},
                 "enhance": {
                     "text_to_video": {"prompt": "enhance_text_to_video", "max_chars": 500},

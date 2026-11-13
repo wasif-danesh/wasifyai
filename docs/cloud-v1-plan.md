@@ -34,9 +34,19 @@ Where the numbers come from:
 **Claude Haiku 5.5 is the default** on the desktop's Cloud tab and on the web, bought from Anthropic directly. The
 person can choose another vendor and model instead (decisions 1 and 2).
 
+**Every model on the key (owner, 2026-11-13).** The desktop's Cloud tab for chat lists every model the vendor serves on
+the person's saved key, not only the catalogue's lines: Anthropic's Models API (`GET /v1/models`, newest first), and the
+OpenAI-compatible `GET /models` of the other vendors (embedding, speech and picture models left out). The list is kept
+for ten minutes per key (`OwnKeysService.vendor_models`). A model with a catalogue line shows its title, words and price
+(Claude Fable 5.2 $8 / $40, Opus 5.5 $4 / $20 and the older Claude models were added); any other shows the vendor's
+name and "price as <vendor> lists it". When the list cannot be read, the catalogue's lines are shown. Older and newer
+Claude models take different requests, read once per model from the Models API (`anthropic_text.Shape`): the 4.5
+models run without thinking, Haiku 4.5 without effort, and Fable, Opus 5.5 and Sonnet 5.5 never have thinking turned
+off. Haiku 5.5 stays the default.
+
 | Vendor | Models in the catalogue (in / out per million tokens) | Address | Notes |
 |---|---|---|---|
-| **Anthropic** (default) | **Claude Haiku 5.5** `claude-haiku-5-5`: $0.10 / $0.50 for prompts up to 100K tokens, $0.50 / $2.50 above. Claude Sonnet 5.5: $2 / $10, for harder work | `api.anthropic.com`, its Messages API | prepaid credits; they expire after a year |
+| **Anthropic** (default) | **Claude Haiku 5.5** `claude-haiku-5-5`: $0.10 / $0.50 for prompts up to 100K tokens, $0.50 / $2.50 above. Claude Sonnet 5.5: $2 / $10, for harder work. Claude Fable 5.2: $8 / $40; Claude Opus 5.5: $4 / $20; and the older Claude models; every other model on the key is listed too | `api.anthropic.com`, its Messages API | prepaid credits; they expire after a year |
 | **OpenAI** | GPT-6 Luna: $0.10 / $0.50 (up to a 272K-token prompt) | `api.openai.com/v1` | price confirmed at OpenAI (CP0); prepaid credits |
 | **Google** | Gemini 3.8 Flash: $0.75 / $3.75 to 2026-12-31, then $1.50 / $7.50 | Gemini API (OpenAI-compatible route) | prepaid credits, $5 minimum |
 | **DeepSeek** | DeepSeek V4.1 Flash `deepseek-flash`: $0.30 / $1.20, half price off-peak | `api.deepseek.com` (OpenAI-compatible) | China-based; the screen says where data goes |

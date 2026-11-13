@@ -64,6 +64,21 @@ CATALOGUE: tuple[CloudModel, ...] = (
     # million tokens in / out, checked 2026-11-12, docs/spikes/cloud-v1-cp0.md)
     _m("chat", "anthropic", "claude-haiku-5-5", "Claude Haiku 5.5", "Anthropic. Quick and cheap; the default.", "$0.10 in / $0.50 out per million tokens"),
     _m("chat", "anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5", "Anthropic. For harder work.", "$2 in / $10 out per million tokens"),
+    # every other model the key lists is shown too (owner, 2026-11-13); these lines give the ones
+    # Anthropic lists today their words and prices (the claude-api notes, 2026-11-03)
+    _m("chat", "anthropic", "claude-fable-5-2", "Claude Fable 5.2", "Anthropic. The most capable.", "$8 in / $40 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-5-5", "Claude Opus 5.5", "Anthropic. Long, demanding work.", "$4 in / $20 out per million tokens"),
+    _m("chat", "anthropic", "claude-fable-5-1", "Claude Fable 5.1", "Anthropic. The previous Fable.", "$10 in / $50 out per million tokens"),
+    _m("chat", "anthropic", "claude-fable-5", "Claude Fable 5", "Anthropic. An older Fable.", "$10 in / $50 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-5", "Claude Opus 5", "Anthropic. The previous Opus.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-sonnet-5", "Claude Sonnet 5", "Anthropic. The previous Sonnet.", "$2 in / $10 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-4-8", "Claude Opus 4.8", "Anthropic. An older Opus.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-4-7", "Claude Opus 4.7", "Anthropic. An older Opus.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-4-6", "Claude Opus 4.6", "Anthropic. An older Opus.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-sonnet-4-6", "Claude Sonnet 4.6", "Anthropic. An older Sonnet.", "$3 in / $15 out per million tokens"),
+    _m("chat", "anthropic", "claude-opus-4-5-20251101", "Claude Opus 4.5", "Anthropic. An older Opus; does not think here.", "$5 in / $25 out per million tokens"),
+    _m("chat", "anthropic", "claude-sonnet-4-5-20250929", "Claude Sonnet 4.5", "Anthropic. An older Sonnet; does not think here.", "$3 in / $15 out per million tokens"),
+    _m("chat", "anthropic", "claude-haiku-4-5-20251001", "Claude Haiku 4.5", "Anthropic. The previous Haiku; does not think here.", "$1 in / $5 out per million tokens"),
     _m("chat", "openai", "gpt-6-luna", "GPT-6 Luna", "OpenAI.", "$0.10 in / $0.50 out per million tokens"),
     _m("chat", "gemini", "gemini-3.8-flash", "Gemini 3.8 Flash", "Google.", "$0.75 in / $3.75 out per million tokens"),
     _m("chat", "deepseek", "deepseek-flash", "DeepSeek V4.1 Flash", "DeepSeek, in China.", "$0.30 in / $1.20 out per million tokens"),

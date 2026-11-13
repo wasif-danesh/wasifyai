@@ -226,7 +226,7 @@ to review changes to schedules. Not in the first version.
 
 ## 7. The plan for Extensions
 
-**What it is.** A catalogue, not a program: 76 skills, 14 plugins, 9 automation templates, a list of
+**What it is.** A catalogue, not a program: 73 skills, 13 plugins, 27 automation templates, a list of
 ready connectors, 7 "apps" (pages for their own screen) and 2 marketplace lists. About 10 MB.
 
 **Three catalogues, one format.**

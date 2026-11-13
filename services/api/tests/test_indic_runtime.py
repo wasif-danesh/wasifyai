@@ -4,6 +4,7 @@ lists, refuses and runs Indic Parler-TTS and IndicConformer."""
 
 import json
 import sys
+from collections.abc import Set
 from pathlib import Path
 
 import pytest
@@ -71,6 +72,7 @@ def test_the_catalogue_pins_every_file_and_lays_each_out_by_its_name():
     assert sum(f.size for f in speak.files) == pytest.approx(3.77e9, rel=0.02)
     assert "indic-conformer-600m--assets--encoder.onnx" in entry_names(WRITE)
     assert "indic-conformer-600m--model_onnx.py" in entry_names(WRITE)
+    assert speak.voice is not None and write.voice is not None
     assert speak.voice.tasks == ("speak",) and write.voice.tasks == ("transcribe",)
     by_language = {v.language for v in speak.voice.voices}
     assert by_language == {"bn", "hi", "mr", "te", "ta", "gu"}
@@ -140,7 +142,7 @@ def installer_for(tmp_path, monkeypatch, platforms=None):
             return True, "accelerator mps\n"
         return True, ""
 
-    inst.run = run
+    inst.run = run  # type: ignore[method-assign]
     return inst, data, calls
 
 
@@ -172,7 +174,7 @@ def test_a_computer_without_a_build_is_told_so(tmp_path, monkeypatch):
 # ---- the process, through the speech engine ------------------------------------------------------
 
 
-def engine_for(tmp_path, monkeypatch, present=frozenset(), installed=True):
+def engine_for(tmp_path, monkeypatch, present: Set[str] = frozenset(), installed=True):
     server_dir = tmp_path / "server"
     server_dir.mkdir(exist_ok=True)
     (server_dir / "server.py").write_text(FAKE_SERVER)

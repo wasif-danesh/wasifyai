@@ -503,11 +503,7 @@ describe("speech and listening", () => {
   });
 
   it("lip sync lists its cloud models and a cloud model of music is chosen for music", async () => {
-    const { keys, use } = cloudKeys(
-      "lipsync",
-      ["fal-ai/infinitalk", "veed/fabric-1.0/fast"],
-      null,
-    );
+    const { keys, use } = cloudKeys("lipsync", ["fal-ai/infinitalk", "veed/fabric-1.0/fast"], null);
     const local = voiceModel({ id: "echomimic", tasks: ["lipsync"], state: "ready" });
     const api = voiceChoices(
       { voice: voice([local]), models, memory: memory(), engines: engines(), keys },

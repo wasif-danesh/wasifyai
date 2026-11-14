@@ -280,7 +280,11 @@ async def test_it_starts_on_a_free_port_with_a_key_only_the_engine_holds(tmp_pat
         assert env["OH_CONVERSATIONS_PATH"].startswith(str(run / "state"))
         assert env["OH_CONVERSATION_WORKTREE_ROOT"].startswith(str(run / "state"))
         assert env["OH_ENABLE_BROWSER"] == "false" and env["OH_TELEMETRY_CONSENT"] == "false"
-        assert env["PATH"].split(os.pathsep)[0] == str(root / "venv" / "bin")
+        # our own commands first (`wasify-make`), then the engine's own environment
+        path = env["PATH"].split(os.pathsep)
+        assert path[0] == str(real(tmp_path) / "coding-fixed" / "bin")
+        assert path[1] == str(root / "venv" / "bin")
+        assert os.access(Path(path[0]) / "wasify-make", os.X_OK)
         # a clean environment: nothing of the engine's own, no key of the person's
         assert "SOMETHING_OF_THE_PERSONS" not in env and "ANTHROPIC_API_KEY" not in env
         assert "VIRTUAL_ENV" not in env and "WASIFY_PARENT_FD" not in env

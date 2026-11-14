@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""wasify-make: ask Wasify AI to make a picture or speech and put it in this project.
+
+    wasify-make picture "a round logo of a loaf of bread, flat, two colours" assets/logo.png
+    wasify-make picture "a wide photo of a bakery counter" assets/hero.png --size wide
+    wasify-make speech "Welcome to the bakery." assets/welcome.wav
+
+Run it alone, as the whole command. The app makes the file before this command runs: the person is
+asked first, and the picture or speech is made by Wasify AI's own products outside this terminal.
+This program only says how that went. It reaches nothing itself.
+"""
+import hashlib
+import json
+import os
+import sys
+
+KINDS = ("picture", "speech")
+SIZES = ("square", "landscape", "portrait", "wide", "tall")
+
+
+def main(argv):
+    args = [a for a in argv if not a.startswith("--")]
+    if "--help" in argv or "-h" in argv or len(args) != 3 or args[0] not in KINDS:
+        print(__doc__.strip())
+        return 0 if "--help" in argv or "-h" in argv else 2
+    kind, text, path = args
+    size = "square"
+    for n, a in enumerate(argv):
+        if a == "--size" and n + 1 < len(argv):
+            size = argv[n + 1]
+        elif a.startswith("--size="):
+            size = a.split("=", 1)[1]
+    if size not in SIZES:
+        print("--size is one of: " + ", ".join(SIZES))
+        return 2
+    key = hashlib.sha256("\0".join((kind, text, path, size)).encode()).hexdigest()
+    result = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "made", key + ".json")
+    try:
+        with open(result) as f:
+            said = json.load(f)
+    except (OSError, ValueError):
+        print(
+            "Nothing was made. Run wasify-make alone, as the whole command, with the description "
+            "in quotes. If you did, the person said no."
+        )
+        return 1
+    print(said.get("message") or "Nothing was made.")
+    return 0 if said.get("ok") else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

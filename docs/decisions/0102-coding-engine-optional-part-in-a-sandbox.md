@@ -152,3 +152,42 @@ project", a git repository included. What that comes to:
    project with a way to stop each, and the same sandbox on Linux and Windows.
 
 Measured in `docs/spikes/coding-c3.md`.
+
+## Amendment (2026-11-15, owner): Node as an optional part, the preview, and Wasify AI's own products
+
+Stage C4. The owner's answers of 2026-11-15: Node may be downloaded as an optional part ("Yes, download it");
+the Preview tab is built now and the Browser tab after it; the agent gets "a short set now" of Wasify AI's own
+products; the routes and actions may be added.
+
+1. **"Node for coding projects" is an optional part** (`components/node.py`): the pinned Node LTS release from
+   nodejs.org, size and SHA-256 checked, under `<app data>/engine/node/`. The sandbox cannot read a person's
+   home folder, so a Node kept there (nvm and the like) is not found; this one is opened for reading and put
+   first on the path of the agent's commands, the check, the preview and the person's terminal. Nothing writes
+   it: a project's packages go into the project, npm's cache into the sandbox's own home. It is offered where
+   the coding engine is.
+2. **The preview is the project's own command, run by the Wasify engine inside the project's sandbox**
+   (`preview.py`), like the check and the person's terminal. It is given a free port as `PORT` and
+   `HOST=127.0.0.1`.
+3. **A running preview is found from outside the sandbox**, by the ports the processes under it listen on
+   (`lsof`), not by what the program prints.
+4. **The sandbox cannot keep a program from listening on every address of the computer.** Measured: with and
+   without an inbound rule in the profile, a server bound to `0.0.0.0` answered on the computer's network
+   address. So the promise "only this computer can open it" is made only when the preview listens on a local
+   address, and the Preview tab says in words when it does not.
+5. **The page is shown in a frame from `http://localhost:<port>`**, not in a second webview. The window's
+   content rule now allows frames from `localhost` beside `127.0.0.1`. The frame is the project's own page: it
+   has none of the app's rights.
+6. **Wasify AI's own products reach a session through one command, not through a connection.** The agent runs
+   `wasify-make picture "<what>" <file.png>` or `wasify-make speech "<words>" <file.wav>` in its terminal. Like
+   every command it waits; `rules.py` knows it as the kind `make`. When it is let through, the Wasify engine
+   itself runs the app's own action (`image.generate`, `speech.speak`) for the person through the one action
+   executor, outside the sandbox, writes the file into the project, and leaves a note; the command inside the
+   sandbox only reads that note. This replaces point 3 of `docs/spikes/coding-c1b.md` ("a connection of the
+   coding product's own on the MCP server"): no token of the app is inside the sandbox, the MCP server is not
+   changed, and none of the 67 tool descriptions (about 25,000 tokens) is sent to the model.
+7. **The kind `make` is asked in every mode**, also in "Work on its own", until the person allows it for the
+   project: it uses the person's own picture or speech model, which can take time or cost money.
+8. **Not decided here:** 3D models, music and video through the same command; a picture the agent can look at;
+   the Browser tab; the same on Windows and Linux.
+
+Measured in `docs/spikes/coding-c4.md`.

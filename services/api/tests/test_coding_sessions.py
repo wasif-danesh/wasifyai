@@ -839,6 +839,7 @@ async def test_a_change_undo_cannot_put_back_is_asked_and_answered_through_the_r
         "not_undoable",
         "delete",
         "install",
+        "make",
     ]
     await box.http.post(f"{url}/messages", json={"text": "#replay:edit-asked"})
     card = await card_of(box, made["id"])

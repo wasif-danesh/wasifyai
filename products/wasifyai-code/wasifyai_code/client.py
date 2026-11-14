@@ -74,7 +74,11 @@ EDIT_NOTE = (
     "package indexes (PyPI, npm, crates.io, the Go proxy, RubyGems). Run the project's tests "
     "yourself when you change code. When you finish, the app runs the project's check and "
     "tells you if it fails. Do not start a program that never ends (a server, a watcher) in "
-    "the foreground: run it in the background and stop it when you are done."
+    "the foreground: run it in the background and stop it when you are done. When the project "
+    'needs a picture or spoken audio, Wasify AI can make it: run `wasify-make picture "<what it '
+    'shows>" <file.png>` (add `--size wide` or `tall` when needed) or `wasify-make speech '
+    '"<the words>" <file.wav>`, alone as the whole command. The person is asked first. Do '
+    "not draw a picture yourself as SVG or text when a real picture is wanted."
 )
 READ_ONLY_NOTE = (
     "This session only reads. You have no tool that changes a file or runs a command, and the "

@@ -1139,6 +1139,66 @@
         "title": "CodeMessageIn",
         "type": "object"
       },
+      "CodeNewIn": {
+        "additionalProperties": false,
+        "description": "A new project from a starter, in a new folder inside a folder the person chose.",
+        "properties": {
+          "mode": {
+            "default": "ask",
+            "enum": [
+              "plan",
+              "ask",
+              "own"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "model": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parent": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Parent",
+            "type": "string"
+          },
+          "starter": {
+            "default": "web",
+            "maxLength": 32,
+            "title": "Starter",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "name"
+        ],
+        "title": "CodeNewIn",
+        "type": "object"
+      },
+      "CodePreviewIn": {
+        "additionalProperties": false,
+        "description": "The command that starts the project for its preview; empty means none is set.",
+        "properties": {
+          "command": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Command",
+            "type": "string"
+          }
+        },
+        "title": "CodePreviewIn",
+        "type": "object"
+      },
       "CodeRefusalEvent": {
         "description": "The model declined the request, in its own words. Not an error: the turn then ends with\n`code_state` `done`, `why: \"refused\"`.",
         "properties": {
@@ -8585,6 +8645,50 @@
         ]
       }
     },
+    "/products/wasifyai-code/code/projects": {
+      "post": {
+        "description": "A new project from a starter, in a new folder inside `parent`, and a session on it.",
+        "operationId": "new_project_products_wasifyai_code_code_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeNewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response New Project Products Wasifyai Code Code Projects Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "New Project",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
     "/products/wasifyai-code/code/sessions": {
       "get": {
         "operationId": "list_sessions_products_wasifyai_code_code_sessions_get",
@@ -9516,6 +9620,210 @@
         ]
       }
     },
+    "/products/wasifyai-code/code/sessions/{session_id}/preview": {
+      "get": {
+        "description": "The project's preview: its command, what the files suggest, and the running one\n(its state, its port on this computer, the end of its output).",
+        "operationId": "get_preview_products_wasifyai_code_code_sessions__session_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Preview Products Wasifyai Code Code Sessions  Session Id  Preview Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Preview",
+        "tags": [
+          "wasifyai-code"
+        ]
+      },
+      "put": {
+        "operationId": "put_preview_products_wasifyai_code_code_sessions__session_id__preview_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodePreviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Put Preview Products Wasifyai Code Code Sessions  Session Id  Preview Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Preview",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/preview/start": {
+      "post": {
+        "description": "Start the project inside its sandbox. It answers at once; the state is read again\nuntil it runs.",
+        "operationId": "start_preview_products_wasifyai_code_code_sessions__session_id__preview_start_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CodePreviewIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Preview Products Wasifyai Code Code Sessions  Session Id  Preview Start Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Preview",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/preview/stop": {
+      "post": {
+        "description": "Stop the preview and everything it started.",
+        "operationId": "stop_preview_products_wasifyai_code_code_sessions__session_id__preview_stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Preview Products Wasifyai Code Code Sessions  Session Id  Preview Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop Preview",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
     "/products/wasifyai-code/code/sessions/{session_id}/project": {
       "get": {
         "description": "What this session's project may do: each kind of request and whether it is allowed.",
@@ -10134,6 +10442,30 @@
           }
         },
         "summary": "Undo Turn",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/starters": {
+      "get": {
+        "description": "What a new project can be started from.",
+        "operationId": "list_starters_products_wasifyai_code_code_starters_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Starters Products Wasifyai Code Code Starters Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Starters",
         "tags": [
           "wasifyai-code"
         ]

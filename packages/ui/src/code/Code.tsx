@@ -14,6 +14,7 @@ import {
   FileDiff,
   Folder,
   FolderOpen,
+  FolderPlus,
   Hand,
   ListChecks,
   Lock,
@@ -39,6 +40,8 @@ import { AskCard, MODES, MayDialog, ModePill } from "./Asking";
 import { Changes } from "./Changes";
 import { CheckCard, CheckDialog, CheckWord, WORDS } from "./Checks";
 import { Files } from "./Files";
+import { NewProject } from "./NewProject";
+import { PreviewPane } from "./Preview";
 import { TerminalPane } from "./Terminal";
 import {
   type CheckPart,
@@ -112,6 +115,20 @@ export function Code({
     const folder = await pickFolder();
     if (folder) await begin(folder, chosen?.id);
   };
+  const [fresh, setFresh] = useState(false);
+  const newProject = fresh ? (
+    <NewProject
+      api={api}
+      pickFolder={pickFolder}
+      model={chosen?.id}
+      onClose={() => setFresh(false)}
+      onMade={(made) => {
+        setFresh(false);
+        if (onOpenChange) onOpenChange(made.id);
+        else void code.open(made.id);
+      }}
+    />
+  ) : null;
 
   if (state.loading) {
     return (
@@ -141,6 +158,7 @@ export function Code({
         onRunCheck={code.runCheck}
         onTryAgain={code.tryAgain}
         onReload={code.reload}
+        onOpenSetup={onOpenSetup}
         filesTick={state.filesTick}
         undoNote={state.undoNote}
       />
@@ -178,9 +196,14 @@ export function Code({
       }
       action={
         state.sessions.length ? (
-          <Button onClick={choose} disabled={!chosen}>
-            <FolderOpen /> Choose a folder
-          </Button>
+          <span className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setFresh(true)} disabled={!chosen}>
+              <FolderPlus /> Start in a new, empty folder
+            </Button>
+            <Button onClick={choose} disabled={!chosen}>
+              <FolderOpen /> Choose a folder
+            </Button>
+          </span>
         ) : null
       }
     >
@@ -208,6 +231,9 @@ export function Code({
           <div className="flex flex-wrap items-center gap-2.5">
             <Button onClick={choose} disabled={!chosen}>
               <FolderOpen /> Choose a folder
+            </Button>
+            <Button variant="outline" onClick={() => setFresh(true)} disabled={!chosen}>
+              <FolderPlus /> Start in a new, empty folder
             </Button>
           </div>
           <p className="m-0 text-sm text-muted-foreground">
@@ -241,6 +267,7 @@ export function Code({
       ) : null}
       <Rules />
       <Leaves model={chosen} />
+      {newProject}
     </Page>
   );
 }
@@ -427,8 +454,13 @@ function Projects({
 
 // ---- a session ---------------------------------------------------------------------------------
 
-type Side = "files" | "changes" | "terminal";
-const SIDES: Record<Side, string> = { files: "Files", changes: "Changes", terminal: "Terminal" };
+type Side = "files" | "changes" | "terminal" | "preview";
+const SIDES: Record<Side, string> = {
+  files: "Files",
+  changes: "Changes",
+  terminal: "Terminal",
+  preview: "Preview",
+};
 
 function chipFor(session: CodeSession, thread: TurnView[], busy: string | null, waiting: boolean) {
   if (busy === "stopping") return "Stopping";
@@ -459,6 +491,7 @@ function Session({
   onRunCheck,
   onTryAgain,
   onReload,
+  onOpenSetup,
   filesTick,
   undoNote,
 }: {
@@ -481,6 +514,8 @@ function Session({
   onTryAgain: () => Promise<void>;
   /** the check was changed or tried in its dialog */
   onReload: () => Promise<void>;
+  /** where an optional part is set up (Settings, Optional parts) */
+  onOpenSetup: () => void;
   filesTick: number;
   undoNote: string | null;
 }) {
@@ -553,7 +588,7 @@ function Session({
         role="tablist"
         aria-label="What to show"
       >
-        {(["chat", "files", "changes", "terminal"] as const).map((p) => (
+        {(["chat", "files", "changes", "terminal", "preview"] as const).map((p) => (
           <button
             key={p}
             type="button"
@@ -692,7 +727,7 @@ function Session({
             role="tablist"
             aria-label="Beside the chat"
           >
-            {(["files", "changes", "terminal"] as const).map((p) => (
+            {(["files", "changes", "terminal", "preview"] as const).map((p) => (
               <button
                 key={p}
                 type="button"
@@ -708,6 +743,16 @@ function Session({
           {side === "files" ? (
             <section aria-label="Files" className="min-h-0 min-w-0 flex-1">
               <Files api={api} sessionId={session.id} project={session.project} tick={filesTick} />
+            </section>
+          ) : side === "preview" ? (
+            <section aria-label="Preview" className="min-h-0 min-w-0 flex-1">
+              <PreviewPane
+                api={api}
+                sessionId={session.id}
+                project={session.project}
+                tick={filesTick}
+                onOpenSetup={onOpenSetup}
+              />
             </section>
           ) : side === "terminal" ? (
             <section aria-label="Terminal" className="min-h-0 min-w-0 flex-1">

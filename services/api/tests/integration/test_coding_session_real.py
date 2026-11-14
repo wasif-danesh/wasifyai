@@ -337,6 +337,8 @@ async def real(tmp_path_factory):
     data = tmp_path_factory.mktemp("coding-data")
     (data / "engine").mkdir()
     (data / "engine" / "coding").symlink_to(APP_DATA / "engine" / "coding")
+    if (APP_DATA / "engine" / "node").is_dir():  # Node for coding projects, when it is set up
+        (data / "engine" / "node").symlink_to(APP_DATA / "engine" / "node")
     project = tmp_path_factory.mktemp("bakery-site")
     (project / "shop").mkdir()
     (project / "app.py").write_text("from shop.prices import total\n\nprint(total([1, 2]))\n")
@@ -988,11 +990,154 @@ async def test_the_persons_terminal_is_held_by_the_same_sandbox(real, site):
         # the person's terminal reaches a package index at any time, and nothing else
         fetch = "curl -sS -m 20 -o /dev/null -w 'code=%{http_code}=' "
         said = await type_and_read(
-            f"{fetch}https://pypi.org/simple/six/; echo index-done", "index-done"
+            f"{fetch}https://pypi.org/simple/six/; echo index-$((40+2))", "index-42"
         )
         assert "code=200=" in said, said
-        said = await type_and_read(f"{fetch}https://example.com/; echo other-done", "other-done")
+        said = await type_and_read(f"{fetch}https://example.com/; echo other-$((40+2))", "other-42")
         assert "code=200=" not in said
     finally:
         await terminals.close_all()
         (site / "by-hand.txt").unlink(missing_ok=True)
+
+
+# ---- Node, the preview, the starter and wasify-make, for real (stage C4) ---------------------------
+
+needs_node = pytest.mark.skipif(
+    not (APP_DATA / "engine" / "node" / "state.json").is_file(),
+    reason="Node for coding projects is not set up in the app data folder",
+)
+
+
+@needs_node
+async def test_the_agent_finds_node_and_a_starter_passes_its_check_in_the_sandbox(
+    real, tmp_path_factory
+):
+    from wasifyai_code import starters
+    from wasifyai_code.checks import run_check
+
+    shop = starters.make("web", tmp_path_factory.mktemp("starters"), "bread-shop")
+    real.model.scripts["has-node"] = [
+        use("terminal", command="which node npm && node -v && npm test 2>&1 | tail -6"),
+        use("finish", message="It passes."),
+    ]
+    spec = SessionSpec(
+        shop, model="scripted", read_only=False,
+        account=Account("t1", "wasifyai-code", "u1", "s-node"),
+    )  # fmt: skip
+    session = await real.place.start(spec)
+
+    async def yes(event: Any) -> None:
+        await real.place.answer(session, event.data["id"], True)
+
+    events = await real.turn(session, "Run the tests. #script:has-node", on_confirm=yes)
+    (said,) = said_by(events)
+    assert "/engine/node/" in said and "pass 3" in said and "fail 0" in said, said
+    # and the check we run ourselves, in our own sandbox for the project
+    wrapper, env = await real.place.sandbox(shop)
+    done = await run_check(
+        "npm test", shop, output=real.data / "node-check.txt", wrapper=wrapper, env=env
+    )
+    assert done.result == "passed", done.tail
+
+
+@needs_node
+async def test_a_preview_runs_inside_the_projects_sandbox_and_serves_only_the_project(
+    real, tmp_path_factory
+):
+    import urllib.error
+    import urllib.request
+
+    from wasifyai_code import starters
+    from wasifyai_code.preview import RUNNING, STARTING, Previews
+
+    shop = starters.make("web", tmp_path_factory.mktemp("previews"), "bread-shop")
+    (shop / "probe.mjs").write_text(
+        "import { writeFileSync, readdirSync } from 'node:fs';\n"
+        "const tried = {};\n"
+        "try { writeFileSync('../outside-by-the-preview.txt', 'x'); tried.wrote = true } catch { tried.wrote = false }\n"
+        f"try {{ readdirSync('{Path.home()}'); tried.read = true }} catch {{ tried.read = false }}\n"
+        "writeFileSync('probe.json', JSON.stringify(tried));\n"
+        "await import('./dev-server.mjs');\n"
+    )
+
+    async def own(folder: Path):
+        return await real.place.sandbox(folder, who="person")
+
+    shown = Previews(own)
+    began = time.monotonic()
+    p = await shown.start("s-preview", shop, "node probe.mjs")
+    try:
+        while p.state == STARTING and time.monotonic() - began < 30:  # noqa: ASYNC110
+            await asyncio.sleep(0.05)
+        assert p.state == RUNNING and p.port == p.wanted and not p.open_to_network, p.view()
+        port = p.port
+
+        def get(path: str) -> str:
+            url = f"http://127.0.0.1:{port}{path}"
+            return urllib.request.urlopen(url, timeout=5).read().decode()
+
+        assert "<h1>bread-shop</h1>" in await asyncio.to_thread(get, "/")
+        # the program itself is held: nothing written beside the project, the home not read
+        assert json.loads((shop / "probe.json").read_text()) == {"wrote": False, "read": False}
+        assert not (shop.parent / "outside-by-the-preview.txt").exists()
+        pid = p.pid
+    finally:
+        await shown.close_all()
+    await asyncio.sleep(0.3)
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+    with pytest.raises(urllib.error.URLError):
+        await asyncio.to_thread(get, "/")
+
+
+async def test_wasify_make_is_asked_first_and_the_command_in_the_sandbox_only_reads_how_it_went(
+    real, tmp_path_factory, monkeypatch
+):
+    """The agent is scripted and the picture is pretended; the engine, the sandbox, the command
+    `wasify-make` inside it, the question and the note are real. A real picture is the walk's."""
+    from types import SimpleNamespace
+
+    from wasifyai_code import assets
+    from wasifyai_code.runtime import INTERRUPT, Sessions
+    from wasifyai_code.store import CodeStore, Owner
+
+    shop = tmp_path_factory.mktemp("logo-shop")
+    (shop / "index.html").write_text("<h1>Bread</h1>\n")
+    command = 'wasify-make picture "a round logo of a loaf of bread" assets/logo.png'
+    real.model.scripts["make"] = [use("terminal", command=command), use("finish", message="Made.")]
+    asked_of: list[tuple] = []
+
+    async def picture(state: Any, identity: Any, ask: Any) -> tuple[bytes, str]:
+        asked_of.append((identity.user_id, ask.text, ask.size))
+        return b"\x89PNG-pretended", "1024 by 1024"
+
+    monkeypatch.setattr(assets, "_picture", picture)
+    store = CodeStore.in_folder(real.data / "code-make")
+    state = SimpleNamespace(
+        code_store=store, code_sessions=None, coding_server=real.server,
+        coding_gateway=real.gateway, creation_index=None, desktop_dir=real.data,
+        actions=object(), storage=object(),
+    )  # fmt: skip
+    live = Sessions(state, place=real.place)
+    me = Owner("t1", "u1")
+    try:
+        made = await live.start(me, folder=str(shop), mode="own", model="scripted")
+        await live.send(me, made["id"], "Give it a logo. #script:make")
+        cards: list[dict[str, Any]] = []
+        for _ in range(600):  # asked even in "Work on its own"
+            cards = [e for e in live.feed(made["id"]).kept if e["event"] == INTERRUPT]
+            if cards:
+                break
+            await asyncio.sleep(0.05)
+        assert cards[0]["payload"]["ask"] == "make" and cards[0]["payload"]["command"] == command
+        assert asked_of == [] and not (shop / "assets").exists()
+        await live.answer(me, made["id"], cards[0]["interrupt_id"], "yes")
+        await asyncio.wait_for(live.wait(me, made["id"]), 60)
+        assert asked_of == [("u1", "a round logo of a loaf of bread", "square")]
+        assert (shop / "assets" / "logo.png").read_bytes() == b"\x89PNG-pretended"
+        results = [e for e in live.feed(made["id"]).kept if e["event"] == "tool_result"]
+        assert results[0]["status"] == "ok", results
+        assert "Made assets/logo.png (1024 by 1024)" in results[0]["output"]["text"]
+    finally:
+        await live.stop_all()
+        store.close()

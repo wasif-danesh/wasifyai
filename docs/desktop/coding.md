@@ -189,6 +189,16 @@ What a person meets in the terminal: the home folder is the sandbox's own, so th
 read; `ps`, `top` and `sudo` do not work; `python3` is the coding engine's own Python unless the project has an
 environment; a write outside the project is refused by the operating system. The tab says the first three.
 
+## Node, the preview, a new project and Wasify AI's own products (stage C4)
+
+| What | How |
+|---|---|
+| Node | The optional part "Node for coding projects" (`components/node.py`, pinned in `components/manifests/darwin-arm64.yaml`): the Node LTS release from nodejs.org under `<app data>/engine/node/<version>/`, about 53 MB to fetch and 199 MB on disk. `find_node` gives its `bin` folder; `coding_server._environment` puts it first on the sandbox's path (after our own commands) and the profile opens it for reading. The Agent Server sees it from its next start; the check, the preview and the person's terminal at once |
+| The preview | `preview.py`: the project's own command (`npm run dev`), started by the Wasify engine in the project's sandbox with `PORT` (a free port) and `HOST=127.0.0.1`. The engine looks, from outside, at which ports the processes under it listen on, and whether on a local address only. One preview for a session; starting again stops the old one; Stop ends everything under it. The end of its output is held in memory |
+| The page | The Preview tab shows `http://localhost:<port>/` in a frame, wide or as a phone, with "Load again", "Stop" and "Open in your own browser". It is loaded again when a turn changes files. When the program listens on every address the tab says that other computers on the network can open it: the sandbox cannot forbid that |
+| A new project | `starters.py`: "Start in a new, empty folder" copies a starter's files into `<chosen folder>/<name>` (a folder that holds files is refused) and opens a session on it in "Ask me", with the starter's check and preview set. The first starter, `web`, is one page with its script, styles and tests and a small server of its own that loads the page again on a change; it needs Node and nothing installed |
+| A picture or speech | `assets.py` and `services/coding-engine/wasify-make`. The agent runs `wasify-make picture "<what>" <file.png>` or `wasify-make speech "<words>" <file.wav>` alone, as the whole command. It waits like every command; its kind, `make`, is asked in every mode until allowed for the project. On a yes the Wasify engine runs `image.generate` or `speech.speak` for the person through the action executor, copies the result into the project and leaves a note under `<app data>/coding-fixed/made/`; the command then prints what the note says. What was made is in the person's library too |
+
 ## The screens
 
 | Where | What |
@@ -198,6 +208,8 @@ environment; a write outside the project is refused by the operating system. The
 | `packages/ui/src/code/Asking.tsx` | The approval card (three answers, and what was answered afterwards), the mode pill with its menu, and "What this project may do" |
 | `packages/ui/src/code/Checks.tsx` | The check: its word in the session's bar (it opens the dialog), the card of each run in the chat (checking with "Stop the check", passed, failed with the end of the output and "sent back to the agent", "needs you" with "Try 3 more rounds" and "Undo this turn", not checked with "Run the check now", could not check with "Change the check"), the tests the agent changed, and the dialog: the command, the suggestions, "Try it now", "No check for this project", the time limit |
 | `packages/ui/src/code/Terminal.tsx`, `xterm-css.ts` | The Terminal tab: the note about its limits, the person's terminals as small tabs, "New", and the terminal itself drawn by xterm.js, which is loaded when the tab is first opened. Its style sheet is carried as text, so no bundler has to load one from a package; a test compares it with the package's |
+| `packages/ui/src/code/Preview.tsx` | The Preview tab: the suggested command and "Change the command", starting, the page in a frame with its bar, why a preview ended (its exit code and output; where Node is set up when a tool was not found), and the warning when it listens to more than this computer |
+| `packages/ui/src/code/NewProject.tsx` | "Start in a new, empty folder": the starter, the project's name, the folder it is made in |
 | `packages/ui/src/code/Changes.tsx` | The Changes tab: one turn at a time, its files (a test file is marked), one file before, after or both, "Undo this turn" and "Bring it back", and what undo does not put back |
 | `packages/ui/src/code/Files.tsx` | The Files tab beside the chat: the project's folders as a tree, opened a folder at a time, and one file to read with its line numbers. Reading only. On a narrow window the chat and the files are two tabs |
 | `packages/ui/src/code/thread.ts`, `use-code.ts` | The stream turned into what is drawn, and the screen's state. A turn from before the app was started shows what was kept: the request, the answer and how many steps it took |
@@ -245,6 +257,8 @@ address on loopback and a token for one session, and every model call of that se
 | `code.session.stop` | Stops the turn at once |
 | `code.session.undo` | Puts the project's files back to before a turn (the newest that changed files, when none is named) |
 | `code.session.check` | Reads the project's check, sets it, and runs it now (a long action) |
+| `code.session.preview` | Starts the project's preview, stops it, or says where it is (a long action) |
+| `code.project.new` | A new project from a starter in a new folder, with a session on it |
 
 They are offered to the assistant and not to outside apps: an outside app that could open a session on any
 folder would be handed that folder's content. Help is in `docs/help/code.session.*.md`.
@@ -266,6 +280,9 @@ folder would be handed that folder's content. Help is in `docs/help/code.session
 | `GET /sessions/{id}/check`, `PUT /sessions/{id}/check` | The project's check (command, where it came from, the time limit, what the files suggest, the session's last checks), and setting it (`command`, empty for none; `limit_s`) |
 | `POST /sessions/{id}/check/run`, `GET /sessions/{id}/checks/{check_id}` | Run the check now, outside a turn (it answers when the check has ended; Stop ends it), and one check with its whole output |
 | `POST /sessions/{id}/check/again` | "Try 3 more rounds": a new turn that tells the agent the check still fails (202) |
+| `GET /sessions/{id}/preview`, `PUT /sessions/{id}/preview` | The project's preview (its command, what the files suggest, and the running one: state, port, address, whether it is open to the network, the end of its output), and setting the command |
+| `POST /sessions/{id}/preview/start`, `POST /sessions/{id}/preview/stop` | Start it (an optional `command` is kept as the project's) and stop it |
+| `GET /starters`, `POST /projects` | What a new project can be started from, and making one (`parent`, `name`, `starter`, `model`, `mode`) |
 | `GET /sessions/{id}/terminals`, `POST /sessions/{id}/terminals` | The person's terminals in this session, and opening one (`cols`, `rows`) |
 | `GET /sessions/{id}/terminals/{tid}/events` | What the terminal prints, as a stream: `terminal_output` (`data`: the bytes in base64) and `terminal_ended` (`exit_code`); `Last-Event-ID` comes back after a number |
 | `POST .../terminals/{tid}/input`, `POST .../terminals/{tid}/size`, `DELETE .../terminals/{tid}` | What the person typed (`data`), the window's size, and closing it |
@@ -303,13 +320,15 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 | `products/wasifyai-code/tests/test_code_checked.py` | Sessions whose turns are checked, on the pretended place with a real check command: the review's case (one refusal, one fix, one pass, the check file untouched), three rounds and "needs you", a question in a project whose check fails, no check set, Plan, Stop during a check, a check that runs while other calls answer, the check's settings, which command is suggested, what kind a command is, and the questions before a command | `make test` |
 | `products/wasifyai-code/tests/test_terminal.py` | The person's terminal without a sandbox: a real shell on a real pseudo-terminal, the size, Ctrl-C, closing ends what it started, the limit of four, and no terminal where there is no sandbox | `make test` |
 | `services/api/tests/test_coding_proxy.py` | The install proxy on loopback: the person let through, the agent only while an install is allowed, every other request refused, and no password in what it says of itself | `make test` |
+| `products/wasifyai-code/tests/test_code_c4.py` | The preview with a real program on a real port (found by its port, open to the network or not, why it ended, a new start replaces the old), which command is suggested, the starter (its files, its refusals, its own check and page), and `wasify-make`: how a call is read, the card in every mode, the app's action run for the person, the file in the project, the note, a no, a failure | `make test` |
+| `services/api/tests/test_components_node.py` | The Node part against a fake download: four steps, the folder the sandbox is given, a wrong checksum, a Node that does not start, a state file that points outside | `make test` |
 | `services/api/tests/integration/test_coding_sandbox.py` | Hostile tests against the real server in its sandbox | `make test-coding`, opt-in |
 | `apps/desktop/scripts/ui-audit.sh light coding-setup` (then `coding-repair`, `coding-remove`) | The part set up, repaired and removed from the real window's Settings, with the real downloads | By hand, on a throwaway `DESKTOP_DATA_DIR` |
 
 ## Not built
 
-- The dot for files changed in a session, in the Files tab; the Browser and Preview tabs; "Start in a new,
-  empty folder"; the approval card on other screens while a session waits (the list of projects says "Waiting
+- The dot for files changed in a session, in the Files tab; the Browser tab (a second webview in the real
+  window; it is its own piece after C4); the approval card on other screens while a session waits (the list of projects says "Waiting
   for you"); a project's "More" menu.
 - "Show what is running": the list of everything started in a project by the person, the agent or a check,
   with a way to stop each (mockup `terminal-processes`). The Terminal tab says that `ps` does not work and
@@ -317,7 +336,9 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 - Build, lint and test as separate steps of the check; the number of rounds in the dialog; the check's output
   through the storage interface.
 - What is asked in every mode (going on past the cost limit).
-- Managed Node and the other tools a project needs: the sandbox finds what the computer has.
+- Other managed tools than Node (Python with `pytest`, Rust, Go): the sandbox finds what the computer has in
+  system folders and Homebrew. More starters than the one web app.
+- 3D models, music and video through `wasify-make`; a picture the agent can look at.
 - Dropping old checkpoints. The store under `<app data>/code/checkpoints` grows with the project.
 - The scheduler: stage C6.
 - A session going on after the app was closed and opened again: the session's token is gone, so its next

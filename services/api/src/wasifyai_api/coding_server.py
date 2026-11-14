@@ -57,6 +57,8 @@ from typing import Any
 
 import httpx
 
+from wasifyai_api.components.node import find_node
+
 log = logging.getLogger(__name__)
 
 STATE = "state.json"
@@ -83,6 +85,9 @@ PLAN_TEXT = "This session only reads. Nothing can be written here.\n"
 # our rules, as the Agent Server loads them (ADR-0102, decision 6): copied beside the plan file,
 # into the folder the sandbox may read and not write, at every start
 RULES_FILE, RULES_MODULE = "wasify_rules.py", "wasify_rules"
+# the one command through which a session asks Wasify AI's own products for a picture or speech
+# (`wasifyai_code/assets.py`): copied into the same folder, in `bin/`, which is on the path
+MAKE_FILE, TOOLS_DIR = "wasify-make", "bin"
 
 # What the server is started with in place of `python -m openhands.agent_server`: the same module,
 # after a thread that waits for this engine to go away. It is not a change to OpenHands' packages.
@@ -495,6 +500,7 @@ class CodingServer:
         kept = plan.parent / RULES_FILE
         if not kept.is_file() or kept.read_text() != rules:
             kept.write_text(rules)
+        self._tools(plan.parent)
         self._sweep_terminal(run)
         terminal = Path(
             os.path.realpath(tempfile.mkdtemp(prefix=TERMINAL_PREFIX, dir=TERMINAL_ROOT))
@@ -509,7 +515,7 @@ class CodingServer:
                 fill_profile(
                     template,
                     write=[run, *workspaces, terminal],
-                    read_only=[root, python_home, plan.parent, *read_only],
+                    read_only=[root, python_home, plan.parent, *self._node_root(), *read_only],
                     closed=[*(Path(c) for c in CLOSED), data],
                 )
             )
@@ -557,6 +563,9 @@ class CodingServer:
             "TMPDIR": str(tmp),
             "PATH": os.pathsep.join(
                 [
+                    *([str(tools)] if (tools := self._tools(self.plan_file.parent)) else []),
+                    # Node for coding projects, when that part is set up: before the computer's own
+                    *([str(node)] if (node := find_node(self._data_dir)) else []),
                     str(venv_bin),
                     *filter(None, [developer_bin()]),
                     *(d for d in TOOL_DIRS if Path(d).is_dir()),
@@ -576,6 +585,11 @@ class CodingServer:
         }
         env.update(self.install_env("agent"))
         return env
+
+    def _node_root(self) -> list[Path]:
+        """The installed Node's own folder, to open for reading; nothing when it is not set up."""
+        node = find_node(self._data_dir)
+        return [Path(os.path.realpath(node)).parent] if node else []
 
     def install_env(self, who: str) -> dict[str, str]:
         """How a program inside the sandbox reaches the package indexes: through our own proxy
@@ -626,7 +640,7 @@ class CodingServer:
             fill_profile(
                 template,
                 write=[home, tmp, workspace],
-                read_only=[root, python_home],
+                read_only=[root, python_home, self.plan_file.parent, *self._node_root()],
                 closed=[*(Path(c) for c in CLOSED), data],
             )
         )
@@ -635,6 +649,19 @@ class CodingServer:
         env.update(self.install_env(who))
         wrapper = [self._sandbox_exec, "-f", str(profile)] if self._sandbox_exec else []
         return {"wrapper": wrapper, "env": env, "profile": profile}
+
+    def _tools(self, fixed: Path) -> Path | None:
+        """Our own commands for the sandbox, in a folder it reads and cannot write."""
+        source = self._files / MAKE_FILE if self._files is not None else None
+        if source is None or not source.is_file():
+            return None
+        folder = fixed / TOOLS_DIR
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / MAKE_FILE
+        if not target.is_file() or target.read_text() != source.read_text():
+            target.write_text(source.read_text())
+        target.chmod(0o755)
+        return folder
 
     def _sweep_terminal(self, run: Path) -> None:
         """Remove the terminal folder a run that was not stopped left in /tmp."""

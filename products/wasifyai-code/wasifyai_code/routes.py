@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk import Identity, RouteDeps, parse_ids
 
-from wasifyai_code import PRODUCT_ID, files
+from wasifyai_code import PRODUCT_ID, files, starters
 from wasifyai_code.runtime import NotAvailable, Refused, Sessions, owner_of, sessions_for, store_for
 from wasifyai_code.terminal import TerminalError
 
@@ -62,6 +62,26 @@ class CodeCheckIn(BaseModel):
     limit_s: int | None = Field(None, ge=5, le=3600)
 
 
+class CodePreviewIn(BaseModel):
+    """The command that starts the project for its preview; empty means none is set."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    command: str = Field("", max_length=2000)
+
+
+class CodeNewIn(BaseModel):
+    """A new project from a starter, in a new folder inside a folder the person chose."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    parent: str = Field(min_length=1, max_length=1024)
+    name: str = Field(min_length=1, max_length=64)
+    starter: str = Field("web", max_length=32)
+    model: str = Field("", max_length=64)
+    mode: Literal["plan", "ask", "own"] = "ask"
+
+
 class CodeTerminalIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -99,6 +119,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "too_many": 409,
             "no_check": 409,
             "ended": 409,
+            "not_empty": 409,
+            "taken": 409,
         }.get(  # fmt: skip
             e.code, 422
         )
@@ -350,6 +372,74 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         try:
             turn = await live.try_again(owner, session_id)
             return {"turn_id": turn["id"], "session": live.view(owner, session_id)}
+        except Refused as e:
+            raise refuse(e) from None
+
+    # ---- the preview and the starters ------------------------------------------------------------
+
+    @router.get("/starters")
+    async def list_starters(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """What a new project can be started from."""
+        sessions()
+        return {"items": starters.list_starters()}
+
+    @router.post("/projects", status_code=201)
+    async def new_project(
+        body: CodeNewIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """A new project from a starter, in a new folder inside `parent`, and a session on it."""
+        try:
+            return await sessions().start_new(
+                owner_of(identity), parent=body.parent, name=body.name, starter=body.starter,
+                model=body.model, mode=body.mode,
+            )  # fmt: skip
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.get("/sessions/{session_id}/preview")
+    async def get_preview(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """The project's preview: its command, what the files suggest, and the running one
+        (its state, its port on this computer, the end of its output)."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            return await asyncio.to_thread(live.preview, owner, session_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.put("/sessions/{session_id}/preview")
+    async def put_preview(
+        session_id: str, body: CodePreviewIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        live, owner = sessions(), owner_of(identity)
+        try:
+            return await asyncio.to_thread(live.set_preview, owner, session_id, body.command)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/sessions/{session_id}/preview/start")
+    async def start_preview(
+        session_id: str,
+        body: CodePreviewIn | None = None,
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """Start the project inside its sandbox. It answers at once; the state is read again
+        until it runs."""
+        try:
+            return await sessions().start_preview(
+                owner_of(identity), session_id, body.command if body else None
+            )
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/sessions/{session_id}/preview/stop")
+    async def stop_preview(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Stop the preview and everything it started."""
+        try:
+            return await sessions().stop_preview(owner_of(identity), session_id)
         except Refused as e:
             raise refuse(e) from None
 

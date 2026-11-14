@@ -227,7 +227,7 @@ export function Changes({
                   </span>
                   <span className="sr-only">{WHAT[f.what]}</span>
                   {f.test ? (
-                    <span className="ms-auto shrink-0 rounded border px-1 text-[10px] text-muted-foreground">
+                    <span className="ms-auto shrink-0 rounded border px-1 text-2xs text-muted-foreground">
                       test
                     </span>
                   ) : null}

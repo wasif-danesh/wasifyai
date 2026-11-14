@@ -539,26 +539,34 @@ def app_with(s: CodingServer | None) -> TestClient:
     return TestClient(app)
 
 
-def test_the_routes_say_where_it_stands_start_it_and_stop_it_without_the_key(tmp_path):
+async def test_the_routes_say_where_it_stands_and_stop_it_without_the_key(tmp_path):
     install(tmp_path)
     s = server(tmp_path)
-    with app_with(s) as client:
-        first = client.get("/desktop/coding-engine").json()
+    app = FastAPI()
+    app.include_router(router)
+    app.state.services = ApiServices(coding_server=s)
+    app.dependency_overrides[get_identity] = lambda: Identity("local", "u1", "user")
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://engine.test"
+    ) as client:
+        first = (await client.get("/desktop/coding-engine")).json()
         assert first["installed"] is True and first["running"] is False
         assert first["memory_bytes"] == 0
-        started = client.post("/desktop/coding-engine/start")
-        assert started.status_code == 200
-        body = started.json()
+        await s.ensure_running()  # as the coding product does when a session needs it
+        body = (await client.get("/desktop/coding-engine")).json()
         assert body["running"] is True and body["port"] and body["memory_bytes"] > 0
-        assert s.session_key is not None and s.session_key not in started.text
-        assert s.session_key not in client.get("/desktop/coding-engine").text
-        assert client.post("/desktop/coding-engine/stop").json() == {"stopped": True}
-        assert client.get("/desktop/coding-engine").json()["running"] is False
+        assert body["workspaces"] == [] and body["read_only"] == []
+        assert s.session_key is not None and s.session_key not in json.dumps(body)
+        assert (await client.post("/desktop/coding-engine/stop")).json() == {"stopped": True}
+        assert (await client.get("/desktop/coding-engine")).json()["running"] is False
+        assert (await client.post("/desktop/coding-engine/stop")).json() == {"stopped": False}
+    await s.close()
 
 
-def test_the_routes_say_plainly_when_it_is_not_set_up_or_not_part_of_this_engine(tmp_path):
+def test_there_is_no_route_that_starts_it_and_none_where_it_is_not_part_of_the_engine(tmp_path):
     with app_with(server(tmp_path)) as client:
-        r = client.post("/desktop/coding-engine/start")
-        assert r.status_code == 409 and "not set up yet" in r.json()["detail"]
+        # the coding product starts it, with the folders a session may reach
+        assert client.post("/desktop/coding-engine/start").status_code == 404
     with app_with(None) as client:
         assert client.get("/desktop/coding-engine").status_code == 404
+        assert client.post("/desktop/coding-engine/stop").status_code == 404

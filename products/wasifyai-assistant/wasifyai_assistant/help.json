@@ -34,6 +34,55 @@
   "body": "# Find the chapters\n\nAction: `audiobook.plan`\n\n## What it is for\n\nFind the chapters of a long text and how long each takes to read aloud. Nothing is spoken.\n\n## Steps in the app\n\n1. Open **Voice › Audiobook**.\n2. Paste or open the text and choose **Find the chapters**; they are listed on the right to read and change.\n\n## Fields\n\n- `text`: The book.\n- `target`: About how long a chapter is, when the text has no headings.\n\n## Limits\n\n- Up to 400,000 characters; 200 chapters.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- How many chapters is this book?\n\n## Problems\n\n- **Too long** Split the text into two books."
  },
  {
+  "action": "code.session.send",
+  "title": "Ask the coding agent",
+  "screen": null,
+  "synonyms": [
+   "ask the coding agent",
+   "analyse this codebase",
+   "explain my code",
+   "map of the project",
+   "where is this in the code",
+   "plan a change",
+   "code question",
+   "read my project",
+   "how does this code work"
+  ],
+  "body": "# Ask the coding agent\n\nAction: `code.session.send`\n\n## What it is for\n\nSend a message to a coding session and get the agent's answer. Use it to understand a project (\"analyse\nthis codebase\", \"where are the prices worked out?\") or to get a plan for a change. The agent finds and\nreads the files it needs. It changes nothing.\n\n## Steps in the app\n\nThe coding screens are not built yet. Until they are, ask the assistant in the chat, for example \"Ask the\ncoding session to analyse this codebase\". The assistant shows a card first, because the agent reads your\nfiles and, with a cloud model, sends what it reads to that model's provider.\n\n## Fields\n\n- `session_id`: The coding session, from `code.session.start`.\n- `text`: What to ask, in plain words.\n\n## Limits\n\n- One message at a time per session. A second message while the agent works is refused: stop the turn or\n  wait for it.\n- A turn stops after 60 tool steps and says so.\n- With a cloud model, the parts of files the agent reads leave this computer and go to the model's\n  provider. The model's key never reaches the coding engine.\n- The session's cost is counted call by call. At the session's limit the turn stops and says so.\n- When the model declines a request, the turn ends with the model's own words. It is not an error.\n- After the app has been closed and opened again, the agent does not remember the session's earlier\n  messages; the turn says so.\n\n## Needs\n\n- A coding session, and the coding engine set up (Settings, under Optional parts).\n- For Claude Sonnet 5.5: your own Anthropic key, saved in Settings under Your keys.\n\n## Examples\n\n- Ask the coding session: analyse this codebase.\n- Ask it where the opening hours are shown, and what would have to change to say \"Closed today\" on Mondays.\n\n## Problems\n\n- **The agent is still working on the last message** Stop it or wait for it to end.\n- **This session reached its cost limit** Start a session with a higher limit.\n- **The model declined this request** Ask in another way, or ask something else.\n- **The coding engine stopped answering** Send the message again. If it happens again, repair the coding\n  engine in Settings, under Optional parts."
+ },
+ {
+  "action": "code.session.start",
+  "title": "Start a coding session",
+  "screen": null,
+  "synonyms": [
+   "coding session",
+   "start coding",
+   "open a project",
+   "open my code",
+   "look at my code",
+   "code agent",
+   "coding agent",
+   "read my codebase",
+   "new coding session",
+   "open a folder for the agent"
+  ],
+  "body": "# Start a coding session\n\nAction: `code.session.start`\n\n## What it is for\n\nOpen one project's folder for the coding agent. In this version every session only reads: the agent can\nfind and read the files of that folder, and it cannot change a file or run a command. Starting a session\nreads nothing yet and starts nothing. The agent begins when you send it a message.\n\n## Steps in the app\n\nThe coding screens are not built yet. Until they are, a session is started by asking the assistant in the\nchat, for example \"Start a coding session on /Users/me/Projects/bakery-site\". The assistant shows a card\nfirst, and nothing happens before you say yes.\n\n## Fields\n\n- `folder`: The project's folder on this computer, as a whole path. The agent may read this folder and\n  nothing else of yours.\n- `title`: A name for the session. Left empty, the folder's name is used.\n- `model`: The model to work with. Left empty, the first choice is used (Claude Sonnet 5.5, with your own\n  Anthropic key).\n- `cost_limit_usd`: The most this session may cost, in US dollars. 0 uses the usual limit of 5 dollars.\n\n## Limits\n\n- One folder per session. Choose a project's folder, not your whole home folder or a disk.\n- Some folders cannot be opened: the app's own folders, your Library, and hidden folders at the top of\n  your home folder (such as `.ssh`). They hold keys and settings the agent must never read.\n- The agent cannot change or run anything in this version. Editing with undo, and running commands, come\n  in later versions.\n- Only on Apple-silicon Macs for now.\n\n## Needs\n\n- The coding engine set up: Settings, under Optional parts, \"Coding engine (OpenHands)\", about 375 MB.\n- For Claude Sonnet 5.5: your own Anthropic key, saved in Settings under Your keys (the key for Chat and\n  writing is used).\n\n## Examples\n\n- Start a coding session on /Users/me/Projects/bakery-site.\n- Open my project in ~/Projects/shop-api for the coding agent and call it \"Checkout bug\".\n\n## Problems\n\n- **There is no folder at that path** Give the whole path of a folder that exists.\n- **Choose one project's folder, not the whole home folder or a disk** Pick the folder of one project.\n- **That folder holds the app's or the system's own files** Pick another folder.\n- **No key is saved for Claude Sonnet 5.5** Save an Anthropic key in Settings, under Your keys.\n- **The coding engine is not set up yet** Set it up in Settings, under Optional parts."
+ },
+ {
+  "action": "code.session.stop",
+  "title": "Stop the coding agent",
+  "screen": null,
+  "synonyms": [
+   "stop the coding agent",
+   "stop coding",
+   "cancel the agent",
+   "interrupt the agent",
+   "stop the session",
+   "stop reading my code"
+  ],
+  "body": "# Stop the coding agent\n\nAction: `code.session.stop`\n\n## What it is for\n\nStop what a coding session is doing. It takes effect at once, whatever the agent is doing: starting up,\nwaiting for the model or reading files. The session stays, and you can send it another message.\n\n## Steps in the app\n\nThe coding screens are not built yet. Until they are, ask the assistant in the chat: \"Stop the coding\nsession\".\n\n## Fields\n\n- `session_id`: The coding session.\n\n## Limits\n\n- Stopping a session that is not working does nothing.\n- What the model had already been sent is not taken back, and its cost so far is counted.\n\n## Needs\n\n- A coding session.\n\n## Examples\n\n- Stop the coding session.\n- Stop the agent that is looking at the bakery site.\n\n## Problems\n\n- **There is no such coding session** Check the session, or start a new one."
+ },
+ {
   "action": "creative.add_media",
   "title": "Add to a project",
   "screen": "creative",

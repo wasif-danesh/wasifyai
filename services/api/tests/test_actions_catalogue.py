@@ -177,7 +177,8 @@ def test_the_first_set_is_there(catalogue):
     # 80 with creative.make_shots, redo_shot, choose_take and preview (ADR-0090 CS2)
     # 84 with video.keep and creative.edit_cut, cut and export (ADR-0090 CS3)
     # 85 with creative.animate (CS4); 86 with speech.join (CS5)
-    assert 35 <= len(ids) <= 86
+    # 89 with code.session.start, send and stop (ADR-0101; a coding session that only reads)
+    assert 35 <= len(ids) <= 89
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",

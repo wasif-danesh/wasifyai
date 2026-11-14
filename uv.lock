@@ -3285,6 +3285,7 @@ dependencies = [
 
 [package.optional-dependencies]
 desktop = [
+    { name = "wasifyai-code" },
     { name = "wasifyai-creative" },
     { name = "wasifyai-media-worker" },
     { name = "wasifyai-model3d" },
@@ -3314,6 +3315,7 @@ requires-dist = [
     { name = "python-json-logger", specifier = ">=2.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+    { name = "wasifyai-code", marker = "extra == 'desktop'", editable = "products/wasifyai-code" },
     { name = "wasifyai-contracts", editable = "packages/contracts" },
     { name = "wasifyai-creative", marker = "extra == 'desktop'", editable = "products/wasifyai-creative" },
     { name = "wasifyai-media-worker", marker = "extra == 'desktop'", editable = "services/media-worker" },
@@ -3352,11 +3354,21 @@ name = "wasifyai-code"
 version = "0.0.0"
 source = { editable = "products/wasifyai-code" }
 dependencies = [
+    { name = "httpx" },
+    { name = "langgraph" },
+    { name = "pydantic" },
     { name = "wasifyai-platform-sdk" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" }]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
+    { name = "websockets", specifier = ">=13" },
+]
 
 [[package]]
 name = "wasifyai-contracts"

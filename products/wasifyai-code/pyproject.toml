@@ -2,11 +2,11 @@
 name = "wasifyai-code"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = ["wasifyai-platform-sdk"]
+dependencies = ["wasifyai-platform-sdk", "langgraph>=0.6", "pydantic>=2.9", "httpx>=0.27", "websockets>=13"]
 
-# No "wasifyai.products" entry point yet, on purpose: the engine finds a product by that entry point,
-# and this package is library code that is not wired into the app (docs/spikes/coding-cores.md).
-# The entry point arrives with the actions and routes of stage C1b.
+# The API discovers installed products through this entry point (GraphRegistry.load_entry_points).
+[project.entry-points."wasifyai.products"]
+wasifyai-code = "wasifyai_code:register"
 
 [build-system]
 requires = ["hatchling"]

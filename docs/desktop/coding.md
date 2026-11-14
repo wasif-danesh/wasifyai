@@ -1,9 +1,10 @@
 # The coding engine on the desktop
 
 Part of [the desktop profile](../desktop-profile.md). ADR-0101 to ADR-0105; the order of the work is in
-`docs/v2-coding-agent-start-plan.md`. **Built so far: stage C1a**, the engine in the app. There is no coding
-screen and no coding session yet: the product `wasifyai-code` comes with stage C1b. Measurements of this stage
-are in `docs/spikes/coding-c1a.md`.
+`docs/v2-coding-agent-start-plan.md`. **Built so far: stage C1a**, the engine in the app, and **the engine
+side of stage C1b**, a coding session that only reads, reached through the product's actions and routes.
+**There is no coding screen yet**: the mockups (`docs/spikes/coding-mockups.html`) wait for the owner's
+approval. Measurements are in `docs/spikes/coding-c1a.md` and `docs/spikes/coding-c1b.md`.
 
 ## What it is
 
@@ -17,7 +18,9 @@ Apple-silicon Macs only. Elsewhere the part says "The coding engine is not avail
 | `services/coding-engine/` | The pins: the one version (`VERSION`), the hashed package list, the list of packages left out, the pinned build tool, the sandbox profile. Its `README.md` says how to move the version |
 | `services/api/src/wasifyai_api/components/coding.py` | The optional part "Coding engine (OpenHands)": set up, repair, remove |
 | `services/api/src/wasifyai_api/coding_server.py` | Start, health and stop of the server as a child program inside the sandbox |
-| `services/api/src/wasifyai_api/desktop_coding.py` | `GET /desktop/coding-engine`, `POST /desktop/coding-engine/start` and `/stop` |
+| `services/api/src/wasifyai_api/desktop_coding.py` | `GET /desktop/coding-engine` and `POST /desktop/coding-engine/stop` |
+| `services/api/src/wasifyai_api/coding_gateway.py`, `coding_models.yaml` | The model gateway for coding sessions and the models a session can run on (stage C1b) |
+| `products/wasifyai-code/` | The product: the place "this computer" (`client.py`), the sessions in flight (`runtime.py`), the actions, the routes, the rows, search |
 | `components/manifests/<platform>.yaml`, `coding` | The lock's SHA-256, the extensions catalogue's address, size and SHA-256, the size shown |
 
 ## Setting it up
@@ -45,8 +48,9 @@ Measured on an M5 Pro (`docs/spikes/coding-c1a.md`): 118 MB to download, 373 MB 
 
 ## Running it
 
-`CodingServer.ensure_running()` starts one server per app. Nothing starts it yet except the route below and
-the last step of the setup; from C1b the coding product starts it when a session needs it.
+`CodingServer.ensure_running(write, read_only)` starts one server per app. The coding product starts it when
+a session needs it, with the folders a session may reach; the last step of the setup starts it too, to see
+that it answers. Nothing else does.
 
 | Rule (ADR-0102) | How it is done |
 |---|---|
@@ -76,8 +80,8 @@ The profile starts from "allow" and closes these. Where two rules match, the lat
 
 | | Closed | Opened again |
 |---|---|---|
-| Writes | Everything | `<app data>/coding`, the workspaces a session was given, the terminal folder |
-| Reads | `/Users`, `/Volumes`, the per-user temp folders, `/tmp`, the app's own data folder | The same three, and read-only: `engine/coding` and the Python it was made with |
+| Writes | Everything | `<app data>/coding`, the workspaces of sessions that may write (none yet), the terminal folder |
+| Reads | `/Users`, `/Volumes`, the per-user temp folders, `/tmp`, the app's own data folder | The same three, and read-only: `engine/coding`, the Python it was made with, **the workspaces of sessions that only read**, and `<app data>/coding-fixed` |
 | Network | Everything | This computer |
 | Other programs | A signal to a process outside the sandbox, opening an app or a file with `open`, a message to another app, a job handed to the system | Signals inside the sandbox |
 
@@ -86,21 +90,102 @@ The rule on other programs is new in this stage: the profile of the C0 spikes le
 so run a file outside the sandbox (`docs/spikes/coding-c1a.md`).
 
 The profile is not edited by hand at run time and never widened by a request. A workspace is a folder the
-person chose; `ensure_running(workspaces)` restarts the server when the list changes, because a profile cannot
-change while its process runs.
+person chose; `ensure_running(write, read_only)` restarts the server when either list changes, because a
+profile cannot change while its process runs.
+
+## A session that only reads (stage C1b)
+
+Every session of this stage is in the plan's "Plan mode": the agent finds and reads files and gives an
+answer or a plan. It cannot change a file or run a command. Three things hold that, each by itself:
+
+| | How |
+|---|---|
+| The tools | The session is made with three of the Agent Server's tools and no others: find files by name (`glob`), search in files (`grep`), and look at a file (`planning_file_editor`). The terminal, the file editor and the patch tool are not given |
+| The one file the viewer could edit | The viewer may edit one file, its "plan". That file is `<app data>/coding-fixed/PLAN.md`, made by the Wasify engine in a folder the sandbox lets the server read and not write |
+| The sandbox | The session's workspace is opened to the server for reading only. A write there is refused by the operating system, whatever asks for it |
+
+Which folders can be a workspace is checked before anything is opened (`runtime.check_folder`): one project's
+folder, never the home folder or a disk, the app's own data, the Library, or a hidden folder at the top of
+the home folder. Opening one of those would hand the engine what the sandbox exists to keep from it.
+
+**Who talks to whom.**
+
+```
+action or route -> wasifyai_code.runtime.Sessions -> wasifyai_code.client.ThisComputer -> Agent Server (sandbox)
+                     rows in <app data>/code/code.db        |  one live socket per turn       |
+                     the relay inside the engine (Feed)     |                                 |  model calls, with a token
+                                                            +-- wasifyai_api.coding_gateway <-+
+                                                                 the key, from the secret store -> the provider
+```
+
+- **`client.py` is the only file that knows the Agent Server's API.** It makes a conversation, sends, stops
+  (the server's interrupt, which cancels the model call in flight), and follows one live socket. After a drop
+  it connects again and asks for what came since the last event it had; an event that arrives twice is
+  dropped. It listens before it sends, because words as they are written go only to who is listening.
+- **`events.py` says the server's events in the place's own words** (state, text, piece, step, result,
+  confirm, ended) and works out how a turn ended: finished, stopped, the step limit, an error, or a refusal
+  by the model. The shapes it reads are in `agent_types.py`, generated from the Agent Server's API
+  description at the pinned version (`scripts/coding-engine-types.py`; the part we rely on is kept in
+  `services/coding-engine/api-excerpt.json`).
+- **One server serves every session.** It is started with every folder the person has opened as a
+  workspace, so a session on a known folder starts nothing. A folder that is new means the server starts
+  again; that is refused, in words, while another session is in the middle of a turn.
+- **A turn that only reads changes no word.** No checkpoint is taken and no check runs; the session's result
+  stays what it was. The implement, check, fix loop (`loop.py`) takes over with the modes that edit (C2).
+- **The session's events are relayed inside the engine only** (`runtime.Feed`). No stream goes to the
+  window until the new event kinds are agreed for the SSE contract (proposed in `docs/spikes/coding-c1b.md`).
+
+## The model gateway (ADR-0102, decision 4)
+
+The Agent Server never holds a model key and cannot reach the internet. It is given this engine's own
+address on loopback and a token for one session, and every model call of that session comes to
+`/coding-gateway/...` on the Wasify engine.
+
+| What | How |
+|---|---|
+| The token | Made per session, kept in memory only, dead when the session is deleted or the app closes. It is the route's identity: the tenant, the product and the person come from it. An unknown token is refused. The real key opens nothing here |
+| The key | Read from the app's secret store for each call and put on it (`keys.chat.anthropic`, the key saved for Chat and writing in Settings › Your keys). Never answered back, logged or written |
+| The model | Only the model the session was opened with is let through. The list is `coding_models.yaml`: Claude Sonnet 5.5 first; the local Qwen 27B through Ollama second, offered only when `CODING_OLLAMA_URL` is set |
+| The body | Passed on byte for byte, so the provider's prompt-cache marks arrive as the Agent Server wrote them |
+| Streaming | Passed through event by event |
+| Tokens and cost | Each call's tokens become usage events (`llm.input_tokens`, `llm.output_tokens`, capability `code.agent`) and its counted cost is added to the session's row. At the session's limit (5 dollars unless the session says otherwise) the next call is refused, and the turn ends saying so |
+| A refusal | When the model declines (`stop_reason: "refusal"`), the Agent Server is answered with a plain message and no tool call, which ends its turn. The turn ends as "refused" with the model's own words. It is not an error |
+
+## The product's actions and routes
+
+| Action | What |
+|---|---|
+| `code.session.start` | A session on a folder. Nothing runs and nothing is read yet |
+| `code.session.send` | A message; waits for the agent's answer (a long action: it can become a job, and cancelling the job stops the turn) |
+| `code.session.stop` | Stops the turn at once |
+
+They are offered to the assistant and not to outside apps: an outside app that could open a session on any
+folder would be handed that folder's content. Help is in `docs/help/code.session.*.md`.
+
+| Route (under `/products/wasifyai-code/code`) | What |
+|---|---|
+| `GET /models` | The models a session can run on, and whether each is ready (never a key) |
+| `POST /sessions`, `GET /sessions` (`ids=`), `GET /sessions/{id}`, `DELETE /sessions/{id}` | Start, list, look at (state, answer, cost) and forget a session |
+| `GET /sessions/{id}/turns` | Each turn: the request, how it ended, the answer, the steps |
+| `POST /sessions/{id}/messages` | Begin a turn (202); the agent works on in the engine |
+| `POST /sessions/{id}/stop` | Stop the turn; answers when it is closed |
+
+A session is found by search (ADR-0041) by its title, its project's name and what was asked first (kind
+`code_session`). Its card and its filter in the Library come with the screens.
 
 ## Routes
 
-All three are under `/desktop`, need a signed-in person like every route, and never give out the session key.
+Both are under `/desktop`, need a signed-in person like every route, and never give out the session key.
 
 | Route | What |
 |---|---|
-| `GET /desktop/coding-engine` | `supported`, `installed`, `version`, `extensions`, `running`, `pid`, `port`, `workspaces`, `start_seconds`, `memory_bytes` |
-| `POST /desktop/coding-engine/start` | Start it (409 with a sentence when it is not set up or did not start) |
-| `POST /desktop/coding-engine/stop` | Stop it and everything it started |
+| `GET /desktop/coding-engine` | `supported`, `installed`, `version`, `extensions`, `running`, `pid`, `port`, `workspaces`, `read_only`, `start_seconds`, `memory_bytes` |
+| `POST /desktop/coding-engine/stop` | Stop it and everything it started. Turns in flight end as "stopped" first. The next message of a session starts it again |
 
-These are for this stage's checks and for diagnostics. A coding session never goes through them: the window
-calls the coding product's actions, and the product calls the engine (ADR-0101, decision 4).
+These are for diagnostics and for giving the memory back. A coding session never goes through them: the
+window calls the coding product's actions, and the product calls the engine (ADR-0101, decision 4). The route
+that started the server by hand (stage C1a) is gone: a start with other folders than the running server has
+starts it again and cuts off every session in the middle of its turn (`docs/spikes/coding-c1b.md`).
 
 ## Tests
 
@@ -108,13 +193,21 @@ calls the coding product's actions, and the product calls the engine (ADR-0101, 
 |---|---|---|
 | `services/api/tests/test_coding_server.py` | The supervisor against the fake server: the profile, the start, the key, the clean environment, the stop, the guard, the routes. One test runs the real `sandbox-exec` with a real start's profile and a shell | `make test` |
 | `services/api/tests/test_components_coding.py` | The part against the fake: seven steps, refusals, repair, remove, the platforms where it is not offered, and that the pin, the manifests and the lock agree | `make test` |
-| `services/api/tests/fake_agent_server.py` | The fake Agent Server: the endpoints the supervisor uses, started the way the real one is | - |
+| `services/api/tests/fake_agent_server.py` | The fake Agent Server: the endpoints the supervisor and the product use, started the way the real one is. Its "agent" replays event streams recorded from the real server (`tests/fixtures/coding/`) | - |
+| `services/api/tests/test_coding_gateway.py` | The gateway against a pretended provider: the token, the key, the body byte for byte, streaming, tokens and cost, the limit, a refusal | `make test` |
+| `services/api/tests/test_coding_sessions.py` | A session from the routes down to the fake server: the tools of a session that only reads, the events, a dropped socket, Stop at any moment, one server for several workspaces, the folders that are refused | `make test` |
+| `products/wasifyai-code/tests/test_code_events.py`, `test_code_sessions.py` | The event translation and the sessions on the pretended place | `make test` |
 | `services/api/tests/integration/test_coding_sandbox.py` | Hostile tests against the real server in its sandbox | `make test-coding`, opt-in |
 | `apps/desktop/scripts/ui-audit.sh light coding-setup` (then `coding-repair`, `coding-remove`) | The part set up, repaired and removed from the real window's Settings, with the real downloads | By hand, on a throwaway `DESKTOP_DATA_DIR` |
 
 ## Not built
 
-- The product, its screens, the model gateway, the check loop, the scheduler: stages C1b onwards.
+- Every screen (the session view, the Files tab): they wait for the mockups' approval. The stream to the
+  window waits for the new event kinds to be agreed.
+- Edits with undo, commands, the check loop switched on, the scheduler: stages C2 onwards.
+- A session going on after the app was closed and opened again: the session's token is gone, so its next
+  message starts a new conversation with the agent, and the turn says so.
+- The coding product's own connection to Wasify's tools (stage C4): `docs/spikes/coding-c1b.md`, "Decided".
 - Our own short list of extensions as the only marketplace (the rest of stage X1): it needs a session to show.
 - Windows, Linux and Intel Macs (ADR-0102, decision 10).
 - A stop that reaches a program which left both its group and its parent. Such a program stays inside the

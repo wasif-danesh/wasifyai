@@ -217,6 +217,19 @@ class ApiToolHost:
                     ui="model3d",
                 )
             return Readiness.ready()
+        if need.kind == "runtime" and need.name == "coding":
+            server, gateway = state.coding_server, state.coding_gateway
+            if server is None or gateway is None or not server.supported:
+                return Readiness.unavailable(
+                    "The coding engine is not available for this computer yet."
+                )
+            if server.install is None:
+                return Readiness.needs_setup(
+                    "Set up the coding engine first, in Settings under Optional parts "
+                    "(about 375 MB).",
+                    ui="models",
+                )
+            return Readiness.ready()
         if need.kind == "runtime" and need.name == "music_analysis":
             tool = state.music_analysis
             if tool is None or not tool.supported:

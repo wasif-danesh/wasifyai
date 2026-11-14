@@ -1,0 +1,48 @@
+# The models a coding session can run on (ADR-0101, decision 7): Claude Sonnet 5.5 first, the
+# local Qwen 27B second. Read by the model gateway (wasifyai_api/coding_gateway.py). The picker
+# that exists takes this list over when the coding screens are built.
+#
+#   shape            how the Agent Server calls the model, and so which of the gateway's two
+#                    doors it uses: "anthropic" (the Messages API) or "openai" (chat completions)
+#   engine_model     the name the Agent Server is given (its own library's name for the model)
+#   provider_model   the only model name the gateway lets through for this entry
+#   upstream         where the gateway sends the call. "ollama" is the address in OLLAMA_BASE_URL
+#   secret           where the key is in the app's secret store (Settings › Your keys). Empty for
+#                    a model on this computer, which needs none
+#   price            US dollars per million tokens, as counted by the gateway. It is a count for
+#                    the session's limit and its header, not the provider's bill
+#   engine_settings  passed to the Agent Server with the model, unchanged
+default: claude-sonnet-5-5
+models:
+  claude-sonnet-5-5:
+    title: Claude Sonnet 5.5
+    where: cloud
+    shape: anthropic
+    provider: anthropic
+    engine_model: anthropic/claude-sonnet-5-5
+    provider_model: claude-sonnet-5-5
+    upstream: https://api.anthropic.com
+    secret: keys.chat.anthropic
+    # a cache write that lasts five minutes costs 1.25 times the input price, one that lasts an
+    # hour twice; a cache read 0.10 dollars
+    price: { input: 2.0, output: 10.0, cache_read: 0.10, cache_write: 2.5, cache_write_1h: 4.0 }
+    engine_settings: {}
+  qwen-27b-ollama:
+    title: Qwen 27B on this computer (Ollama)
+    where: this-computer
+    shape: openai
+    provider: ollama
+    engine_model: openai/qwen3.8:27b-mlx
+    provider_model: qwen3.8:27b-mlx
+    upstream: ollama
+    secret: ""
+    price: {}
+    # what the C0 spikes ran it with: no thinking, its own tool calls, one retry
+    engine_settings:
+      native_tool_calling: true
+      reasoning_effort: none
+      litellm_extra_body: { reasoning_effort: none }
+      max_input_tokens: 24000
+      max_output_tokens: 4096
+      temperature: 0.2
+      num_retries: 1

@@ -68,6 +68,7 @@ from wasifyai_api.actions_engine import build_executor
 from wasifyai_api.admin import AdminStore, PostgresAdminStore
 from wasifyai_api.admin_providers import AdminProviders, CloudPlanSink
 from wasifyai_api.auth import Claims
+from wasifyai_api.coding_gateway import CodingGateway
 from wasifyai_api.components.coding import CodingComponent, coding_files
 from wasifyai_api.components.comfyui import ComfyUiComponent
 from wasifyai_api.components.desktop import service_components
@@ -939,7 +940,8 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     if desktop.styles is not None:  # what Train taught in each run: only a look gets the warning
         desktop.styles.taught = lambda run: _taught_in(s, run)
     s.llama_server = desktop.llama
-    s.coding_server = desktop.coding  # the coding engine (ADR-0102); no product uses it yet
+    s.coding_server = desktop.coding  # the coding engine (ADR-0102), for the coding product
+    _desktop_coding(s, desktop)
     s.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
     s.video_builder = desktop.video_builder  # the render engine (ADR-0077)
     s.model3d = desktop.model3d  # the 3D engine (ADR-0080)
@@ -980,6 +982,36 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     s.export_dir = Path(os.environ.get("WASIFYAI_EXPORT_DIR") or Path.home() / "Downloads")
     # the optional components, on the one installer (stage F2)
     s.components = _desktop_components(s, desktop)
+
+
+def _desktop_coding(s: ApiServices, desktop: Desktop) -> None:
+    """What a coding session needs beside the coding engine (ADR-0101, ADR-0102; stage C1b): the
+    gateway that holds the model key, and the product's rows. The rows are in
+    `<app data>/code`, which the sandbox closes to the engine; `<app data>/coding` is the
+    engine's own folder and holds nothing of ours."""
+    if desktop.coding is None or desktop.secrets is None:
+        return
+    settings = desktop.settings
+    s.coding_gateway = CodingGateway(
+        secrets=desktop.secrets,
+        usage=desktop.usage,
+        # this engine as a program on this computer reaches it; the port is the window's
+        base_url=lambda: _loopback(settings.desktop_public_url),
+        ollama_url=settings.coding_ollama_url,
+    )
+    try:
+        from wasifyai_code.store import CodeStore
+    except ImportError:  # a build without the coding product
+        return
+    # opened at the start, so that a turn a closed app left in the middle is closed in words
+    s.code_store = CodeStore.in_folder(Path(settings.desktop_data_dir) / "code")
+
+
+def _loopback(public_url: str) -> str:
+    """This engine's own address for a program on this computer: always by number, because the
+    sandbox the coding engine runs in lets the network through to this computer only."""
+    port = urlparse(public_url).port
+    return f"http://127.0.0.1:{port}" if port else ""
 
 
 def engine_bundle(products_dir: Path | None) -> Path | None:
@@ -1039,8 +1071,14 @@ async def _close(
     await asyncio.gather(*r.background, return_exceptions=True)
     if consumer:
         await consumer.stop()
+    if s.code_sessions is not None:  # turns in flight end before the coding engine does
+        await s.code_sessions.close()
     if desktop:
         await desktop.stop()
+    if s.coding_gateway is not None:
+        await s.coding_gateway.close()
+    if s.code_store is not None:
+        await asyncio.to_thread(s.code_store.close)
     elif s.voice_store is not None:
         web_audio: Any = s.audio
         if web_audio is not None:  # the hosted client, and the local models' memory

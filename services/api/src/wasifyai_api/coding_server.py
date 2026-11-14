@@ -5,7 +5,9 @@ The coding engine is an optional part (`wasifyai_api/components/coding.py`): a P
 of its own from a hashed lock, and the pinned extensions catalogue, under
 `<app data>/engine/coding/`. This module finds it and runs one server:
 
-    CodingServer.ensure_running()   start (or keep) the server, return its address on loopback
+    CodingServer.ensure_running()   start (or keep) the server, return its address on loopback;
+                                    it is given the folders it may write and the folders it
+                                    may only read, and starts again when they differ
     CodingServer.stop()             stop it and everything it started
     CodingServer.request(...)       call it: the only place the session key is put on a call
 
@@ -16,7 +18,8 @@ What holds it (ADR-0102, decisions 2 and 3):
                     writes only to its own state, the workspaces and its terminal folder; the
                     home folder, other disks and the app's own data closed to reading except
                     its own files; the network to this computer only; no signal to, and no
-                    start of, a program outside
+                    start of, a program outside. A workspace of a session that only reads is
+                    opened for reading and not for writing (stage C1b)
     a free port     chosen at start on loopback, so a second copy of the app starts beside this one
     a new key       a random session key at every start. It is given to the server in its
                     environment and kept here in memory: not in `state()`, a log, a file or a route
@@ -70,6 +73,12 @@ TERMINAL_PREFIX = "wasify-coding-"
 TOOL_DIRS = ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin")
 # Closed to reading whatever else is asked: people's folders, other disks, every program's temp
 CLOSED = ("/Users", "/Volumes", "/private/var/folders", "/private/tmp")
+# A folder the server may read and never write, made here: it holds the one file the agent's
+# file viewer would otherwise be allowed to edit (its "plan"), so that a session that only reads
+# has nothing at all it can write (stage C1b)
+FIXED_DIR = "coding-fixed"
+PLAN_FILE = "PLAN.md"
+PLAN_TEXT = "This session only reads. Nothing can be written here.\n"
 
 # What the server is started with in place of `python -m openhands.agent_server`: the same module,
 # after a thread that waits for this engine to go away. It is not a change to OpenHands' packages.
@@ -293,6 +302,7 @@ class CodingServer:
         self._guard: int | None = None  # our end of the pipe the server watches
         self._terminal: Path | None = None
         self._workspaces: tuple[Path, ...] = ()
+        self._read_only: tuple[Path, ...] = ()
         self._started: float | None = None
         self._start_seconds: float | None = None
         self._lock = asyncio.Lock()
@@ -305,6 +315,22 @@ class CodingServer:
         """What the server may write: its home, its state, its temp folder, the default
         workspace. It is the person's coding work, so removing the part leaves it."""
         return self._data_dir / "coding"
+
+    @property
+    def plan_file(self) -> Path:
+        """The file a session that only reads names as its "plan": the server can read it and,
+        because of where it is, cannot write it."""
+        return Path(os.path.realpath(self._data_dir)) / FIXED_DIR / PLAN_FILE
+
+    @property
+    def workspaces(self) -> tuple[Path, ...]:
+        """The folders the running server may write."""
+        return self._workspaces if self.running else ()
+
+    @property
+    def read_only(self) -> tuple[Path, ...]:
+        """The folders the running server may read and not write."""
+        return self._read_only if self.running else ()
 
     @property
     def install(self) -> CodingInstall | None:
@@ -343,6 +369,7 @@ class CodingServer:
             "pid": self.pid,
             "port": int(self._url.rsplit(":", 1)[1]) if self.running and self._url else None,
             "workspaces": [str(w) for w in self._workspaces] if self.running else [],
+            "read_only": [str(w) for w in self._read_only] if self.running else [],
             "start_seconds": self._start_seconds if self.running else None,
         }
 
@@ -370,12 +397,16 @@ class CodingServer:
 
     # ---- starting ----------------------------------------------------------------------------
 
-    async def ensure_running(self, workspaces: Sequence[Path] = ()) -> str:
+    async def ensure_running(
+        self, workspaces: Sequence[Path] = (), read_only: Sequence[Path] = ()
+    ) -> str:
         """The address of a running server that may write to `workspaces` (and to its own
-        default workspace), starting it, or starting it again when the folders differ."""
+        default workspace) and may read, but not write, `read_only`; starting it, or starting
+        it again when the folders differ. A folder named in both may be written."""
         want = await asyncio.to_thread(_resolved, workspaces)
+        reads = tuple(p for p in await asyncio.to_thread(_resolved, read_only) if p not in want)
         async with self._lock:
-            if self.running and self._url and want == self._workspaces:
+            if self.running and self._url and (want, reads) == (self._workspaces, self._read_only):
                 if await self._healthy(self._url):
                     return self._url
             await self._terminate()
@@ -385,7 +416,7 @@ class CodingServer:
                     "not_installed",
                     "The coding engine is not set up yet. Set it up in Settings first.",
                 )
-            return await self._start(found, want)
+            return await self._start(found, want, reads)
 
     async def check(self, found: CodingInstall) -> dict[str, Any]:
         """Start `found` in the sandbox, ask it what it is, stop it: the last step of its setup,
@@ -393,7 +424,7 @@ class CodingServer:
         async with self._lock:
             await self._terminate()
             try:
-                await self._start(found, ())
+                await self._start(found, (), ())
                 seconds = self._start_seconds
                 r = await self.request("GET", "/server_info")
                 if r.status_code != 200:
@@ -414,7 +445,9 @@ class CodingServer:
             )
         return path.read_text()
 
-    def _prepare(self, found: CodingInstall, workspaces: tuple[Path, ...]) -> dict[str, Any]:
+    def _prepare(
+        self, found: CodingInstall, workspaces: tuple[Path, ...], read_only: tuple[Path, ...]
+    ) -> dict[str, Any]:
         """The folders, the profile and the environment of one start (file work, off the loop)."""
         template = self._template()
         run = Path(os.path.realpath(self.run_dir))
@@ -422,6 +455,10 @@ class CodingServer:
         shutil.rmtree(tmp, ignore_errors=True)  # what an earlier run left
         for folder in (home, state, tmp, workspace):
             folder.mkdir(parents=True, exist_ok=True)
+        plan = self.plan_file
+        plan.parent.mkdir(parents=True, exist_ok=True)
+        if not plan.is_file() or plan.read_text() != PLAN_TEXT:
+            plan.write_text(PLAN_TEXT)
         self._sweep_terminal(run)
         terminal = Path(
             os.path.realpath(tempfile.mkdtemp(prefix=TERMINAL_PREFIX, dir=TERMINAL_ROOT))
@@ -436,7 +473,7 @@ class CodingServer:
                 fill_profile(
                     template,
                     write=[run, *workspaces, terminal],
-                    read_only=[root, python_home],
+                    read_only=[root, python_home, plan.parent, *read_only],
                     closed=[*(Path(c) for c in CLOSED), data],
                 )
             )
@@ -514,13 +551,15 @@ class CodingServer:
                 path.replace(path.with_name(LOG_NAME + ".1"))
         return path.open("ab")
 
-    async def _start(self, found: CodingInstall, workspaces: tuple[Path, ...]) -> str:
+    async def _start(
+        self, found: CodingInstall, workspaces: tuple[Path, ...], read_only: tuple[Path, ...] = ()
+    ) -> str:
         if not self.supported:
             raise CodingError(
                 "unsupported", "The coding engine is not available for this computer yet."
             )
         began = time.monotonic()
-        prepared = await asyncio.to_thread(self._prepare, found, workspaces)
+        prepared = await asyncio.to_thread(self._prepare, found, workspaces, read_only)
         with socket.socket() as s:  # a free port on loopback
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
@@ -555,7 +594,7 @@ class CodingServer:
             out.close()
             os.close(read_end)
         self._guard, self._key, self._terminal = write_end, key, prepared["terminal"]
-        self._workspaces = workspaces
+        self._workspaces, self._read_only = workspaces, read_only
         log.info("started the coding engine (pid %s) on %s", self._proc.pid, url)
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self._timeout
@@ -580,7 +619,8 @@ class CodingServer:
     async def _terminate(self) -> None:
         proc, guard, terminal = self._proc, self._guard, self._terminal
         self._proc = self._url = self._key = self._guard = self._terminal = None
-        self._workspaces, self._started, self._start_seconds = (), None, None
+        self._workspaces, self._read_only = (), ()
+        self._started, self._start_seconds = None, None
         try:
             if proc is not None and proc.returncode is None:
                 pids = await _tree(proc.pid)
@@ -621,7 +661,8 @@ class CodingServer:
         """End it at once, without waiting (for code that cannot wait: removing the part)."""
         proc, guard, terminal = self._proc, self._guard, self._terminal
         self._proc = self._url = self._key = self._guard = self._terminal = None
-        self._workspaces, self._started, self._start_seconds = (), None, None
+        self._workspaces, self._read_only = (), ()
+        self._started, self._start_seconds = None, None
         was = proc is not None and proc.returncode is None
         if was and proc is not None:
             rows = subprocess.run(

@@ -10,8 +10,10 @@ makes for every person at once say so in their names.
 - A **workspace** is a folder the person chose, with its check command (ADR-0103, decision 5: the
   command lives here, never in the workspace) and the checkpoint of the last state that passed.
 - A **session** is one conversation with the agent on a workspace. Its `result` is the one word in
-  its header.
-- A **turn** is one request and everything done about it, with its state (`loop.py`).
+  its header. Its `mode` says how much the agent may do (`plan`: it only reads). Its counted cost
+  and tokens are added by the model gateway, call by call (ADR-0102, decision 4).
+- A **turn** is one request and everything done about it, with its state (`loop.py`), the
+  agent's last message (`answer`) and how many tool steps it took.
 - A **check** is one run of the check command (ADR-0103, decision 8).
 - A **checkpoint** names a commit in the workspace's checkpoint store (`checkpoints.py`).
 - A **schedule** is a request, a plain rule and a time zone; a **schedule run** is one time it came
@@ -48,6 +50,10 @@ TURN_STATES = (WORKING, TURN_ENDED, CHECKING, DONE)
 RUN_WAITING, RUN_RUNNING, RUN_DONE = "waiting", "running", "done"
 RUN_MISSED, RUN_SKIPPED, RUN_FAILED = "missed", "skipped", "failed"
 RUN_STATES = (RUN_WAITING, RUN_RUNNING, RUN_DONE, RUN_MISSED, RUN_SKIPPED, RUN_FAILED)
+
+# how much the agent may do in a session (the plan's three modes; only the first is built)
+PLAN = "plan"  # it only reads: no tool that writes a file or runs a command
+MODES = (PLAN,)
 
 LEFT_WORKING = "It was stopped when the app closed."
 STILL_RUNNING = "still running"
@@ -125,7 +131,10 @@ CREATE TABLE IF NOT EXISTS sessions(
   origin TEXT NOT NULL DEFAULT 'chat' CHECK (origin IN ('chat', 'schedule')),
   place TEXT NOT NULL DEFAULT 'this-computer', place_session TEXT, last_event TEXT,
   model TEXT NOT NULL DEFAULT '',
+  mode TEXT NOT NULL DEFAULT 'plan',
   result TEXT NOT NULL DEFAULT '' CHECK (result IN {_WORDS}),
+  cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0, cost_limit_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+  tokens_in BIGINT NOT NULL DEFAULT 0, tokens_out BIGINT NOT NULL DEFAULT 0, model_calls INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS turns(
   {_OWNED},
@@ -134,6 +143,7 @@ CREATE TABLE IF NOT EXISTS turns(
   result TEXT NOT NULL DEFAULT '' CHECK (result IN {_WORDS}),
   why TEXT NOT NULL DEFAULT '', rounds INTEGER NOT NULL DEFAULT 0, needs_you INTEGER NOT NULL DEFAULT 0,
   checkpoint_id TEXT, notes TEXT NOT NULL DEFAULT '[]',
+  answer TEXT NOT NULL DEFAULT '', steps INTEGER NOT NULL DEFAULT 0,
   started_at TEXT NOT NULL, finished_at TEXT);
 CREATE TABLE IF NOT EXISTS checks(
   {_OWNED},
@@ -259,6 +269,18 @@ class CodeStore:
     def list_workspaces(self, owner: Owner) -> list[dict[str, Any]]:
         return self._list("workspaces", owner)
 
+    def find_workspace(self, owner: Owner, path: str) -> dict[str, Any] | None:
+        """This person's workspace for a folder, when they have opened it before."""
+        found = self._list("workspaces", owner, "path = ?", (path,))
+        return found[0] if found else None
+
+    def workspace_paths(self) -> list[str]:
+        """Every folder any person has opened as a workspace: what the one coding engine of
+        this computer is allowed to reach (its sandbox names them all)."""
+        return [
+            r["path"] for r in self.db.all("SELECT DISTINCT path FROM workspaces ORDER BY path")
+        ]
+
     def set_check(
         self, owner: Owner, item: str, command: str, *, source: str = "person", limit_s: int | None = None
     ) -> dict[str, Any]:  # fmt: skip
@@ -299,16 +321,78 @@ class CodeStore:
     # ---- sessions ------------------------------------------------------------------------------
 
     def add_session(
-        self, owner: Owner, workspace_id: str, *, title: str = "", origin: str = "chat", model: str = ""
+        self, owner: Owner, workspace_id: str, *, title: str = "", origin: str = "chat", model: str = "",
+        mode: str = PLAN, cost_limit_usd: float = 0.0,
     ) -> dict[str, Any]:  # fmt: skip
         self.get_workspace(owner, workspace_id)  # it must be this person's
+        if mode not in MODES:
+            raise ValueError(f"no such mode: {mode}")
         item, at = new_id(), now()
         self.db.exec(
-            "INSERT INTO sessions(id, tenant_id, product_id, user_id, workspace_id, title, origin, model, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (item, *_who(owner), workspace_id, title[:200], origin, model, at, at),
+            "INSERT INTO sessions(id, tenant_id, product_id, user_id, workspace_id, title, origin, model, mode, cost_limit_usd, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                item,
+                *_who(owner),
+                workspace_id,
+                title[:200],
+                origin,
+                model,
+                mode,
+                cost_limit_usd,
+                at,
+                at,
+            ),
         )
         return self.get_session(owner, item)
+
+    def set_session_title(self, owner: Owner, item: str, title: str) -> None:
+        self.db.exec(
+            f"UPDATE sessions SET title = ?, updated_at = ? WHERE id = ? AND {_MINE}",
+            (title[:200], now(), item, *_who(owner)),
+        )
+
+    def add_session_cost(
+        self, item: str, *, usd: float, tokens_in: int, tokens_out: int, calls: int = 1
+    ) -> None:
+        """One model call of a session, counted by the gateway (which knows the session by its
+        token, and so names no person here)."""
+        self.db.exec(
+            "UPDATE sessions SET cost_usd = cost_usd + ?, tokens_in = tokens_in + ?, tokens_out = tokens_out + ?, "
+            "model_calls = model_calls + ? WHERE id = ?",
+            (usd, tokens_in, tokens_out, calls, item),
+        )
+
+    def delete_session(self, owner: Owner, item: str) -> bool:
+        """Forget a session and its turns and checks. The workspace and its checkpoints stay."""
+        who = _who(owner)
+        with self.db.transaction() as db:
+            n = db.execute(f"DELETE FROM sessions WHERE id = ? AND {_MINE}", (item, *who)).rowcount
+            if n == 0:
+                return False
+            for table in ("checks", "turns"):
+                db.execute(f"DELETE FROM {table} WHERE session_id = ? AND {_MINE}", (item, *who))
+        return True
+
+    def sessions_page(self, after: str | None, limit: int) -> list[dict[str, Any]]:
+        """Sessions of every person in the order of their ids, with their workspace's name and
+        the first thing that was asked: what search indexes (ADR-0041)."""
+        rows = self.db.all(
+            "SELECT s.id, s.tenant_id, s.product_id, s.user_id, s.title, w.name AS workspace_name, w.path AS workspace_path, "
+            "(SELECT t.request FROM turns t WHERE t.session_id = s.id ORDER BY t.position LIMIT 1) AS first_request "
+            "FROM sessions s LEFT JOIN workspaces w ON w.id = s.workspace_id "
+            f"{'WHERE s.id > ? ' if after is not None else ''}ORDER BY s.id LIMIT ?",
+            (limit,) if after is None else (after, limit),
+        )
+        return [dict(r) for r in rows]
+
+    def sessions_present(self, ids: Sequence[str]) -> set[str]:
+        if not ids:
+            return set()
+        rows = self.db.all(
+            f"SELECT id FROM sessions WHERE id IN ({','.join('?' * len(ids))})", tuple(ids)
+        )
+        return {_first(r) for r in rows}
 
     def get_session(self, owner: Owner, item: str) -> dict[str, Any]:
         return self._get("sessions", owner, item)
@@ -378,6 +462,13 @@ class CodeStore:
             "UPDATE turns SET state = COALESCE(?, state), rounds = COALESCE(?, rounds), checkpoint_id = COALESCE(?, checkpoint_id) "
             f"WHERE id = ? AND {_MINE} AND state <> 'done'",
             (state, rounds, checkpoint_id, item, *_who(owner)),
+        )
+
+    def set_turn_answer(self, owner: Owner, item: str, *, answer: str, steps: int) -> None:
+        """What the agent said last in the turn, and how many tool steps it has taken."""
+        self.db.exec(
+            f"UPDATE turns SET answer = ?, steps = ? WHERE id = ? AND {_MINE}",
+            (answer, steps, item, *_who(owner)),
         )
 
     def note_turn(self, owner: Owner, item: str, note: str) -> None:

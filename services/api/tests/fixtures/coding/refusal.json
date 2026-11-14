@@ -1,0 +1,97 @@
+{
+ "recorded_from": "openhands-agent-server 1.62.0 in its sandbox, with a scripted model, through the gateway",
+ "task": "A request the model declines.",
+ "events": [
+  {
+   "event": {
+    "id": "5398b940-be62-43ea-bd1a-1196b6f0145e",
+    "timestamp": "2026-11-14T13:40:57.683656",
+    "source": "environment",
+    "parent_id": "2a4a6bb4-633a-410c-830a-cac9f727a917",
+    "key": "execution_status",
+    "value": "running",
+    "kind": "ConversationStateUpdateEvent"
+   }
+  },
+  {
+   "event": {
+    "id": "bc66771f-c132-434d-993f-032edd0dc7ae",
+    "timestamp": "2026-11-14T13:40:57.695342",
+    "source": "environment",
+    "parent_id": "2a4a6bb4-633a-410c-830a-cac9f727a917",
+    "key": "stats",
+    "value": {
+     "usage_to_metrics": {
+      "wasify-code": {
+       "model_name": "anthropic/scripted-1",
+       "accumulated_cost": 0.0,
+       "max_budget_per_task": null,
+       "accumulated_token_usage": {
+        "model": "anthropic/scripted-1",
+        "prompt_tokens": 21000,
+        "completion_tokens": 80,
+        "cache_read_tokens": 18000,
+        "cache_write_tokens": 600,
+        "reasoning_tokens": 0,
+        "context_window": 0,
+        "per_turn_token": 10540,
+        "response_id": ""
+       }
+      },
+      "condenser": {
+       "model_name": "anthropic/scripted-1",
+       "accumulated_cost": 0.0,
+       "max_budget_per_task": null,
+       "accumulated_token_usage": {
+        "model": "anthropic/scripted-1",
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "reasoning_tokens": 0,
+        "context_window": 0,
+        "per_turn_token": 0,
+        "response_id": ""
+       }
+      }
+     }
+    },
+    "kind": "ConversationStateUpdateEvent"
+   }
+  },
+  {
+   "event": {
+    "id": "9ec37cdb-7a44-43cc-b6a9-e301dc32fca6",
+    "timestamp": "2026-11-14T13:40:57.696616",
+    "source": "agent",
+    "parent_id": "2a4a6bb4-633a-410c-830a-cac9f727a917",
+    "llm_message": {
+     "role": "assistant",
+     "content": [
+      {
+       "cache_prompt": false,
+       "type": "text",
+       "text": "The model declined this request. I can't help with that."
+      }
+     ],
+     "thinking_blocks": []
+    },
+    "llm_response_id": "chatcmpl-ee4d42a0-be40-4cec-a03a-23b9e8a564ff",
+    "activated_skills": [],
+    "extended_content": [],
+    "kind": "MessageEvent"
+   }
+  },
+  {
+   "event": {
+    "id": "9c3f53f8-a177-449f-b9d5-d0fbec5ca81e",
+    "timestamp": "2026-11-14T13:40:57.697453",
+    "source": "environment",
+    "parent_id": "9ec37cdb-7a44-43cc-b6a9-e301dc32fca6",
+    "key": "execution_status",
+    "value": "finished",
+    "kind": "ConversationStateUpdateEvent"
+   }
+  }
+ ]
+}

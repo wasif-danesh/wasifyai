@@ -83,6 +83,9 @@ class EngineServices:
     llama_server: Any = None
     # OpenHands' Agent Server in its sandbox, for the coding product (ADR-0101, ADR-0102)
     coding_server: Any = None
+    # the coding sessions' model gateway: it holds the key, the server gets a token (ADR-0102, 4)
+    coding_gateway: Any = None
+    code_store: Any = None  # wasifyai_code's rows (`<app data>/code/code.db`)
     desktop_language: Any = None  # the local language model
     desktop_vision: Any = None
     desktop_hub: Any = None
@@ -97,6 +100,7 @@ class EngineServices:
     model3d_jobs: Any = None
     creative_store: Any = None  # Creative Studio's projects (ADR-0090)
     creative_jobs: Any = None
+    code_sessions: Any = None  # wasifyai_code.runtime.Sessions: the coding sessions in flight
     model3d_notices: Any = None
     training_runs: Any = None
     training_captions: Any = None

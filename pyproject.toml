@@ -24,6 +24,7 @@ wasifyai-video = { workspace = true }
 wasifyai-model3d = { workspace = true }
 wasifyai-creative = { workspace = true }
 wasifyai-training = { workspace = true }
+wasifyai-code = { workspace = true }
 
 [tool.ruff]
 line-length = 100

@@ -2,9 +2,9 @@
 
 The product never talks to an engine directly. It talks to a *place*: start a session, send it a
 message, let it run, stop it, follow what happens, answer a question it asks. In v1 there will be
-one real place, this computer (the Agent Server inside the sandbox, ADR-0102). That one is not
-written yet. What is here is the interface and a pretended place for tests, so that the loop, the
-scheduler and the evaluation can be written and tested before an engine exists.
+one real place, this computer (the Agent Server inside the sandbox, ADR-0102): `client.py`. What
+is here is the interface and a pretended place for tests, so that the loop, the scheduler and the
+evaluation are tested without an engine.
 
 The words are ours, not the Agent Server's: an event has one of a few plain kinds, and a turn ends
 for one of a few plain reasons. The real place will translate.
@@ -23,10 +23,12 @@ from typing import Any, Protocol
 STATE = "state"  # data: {"state": "running" | "idle"}
 TEXT = "text"  # a finished message of the agent; data: {"text": ...}
 PIECE = "piece"  # a few characters of a message as it is written; data: {"text": ...}
-STEP = "step"  # one use of a tool; data: {"tool": ..., and what the tool was given}
+STEP = "step"  # one use of a tool; data: {"tool": ..., "id": ..., and what the tool was given}
+# what a step gave back; data: {"id": the step's, "tool": ..., "ok": bool, "text": ...}
+RESULT = "result"
 CONFIRM = "confirm"  # the agent waits for a yes or no; data: {"id": ..., "what": ...}
 ENDED = "ended"  # the turn is over; data: {"why": one of ENDINGS, "detail": ..., "steps": n}
-EVENT_KINDS = (STATE, TEXT, PIECE, STEP, CONFIRM, ENDED)
+EVENT_KINDS = (STATE, TEXT, PIECE, STEP, RESULT, CONFIRM, ENDED)
 
 # ---- why a turn ended ----------------------------------------------------------------------------
 
@@ -51,6 +53,19 @@ class Busy(PlaceError):
 
 
 @dataclass(frozen=True)
+class Account:
+    """Whose session it is and what it may spend: what the model gateway counts against
+    (ADR-0102, decision 4). `session_id` is the product's id for the session, not the place's."""
+
+    tenant_id: str
+    product_id: str
+    user_id: str
+    session_id: str
+    spent_usd: float = 0.0
+    limit_usd: float = 0.0  # 0: the gateway's own limit for one session
+
+
+@dataclass(frozen=True)
 class SessionSpec:
     """What a place needs to start a session."""
 
@@ -59,6 +74,8 @@ class SessionSpec:
     step_limit: int = 40
     unattended: bool = False  # nobody is there to answer (a scheduled run, ADR-0105 decision 11)
     ask: tuple[str, ...] = ()  # patterns of commands that must be asked first (ADR-0102, 6)
+    read_only: bool = False  # the agent gets no tool that writes a file or runs a command
+    account: Account | None = None  # None: nobody's (an evaluation run)
 
 
 @dataclass(frozen=True)

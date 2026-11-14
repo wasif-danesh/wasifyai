@@ -24,6 +24,7 @@ from wasifyai_api.admin_workers import router as admin_workers_router
 from wasifyai_api.assemble import ApiServices, Injected, run_engine
 from wasifyai_api.attachments import router as attachments_router
 from wasifyai_api.auth import MIN_SECRET_BYTES
+from wasifyai_api.coding_gateway import router as coding_gateway_router
 from wasifyai_api.components.routes import router as components_router
 from wasifyai_api.config import get_settings
 from wasifyai_api.creations import router as creations_router
@@ -172,6 +173,7 @@ def create_app(given: Injected | None = None) -> FastAPI:
         app.include_router(desktop_styles_router)
         app.include_router(desktop_llm_router)
         app.include_router(desktop_coding_router)
+        app.include_router(coding_gateway_router)
         app.include_router(desktop_hub_router)
         app.include_router(own_keys_router)
         app.include_router(components_router)

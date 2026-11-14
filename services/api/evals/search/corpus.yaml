@@ -259,6 +259,15 @@ concepts:
       - { lang: en, text: "the music video plan about driving along the coast at sunrise" }
       - { lang: fr, text: "le clip d'une femme qui conduit sur la côte à l'aube" }
       - { lang: es, text: "plan de un videoclip de un viaje en coche al amanecer" }
+  - id: bakery-site-coding-session
+    items:
+      - { kind: code_session, lang: en, text: "Opening hours on the home page. Coding session on bakery-site. Where are the opening hours shown, and what would have to change to say Closed today on Mondays?" }
+      - { kind: image, lang: it, text: "La vetrina di una panetteria con un cartello degli orari di apertura appeso alla porta, luce calda del mattino" }
+      - { kind: speech, lang: de, text: "Die Bäckerei hat montags geschlossen. An allen anderen Tagen öffnen wir um sieben Uhr." }
+    queries:
+      - { lang: en, text: "the coding session about the bakery website's opening hours" }
+      - { lang: es, text: "la sesión de programación sobre el horario de la panadería" }
+      - { lang: fr, text: "où j'ai demandé à l'agent de code d'afficher fermé le lundi" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

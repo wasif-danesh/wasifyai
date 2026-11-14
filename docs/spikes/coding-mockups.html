@@ -1,0 +1,1572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code in Wasify AI: mockups of every screen</title>
+<!--
+  Mockups of the coding agent's screens (ADR-0101 to ADR-0105; docs/v2-coding-agent-start-plan.md, sections 2, 6 and 7).
+  One self-contained file: no network, no web font, no outside picture. Nothing here is a real screen.
+  The colours, radii, shadow and fonts are the app's own tokens, copied from packages/ui/src/tokens.generated.css;
+  the menu is MENU_GROUPS from packages/ui/src/shell/menu.ts with the proposed "Code" group added.
+  Notes for the owner, the open choices and what could not be drawn: docs/spikes/coding-mockups.md
+  Address: coding-mockups.html#<screen>  ·  ?s=<screen>&theme=dark&size=small&bare=1 shows one window alone.
+-->
+<style>
+  /* ---------------------------------------------------------------- the app's tokens (design/DESIGN.md, template blue 1.0.0) */
+  :root {
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(21% 0.014 255));
+    --surface-2: light-dark(oklch(96% 0.006 250), oklch(26% 0.016 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(34% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 10%, transparent);
+    --ok: light-dark(oklch(52% 0.125 155), oklch(76% 0.15 155));
+    --warn: light-dark(oklch(58% 0.12 70), oklch(82% 0.13 80));
+    --danger: light-dark(oklch(55% 0.19 25), oklch(74% 0.14 25));
+    --scrim: oklch(20% 0.03 255 / 0.84);
+    --radius-sm: 0.5rem;
+    --radius: 0.85rem;
+    --radius-lg: 1.15rem;
+    --radius-control: 0.65rem;
+    --shadow: 0 1px 2px oklch(22% 0.03 255 / 0.05), 0 12px 30px -16px oklch(30% 0.08 255 / 0.22);
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --ring: color-mix(in oklch, var(--accent) 60%, transparent);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  p, h1, h2, h3, h4, ul, ol, dl, dd, pre, figure { margin: 0; }
+  ul, ol { padding: 0; list-style: none; }
+
+  /* ---------------------------------------------------------------- the page around the window (not part of the app) */
+  body { background: oklch(13% 0.01 255); color: oklch(86% 0.01 255); font: 14px/1.45 var(--font); }
+  .mock { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
+  .rail { border-inline-end: 1px solid oklch(26% 0.012 255); padding: 16px 10px 40px; position: sticky; top: 0; height: 100vh; overflow: auto; }
+  .rail h1 { font-size: 15px; font-weight: 650; color: oklch(96% 0.005 255); padding: 0 8px 2px; }
+  .rail .sub { font-size: 12px; color: oklch(68% 0.012 255); padding: 0 8px 12px; }
+  .rail h2 { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: oklch(64% 0.012 255); padding: 12px 8px 4px; font-weight: 600; }
+  .rail button { display: block; width: 100%; text-align: start; border: 0; background: transparent; color: oklch(84% 0.01 255); border-radius: 7px; padding: 5px 8px; font-size: 13px; }
+  .rail button:hover { background: oklch(21% 0.012 255); }
+  .rail button[aria-current=true] { background: oklch(28% 0.04 255); color: white; font-weight: 600; }
+  .stagearea { padding: 16px 22px 60px; min-width: 0; }
+  .ctl { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+  .ctl .grp { display: inline-flex; border: 1px solid oklch(30% 0.014 255); border-radius: 999px; padding: 2px; background: oklch(18% 0.012 255); }
+  .ctl .grp button { border: 0; background: transparent; color: oklch(72% 0.012 255); border-radius: 999px; padding: 4px 13px; font-size: 13px; }
+  .ctl .grp button[aria-pressed=true] { background: oklch(32% 0.02 255); color: white; font-weight: 600; }
+  .ctl .plain { border: 1px solid oklch(30% 0.014 255); background: oklch(18% 0.012 255); color: oklch(88% 0.01 255); border-radius: 999px; padding: 5px 13px; font-size: 13px; }
+  .ctl .where { margin-inline-start: auto; color: oklch(66% 0.012 255); font-size: 12.5px; }
+  .cap { max-width: 1100px; margin-bottom: 12px; }
+  .cap h2 { font-size: 17px; font-weight: 650; color: oklch(97% 0.004 255); }
+  .cap p { color: oklch(74% 0.012 255); margin-top: 3px; max-width: 86ch; }
+  .frame { width: fit-content; max-width: 100%; overflow: auto; border-radius: 12px; border: 1px solid oklch(30% 0.014 255); box-shadow: 0 30px 80px -40px black; }
+  .allgrid { display: grid; gap: 34px; }
+  .allgrid .cap h2 { font-size: 14px; }
+  body.bare { background: transparent; }
+  body.bare .mock { display: block; min-height: 0; }
+  body.bare .rail, body.bare .ctl, body.bare .cap { display: none; }
+  body.bare .stagearea { padding: 0; }
+  body.bare .frame { border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+  body.bare .win { border-radius: 0; }
+
+  /* ---------------------------------------------------------------- the window */
+  .win { color-scheme: light; width: 1100px; height: 760px; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font); display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; position: relative; container: win / size; -webkit-font-smoothing: antialiased; }
+  .win[data-theme=dark] { color-scheme: dark; }
+  .win[data-size=small] { width: 720px; height: 520px; }
+  .win *, .win ::before, .win ::after { border-color: var(--border); }
+  .win :focus-visible { outline: 3px solid var(--ring); outline-offset: 1px; }
+  .ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ic.s12 { width: 12px; height: 12px; } .ic.s14 { width: 14px; height: 14px; } .ic.s20 { width: 20px; height: 20px; } .ic.s24 { width: 24px; height: 24px; }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { rotate: 360deg; } }
+  @media (prefers-reduced-motion: reduce) { .spin, .slide i { animation: none !important; } }
+  .muted { color: var(--muted); }
+  .sm { font-size: .875rem; } .xs { font-size: .75rem; } .ui { font-size: .9rem; }
+  .mono { font-family: var(--mono); font-size: .8125rem; }
+  code { font-family: var(--mono); font-size: .86em; background: var(--surface-2); border-radius: 5px; padding: .08em .35em; overflow-wrap: anywhere; }
+  .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .row.wrap { flex-wrap: wrap; }
+  .row.between { justify-content: space-between; }
+  .row.top { align-items: flex-start; }
+  .grow { flex: 1; min-width: 0; }
+  .end { margin-inline-start: auto; }
+  .stack { display: grid; gap: 8px; min-width: 0; align-content: start; }
+  .stack.g4 { gap: 4px; } .stack.g12 { gap: 12px; } .stack.g16 { gap: 16px; } .stack.g24 { gap: 24px; }
+  .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .nowrap { white-space: nowrap; }
+  .strong { font-weight: 600; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* the one top bar (AppBar, 48 px) */
+  .appbar { height: 48px; flex: none; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 60%, transparent); padding-inline-end: 8px; min-width: 0; }
+  .appbar .nav { height: 100%; display: flex; align-items: center; gap: 2px; padding-inline: 84px 4px; position: relative; flex: none; }
+  .win[data-menu=open] .appbar .nav { width: 256px; border-inline-end: 1px solid var(--border); }
+  .lights { position: absolute; inset-inline-start: 18px; top: 18px; display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; background: oklch(70% 0.02 255 / .55); }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .tool { width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); border-radius: var(--radius-sm); }
+  .tool:hover { background: var(--accent-soft); color: var(--text); }
+  .tool[disabled] { opacity: .4; }
+  .appbar .title { font-weight: 600; font-size: .875rem; padding-inline-start: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 2.5rem; flex: 0 1 auto; display: flex; align-items: center; gap: 6px; }
+  .appbar .title .t { overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 14rem; }
+  .appbar .title .sep { color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
+  .appbar .title .ic { flex: none; }
+  .appbar .slot { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; }
+  .appbar .right { margin-inline-start: auto; display: flex; align-items: center; gap: 4px; flex: none; }
+  .barbtn { height: 32px; display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; color: var(--muted); border-radius: var(--radius-sm); padding: 0 8px; font-size: .875rem; white-space: nowrap; }
+  .barbtn:hover { background: var(--accent-soft); color: var(--text); }
+  .kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: .75rem; font-family: inherit; }
+  .model { flex: none; height: 32px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); background: transparent; border-radius: var(--radius-sm); padding: 0 10px; font-size: .875rem; font-weight: 600; white-space: nowrap; min-width: 0; }
+  .model .nm { overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+  .dot.off { background: color-mix(in oklch, var(--muted) 45%, transparent); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--danger); }
+  .status { height: 28px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 0 10px; font-size: .75rem; font-weight: 600; white-space: nowrap; color: var(--text); }
+  .status .ic { width: 14px; height: 14px; }
+  .t-ok { --tone: var(--ok); } .t-bad { --tone: var(--danger); } .t-warn { --tone: var(--warn); } .t-info { --tone: var(--accent); } .t-quiet { --tone: var(--muted); }
+  .status .ic, .tone { color: var(--tone, var(--muted)); }
+  .cost { margin-inline-end: 6px; height: 28px; display: inline-flex; align-items: center; border: 0; background: transparent; border-radius: 999px; padding: 0 8px; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cost:hover { background: var(--accent-soft); color: var(--text); }
+
+  /* the side menu (SideMenu, 256 px) */
+  .below { flex: 1; min-height: 0; display: flex; }
+  .side { width: 256px; flex: none; border-inline-end: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 60%, transparent); display: flex; flex-direction: column; gap: 4px; padding: 12px; min-height: 0; }
+  .win[data-menu=closed] .side { display: none; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 8px; }
+  .brand i { width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 1.125rem; font-style: normal; }
+  .brand b { font-weight: 600; font-size: 1.25rem; letter-spacing: -.02em; }
+  .side .items { position: relative; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: grid; gap: 2px; align-content: start; margin-top: 8px; }
+  .mi { display: flex; width: 100%; align-items: center; gap: 12px; border: 0; background: transparent; border-radius: var(--radius-sm); padding: 8px 12px; font-size: .95rem; text-align: start; }
+  .mi:hover { background: var(--accent-soft); }
+  .mi[aria-current=page] { background: var(--accent-soft); }
+  .mi.here { font-weight: 500; }
+  .mi .chev { margin-inline-start: auto; color: var(--muted); }
+  .subitems { display: grid; gap: 2px; padding-inline-start: 12px; }
+  .subitems .mi { padding-block: 6px; font-size: .9rem; }
+  .mi .new { margin-inline-start: auto; border: 1px dashed var(--accent); color: var(--accent); border-radius: 999px; padding: 0 7px; font-size: .65rem; text-transform: uppercase; letter-spacing: .04em; }
+  .side .foot { display: flex; align-items: center; gap: 12px; padding: 12px 8px 0; }
+  .side .foot i { width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 600; font-style: normal; flex: none; }
+  .side .foot .gear { margin-inline-start: auto; border: 0; background: transparent; color: var(--muted); padding: 8px; border-radius: var(--radius-sm); display: grid; }
+  .side .foot .gear[aria-current=page] { background: var(--accent-soft); }
+  main.page { flex: 1; min-width: 0; min-height: 0; overflow: auto; position: relative; }
+
+  /* ---------------------------------------------------------------- foundation components (packages/ui/src/components) */
+  .btn { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 20px; border-radius: var(--radius-sm); border: 1px solid transparent; background: var(--accent); color: var(--on-accent); font-size: .875rem; font-weight: 600; white-space: nowrap; box-shadow: 0 5px 16px -8px color-mix(in oklch, var(--accent) 65%, transparent); }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.sm { height: 32px; padding: 0 12px; gap: 6px; } .btn.xs { height: 24px; padding: 0 8px; gap: 4px; font-size: .75rem; }
+  .btn.outline { background: transparent; color: var(--text); border-color: var(--border); box-shadow: none; }
+  .btn.secondary { background: var(--surface-2); color: var(--text); box-shadow: none; }
+  .btn.ghost { background: transparent; color: var(--text); box-shadow: none; }
+  .btn.outline:hover, .btn.ghost:hover { background: var(--accent-soft); filter: none; }
+  .btn.danger { background: var(--danger); box-shadow: none; }
+  .btn.link { background: transparent; color: var(--accent); box-shadow: none; padding: 0; height: auto; font-weight: 500; }
+  .btn.link:hover { text-decoration: underline; filter: none; }
+  .btn[disabled] { opacity: .5; pointer-events: none; }
+  .btn.icon { width: 32px; padding: 0; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; border: 1px solid var(--border); padding: 2px 8px; font-size: .75rem; font-weight: 500; white-space: nowrap; }
+  .badge.fill { background: var(--surface-2); border-color: transparent; }
+  .badge.tag { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .badge .ic { width: 12px; height: 12px; color: var(--tone, currentColor); }
+  .notice { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; border: 1px solid color-mix(in oklch, var(--tone) 30%, transparent); background: color-mix(in oklch, var(--tone) 5%, transparent); border-radius: var(--radius); padding: 14px 18px; }
+  .notice > .mark { grid-row: span 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in oklch, var(--tone) 20%, transparent); color: var(--tone); font-weight: 800; }
+  .notice h3 { font-size: 1.05rem; font-weight: 600; }
+  .notice p { color: var(--muted); }
+  .notice .acts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+  .notice.slim { padding: 10px 14px; gap: 2px 12px; font-size: .875rem; }
+  .notice.slim h3 { font-size: .9rem; }
+  .notice.slim > .mark { width: 24px; height: 24px; font-size: .8rem; }
+  .seg { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); background: color-mix(in oklch, var(--surface-2) 60%, transparent); border-radius: var(--radius-sm); padding: 4px; max-width: 100%; }
+  .seg button { height: 28px; border: 0; background: transparent; color: var(--muted); border-radius: 6px; padding: 0 10px; font-size: .75rem; font-weight: 500; white-space: nowrap; }
+  .seg button[aria-pressed=true] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px oklch(22% 0.03 255 / .12); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: transparent; border-radius: var(--radius-sm); padding: .35rem .85rem; font-size: .9rem; }
+  .chip:hover { border-color: color-mix(in oklch, var(--accent) 50%, transparent); }
+  .chip[aria-pressed=true] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+  .chip.round { border-radius: 999px; padding: 6px 12px; font-size: .875rem; color: var(--muted); }
+  .input, .select, .area { width: 100%; min-width: 0; border: 1px solid var(--border); background: transparent; border-radius: var(--radius-sm); padding: 0 12px; height: 36px; font-size: .875rem; display: flex; align-items: center; gap: 8px; }
+  .win[data-theme=dark] .input, .win[data-theme=dark] .select, .win[data-theme=dark] .area { background: color-mix(in oklch, var(--border) 30%, transparent); }
+  .area { height: auto; padding: 8px 12px; align-items: flex-start; min-height: 72px; line-height: 1.45; }
+  .select { justify-content: space-between; text-align: start; }
+  .select .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .select .ic { color: var(--muted); }
+  .input.mono, .area.mono { font-family: var(--mono); font-size: .8125rem; }
+  .ph { color: var(--muted); }
+  .field { display: grid; gap: 6px; min-width: 0; }
+  .field > .lab { font-size: .875rem; font-weight: 600; }
+  .hint { font-size: .8125rem; color: var(--muted); }
+  .switch { width: 36px; height: 20px; border-radius: 999px; background: color-mix(in oklch, var(--muted) 40%, transparent); border: 0; padding: 2px; display: inline-flex; flex: none; }
+  .switch::after { content: ""; width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 2px #0004; transition: translate .15s; }
+  .switch[aria-checked=true] { background: var(--accent); }
+  .switch[aria-checked=true]::after { translate: 16px 0; }
+  .check { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border); flex: none; display: grid; place-items: center; background: transparent; margin-top: 3px; }
+  .check[aria-checked=true] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .check .ic { width: 12px; height: 12px; stroke-width: 3; }
+  .radios { display: grid; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+  .radio { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--border); background: transparent; text-align: start; align-items: start; }
+  .radio:last-child { border-bottom: 0; }
+  .radio .o { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--muted); margin-top: 3px; grid-row: span 2; display: grid; place-items: center; }
+  .radio[aria-checked=true] .o { border-color: var(--accent); }
+  .radio[aria-checked=true] .o::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .radio b { font-size: .875rem; font-weight: 600; }
+  .radio span.d { font-size: .8125rem; color: var(--muted); grid-column: 2; }
+  .radio .more { grid-column: 2; margin-top: 6px; }
+  .card { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 16px; }
+  .card.flat { border-radius: var(--radius-sm); padding: 12px; }
+  .progress { height: .6rem; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+  .progress.slide i { width: 40%; animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { from { translate: -100% 0; } to { translate: 250% 0; } }
+  .empty { display: grid; justify-items: center; gap: 8px; text-align: center; color: var(--muted); padding: 48px 16px; }
+  .empty.sm { padding: 24px 12px; }
+  .empty .round { width: 48px; height: 48px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; }
+  .empty h3 { color: var(--text); font-size: 1.125rem; font-weight: 600; }
+  .empty.sm h3 { font-size: 1rem; }
+  .empty p { font-size: .875rem; max-width: 46ch; }
+  .skel { background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in oklch, var(--surface-2) 50%, var(--surface)) 50%, var(--surface-2) 75%); background-size: 200% 100%; border-radius: 6px; height: 12px; }
+  details.experts { border-top: 1px solid var(--border); padding-top: 10px; }
+  details.experts > summary { cursor: pointer; font-size: .875rem; font-weight: 600; color: var(--muted); list-style: none; display: flex; align-items: center; gap: 6px; }
+  details.experts > summary::-webkit-details-marker { display: none; }
+  details.experts[open] > summary .ic { rotate: 90deg; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); display: grid; place-items: center; padding: 16px; z-index: 30; }
+  .dialog { width: min(32rem, 100%); max-height: 100%; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; display: grid; gap: 14px; }
+  .dialog.wide { width: min(40rem, 100%); }
+  .dialog h2 { font-size: 1.125rem; font-weight: 600; }
+  .dialog > .acts { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; position: sticky; bottom: -20px; background: var(--surface); margin: 0 -20px -20px; padding: 12px 20px 20px; border-top: 1px solid transparent; }
+  @container win (max-height: 600px) { .dialog > .acts { border-top-color: var(--border); } .dialog { gap: 10px; } }
+  .pop { position: absolute; z-index: 20; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 8px; }
+  .menuitem { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; width: 100%; border: 0; background: transparent; text-align: start; padding: 8px 10px; border-radius: 6px; align-items: start; }
+  .menuitem:hover, .menuitem[aria-checked=true] { background: var(--accent-soft); }
+  .menuitem b { font-size: .875rem; font-weight: 600; }
+  .menuitem .d { grid-column: 2; font-size: .8125rem; color: var(--muted); }
+  .menuitem > .ic { margin-top: 3px; }
+  table.t { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  table.t th { text-align: start; font-weight: 500; color: var(--muted); font-size: .8125rem; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.t td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.t tr:last-child td { border-bottom: 0; }
+
+  /* ---------------------------------------------------------------- pages (the first screen, Scheduled, Extensions, Settings) */
+  .pagepad { max-width: 56rem; margin: 0 auto; padding: 32px 32px 40px; display: grid; gap: 20px; }
+  .pagepad.narrow { max-width: 44rem; }
+  .pagehead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .pagehead h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -.01em; }
+  .pagehead p { color: var(--muted); font-size: .9rem; max-width: 60ch; }
+  .sideacts { justify-items: end; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .rules h3 { font-size: .9rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .rules li { display: grid; grid-template-columns: 16px 1fr; gap: 8px; font-size: .875rem; padding: 3px 0; align-items: start; }
+  .rules li .ic { margin-top: 3px; color: var(--tone); }
+  .listrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .listrow .acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .listrow h3 { font-size: .95rem; font-weight: 600; }
+  .listrow .meta { font-size: .8125rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: center; }
+  .listrow .meta > span { display: inline-flex; align-items: center; gap: 5px; }
+  .gal { display: grid; gap: 14px; }
+  .gal .lbl { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .galnote { font-size: .8125rem; color: var(--muted); border-inline-start: 2px solid var(--border); padding-inline-start: 10px; }
+
+  /* ---------------------------------------------------------------- the session view */
+  .session { height: 100%; display: grid; grid-template-columns: minmax(340px, 40%) minmax(0, 1fr); grid-template-rows: 40px minmax(0, 1fr); grid-template-areas: "chat tabs" "chat panel"; min-height: 0; }
+  .chatcol { grid-area: chat; display: flex; flex-direction: column; min-height: 0; border-inline-end: 1px solid var(--border); min-width: 0; }
+  .tabs { grid-area: tabs; display: flex; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 60%, transparent); min-width: 0; overflow: hidden; }
+  .tab { height: 30px; display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); border-radius: 6px; padding: 0 10px; font-size: .8125rem; font-weight: 500; white-space: nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.selw { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+  .tab .n { background: var(--surface-2); border-radius: 999px; padding: 0 6px; font-size: .7rem; font-variant-numeric: tabular-nums; }
+  .tab.chat { display: none; }
+  .panel { grid-area: panel; min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
+  .thread { flex: 1; min-height: 0; overflow: auto; padding: 16px 16px 8px; display: grid; gap: 14px; align-content: start; font-size: .9rem; }
+  .thread.center { align-content: center; }
+  .msg-user { justify-self: end; max-width: 85%; background: var(--accent-soft); border-radius: 1rem; padding: 9px 14px; overflow-wrap: anywhere; }
+  .msg-ai { display: grid; gap: 10px; min-width: 0; }
+  .msg-ai p { overflow-wrap: anywhere; }
+  .msg-ai ol { list-style: decimal; padding-inline-start: 1.4em; display: grid; gap: 4px; }
+  .acts-under { display: flex; gap: 0; margin-top: -4px; }
+  .acts-under button { border: 0; background: transparent; color: var(--muted); padding: 7px; border-radius: 6px; display: grid; }
+  .steps { display: grid; gap: 1px; }
+  .step { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .8125rem; padding: 2px 0; min-width: 0; }
+  .step .ic { width: 14px; height: 14px; }
+  .step code { background: transparent; padding: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step .pm { font-family: var(--mono); font-size: .75rem; white-space: nowrap; }
+  .step .pm .p { color: var(--ok); } .step .pm .m { color: var(--danger); }
+  .step .go { border: 0; background: transparent; color: var(--accent); font-size: .75rem; padding: 0 2px; white-space: nowrap; }
+  details.stepd > summary { list-style: none; cursor: pointer; }
+  details.stepd > summary::-webkit-details-marker { display: none; }
+  details.stepd > summary .chev { transition: rotate .15s; margin-inline-start: -2px; }
+  details.stepd[open] > summary .chev { rotate: 90deg; }
+  .stepbody { margin: 4px 0 6px 22px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); overflow: hidden; }
+  .out { font-family: var(--mono); font-size: .75rem; line-height: 1.55; padding: 8px 10px; white-space: pre; overflow: auto; max-height: 150px; color: var(--text); }
+  .out .dim { color: var(--muted); } .out .g { color: var(--ok); } .out .r { color: var(--danger); } .out .y { color: var(--warn); }
+  .outfoot.note { flex-wrap: nowrap; align-items: flex-start; border-top: 1px solid var(--border); }
+  .outfoot.note .ic { margin-top: 3px; }
+  .outfoot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px solid var(--border); padding: 5px 10px; font-size: .75rem; color: var(--muted); }
+  .tcard { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; display: grid; gap: 8px; font-size: .875rem; max-width: 30rem; background: var(--surface); min-width: 0; }
+  .tcard.ask { background: color-mix(in oklch, var(--accent) 5%, var(--surface)); border-color: color-mix(in oklch, var(--accent) 35%, var(--border)); }
+  .tcard .head { display: flex; align-items: center; gap: 8px; font-weight: 600; flex-wrap: wrap; }
+  .tcard .head .ic { color: var(--tone, var(--muted)); width: 18px; height: 18px; }
+  .tcard .word { color: var(--text); }
+  .tcard .facts { display: flex; flex-wrap: wrap; gap: 2px 12px; color: var(--muted); font-size: .8125rem; align-items: center; }
+  .tcard .cmd { font-family: var(--mono); font-size: .8125rem; background: var(--surface-2); border-radius: 6px; padding: 6px 10px; overflow-wrap: anywhere; }
+  .tcard .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tcard .files { display: grid; gap: 2px; font-size: .8125rem; }
+  .tcard .files li { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .tcard .sub { border-top: 1px solid var(--border); padding-top: 8px; display: grid; gap: 4px; }
+  .rounds { display: inline-flex; gap: 4px; align-items: center; }
+  .rounds i { width: 18px; height: 5px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--border); }
+  .rounds i.f { background: var(--danger); border-color: transparent; } .rounds i.p { background: var(--ok); border-color: transparent; } .rounds i.n { background: var(--accent); border-color: transparent; }
+  .marker { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .75rem; }
+  .marker::before, .marker::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .composerwrap { padding: 6px 12px 12px; flex: none; position: relative; }
+  .pop.modes { bottom: 56px; inset-inline-start: 12px; width: min(350px, calc(100% - 24px)); display: grid; gap: 2px; }
+  .pop.costpop { top: 44px; inset-inline-end: 96px; width: 280px; display: grid; gap: 6px; font-size: .8125rem; padding: 12px; }
+  .pop.costpop dl { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; }
+  .pop.costpop dt { color: var(--muted); }
+  .composer { border: 1px solid var(--border); background: var(--surface); border-radius: 1.25rem; padding: 10px 14px 8px; box-shadow: var(--shadow); display: grid; gap: 4px; }
+  .composer .text { min-height: 26px; font-size: .95rem; padding: 2px 0; }
+  .composer .bar { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .pill { height: 32px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: transparent; border-radius: 999px; padding: 0 11px; font-size: .8125rem; font-weight: 500; white-space: nowrap; color: var(--text); }
+  .pill .ic { width: 14px; height: 14px; }
+  .pill.icononly { width: 32px; padding: 0; justify-content: center; color: var(--muted); }
+  .pill[aria-pressed=true] { background: var(--accent-soft); border-color: var(--accent); }
+  .send { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; flex: none; }
+  .send[disabled] { opacity: .4; }
+  .composernote { text-align: center; color: var(--muted); font-size: .8125rem; margin-top: 6px; }
+  .hello { display: grid; gap: 14px; justify-items: center; text-align: center; padding: 8px; }
+  .hello h2 { font-size: 1.35rem; font-weight: 600; letter-spacing: -.01em; }
+
+  /* the tabs' panes */
+  .panehead { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); min-width: 0; flex-wrap: wrap; }
+  .panebody { flex: 1; min-height: 0; overflow: auto; }
+  .filespane { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); }
+  .tree { border-inline-end: 1px solid var(--border); overflow: auto; padding: 8px 6px; font-size: .8125rem; display: grid; gap: 1px; align-content: start; }
+  .tree .n { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 5px; border: 0; background: transparent; width: 100%; text-align: start; white-space: nowrap; min-width: 0; }
+  .tree .n .nm { overflow: hidden; text-overflow: ellipsis; }
+  .tree .n[aria-current=true] { background: var(--accent-soft); font-weight: 600; }
+  .tree .n .ic { width: 14px; height: 14px; color: var(--muted); }
+  .tree .n .chg { margin-inline-start: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+  .tree .d1 { padding-inline-start: 20px; } .tree .d2 { padding-inline-start: 34px; }
+  .reader { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .code { flex: 1; min-height: 0; overflow: auto; font-family: var(--mono); font-size: .75rem; line-height: 1.6; padding: 8px 0; }
+  .code .l { display: grid; grid-template-columns: 40px 1fr; white-space: pre; }
+  .code .l > i { font-style: normal; color: var(--muted); text-align: end; padding-inline-end: 10px; user-select: none; opacity: .75; }
+  .code .l.add { background: color-mix(in oklch, var(--ok) 14%, transparent); }
+  .code .l.del { background: color-mix(in oklch, var(--danger) 12%, transparent); }
+  .code.diff .l { grid-template-columns: 34px 34px 16px 1fr; }
+  .code .l > b { font-weight: 400; color: var(--muted); }
+  .code .l.add > b { color: var(--ok); } .code .l.del > b { color: var(--danger); }
+  .code .hunk { color: var(--muted); padding: 2px 12px; background: var(--surface-2); margin: 4px 0; }
+  .tk { color: var(--accent); } .ts { color: var(--ok); } .tc { color: var(--muted); font-style: italic; }
+  .chgfiles { display: grid; gap: 1px; padding: 8px; border-bottom: 1px solid var(--border); }
+  .chgfile { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; text-align: start; padding: 5px 8px; border-radius: 6px; font-size: .8125rem; min-width: 0; width: 100%; }
+  .chgfile[aria-current=true] { background: var(--accent-soft); }
+  .chgfile code { background: transparent; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chgfile .kind { width: 62px; flex: none; color: var(--muted); font-size: .75rem; }
+  .chgfile .pm { margin-inline-start: auto; font-family: var(--mono); font-size: .75rem; white-space: nowrap; }
+  .pm .p { color: var(--ok); } .pm .m { color: var(--danger); }
+  .struck { text-decoration: line-through; opacity: .6; }
+  .term { flex: 1; min-height: 0; overflow: auto; font-family: var(--mono); font-size: .78rem; line-height: 1.6; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); }
+  .term .p { color: var(--accent); } .term .dim { color: var(--muted); } .term .r { color: var(--danger); } .term .g { color: var(--ok); }
+  .term .hint { display: block; font-family: var(--font); font-size: .8125rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin: 4px 0; white-space: normal; color: var(--text); }
+  .caret { display: inline-block; width: 7px; height: 14px; background: var(--text); vertical-align: -2px; }
+  .addr { flex: 1; min-width: 80px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: .8125rem; overflow: hidden; white-space: nowrap; }
+  .addr .u { overflow: hidden; text-overflow: ellipsis; }
+  .webpage { flex: 1; min-height: 0; overflow: auto; background: white; color: #1c2430; color-scheme: light; }
+  .webpage.docs { padding: 22px 28px; font-size: .875rem; display: grid; gap: 10px; align-content: start; }
+  .webpage.docs h4 { font-size: 1.3rem; font-weight: 700; } .webpage.docs h5 { font-size: 1rem; margin: 8px 0 0; }
+  .webpage.docs pre { background: #f2f4f7; border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: .75rem; overflow: auto; }
+  .webpage.docs .crumbs { color: #667; font-size: .75rem; }
+  .bakery { font-family: ui-serif, Georgia, serif; background: #fbf5ea; color: #3b2a1a; min-height: 100%; }
+  .bakery header { display: flex; justify-content: space-between; align-items: center; padding: 14px 22px; border-bottom: 1px solid #ead9bd; flex-wrap: wrap; gap: 6px; }
+  .bakery header b { font-size: 1.2rem; }
+  .bakery nav { display: flex; gap: 14px; font-family: var(--font); font-size: .8rem; color: #7a5a35; }
+  .bakery .hero { padding: 26px 22px 12px; }
+  .bakery .hero h4 { font-size: 1.7rem; line-height: 1.15; }
+  .bakery .hero p { font-family: var(--font); font-size: .875rem; color: #6a5238; margin-top: 6px; max-width: 46ch; }
+  .bakery .hours { margin: 12px 22px 22px; border: 1px solid #ead9bd; background: #fffaf1; border-radius: 12px; padding: 14px 16px; font-family: var(--font); font-size: .85rem; max-width: 340px; }
+  .bakery .hours h5 { font-family: ui-serif, Georgia, serif; font-size: 1.05rem; margin: 0 0 6px; }
+  .bakery .hours .today { display: inline-block; background: #7a3b1d; color: #fff8ec; border-radius: 999px; padding: 2px 10px; font-weight: 600; font-size: .8rem; margin-bottom: 8px; }
+  .bakery .hours dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 16px; }
+  .bakery .hours dt { color: #7a5a35; }
+  .phoneframe { width: 300px; max-width: 100%; margin: 14px auto; border: 1px solid var(--border); border-radius: 22px; overflow: hidden; box-shadow: var(--shadow); height: calc(100% - 28px); min-height: 300px; }
+  .previewwrap { flex: 1; min-height: 0; overflow: auto; background: var(--surface-2); display: flex; flex-direction: column; }
+  .previewwrap .webpage { flex: 1; }
+
+  /* ---------------------------------------------------------------- the smallest window (720 x 520) and narrow panes */
+  @container win (max-width: 900px) {
+    .session { grid-template-columns: minmax(0, 1fr); grid-template-areas: "tabs" "pane"; }
+    .tab.chat { display: inline-flex; }
+    .chatcol, .panel { grid-area: pane; border: 0; }
+    .session[data-small=chat] .panel { display: none; }
+    .session:not([data-small=chat]) .chatcol { display: none; }
+    .tabs { padding: 0 6px; gap: 0; }
+    .tab.selw { background: transparent; color: var(--muted); font-weight: 500; }
+    .tab.sels { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+    .tab { padding: 0 8px; }
+    .appbar .right .lbl, .barbtn .kbd, .barbtn .lbl { display: none; }
+    .model { padding: 0 8px; gap: 6px; }
+    .appbar .title .t { flex: 0 1 auto; min-width: 2.5rem; }
+    .appbar .title > .ic { display: none; }
+    .appbar { gap: 6px; }
+    .appbar .title .sep { display: none; }
+    .pagepad { padding: 20px 16px 28px; gap: 16px; }
+    .pagehead h1 { font-size: 1.3rem; }
+    .thread { padding: 12px 14px 6px; }
+    .hidesmall { display: none !important; }
+  }
+  main.page { container: page / inline-size; }
+  .panel { container: pane / inline-size; }
+  @container page (max-width: 620px) {
+    .two { grid-template-columns: 1fr; }
+    .listrow { grid-template-columns: minmax(0, 1fr); }
+    .listrow .acts { justify-content: flex-start; }
+    .sideacts { justify-items: start; }
+    table.t .opt { display: none; }
+    .pagepad { padding: 20px 16px 28px; gap: 16px; }
+    .pagehead h1 { font-size: 1.3rem; }
+    .setgrid { grid-template-columns: 1fr !important; }
+    .setgrid > aside { display: none; }
+  }
+  @container pane (max-width: 560px) {
+    .filespane { grid-template-columns: 150px minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body>
+<!-- the icons: Lucide outlines (the app's icon set), drawn inline so nothing is fetched -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+  <symbol id="i-panel-left" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-square-pen" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z"/></symbol>
+  <symbol id="i-book-open" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-clapperboard" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="i-shapes" viewBox="0 0 24 24"><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-library" viewBox="0 0 24 24"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2"/><path d="M6.453 15h11.094"/><path d="M8.5 2h7"/></symbol>
+  <symbol id="i-stack" viewBox="0 0 24 24"><path d="M4 10c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2"/><path d="M10 16c-1.1 0-2-.9-2-2v-4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2"/><rect width="8" height="8" x="14" y="14" rx="2"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-folder-open" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-file-diff" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M9 10h6"/><path d="M12 13V7"/><path d="M9 17h6"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+  <symbol id="i-square" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-calendar-clock" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></symbol>
+  <symbol id="i-puzzle" viewBox="0 0 24 24"><path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-paperclip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></symbol>
+  <symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-circle-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+  <symbol id="i-circle-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-circle-dashed" viewBox="0 0 24 24"><path d="M10.1 2.182a10 10 0 0 1 3.8 0"/><path d="M13.9 21.818a10 10 0 0 1-3.8 0"/><path d="M17.609 3.721a10 10 0 0 1 2.69 2.7"/><path d="M2.182 13.9a10 10 0 0 1 0-3.8"/><path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"/><path d="M21.818 10.1a10 10 0 0 1 0 3.8"/><path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"/><path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"/></symbol>
+  <symbol id="i-circle-slash" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+  <symbol id="i-loader" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></symbol>
+  <symbol id="i-list-checks" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-smartphone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+</svg>
+
+<div class="mock">
+  <aside class="rail" id="rail" aria-label="Screens"></aside>
+  <div class="stagearea">
+    <div class="ctl" id="ctl">
+      <span class="grp" role="group" aria-label="Light or dark" id="themeseg">
+        <button data-theme="light" aria-pressed="true">Light</button><button data-theme="dark" aria-pressed="false">Dark</button>
+      </span>
+      <span class="grp" role="group" aria-label="Window size" id="sizeseg">
+        <button data-size="usual" aria-pressed="true">Usual window, 1100 × 760</button><button data-size="small" aria-pressed="false">Smallest, 720 × 520</button>
+      </span>
+      <button class="plain" id="prev">‹ Previous</button><button class="plain" id="next">Next ›</button>
+      <button class="plain" id="allbtn">All screens on one page</button>
+      <span class="where" id="where"></span>
+    </div>
+    <div id="stage"></div>
+  </div>
+</div>
+<script>
+'use strict';
+/* ------------------------------------------------------------------ small helpers */
+const ic = (n, c = '') => `<svg class="ic ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const SCREENS = [];
+const add = (s) => SCREENS.push(s);
+
+/* ------------------------------------------------------------------ the shell: the real menu (MENU_GROUPS) with the proposed Code group */
+const GROUPS = [['notebook', 'Notebook', 'book-open'], ['images', 'Images', 'image'], ['video', 'Video', 'video'], ['voice', 'Voice', 'volume'], ['music', 'Music', 'music']];
+const CODE = [['code.projects', 'Projects', 'folder-open', 'projects'], ['code.scheduled', 'Scheduled', 'calendar-clock', 'scheduled'], ['code.extensions', 'Extensions', 'puzzle', 'extensions']];
+const EXTRAS = [['creative', 'Creative Studio', 'clapperboard'], ['motion', 'Motion graphics', 'shapes'], ['model3d', '3D model', 'box'], ['library', 'Library', 'library'], ['train', 'Train models', 'flask'], ['models', 'Model hub', 'stack']];
+
+function sideMenu(current) {
+  const inCode = current && current.startsWith('code.');
+  return `<nav class="side" aria-label="Main">
+    <div class="brand"><i aria-hidden="true">w</i><b>Wasify AI</b></div>
+    <div class="items">
+      <button class="mi">${ic('square-pen')} New chat</button>
+      ${GROUPS.map(([, l, i]) => `<button class="mi" aria-expanded="false">${ic(i)} ${l}${ic('chevron-right', 'chev')}</button>`).join('')}
+      <button class="mi ${inCode ? 'here' : ''}" aria-expanded="true">${ic('code')} Code${ic('chevron-down', 'chev')}</button>
+      <div class="subitems">${CODE.map(([id, l, i, go]) => `<button class="mi" data-go="${go}" ${current === id ? 'aria-current="page"' : ''}>${ic(i)} ${l}</button>`).join('')}</div>
+      ${EXTRAS.map(([, l, i]) => `<button class="mi">${ic(i)} ${l}</button>`).join('')}
+    </div>
+    <div class="foot"><i aria-hidden="true">Y</i><div style="min-width:0;line-height:1.25"><div class="strong trunc">You</div><div class="xs muted trunc">On this computer</div></div>
+      <button class="gear" aria-label="Settings" data-go="settings" ${current === 'settings' ? 'aria-current="page"' : ''}>${ic('settings', 's20')}</button></div>
+  </nav>`;
+}
+
+function tray(n) {
+  return `<button class="barbtn" aria-label="Running now">${n ? ic('loader', 's14 spin') : '<span class="dot off"></span>'}<span class="tnum">${n || ''}</span><span class="lbl">${n ? 'Running' : ''}</span></button>`;
+}
+
+/** The window's inside: the one top bar, the side menu and the page. */
+function shell(o) {
+  return `<header class="appbar">
+      <div class="nav"><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+        <button class="tool" aria-label="Back">${ic('arrow-left')}</button>
+        <button class="tool" aria-label="Forward" disabled>${ic('arrow-right')}</button>
+        <button class="tool" data-act="menu" aria-label="Show or hide the side menu" title="Show or hide the side menu">${ic('panel-left')}</button>
+      </div>
+      ${o.slot ?? `<p class="title"><span class="t">${o.title ?? 'Code'}</span></p>`}
+      <div class="right">${o.right ?? ''}${tray(o.jobs)}
+        <button class="barbtn" aria-label="Search" title="Search (⌘K)">${ic('search')}<span class="lbl">Search</span><kbd class="kbd">⌘K</kbd></button>
+        <button class="tool" data-act="theme" aria-label="Switch between the light and dark theme">${ic('moon')}</button>
+      </div>
+    </header>
+    <div class="below">${sideMenu(o.current ?? null)}<main class="page" id="main">${o.body}</main></div>${o.over ?? ''}`;
+}
+
+/* ------------------------------------------------------------------ the session's bar: project, model, the check's word, the cost */
+const ST = {
+  working: ['t-info', 'loader', 'Working', 'spin'],
+  checking: ['t-info', 'loader', 'Checking', 'spin'],
+  starting: ['t-info', 'loader', 'Starting', 'spin'],
+  passed: ['t-ok', 'circle-check', 'Check passed'],
+  failed: ['t-bad', 'circle-x', 'Check failed'],
+  needs: ['t-bad', 'circle-x', 'Check failed<span class="hidesmall">· needs you</span>'],
+  notchecked: ['t-quiet', 'circle-dashed', 'Not checked'],
+  couldnot: ['t-warn', 'circle-alert', 'Could not check'],
+  waiting: ['t-warn', 'hand', 'Waiting for you'],
+  none: ['t-quiet', 'circle-dashed', 'No check run yet'],
+};
+const chipOf = (k, extra = '') => { const [tone, icon, word, cls] = ST[k]; return `<span class="status ${tone}" ${extra}>${ic(icon, cls ?? '')}${word}</span>`; };
+
+function sessSlot(o = {}) {
+  return `<div class="slot"><h1 class="title">${ic('folder', 'muted')}<span class="t">${o.project ?? 'bakery-site'}</span><span class="sep">· ${o.name ?? 'Opening hours on the home page'}</span></h1>
+    <button class="model" aria-label="Model: Claude Sonnet 5.5, ready"><span class="dot"></span><span class="nm"><span class="hidesmall">Claude </span>Sonnet 5.5</span>${ic('chevron-down', 's14')}</button>
+    <button class="tool hidesmall" aria-label="New session in this project" title="New session in this project">${ic('square-pen')}</button></div>`;
+}
+const sessRight = (status, cost = '$0.21') => `${chipOf(status, 'data-act="check" role="button" tabindex="0" title="The check for this project"')}<button class="cost" data-act="cost" title="This session so far">${cost}</button>`;
+
+/* ------------------------------------------------------------------ the chat: messages, quiet steps, the box */
+const user = (t) => `<div class="msg-user" dir="auto">${t}</div>`;
+const ai = (...parts) => `<div class="msg-ai">${parts.join('')}</div>`;
+const p = (t) => `<p>${t}</p>`;
+const steps = (...rows) => `<div class="steps">${rows.join('')}</div>`;
+const step = (icon, html, cls = '') => `<div class="step">${ic(icon, cls)}${html}</div>`;
+const read = (f) => step('eye', `<span>Read</span><code>${f}</code>`);
+const pm = (a, d) => `<span class="pm">${a ? `<span class="p">+${a}</span>` : ''}${a && d ? ' ' : ''}${d ? `<span class="m">−${d}</span>` : ''}</span>`;
+const edit = (kind, f, a, d, test) => step(kind === 'Added' ? 'plus' : kind === 'Deleted' ? 'trash' : 'pencil',
+  `<span>${kind}</span><code>${f}</code>${pm(a, d)}${test ? '<span class="badge" title="A file the check reads">test file</span>' : ''}<button class="go" data-go="changes">See</button>`);
+const group = (summary, rows, open) => `<details class="stepd" ${open ? 'open' : ''}><summary class="step">${ic('chevron-right', 'chev')}<span>${summary}</span></summary><div class="steps" style="padding-inline-start:22px">${rows}</div></details>`;
+const cmd = (c, meta, out, open, foot) => `<details class="stepd" ${open ? 'open' : ''}><summary class="step">${ic('chevron-right', 'chev')}${ic('terminal')}<span>Ran</span><code>${c}</code><span class="nowrap">${meta}</span></summary>
+  <div class="stepbody"><div class="out" tabindex="0">${out}</div>${foot ? `<div class="outfoot">${foot}</div>` : ''}</div></details>`;
+const working = (t = 'Working…') => `<div class="step">${ic('loader', 'spin')}<span>${t}</span></div>`;
+const under = () => `<div class="acts-under"><button aria-label="Copy reply">${ic('copy')}</button></div>`;
+const marker = (t) => `<div class="marker">${t}</div>`;
+const thread = (html, cls = '') => `<div class="thread ${cls}">${html}</div>`;
+
+const MODES = {
+  plan: { label: 'Plan', icon: 'list-checks', d: 'Reads the project and writes a plan. Changes no file and runs nothing.' },
+  ask: { label: 'Ask me', icon: 'hand', d: 'Changes files and runs commands in this folder. Stops and asks you before anything a rule marks, such as deleting or installing.' },
+  own: { label: 'Work on its own', icon: 'zap', d: 'Does not stop to ask. It still cannot leave this folder or reach the internet, and every turn can be undone.' },
+};
+function modeMenu(cur) {
+  return `<div class="pop modes" role="menu" aria-label="How much the agent asks">${Object.entries(MODES).map(([k, m]) =>
+    `<button class="menuitem" role="menuitemradio" aria-checked="${k === cur}">${ic(m.icon)}<b>${m.label}</b>${k === cur ? ic('check', 'tone t-info') : '<span></span>'}<span class="d">${m.d}</span></button>`).join('')}</div>`;
+}
+function composer(o = {}) {
+  const m = MODES[o.mode ?? 'ask'];
+  return `<div class="composerwrap">${o.menu ? modeMenu(o.mode ?? 'ask') : ''}<div class="composer" ${o.off ? 'style="opacity:.6"' : ''}>
+      <div class="text ${o.text ? '' : 'ph'}" style="${o.tall ? 'min-height:64px' : ''}">${o.text ?? o.placeholder ?? 'Ask for a change, or ask a question'}</div>
+      <div class="bar"><button class="pill icononly" aria-label="Attach a file">${ic('paperclip')}</button>
+        <button class="pill" data-go="session-mode" aria-haspopup="menu" aria-label="How much the agent asks: ${m.label}" ${o.menu ? 'aria-pressed="true"' : ''}>${ic(m.icon)}<span>${m.label}</span>${ic('chevron-down', 's12')}</button>
+        <span class="end row">${o.running ? `<button class="btn outline sm" data-go="stopped">${ic('square', 's12')} Stop</button>` : ''}<button class="send" aria-label="Send" ${o.text && !o.off ? '' : 'disabled'}>${ic('arrow-up', 's20')}</button></span>
+      </div>
+    </div>${o.note ? `<p class="composernote">${o.note}</p>` : ''}</div>`;
+}
+
+/* ------------------------------------------------------------------ the check's cards: one per result, and the one while it runs */
+const WORD = {
+  checking: ['t-info', 'loader', 'Checking'],
+  passed: ['t-ok', 'circle-check', 'Check passed'],
+  failed: ['t-bad', 'circle-x', 'Check failed'],
+  notchecked: ['t-quiet', 'circle-dashed', 'Not checked'],
+  couldnot: ['t-warn', 'circle-alert', 'Could not check'],
+};
+const rounds = (marks) => `<span class="rounds" aria-hidden="true">${marks.split('').map((c) => `<i class="${c === '.' ? '' : c}"></i>`).join('')}</span>`;
+const testFiles = (list) => `<div class="sub"><p class="row">${ic('alert', 'tone t-warn')}<span class="strong">The agent changed ${list.length === 1 ? 'a file' : 'files'} the check reads</span></p>
+  <ul class="files">${list.map(([f, what]) => `<li><code>${f}</code><span class="muted">${what}</span></li>`).join('')}</ul>
+  <p class="muted" style="font-size:.8125rem">Have a look before you trust the result. <button class="btn link" data-go="changes">See these changes</button></p></div>`;
+function checkCard(k, o = {}) {
+  const [tone, icon, word] = WORD[k];
+  return `<section class="tcard ${tone}" aria-label="${word}">
+    <div class="head">${ic(icon, k === 'checking' ? 'spin' : '')}<span class="word">${o.title ?? word}</span>${o.marks ? rounds(o.marks) : ''}</div>
+    ${o.line ? `<p>${o.line}</p>` : ''}
+    <div class="facts">${o.facts ?? ''}</div>
+    ${o.out ? `<details class="stepd" ${o.open ? 'open' : ''}><summary class="step">${ic('chevron-right', 'chev')}<span>${o.outLabel ?? 'The end of the output'}</span></summary><div class="stepbody" style="margin-inline-start:0"><div class="out" tabindex="0">${o.out}</div><div class="outfoot"><button class="btn link" style="font-size:.75rem">See the full output</button></div></div></details>` : ''}
+    ${o.tests ? testFiles(o.tests) : ''}
+    ${o.after ? `<p class="muted" style="font-size:.8125rem">${o.after}</p>` : ''}
+    ${o.btns ? `<div class="btns">${o.btns}</div>` : ''}
+  </section>`;
+}
+const FAILOUT = `<span class="dim"> ✓ shows the welcome text (4 ms)
+ ✓ shows today's hours on a Tuesday (3 ms)</span>
+<span class="r"> ✗ says "Closed today" on a Monday (6 ms)</span>
+
+   Expected: "Closed today"
+   Received: "Open today undefined to undefined"
+
+     at tests/home.test.js:41:27
+
+<span class="r">Tests: 1 failed</span>, 11 passed, 12 total
+<span class="dim">npm test finished with exit code 1</span>`;
+const PASSOUT = `<span class="dim">&gt; bakery-site@1.4.0 test
+&gt; node --test tests/</span>
+
+<span class="g"> ✓ shows the welcome text (4 ms)
+ ✓ shows today's hours on a Tuesday (3 ms)
+ ✓ says "Closed today" on a Monday (2 ms)</span>
+<span class="dim"> … 9 more</span>
+
+Tests: <span class="g">12 passed</span>, 12 total`;
+
+/* ------------------------------------------------------------------ the session frame: tabs, the chat column, the open tab */
+const TABS = [['chat', 'Chat', 'message', 'session'], ['files', 'Files', 'folder', 'files'], ['changes', 'Changes', 'file-diff', 'changes'], ['terminal', 'Terminal', 'terminal', 'terminal'], ['browser', 'Browser', 'globe', 'browser'], ['preview', 'Preview', 'monitor', 'preview']];
+function session(o) {
+  const tab = o.tab ?? 'files', small = o.small ?? 'chat';
+  return `<div class="session" data-small="${small}">
+    <div class="tabs" role="tablist" aria-label="Parts of the session">${TABS.map(([id, l, i, go]) =>
+      `<button class="tab ${id === 'chat' ? 'chat' : ''} ${id === tab ? 'selw' : ''} ${id === small ? 'sels' : ''}" role="tab" data-go="${go}">${ic(i, 's14')}<span>${l}</span>${id === 'changes' && o.n ? `<span class="n">${o.n}</span>` : ''}</button>`).join('')}</div>
+    <section class="chatcol" aria-label="Chat">${o.thread}${o.box ?? composer(o.composer)}</section>
+    <section class="panel" aria-label="${tab}">${o.panel ?? PANES[tab](o.pane ?? {})}</section>
+  </div>`;
+}
+
+/* ---- Files */
+const TREE = [
+  ['folder-open', 'src', 0], ['folder-open', 'pages', 1], ['file', 'about.html', 2], ['file', 'home.html', 2, 1], ['file', 'hours.js', 1, 1], ['file', 'site.css', 1], ['file', 'site.js', 1],
+  ['folder-open', 'tests', 0], ['file', 'home.test.js', 1, 1], ['file', 'site.test.js', 1],
+  ['folder', 'public', 0], ['file', 'package.json', 0], ['file', 'README.md', 0],
+];
+const HOURS_JS = [
+  `<span class="tc">// Opening hours, one line per weekday (0 is Sunday).</span>`,
+  `<span class="tk">export const</span> HOURS = {`,
+  `  0: [<span class="ts">'09:00'</span>, <span class="ts">'14:00'</span>],`,
+  `  1: <span class="tk">null</span>, <span class="tc">// closed on Mondays</span>`,
+  `  2: [<span class="ts">'07:30'</span>, <span class="ts">'17:00'</span>],`,
+  `  3: [<span class="ts">'07:30'</span>, <span class="ts">'17:00'</span>],`,
+  `  4: [<span class="ts">'07:30'</span>, <span class="ts">'17:00'</span>],`,
+  `  5: [<span class="ts">'07:30'</span>, <span class="ts">'18:00'</span>],`,
+  `  6: [<span class="ts">'08:00'</span>, <span class="ts">'16:00'</span>],`,
+  `};`,
+  ``,
+  `<span class="tc">/** The line the home page shows for a day. */</span>`,
+  `<span class="tk">export function</span> todayLine(date = <span class="tk">new</span> Date()) {`,
+  `  <span class="tk">const</span> hours = HOURS[date.getDay()];`,
+  `  <span class="tk">if</span> (!hours) <span class="tk">return</span> <span class="ts">'Closed today'</span>;`,
+  `  <span class="tk">return</span> <span class="ts">&#96;Open today &#36;{hours[0]} to &#36;{hours[1]}&#96;</span>;`,
+  `}`,
+  ``,
+  `<span class="tk">export function</span> fillHours(doc = document) {`,
+  `  <span class="tk">const</span> el = doc.querySelector(<span class="ts">'#today'</span>);`,
+  `  <span class="tk">if</span> (el) el.textContent = todayLine();`,
+  `}`,
+];
+const tree = (cur, clean) => `<div class="tree" role="tree" aria-label="Files in bakery-site">${TREE.filter(([, n]) => !(clean && n === 'hours.js')).map(([i, n, d, c]) => [i, n, d, clean ? 0 : c]).map(([i, n, d, chg]) =>
+  `<button class="n d${d}" role="treeitem" ${n === cur ? 'aria-current="true"' : ''}>${ic(i)}<span class="nm">${n}</span>${chg ? '<span class="chg" title="Changed in this session"></span>' : ''}</button>`).join('')}</div>`;
+function filesPane(o = {}) {
+  const none = o.none;
+  return `<div class="panehead"><div class="input" style="height:30px;flex:1;min-width:120px">${ic('search', 's14 muted')}<span class="ph">Find a file by name</span></div>
+      <span class="xs muted row hidesmall"><span class="chg" style="width:7px;height:7px;border-radius:50%;background:var(--accent)"></span> changed in this session</span></div>
+    <div class="filespane">${tree(none ? '' : 'hours.js', none)}
+      <div class="reader">${none ? `<div class="empty sm" style="margin:auto"><span class="round">${ic('file-text', 's24')}</span><h3>Choose a file to read it</h3><p>Files open here to read. To change one, ask in the chat or use your own editor.</p></div>` : `
+        <div class="panehead" style="padding-block:6px"><code style="background:transparent;padding:0">src/hours.js</code><span class="badge tag">Added this turn</span>
+          <span class="end row"><button class="tool" aria-label="Copy the path" title="Copy the path">${ic('copy', 's14')}</button><button class="tool" aria-label="Show in Finder" title="Show in Finder">${ic('external', 's14')}</button></span></div>
+        <div class="code" tabindex="0">${HOURS_JS.map((l, i) => `<div class="l"><i>${i + 1}</i><span>${l}</span></div>`).join('')}</div>
+        <div class="outfoot note">${ic('eye', 's12')} Read only. 22 lines.</div>`}
+      </div></div>`;
+}
+
+/* ---- Changes */
+const DIFF = [
+  ['h', '', '', 'The welcome section'],
+  ['', 11, 11, '    <h1>Welcome to Marlow Street Bakery</h1>'],
+  ['', 12, 12, '    <p class="lead">Fresh bread every morning.</p>'],
+  ['', 13, 13, '  </section>'],
+  ['del', 14, '', '  <p class="note">Ask in the shop for our opening hours.</p>'],
+  ['add', '', 14, '  <section id="hours" class="hours">'],
+  ['add', '', 15, '    <h2>Opening hours</h2>'],
+  ['add', '', 16, '    <p id="today" class="today"></p>'],
+  ['add', '', 17, '    <dl>'],
+  ['add', '', 18, '      <dt>Monday</dt><dd>Closed</dd>'],
+  ['add', '', 19, '      <dt>Tuesday to Thursday</dt><dd>07:30 to 17:00</dd>'],
+  ['add', '', 20, '      <dt>Friday</dt><dd>07:30 to 18:00</dd>'],
+  ['add', '', 21, '      <dt>Saturday</dt><dd>08:00 to 16:00</dd>'],
+  ['add', '', 22, '      <dt>Sunday</dt><dd>09:00 to 14:00</dd>'],
+  ['add', '', 23, '    </dl>'],
+  ['add', '', 24, '  </section>'],
+  ['h', '', '', 'The end of the page'],
+  ['', 31, 41, '  <scr' + 'ipt src="../site.js"></scr' + 'ipt>'],
+  ['del', 32, '', '</body>'],
+  ['add', '', 42, '  <scr' + 'ipt type="module" src="../hours-start.js"></scr' + 'ipt>'],
+  ['add', '', 43, '</body>'],
+];
+const diffView = () => `<div class="code diff" tabindex="0">${DIFF.map(([k, a, b, t]) => k === 'h'
+  ? `<div class="hunk">${t}</div>` : `<div class="l ${k}"><i>${a}</i><i>${b}</i><b>${k === 'add' ? '+' : k === 'del' ? '−' : ' '}</b><span>${esc(t)}</span></div>`).join('')}</div>`;
+const CHG = [['Changed', 'src/pages/home.html', 13, 2], ['Added', 'src/hours.js', 22, 0], ['Changed', 'tests/home.test.js', 18, 0, 1]];
+const chgFiles = (cur, struck, count = 3) => `<div class="chgfiles" role="list">${CHG.slice(0, count).map(([k, f, a, d, t], i) =>
+  `<button class="chgfile" ${i === cur ? 'aria-current="true"' : ''}><span class="kind">${k}</span><code class="${struck ? 'struck' : ''}">${f}</code>${t ? '<span class="badge">test file</span>' : ''}${pm(a, d)}</button>`).join('')}</div>`;
+function changesPane(o = {}) {
+  if (o.empty) return `<div class="empty" style="margin:auto"><span class="round">${ic('file-diff', 's24')}</span><h3>Nothing has changed yet</h3><p>When the agent changes, adds or deletes a file, it is listed here turn by turn, with before and after, and a way to undo the turn.</p></div>`;
+  const undone = o.undone;
+  return `<div class="panehead">
+      <button class="select" style="width:auto;max-width:100%;height:30px;flex:0 1 auto" aria-label="Which turn"><span class="v"><span class="strong">Turn 3</span> · Add the opening hours · 14:02</span>${ic('chevron-down', 's14')}</button>
+      ${undone ? '<span class="badge fill">Undone</span>' : ''}
+      <span class="end row">${undone
+        ? `<button class="btn sm" data-go="changes">${ic('redo', 's14')} Bring it back</button>`
+        : `<button class="btn outline sm" data-go="changes-undone">${ic('undo', 's14')} Undo this turn</button>`}</span></div>
+    ${undone ? `<div style="padding:10px 12px 0"><div class="notice slim t-info"><span class="mark">i</span><h3>Turn 3 is undone</h3><p>These 3 files are back to how they were at 14:02, before the turn. Nothing is lost: “Bring it back” puts the turn's changes in again.</p></div></div>` : ''}
+    ${chgFiles(0, undone, o.count)}
+    <div class="panehead" style="padding-block:6px"><code style="background:transparent;padding:0" class="${undone ? 'struck' : ''}">src/pages/home.html</code>
+      <span class="end seg" role="group" aria-label="What to show"><button aria-pressed="false">Before</button><button aria-pressed="false">After</button><button aria-pressed="true">Both</button></span></div>
+    ${diffView()}
+    <div class="outfoot note">${ic('info', 's12')}<span>Undo puts back files that were changed, added or deleted. It does not put back files your project ignores (such as <code>.env</code>) or empty folders.</span></div>`;
+}
+
+/* ---- Terminal */
+const termNote = () => `<div style="padding:10px 12px 0"><div class="notice slim t-info"><span class="mark">i</span><h3>This terminal has the same limits as the agent</h3>
+  <p>It can change only this project's folder and cannot reach the internet. Because of those limits <code>ps</code>, <code>top</code> and <code>sudo</code> do not work here. For what is running, use the list.</p>
+  <div class="acts" style="margin-top:4px"><button class="btn outline sm" data-go="terminal-processes">${ic('list', 's14')} Show what is running</button><button class="btn ghost sm">Hide this note</button></div></div></div>`;
+function terminalPane(o = {}) {
+  return `${termNote()}
+    <div class="panehead" style="border-bottom:0;padding-bottom:4px"><span class="xs muted">Your terminal · <code>~/Projects/bakery-site</code></span><span class="end row"><button class="btn ghost xs">${ic('plus', 's12')} New</button><button class="btn ghost xs">Clear</button></span></div>
+    <div class="term" tabindex="0" aria-label="Terminal"><span class="p">bakery-site %</span> npm test
+<span class="dim">&gt; bakery-site@1.4.0 test
+&gt; node --test tests/</span>
+<span class="g">Tests: 12 passed</span>, 12 total
+
+<span class="p">bakery-site %</span> ps
+<span class="r">zsh: operation not permitted: ps</span>
+<span class="hint">${ic('info', 's12')} <code>ps</code> cannot start inside the protected area this terminal runs in. <button class="btn link" data-go="terminal-processes">Show what is running</button></span>
+<span class="p">bakery-site %</span> <span class="caret"></span></div>
+    ${o.over ?? ''}`;
+}
+const processes = () => `<div class="scrim" style="position:absolute"><div class="dialog wide" role="dialog" aria-label="Running in this project">
+    <div class="row between"><h2>Running in this project</h2><button class="tool" aria-label="Close" data-go="terminal">${ic('x')}</button></div>
+    <p class="sm muted">Everything started in this project's folder by you, the agent or a check. Stopping one stops everything it started.</p>
+    <table class="t"><thead><tr><th>What</th><th>Started by</th><th class="opt">Running for</th><th class="opt">Memory</th><th></th></tr></thead><tbody>
+      <tr><td><code>npm run dev</code><div class="xs muted">the preview, on this computer only</div></td><td>You, in Preview</td><td class="opt tnum">12 min</td><td class="opt tnum">84 MB</td><td><button class="btn outline xs">Stop</button></td></tr>
+      <tr><td><code>zsh</code><div class="xs muted">your terminal</div></td><td>You</td><td class="opt tnum">31 min</td><td class="opt tnum">6 MB</td><td><button class="btn outline xs">Stop</button></td></tr>
+      <tr><td><code>node --test tests/</code><div class="xs muted">the check, round 1</div></td><td>The check</td><td class="opt tnum">4 s</td><td class="opt tnum">52 MB</td><td><button class="btn outline xs">Stop</button></td></tr>
+    </tbody></table>
+    <div class="acts"><button class="btn outline sm" data-go="terminal">Close</button></div></div></div>`;
+
+/* ---- Browser */
+function browserPane() {
+  return `<div class="panehead"><button class="tool" aria-label="Back">${ic('arrow-left')}</button><button class="tool" aria-label="Forward" disabled>${ic('arrow-right')}</button><button class="tool" aria-label="Load again">${ic('rotate')}</button>
+      <div class="addr">${ic('lock', 's12 muted')}<span class="u">developer.mozilla.org/en-US/docs/Web/API/Date/getDay</span></div>
+      <button class="btn outline sm">${ic('message', 's14')}<span class="hidesmall">Add this page to the chat</span></button>
+      <button class="tool" aria-label="Open in your own browser" title="Open in your own browser">${ic('external')}</button></div>
+    <div class="webpage docs" tabindex="0">
+      <div class="crumbs">References › JavaScript › Date › getDay()</div>
+      <h4>Date.prototype.getDay()</h4>
+      <p>(A page from the web, shown as it is. The words here stand in for the real page.)</p>
+      <p>Returns the day of the week for a date according to local time, where 0 is Sunday and 6 is Saturday.</p>
+      <h5>Try it</h5>
+      <pre>const day = new Date('2026-11-16T09:00:00');
+console.log(day.getDay()); // 1, a Monday</pre>
+      <h5>Return value</h5>
+      <p>A whole number from 0 to 6 for the day of the week.</p>
+    </div>
+    <div class="outfoot note">${ic('info', 's12')}<span>This browser is yours. The agent cannot open pages or reach the internet; it sees a page only when you add it to the chat.</span></div>`;
+}
+
+/* ---- Preview */
+const bakery = (closed) => `<div class="bakery"><header><b>Marlow Street Bakery</b><nav><span>Home</span><span>Bread</span><span>About</span></nav></header>
+    <div class="hero"><h4>Welcome to Marlow Street Bakery</h4><p>Fresh bread every morning, baked in the shop since 1987.</p></div>
+    <section class="hours"><h5>Opening hours</h5><span class="today">${closed ? 'Closed today' : 'Open today 07:30 to 17:00'}</span>
+      <dl><dt>Monday</dt><dd>Closed</dd><dt>Tuesday to Thursday</dt><dd>07:30 to 17:00</dd><dt>Friday</dt><dd>07:30 to 18:00</dd><dt>Saturday</dt><dd>08:00 to 16:00</dd><dt>Sunday</dt><dd>09:00 to 14:00</dd></dl></section></div>`;
+function previewPane(o = {}) {
+  if (o.empty) return `<div class="empty" style="margin:auto"><span class="round">${ic('monitor', 's24')}</span><h3>Nothing is running yet</h3>
+    <p>The preview starts your project on this computer and shows it here. For bakery-site that is <code>npm run dev</code>.</p>
+    <div class="row wrap" style="justify-content:center;margin-top:8px"><button class="btn" data-go="preview">${ic('play', 's14')} Start the preview</button><button class="btn outline">Change the command</button></div>
+    <p class="xs">Only this computer can open it. Nothing is put on the internet.</p></div>`;
+  return `<div class="panehead"><span class="status t-ok"><span class="dot"></span>Running</span>
+      <div class="addr">${ic('monitor', 's12 muted')}<span class="u">This computer · <code style="background:transparent;padding:0">npm run dev</code> · port 5173</span></div>
+      <span class="seg" role="group" aria-label="Size"><button aria-pressed="${!o.phone}" aria-label="Wide">${ic('monitor', 's14')}</button><button aria-pressed="${!!o.phone}" aria-label="Phone">${ic('smartphone', 's14')}</button></span>
+      <button class="tool" aria-label="Load again">${ic('rotate')}</button>
+      <button class="btn outline sm" data-go="preview-empty">${ic('square', 's12')} Stop</button>
+      <button class="tool" aria-label="Open in your own browser" title="Open in your own browser">${ic('external')}</button></div>
+    <div class="previewwrap">${o.phone ? `<div class="phoneframe"><div class="webpage" style="height:100%">${bakery()}</div></div>` : `<div class="webpage" tabindex="0">${bakery()}</div>`}</div>
+    <div class="outfoot note">${ic('info', 's12')}<span>Loads again by itself when a file changes. Only this computer can open it.</span></div>`;
+}
+const PANES = { files: filesPane, changes: changesPane, terminal: terminalPane, browser: browserPane, preview: previewPane };
+
+/* ------------------------------------------------------------------ the conversation used on most session screens */
+const ASK = user('Add our opening hours to the home page. On Mondays it should say “Closed today”.');
+const LOOKED = group('Looked at 4 files', read('package.json') + read('src/pages/home.html') + read('src/site.js') + read('tests/home.test.js'));
+const PLAN_P = p('The home page has no opening hours yet. I will add a section under the welcome text, and a small script that works out today’s line.');
+const EDITS = steps(edit('Changed', 'src/pages/home.html', 13, 2), edit('Added', 'src/hours.js', 22, 0), edit('Changed', 'tests/home.test.js', 18, 0, 1));
+const DONE_P = p('Done. The home page now lists the opening hours and shows one line for today. On a Monday that line is “Closed today”. I added three tests for it.');
+</script>
+<script>
+/* ================================================================== 1 · Where coding lives */
+const G1 = '1 · Where coding lives';
+const li = (icon, t) => `<li>${ic(icon, 's14')}<span>${t}</span></li>`;
+const rulesCards = () => `<div class="two rules">
+    <div class="card flat t-ok"><h3>${ic('circle-check', 'tone')} In the folder you choose, the agent may</h3><ul>
+      ${li('check', 'read every file')}${li('check', 'change, add and delete files (every turn can be undone)')}${li('check', 'run commands, such as the project’s tests')}${li('check', 'start the project so you can look at it in Preview')}</ul></div>
+    <div class="card flat t-bad"><h3>${ic('lock', 'tone')} It cannot</h3><ul>
+      ${li('x', 'change or delete anything outside that folder')}${li('x', 'read the rest of your home folder: documents, keys, other apps’ data')}${li('x', 'reach the internet (only to install packages, from a short list of sites)')}${li('x', 'see your model key')}</ul></div>
+  </div>`;
+const leaves = () => `<div class="notice slim t-info"><span class="mark">i</span><h3>What leaves this computer</h3>
+  <p>The parts of files the agent reads are sent to the model you chose: Claude Sonnet 5.5, with your own key. With a model that runs on this computer, nothing leaves it.</p></div>`;
+
+add({ id: 'start', g: G1, name: 'The menu, and the first screen', menu: true,
+  note: 'A new group, Code, in the side menu, with Projects, Scheduled and Extensions under it. With no project yet, Projects asks for a folder and says what the agent may and may not do there, before anything is read.',
+  render: () => shell({ current: 'code.projects', body: `<div class="pagepad narrow">
+    <div class="pagehead"><div><h1>Build and fix code by asking</h1><p>Choose the folder of a project. An agent reads it, changes files and runs commands there. You see every step and can undo every turn.</p></div></div>
+    <div class="card stack g12">
+      <div class="row wrap"><button class="btn" data-go="start-chosen">${ic('folder-open')} Choose a folder</button><button class="btn outline">${ic('plus')} Start in a new, empty folder</button></div>
+      <p class="sm muted">Nothing is read or changed until you open the project.</p>
+    </div>
+    ${rulesCards()}${leaves()}
+  </div>` }) });
+
+add({ id: 'start-chosen', g: G1, name: 'A folder is chosen', menu: true,
+  note: 'After the folder picker: what was found, the check that is suggested from the project’s files, and how much the agent asks. One main button opens the project.',
+  render: () => shell({ current: 'code.projects', body: `<div class="pagepad narrow">
+    <div class="pagehead"><div><h1>Open this project?</h1><p>The agent will work in this folder and nowhere else.</p></div></div>
+    <div class="card stack g16">
+      <div class="row top">${ic('folder-open', 's24 muted')}<div class="grow"><div class="strong">bakery-site</div><div class="sm muted" style="overflow-wrap:anywhere"><code>~/Projects/bakery-site</code> · 42 files in 6 folders · a website project (it has a <code>package.json</code>)</div></div>
+        <button class="btn outline sm" data-go="start">Choose another</button></div>
+      <div class="field"><span class="lab">How the work is checked</span>
+        <div class="row"><div class="input mono grow">npm test</div><button class="btn outline sm" data-go="check-setup">Change</button></div>
+        <span class="hint">Suggested because <code>package.json</code> has a “test” script. Wasify AI runs it after a turn that changed files, and tells you: passed, failed, not checked or could not check.</span></div>
+      <div class="field"><span class="lab">How much the agent asks</span>
+        <div class="radios" role="radiogroup" aria-label="How much the agent asks">${Object.entries(MODES).map(([k, m]) => `<button class="radio" role="radio" aria-checked="${k === 'ask'}"><span class="o"></span><b>${m.label}</b><span class="d">${m.d}</span></button>`).join('')}</div>
+        <span class="hint">You can change this at any time, in the box you write in.</span></div>
+      <div class="row wrap"><button class="btn" data-go="session-new">Open this project</button><span class="sm muted">Nothing is read or changed before this.</span></div>
+    </div>
+    ${rulesCards()}
+  </div>` }) });
+
+const projRow = (o) => `<div class="listrow"><div class="stack g4"><h3 class="row">${ic('folder', 'muted')}<span class="trunc">${o.name}</span></h3>
+    <div class="meta"><span><code>${o.path}</code></span><span>${o.sessions}</span></div>
+    <div class="meta"><span class="${o.tone}">${ic(o.icon, 's14 tone ' + (o.spin ? 'spin' : ''))}<span style="color:var(--text)">${o.word}</span></span><span>${o.last}</span></div></div>
+  <div class="acts">${o.acts ?? `<button class="btn outline sm" data-go="session-done">Open</button>`}<button class="tool" aria-label="More">${ic('more')}</button></div></div>`;
+add({ id: 'projects', g: G1, name: 'Projects, when there are some', menu: true,
+  note: 'The same menu item once folders have been opened: each project with its last session, the check’s word and what waits for you. A session is also found in the Library and by search.',
+  render: () => shell({ current: 'code.projects', body: `<div class="pagepad">
+    <div class="pagehead"><div><h1>Projects</h1><p>The folders the agent works in. Each keeps its own sessions, check and extensions.</p></div>
+      <button class="btn" data-go="start">${ic('folder-open')} Choose a folder</button></div>
+    <div class="stack">
+      ${projRow({ name: 'bakery-site', path: '~/Projects/bakery-site', sessions: '3 sessions', tone: 't-ok', icon: 'circle-check', word: 'Check passed', last: 'Opening hours on the home page · today 14:12' })}
+      ${projRow({ name: 'recipe-cards', path: '~/Projects/recipe-cards', sessions: '1 session', tone: 't-warn', icon: 'hand', word: 'Waiting for you', last: 'Wants to run a command · 3 minutes ago', acts: `<button class="btn sm" data-go="ask">Answer</button>` })}
+      ${projRow({ name: 'club-newsletter', path: '~/Documents/club-newsletter', sessions: '7 sessions', tone: 't-bad', icon: 'circle-x', word: 'Check failed · needs you', last: 'Fix the sign-up form · yesterday 18:40' })}
+      ${projRow({ name: 'first-game', path: '~/Documents/Wasify AI/Code/first-game', sessions: 'No session yet', tone: 't-quiet', icon: 'circle-dashed', word: 'No check set', last: 'Made 2 days ago', acts: `<button class="btn outline sm" data-go="session-new">Start</button>` })}
+    </div>
+  </div>` }) });
+
+add({ id: 'session-new', g: G1, name: 'A project just opened', menu: false,
+  note: 'The session view before the first message: what to ask, three starting points that only fill the box, the mode in the box, and the project’s files beside the chat. The side menu steps aside here, as it does for a notebook; the bar’s button brings it back.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'New session' }), right: sessRight('none', '$0.00'),
+    body: session({ tab: 'files', pane: { none: true },
+      thread: thread(`<div class="hello"><h2>What should be done in bakery-site?</h2>
+        <p class="muted sm" style="max-width:34ch">Ask for a change, or ask how something works. Questions change nothing.</p>
+        <div class="row wrap" style="justify-content:center"><button class="chip round">Explain this project in plain words</button><button class="chip round">Find what is broken and fix it</button><button class="chip round">Add a page</button></div></div>`, 'center'),
+      composer: { tall: true } }) }) });
+
+/* ================================================================== 2 · The session */
+const G2 = '2 · The session';
+const TESTRUN = cmd('node --test tests/home.test.js', '· 2 s · no errors', `<span class="dim">&gt; node --test tests/home.test.js</span>
+<span class="g"> ✓ shows the welcome text (4 ms)
+ ✓ shows today's hours on a Tuesday (3 ms)
+ ✓ says "Closed today" on a Monday (2 ms)</span>
+
+Tests: <span class="g">3 passed</span>, 3 total`, true, `<span>12 lines</span><button class="btn link" style="font-size:.75rem" data-go="long-output">See all of it</button>`);
+const TESTRUN_C = cmd('node --test tests/home.test.js', '· 2 s · no errors', '', false);
+const PASSCARD = (extra = {}) => checkCard('passed', { facts: `<code>npm test</code><span>12 s</span><span>round 1 of 3</span>`, ...extra });
+
+add({ id: 'session', g: G2, name: 'The agent at work', menu: false,
+  note: 'The chat on the left, the tabs on the right. The agent’s steps are quiet single lines (read, changed, ran) that open when you want the detail. The bar holds the project, the model, the session’s state and the cost so far; the box holds the mode and Stop.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('working', '$0.14'),
+    body: session({ tab: 'files', n: 3,
+      thread: thread(ASK + ai(LOOKED, PLAN_P, EDITS, TESTRUN, working('Reading the result…')), 'toend'),
+      composer: { running: true } }) }) });
+
+add({ id: 'session-done', g: G2, name: 'A turn that ended, checked', menu: false,
+  note: 'The turn has ended and the check has run: one card in the chat, one word in the bar. Because the agent changed a test file in this turn, the card lists it.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('passed'),
+    body: session({ tab: 'changes', n: 3,
+      thread: thread(ASK + ai(LOOKED, PLAN_P, EDITS, TESTRUN_C, DONE_P, PASSCARD({ tests: [['tests/home.test.js', 'changed, 18 lines added']] }), under()), 'toend'),
+      composer: {} }) }) });
+
+add({ id: 'session-plan', g: G2, name: 'Plan mode: a plan, nothing changed', menu: false,
+  note: 'In Plan the agent only reads. Its answer is a plan, a card says that nothing was changed, and one button carries the plan out in “Ask me”. No file changed, so no check runs. This is the whole session view of the first stage that has a screen.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'A plan for the opening hours' }), right: sessRight('none', '$0.04'),
+    body: session({ tab: 'files',
+      thread: thread(user('How would you add our opening hours to the home page?') + ai(LOOKED, p('Here is how I would do it.'),
+        `<ol><li>Add an “Opening hours” section to <code>src/pages/home.html</code>, under the welcome text.</li><li>Add <code>src/hours.js</code> with the hours for each weekday and one function that gives today’s line.</li><li>Make that line say “Closed today” on Mondays.</li><li>Add three tests to <code>tests/home.test.js</code>: a Tuesday, a Monday and the welcome text.</li></ol>`,
+        `<section class="tcard t-info" aria-label="A plan"><div class="head">${ic('list-checks')}<span class="word">This is a plan. Nothing was changed</span></div>
+          <p class="muted">In Plan the agent reads files and changes none. Carrying the plan out switches this session to “Ask me”.</p>
+          <div class="btns"><button class="btn sm" data-go="session">Carry out this plan</button><button class="btn ghost sm">Change the plan</button></div></section>`, under()), 'toend'),
+      composer: { mode: 'plan' } , pane: { none: true } }) }) });
+
+add({ id: 'session-mode', g: G2, name: 'Choosing the mode', menu: false,
+  note: 'Plan, Ask me, Work on its own: one pill in the box, where the home chat keeps “Ask me first”. Each choice says in a line what it means.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('passed'),
+    body: session({ tab: 'files', n: 3,
+      thread: thread(ASK + ai(LOOKED, PLAN_P, EDITS, TESTRUN_C, DONE_P, PASSCARD(), under()), 'toend'),
+      composer: { menu: true, mode: 'ask' } }) }) });
+
+add({ id: 'session-cost', g: G2, name: 'The cost so far', menu: false,
+  note: 'The amount in the bar opens to what it is made of, and the limit for one session. With a model on this computer it says “No cost”.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('passed'),
+    over: `<div class="pop costpop" role="dialog" aria-label="This session so far"><div class="strong" style="font-size:.875rem">This session so far</div>
+      <dl><dt>Claude Sonnet 5.5, 14 calls</dt><dd class="tnum">$0.21</dd><dt>Turns</dt><dd class="tnum">3</dd><dt>Limit for one session</dt><dd class="tnum">$2.00</dd></dl>
+      <div class="progress" style="height:.4rem" aria-hidden="true"><i style="width:10.5%"></i></div>
+      <p class="muted">Paid with your own key. At the limit the session stops and asks you.</p>
+      <div class="row"><button class="btn outline xs">Change the limit</button><button class="btn ghost xs">Your keys</button></div></div>`,
+    body: session({ tab: 'files', n: 3,
+      thread: thread(ASK + ai(LOOKED, PLAN_P, EDITS, TESTRUN_C, DONE_P, PASSCARD(), under()), 'toend'),
+      composer: {} }) }) });
+
+/* ================================================================== 3 · The check */
+const G3 = '3 · The check';
+const checkDialog = () => `<div class="scrim"><div class="dialog" role="dialog" aria-label="The check for bakery-site">
+    <h2>The check for bakery-site</h2>
+    <p class="sm muted">After a turn that changed files, Wasify AI runs this command in the project. If it fails, the agent gets the end of the output and tries again, up to three times.</p>
+    <div class="field"><span class="lab">Command</span><div class="input mono">npm test</div>
+      <span class="hint">Suggested because <code>package.json</code> has a “test” script. Other commands found in this project:</span>
+      <div class="row wrap"><button class="chip" style="font-family:var(--mono);font-size:.8125rem">npm run build</button><button class="chip" style="font-family:var(--mono);font-size:.8125rem">npm run lint</button></div></div>
+    <div class="row wrap"><button class="btn outline sm">${ic('play', 's12')} Try it now</button><span class="row sm t-ok">${ic('circle-check', 'tone')}<span>Passed in 12 s</span></span></div>
+    <label class="row top sm"><span class="check" role="checkbox" aria-checked="false"></span><span>No check for this project<br><span class="muted">Every turn that changes files then ends “not checked”.</span></span></label>
+    <details class="experts"><summary>${ic('chevron-right', 's14')} For experts</summary>
+      <div class="two" style="margin-top:10px"><div class="field"><span class="lab">Stop a check after</span><div class="select"><span class="v">10 minutes</span>${ic('chevron-down', 's14')}</div></div>
+      <div class="field"><span class="lab">Rounds of fixing</span><div class="select"><span class="v">3</span>${ic('chevron-down', 's14')}</div></div></div></details>
+    <p class="xs muted row top">${ic('lock', 's12')}<span>Kept by Wasify AI, outside the project, where the agent cannot change it.</span></p>
+    <div class="acts"><button class="btn outline" data-go="session-done">Cancel</button><button class="btn" data-go="session-done">Save the check</button></div>
+  </div></div>`;
+add({ id: 'check-setup', g: G3, name: 'The check command, and changing it', menu: false,
+  note: 'Opened from the check’s word in the bar, or from “Change” when a project is opened. One command, suggested from the project’s files; it can be tried at once. Time limit and rounds are under “For experts”.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('passed'), over: checkDialog(),
+    body: session({ tab: 'files', n: 3, thread: thread(ASK + ai(LOOKED, PLAN_P, EDITS, TESTRUN_C, DONE_P, PASSCARD(), under()), 'toend'), composer: {} }) }) });
+
+add({ id: 'check-running', g: G3, name: 'The check is running', menu: false,
+  note: 'The agent’s turn has ended; Wasify AI now runs the check itself. The card counts the time, the bar says “Checking”, the tray counts one job, and Stop ends it at once.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('checking', '$0.19'), jobs: 1,
+    body: session({ tab: 'changes', n: 3,
+      thread: thread(ASK + ai(LOOKED, PLAN_P, EDITS, TESTRUN_C, DONE_P,
+        checkCard('checking', { marks: 'n..', line: 'Wasify AI is running the project’s check.', facts: `<code>npm test</code><span>round 1 of 3</span><span class="tnum">0:08</span>`, btns: `<button class="btn outline sm" data-go="stopped">${ic('square', 's12')} Stop the check</button>` })), 'toend'),
+      composer: { running: true } }) }) });
+
+const galItem = (label, chip, card) => `<div><div class="lbl">${label}<span style="text-transform:none;letter-spacing:0">${chip}</span></div>${card}</div>`;
+add({ id: 'check-results', g: G3, name: 'The four results, side by side', menu: false,
+  note: 'Not a real screen: the card for each of the four words as it appears in the chat, with the word the bar shows beside it. A check that could not run is never shown as passed. A turn that changed no file runs no check: a quiet line says the last result stands.',
+  render: () => shell({ current: 'code.projects', title: 'Code', body: `<div class="pagepad" style="max-width:66rem"><div class="two" style="gap:20px 24px;align-items:start">
+    ${galItem('Passed', chipOf('passed'), PASSCARD({ line: 'The check ran after this turn and found nothing wrong.' }))}
+    ${galItem('Failed, after three rounds', chipOf('needs'), checkCard('failed', { title: 'Check failed · needs you', marks: 'fff', line: 'The check still fails after 3 rounds, so the agent has stopped.', facts: `<code>npm test</code><span>exit code 1</span><span>9 s</span><span>round 3 of 3</span>`, btns: `<button class="btn sm">Try 3 more rounds</button><button class="btn outline sm">${ic('undo', 's14')} Undo this turn</button>` }))}
+    ${galItem('Not checked', chipOf('notchecked'), checkCard('notchecked', { line: 'You stopped this turn before the check could run.', facts: `<span>2 files were changed before the stop</span>`, after: 'Also shown when the agent reaches its limit of steps in one turn, and when the project has no check.', btns: `<button class="btn outline sm">${ic('play', 's12')} Run the check now</button><button class="btn outline sm">${ic('undo', 's14')} Undo this turn</button>` }))}
+    ${galItem('Could not check', chipOf('couldnot'), checkCard('couldnot', { line: 'The check did not run: the command <code>npm tset</code> was not found. That is not a pass.', facts: `<code>npm tset</code><span>round 1 of 3</span>`, after: 'Also shown when a check takes longer than 10 minutes, or stops with a crash of its own.', btns: `<button class="btn sm" data-go="check-setup">Change the check</button><button class="btn outline sm">Try again</button>` }))}
+    ${galItem('Passed, and the agent changed tests', chipOf('passed'), PASSCARD({ tests: [['tests/home.test.js', 'changed, 18 lines added'], ['tests/old-banner.test.js', 'deleted']] }))}
+    ${galItem('A question: nothing to check', chipOf('passed'), `<div class="stack g12">${user('What does site.js do?')}${ai(steps(read('src/site.js')), p('It opens and closes the menu on small screens, and nothing else.'))}${marker('No file changed. The last check still stands: passed')}</div>`)}
+  </div></div>` }) });
+
+add({ id: 'check-failed-round', g: G3, name: 'A failed round goes back to the agent', menu: false,
+  note: 'Round 1 failed. The card shows the end of the output and says it was sent back; the agent reads it, fixes the fault, and the check runs again as round 2 of 3.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('checking', '$0.26'), jobs: 1,
+    body: session({ tab: 'changes', n: 3,
+      thread: thread(ASK + ai(LOOKED, PLAN_P, EDITS,
+        checkCard('failed', { marks: 'f..', facts: `<code>npm test</code><span>exit code 1</span><span>9 s</span><span>round 1 of 3</span>`, out: FAILOUT, open: true, after: 'Sent back to the agent: the command, its exit code and the end of the output.' }))
+        + marker('Round 2 of 3')
+        + ai(p('The Monday test fails because the script reads the hours before it checks for a closed day. I am fixing that.'), steps(read('src/hours.js'), edit('Changed', 'src/hours.js', 3, 2)),
+          checkCard('checking', { marks: 'fn.', facts: `<code>npm test</code><span>round 2 of 3</span><span class="tnum">0:04</span>`, btns: `<button class="btn outline sm">${ic('square', 's12')} Stop the check</button>` })), 'toend'),
+      composer: { running: true } }) }) });
+
+add({ id: 'check-needs-you', g: G3, name: '“Needs you” after three rounds', menu: false,
+  note: 'Three rounds failed, so the turn stops and says what still fails. The person can ask for three more rounds, undo the turn, or write what to do differently. The test files the agent changed or deleted in this turn are listed on the card.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('needs', '$0.58'),
+    body: session({ tab: 'changes', n: 4,
+      thread: thread(marker('Round 3 of 3') + ai(p('I changed how the day is read once more.'), steps(edit('Changed', 'src/hours.js', 4, 4), edit('Deleted', 'tests/site.test.js', 0, 27, 1)),
+        checkCard('failed', { title: 'Check failed · needs you', marks: 'fff', line: 'The check still fails after 3 rounds, so the agent has stopped.',
+          facts: `<code>npm test</code><span>exit code 1</span><span>9 s</span><span>round 3 of 3</span>`, outLabel: 'What still fails', open: true,
+          out: `<span class="r"> ✗ says "Closed today" on a Monday (6 ms)</span>
+   Expected: "Closed today"
+   Received: "Open today 09:00 to 14:00"
+
+<span class="r">Tests: 1 failed</span>, 8 passed, 9 total`,
+          tests: [['tests/home.test.js', 'changed'], ['tests/site.test.js', 'deleted']],
+          btns: `<button class="btn sm" data-go="check-failed-round">Try 3 more rounds</button><button class="btn outline sm" data-go="changes-undone">${ic('undo', 's14')} Undo this turn</button><button class="btn ghost sm" data-go="check-setup">Change the check</button>` })), 'toend'),
+      composer: { placeholder: 'Say what to do differently' } }) }) });
+</script>
+<script>
+/* ================================================================== 4 · Asking */
+const G4 = '4 · Asking';
+const BUILD_ASK = user('Build the site again so I can put it online.');
+const askCard = (state) => `<section class="tcard ask t-warn" aria-label="The agent wants to run a command">
+    <div class="head">${ic('hand')}<span class="word">The agent wants to run a command</span></div>
+    <div class="cmd">rm -rf dist/</div>
+    <p>It says: “Remove the old build before I build again.”</p>
+    <dl class="stack g4" style="font-size:.8125rem">
+      <div class="row top"><dt class="muted" style="width:5.5rem;flex:none">What it does</dt><dd>Deletes the folder <code>dist/</code> and the 31 files in it.</dd></div>
+      <div class="row top"><dt class="muted" style="width:5.5rem;flex:none">Undo</dt><dd>Will not bring these back: <code>dist/</code> is a folder your project ignores.</dd></div>
+      <div class="row top"><dt class="muted" style="width:5.5rem;flex:none">Why you are asked</dt><dd>The rule “Ask before deleting files”.</dd></div>
+    </dl>
+    ${state === 'yes' ? `<p class="row muted">${ic('check', 'tone t-ok')}<span>You said yes · 14:31</span></p>`
+      : state === 'no' ? `<p class="row muted">${ic('x', 's14')}<span>You said no · 14:31</span></p>`
+      : `<div class="btns"><button class="btn sm" data-go="ask-answered">Yes, run it</button><button class="btn outline sm" data-go="ask-answered">No</button></div>`}
+  </section>`;
+const askSmall = (cmdText, says, rule, state) => `<section class="tcard ask t-warn" aria-label="The agent wants to run a command">
+    <div class="head">${ic('hand')}<span class="word">The agent wants to run a command</span></div>
+    <div class="cmd">${cmdText}</div><p>It says: “${says}”</p>
+    <p class="muted" style="font-size:.8125rem">Why you are asked: the rule “${rule}”.</p>
+    <p class="row muted">${state === 'yes' ? ic('check', 'tone t-ok') : ic('x', 's14')}<span>You said ${state} · ${state === 'yes' ? '14:31' : '14:33'}</span></p></section>`;
+
+add({ id: 'ask', g: G4, name: 'The approval card, and the session while it waits', menu: false,
+  note: 'In “Ask me”, a command that a rule marks stops for a yes or a no. The card shows the command, the agent’s reason in its own words, what it does, whether Undo covers it, and the rule. While it waits the bar says “Waiting for you” and nothing else runs.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'Build for the web' }), right: sessRight('waiting', '$0.06'),
+    body: session({ tab: 'files', pane: { none: true },
+      thread: thread(BUILD_ASK + ai(steps(read('package.json'), read('README.md')), p('The project builds into <code>dist/</code>. An old build is still there, so I will clear it first.'), askCard()), 'toend'),
+      composer: { running: true, placeholder: 'Or say what to do instead', note: 'The agent is waiting for your answer. Nothing else runs until then.' } }) }) });
+
+add({ id: 'ask-elsewhere', g: G4, name: 'Waiting, seen from another screen', menu: true,
+  note: 'When the person is somewhere else in the app, the question comes to them: a card under the bar, as connection approvals do today, with the same yes and no. Projects shows “Waiting for you” on the row.',
+  render: () => shell({ current: 'code.projects', body: `<div class="pagepad">
+    <div class="pagehead"><div><h1>Projects</h1><p>The folders the agent works in. Each keeps its own sessions, check and extensions.</p></div>
+      <button class="btn">${ic('folder-open')} Choose a folder</button></div>
+    <div class="stack">
+      ${projRow({ name: 'bakery-site', path: '~/Projects/bakery-site', sessions: '4 sessions', tone: 't-warn', icon: 'hand', word: 'Waiting for you', last: 'Build for the web · just now', acts: `<button class="btn sm" data-go="ask">Answer</button>` })}
+      ${projRow({ name: 'club-newsletter', path: '~/Documents/club-newsletter', sessions: '7 sessions', tone: 't-bad', icon: 'circle-x', word: 'Check failed · needs you', last: 'Fix the sign-up form · yesterday 18:40' })}
+    </div></div>
+    <div class="pop" style="top:12px;inset-inline-end:12px;width:min(24rem,calc(100% - 24px));padding:0;border:0;box-shadow:var(--shadow)" role="alertdialog" aria-label="The agent in bakery-site is waiting for you">
+      <section class="tcard ask t-warn" style="max-width:none"><div class="head">${ic('hand')}<span class="word">bakery-site is waiting for you</span></div>
+        <p>The agent wants to run a command:</p><div class="cmd">rm -rf dist/</div>
+        <div class="btns"><button class="btn sm">Yes, run it</button><button class="btn outline sm">No</button><button class="btn ghost sm" data-go="ask">Open the session</button></div></section></div>` }) });
+
+add({ id: 'ask-answered', g: G4, name: 'After a yes, and after a no', menu: false,
+  note: 'An answered card stays in the chat and says what was answered. After a yes the command runs. After a no the agent is told, and goes on another way or stops; nothing is done behind the answer.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'Build for the web' }), right: sessRight('working', '$0.11'),
+    body: session({ tab: 'terminal',
+      thread: thread(BUILD_ASK + ai(askSmall('rm -rf dist/', 'Remove the old build before I build again.', 'Ask before deleting files', 'yes'),
+        steps(cmd('rm -rf dist/', '· under 1 s · no errors', '', false), cmd('npm run build', '· 38 s · no errors', '', false)),
+        p('The build is ready in <code>dist/</code>. The pictures are large; a package called sharp could make them smaller.'),
+        askSmall('npm install sharp', 'Install sharp to shrink the pictures.', 'Ask before installing packages', 'no'),
+        p('All right, I will not install it. The pictures stay as they are. The site is built and ready.'),
+        working('Finishing…')), 'toend'),
+      composer: { running: true } }) }) });
+
+add({ id: 'refusal', g: G4, name: 'The model declines a request', menu: false,
+  note: 'When the model itself says no, the person sees that as a plain message with the model’s own words, and the turn ends. It is not an error, the session is not “stuck”, and nothing was changed or run.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'The old admin page' }), right: sessRight('passed', '$0.02'),
+    body: session({ tab: 'files', pane: { none: true },
+      thread: thread(user('Write a script that tries passwords on the shop’s old admin page until one works.')
+        + ai(`<p class="row muted" style="font-size:.8125rem">${ic('circle-slash', 's14')}<span>The model declined this request. In its words:</span></p>`,
+          p('I can’t help with trying passwords against a login page. If this is your own page and you are locked out, I can help you reset the password with the project’s own reset script instead.'),
+          `<p class="muted" style="font-size:.8125rem">The turn has ended. No file was changed and nothing was run.</p>`, under()), 'toend'),
+      composer: {} }) }) });
+
+/* ================================================================== 5 · The tabs */
+const G5 = '5 · The tabs';
+const DONE_THREAD = thread(ASK + ai(LOOKED, PLAN_P, EDITS, TESTRUN_C, DONE_P, PASSCARD(), under()), 'toend');
+const tabScreen = (id, name, note, o = {}) => add({ id, g: G5, name, note, menu: false,
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight(o.status ?? 'passed'), over: o.over,
+    body: session({ tab: o.tab, small: o.tab, n: 3, pane: o.pane, thread: o.thread ?? DONE_THREAD, composer: {} }) }) });
+
+tabScreen('files', 'Files: browse and read',
+  'The project’s folder as a tree, and a file to read. A dot marks what changed in this session. Reading only: changes go through the chat (or the person’s own editor), so every change has a turn that can be undone.', { tab: 'files' });
+
+tabScreen('changes', 'Changes: what this turn changed',
+  'One turn at a time: the files it changed, added or deleted, and each file before and after. “Undo this turn” puts every file back. A test file is marked.', { tab: 'changes' });
+
+tabScreen('changes-undone', 'Changes: an undone turn',
+  'After Undo the turn stays in the list, marked as undone, with “Bring it back”: an undo can itself be undone. The chat keeps a line for it. The foot says what undo does not put back.', { tab: 'changes', pane: { undone: true },
+  thread: thread(ASK + ai(LOOKED, PLAN_P, EDITS, TESTRUN_C, DONE_P, PASSCARD())
+    + `<section class="tcard" aria-label="You undid this turn"><div class="head">${ic('undo')}<span class="word">You undid this turn</span></div>
+        <p>3 files are back to how they were at 14:02, before the turn.</p><div class="btns"><button class="btn outline sm" data-go="changes">${ic('redo', 's14')} Bring it back</button></div></section>`, 'toend') });
+
+tabScreen('terminal', 'Terminal: the person’s own',
+  'A terminal of the person’s own, in the project’s folder, under the same limits as the agent. A note says why ps, top and sudo do not work there, and the same explanation appears in place when one of them is typed.', { tab: 'terminal' });
+
+tabScreen('terminal-processes', 'Terminal: what is running',
+  'The app’s own list, in place of ps and top: everything started in this project by the person, the agent or a check, each with Stop.', { tab: 'terminal', over: processes() });
+
+tabScreen('browser', 'Browser',
+  'A browser of the person’s own beside the chat, for looking things up. The agent cannot reach the internet; it sees a page only when the person adds it to the chat.', { tab: 'browser' });
+
+tabScreen('preview', 'Preview: the running result',
+  'The project started on this computer and shown beside the chat: what is running, a wide and a phone size, load again, stop, and “open in your own browser”.', { tab: 'preview' });
+
+tabScreen('preview-phone', 'Preview: phone size',
+  'The same preview at a phone’s width.', { tab: 'preview', pane: { phone: true } });
+
+tabScreen('preview-empty', 'Preview: nothing running yet',
+  'Before anything runs: what the preview does, the command it would run, and one button.', { tab: 'preview', pane: { empty: true } });
+</script>
+<script>
+/* ================================================================== 6 · Scheduled */
+const G6 = '6 · Scheduled';
+const awake = () => `<div class="notice slim t-info"><span class="mark">i</span><h3>Schedules run only while Wasify AI is open and this computer is awake</h3>
+  <p>A time that passes while the app is closed or the computer sleeps is written down as missed. A schedule can ask to run once when the app is back.</p>
+  <div class="row top" style="grid-column:2;margin-top:4px"><button class="switch" role="switch" aria-checked="true" aria-label="Open Wasify AI when I log in" style="margin-top:2px"></button><span class="sm grow">Open Wasify AI when I log in, and keep it in the menu bar</span></div></div>`;
+const OUT = {
+  passed: ['t-ok', 'circle-check', 'Passed'], failed: ['t-bad', 'circle-x', 'Failed'], notchecked: ['t-quiet', 'circle-dashed', 'Not checked'], couldnot: ['t-warn', 'circle-alert', 'Could not check'],
+  missed: ['t-quiet', 'clock', 'Missed'], skipped: ['t-quiet', 'circle-slash', 'Skipped: still running'], stopped: ['t-quiet', 'square', 'Stopped'], running: ['t-info', 'loader', 'Running now'],
+};
+const outcome = (k) => { const [tone, icon, word] = OUT[k]; return `<span class="badge ${tone}">${ic(icon, k === 'running' ? 'spin' : '')}${word}</span>`; };
+const schedRow = (o) => `<div class="listrow" style="align-items:start"><div class="stack g4">
+    <h3 style="${o.off ? 'color:var(--muted)' : ''}">${o.what}</h3>
+    <div class="meta"><span>${ic('folder', 's14')}${o.project}</span><span>${ic('calendar-clock', 's14')}${o.rule}</span></div>
+    <p class="muted" style="font-size:.8125rem">${o.next}</p>
+    <div class="meta">${o.last}</div></div>
+  <div class="acts"><button class="switch" role="switch" aria-checked="${!o.off}" aria-label="On"></button>
+    ${o.running ? `<button class="btn outline sm">${ic('square', 's12')} Stop</button>` : `<button class="btn outline sm" ${o.off ? '' : ''}>${ic('play', 's12')} Run now</button>`}
+    <button class="btn ghost sm" data-go="schedule-history">History</button><button class="tool" aria-label="Change or delete">${ic('more')}</button></div></div>`;
+
+add({ id: 'scheduled', g: G6, name: 'The list of schedules', menu: true,
+  note: 'Each schedule: what it asks, the project, its rule in words, the next time, and what happened last. The note that the app must be open and the computer awake is at the top and beside every next time. Run now is on each row.',
+  render: () => shell({ current: 'code.scheduled', jobs: 1, body: `<div class="pagepad">
+    <div class="pagehead"><div><h1>Scheduled</h1><p>Work the agent does by itself at times you set. It works on a copy of the project, and you look at the result before anything is applied.</p></div>
+      <button class="btn" data-go="schedule-new">${ic('plus')} New schedule</button></div>
+    ${awake()}
+    <div class="stack">
+      ${schedRow({ what: 'Update the packages and run the tests', project: 'bakery-site', rule: 'Every day at 02:00, London time',
+        next: '<span class="strong" style="color:var(--text)">Next: tonight at 02:00</span>, if the app is open and the computer is awake',
+        last: `${outcome('passed')}<span>today 02:00 · 3 files changed, waiting for you</span><button class="btn link" style="font-size:.8125rem" data-go="schedule-history">Look at the changes</button>` })}
+      ${schedRow({ what: 'Check every link on the site', project: 'club-newsletter', rule: 'Monday, Wednesday and Friday at 09:00, London time', running: true,
+        next: '<span class="strong" style="color:var(--text)">Next: Monday at 09:00</span>, if the app is open and the computer is awake',
+        last: `${outcome('running')}<span>started by “Run now” at 14:03 · 3 min</span>` })}
+      ${schedRow({ what: 'Write a summary of what changed this month', project: 'recipe-cards', rule: 'Every month on day 1 at 08:00, London time',
+        next: '<span class="strong" style="color:var(--text)">Next: 1 December at 08:00</span>, if the app is open and the computer is awake',
+        last: `${outcome('missed')}<span>1 November 08:00 · the app was closed</span>` })}
+      ${schedRow({ what: 'Tidy the old drafts folder', project: 'club-newsletter', rule: 'Once, on 20 November 2026 at 18:00, London time', off: true,
+        next: 'Off. It will not run.', last: '<span>Has not run yet</span>' })}
+    </div></div>` }) });
+
+const days = (on) => `<div class="row wrap" role="group" aria-label="Weekdays">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => `<button class="chip" aria-pressed="${on.includes(i)}" style="padding:.25rem .6rem;font-size:.8125rem">${d}</button>`).join('')}</div>`;
+const timeBox = (t) => `<div class="input tnum" style="width:5.5rem" aria-label="Time">${ic('clock', 's14 muted')}${t}</div>`;
+const KINDS = [
+  ['once', 'Once', 'On one day, at one time.', `<div class="row wrap"><div class="input" style="width:11.5rem" aria-label="Date">${ic('calendar-clock', 's14 muted')}20 November 2026</div><span class="sm muted">at</span>${timeBox('18:00')}</div>`],
+  ['every', 'Every so many minutes or hours', 'Counted from when the schedule is saved.', `<div class="row wrap"><span class="sm muted">Every</span><div class="input tnum" style="width:4rem" aria-label="How many">30</div><div class="select" style="width:8rem"><span class="v">minutes</span>${ic('chevron-down', 's14')}</div></div><p class="xs muted" style="margin-top:6px">Five minutes at the least. Choose minutes or hours.</p>`],
+  ['daily', 'Every day', 'At the same time each day.', `<div class="row wrap"><span class="sm muted">At</span>${timeBox('02:00')}</div>`],
+  ['weekdays', 'On chosen weekdays', 'The days you pick, at one time.', `<div class="stack">${days([0, 1, 2, 3, 4])}<div class="row wrap"><span class="sm muted">At</span>${timeBox('09:00')}</div></div>`],
+  ['monthly', 'Every month', 'On one day of the month, at one time.', `<div class="row wrap"><span class="sm muted">On day</span><div class="select tnum" style="width:5rem"><span class="v">31</span>${ic('chevron-down', 's14')}</div><span class="sm muted">at</span>${timeBox('08:00')}</div><p class="xs muted" style="margin-top:6px">In a month without a day 31 it runs on the month’s last day.</p>`],
+];
+const kindRadios = (open) => `<div class="radios" role="radiogroup" aria-label="When">${KINDS.map(([k, l, d, f]) =>
+  `<div class="radio" role="radio" aria-checked="${k === open}" tabindex="0"><span class="o"></span><b>${l}</b><span class="d">${d}</span>${k === open ? `<div class="more">${f}</div>` : ''}</div>`).join('')}</div>`;
+
+add({ id: 'schedule-new', g: G6, name: 'Making a schedule', menu: true,
+  note: 'What to do in plain words (or from a template), then when: five plain kinds of rule, never cron text. A time zone, “run when missed”, and one sentence that says back what was set and when it will next run.',
+  render: () => shell({ current: 'code.scheduled', body: `<div class="pagepad narrow">
+    <div class="pagehead"><div><button class="btn link sm" data-go="scheduled">${ic('arrow-left', 's14')} Scheduled</button><h1>New schedule</h1></div></div>
+    <div class="card stack g16">
+      <div class="field"><span class="lab">Project</span><div class="select"><span class="v row">${ic('folder', 's14 muted')} bakery-site</span>${ic('chevron-down', 's14')}</div></div>
+      <div class="field"><span class="lab">What should be done</span>
+        <div class="area">Update the packages to their newest versions and run the tests. If a test fails, fix it or put that package back.</div>
+        <div class="row wrap"><span class="hint">Or start from a template:</span><button class="chip round" style="padding:3px 10px">Update the packages</button><button class="chip round" style="padding:3px 10px">Fix failing tests</button><button class="chip round" style="padding:3px 10px">Summary of the week</button></div></div>
+      <div class="field"><span class="lab">When</span>${kindRadios('weekdays')}</div>
+      <div class="field"><span class="lab">Time zone</span><div class="select"><span class="v">Europe/London · this computer’s time zone</span>${ic('chevron-down', 's14')}</div>
+        <span class="hint">Times are clock times in this zone, also when the clocks change.</span></div>
+      <label class="row top sm"><span class="check" role="checkbox" aria-checked="true">${ic('check')}</span><span><span class="strong">Run when missed</span><br><span class="muted">If the app was closed or the computer asleep at the time, run once when it is back, as long as less than a day has passed. Otherwise the time is written down as missed.</span></span></label>
+      <div class="notice slim t-ok"><span class="mark">✓</span><h3>Runs Monday to Friday at 09:00, London time</h3><p>Next: Monday 16 November at 09:00, if Wasify AI is open and this computer is awake.</p></div>
+      <details class="experts" open><summary>${ic('chevron-right', 's14')} How a scheduled run works</summary>
+        <ul class="rules t-quiet" style="margin-top:8px">${li('info', 'It works on a copy of the project. Your files change only when you look at the result and apply it.')}${li('info', 'Nobody is there to answer, so anything that would ask you is refused and written down.')}${li('info', 'It ends with the same check as a chat: passed, failed, not checked or could not check.')}${li('info', 'One run at a time: if the last run is still going when the next time comes, that time is skipped.')}</ul></details>
+      <div class="row wrap"><button class="btn" data-go="scheduled">Save the schedule</button><button class="btn outline" data-go="scheduled">Cancel</button></div>
+    </div></div>` }) });
+
+add({ id: 'schedule-rules', g: G6, name: 'The five kinds of rule', menu: true,
+  note: 'Not a real screen: the “When” part with each kind chosen in turn, to show the fields each one has. Once; every so many minutes or hours; every day; chosen weekdays; every month.',
+  render: () => shell({ current: 'code.scheduled', body: `<div class="pagepad"><div class="two" style="align-items:start;gap:16px 20px">
+    ${KINDS.map(([k, l, , f]) => `<div><div class="gal"><div><div class="lbl">${l}</div><div class="card flat stack"><div class="row"><span class="radio" style="padding:0;border:0;display:flex" aria-checked="true"><span class="o" style="margin:0"></span></span><b class="sm">${l}</b></div>${f}</div></div></div></div>`).join('')}
+    <div><div class="lbl" style="font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px">When the clocks change</div>
+      <p class="galnote">A time that does not exist on the day the clocks go forward runs at the first moment after the gap. A time that comes twice when they go back runs the first time only. The screen says this under “Time zone” on those two days of the year.</p></div>
+  </div></div>` }) });
+
+const hrow = (when, k, took, what, extra = '') => `<tr><td class="nowrap">${when}</td><td>${outcome(k)}${extra}</td><td class="opt tnum nowrap">${took}</td><td class="sm">${what}</td></tr>`;
+add({ id: 'schedule-history', g: G6, name: 'A schedule’s history, and Run now', menu: true,
+  note: 'Every time the schedule came due, with what happened: the four check words, and missed, skipped: still running, stopped. A run’s changes wait in its copy until the person looks and applies them. What a run would have asked is listed as refused.',
+  render: () => shell({ current: 'code.scheduled', body: `<div class="pagepad">
+    <div class="pagehead"><div class="stack g4"><button class="btn link sm" data-go="scheduled" style="justify-self:start">${ic('arrow-left', 's14')} Scheduled</button><h1>Update the packages and run the tests</h1>
+        <p>${ic('folder', 's14')} bakery-site · Every day at 02:00, London time · Run when missed: on</p>
+        <p><span class="strong" style="color:var(--text)">Next: tonight at 02:00</span>, if the app is open and the computer is awake</p></div>
+      <div class="row wrap"><button class="switch" role="switch" aria-checked="true" aria-label="On"></button><button class="btn outline sm">Change</button><button class="btn sm">${ic('play', 's12')} Run now</button></div></div>
+    <section class="tcard t-ok" style="max-width:none" aria-label="The last run's changes"><div class="head">${ic('circle-check')}<span class="word">Today’s run changed 3 files, in its copy</span></div>
+      <p class="muted">Your project has not been touched. Look at the changes, then apply them or throw them away.</p>
+      <p class="row top" style="font-size:.8125rem">${ic('hand', 's14 tone t-warn')}<span>It would have asked you once: <code>rm -rf dist/</code>. That was refused, because nobody was there to answer.</span></p>
+      <div class="btns"><button class="btn sm" data-go="changes">Look at the changes</button><button class="btn outline sm">Apply to the project</button><button class="btn ghost sm">Throw away</button></div></section>
+    <div class="card" style="padding:4px 6px"><table class="t"><thead><tr><th>It was due</th><th>What happened</th><th class="opt">Took</th><th>More</th></tr></thead><tbody>
+      ${hrow('Today 02:00', 'passed', '4 min', '3 files changed, waiting for you')}
+      ${hrow('Fri 13 Nov 02:00', 'failed', '11 min', 'The check still failed after 3 rounds. 2 files changed, thrown away by you')}
+      ${hrow('Thu 12 Nov 02:00', 'skipped', '', 'The run from Wednesday night was still going')}
+      ${hrow('Wed 11 Nov 02:00', 'stopped', '26 h', 'You stopped it on Thursday at 04:10')}
+      ${hrow('Tue 10 Nov 02:00', 'missed', '', 'The app was closed until Wednesday')}
+      ${hrow('Mon 9 Nov 02:00', 'notchecked', '6 min', 'Ran at 08:14, when the app was opened. It reached its limit of steps')}
+      ${hrow('Sun 8 Nov 02:00', 'couldnot', '1 min', 'The check command was not found')}
+      ${hrow('Sat 7 Nov 16:40', 'passed', '2 min', 'Started with Run now. Nothing needed changing')}
+    </tbody></table></div></div>` }) });
+
+/* ================================================================== 7 · Extensions */
+const G7 = '7 · Extensions';
+const EXT = [
+  ['sparkles', 'Explain in plain words', 'Skill', 'Wasify AI', 'Explains a project, a file or an error for someone who is not a developer.', true],
+  ['sparkles', 'Pictures with Wasify AI', 'Skill', 'Wasify AI', 'Makes a logo or a picture for the project with your own picture model.', false],
+  ['sparkles', 'Code review', 'Skill', 'OpenHands catalogue', 'Reads the changes of a turn and lists what could go wrong, the worst first.', false],
+  ['sparkles', 'Write the tests first', 'Skill', 'OpenHands catalogue', 'Writes a failing test before each change, then makes it pass.', true],
+  ['plug', 'Release notes', 'Plugin', 'OpenHands catalogue', 'Brings 2 skills, 1 hook and 1 tool connection.', 'approve'],
+  ['sparkles', 'House style', 'Skill', 'Your folder', 'How this shop’s pages are worded and laid out.', true],
+];
+const extRow = ([icon, name, kind, from, line, on]) => `<div class="listrow"><div class="stack g4"><h3 class="row wrap">${ic(icon, 'muted')}<span>${name}</span><span class="badge ${kind === 'Plugin' ? 'tag' : 'fill'}">${kind}</span><span class="badge">${from}</span></h3>
+    <div class="meta"><span>${line}</span></div></div>
+  <div class="acts">${on === 'approve' ? `<button class="btn outline sm" data-go="extension-approve">Look and switch on</button>` : `<button class="switch" role="switch" aria-checked="${on}" aria-label="On for bakery-site"></button>`}<button class="btn ghost sm" data-go="extension-detail">Details</button></div></div>`;
+const extPage = (over = '') => shell({ current: 'code.extensions', over, body: `<div class="pagepad">
+    <div class="pagehead"><div><h1>Extensions</h1><p>Skills and plugins that teach the agent a way of working. Each is switched on or off for one project.</p></div>
+      <button class="btn outline" data-go="extension-add">${ic('folder-open')} Add from a folder</button></div>
+    <div class="row wrap"><div class="select" style="width:auto;flex:0 1 15rem" aria-label="Project"><span class="v row">${ic('folder', 's14 muted')} For bakery-site</span>${ic('chevron-down', 's14')}</div>
+      <div class="input" style="flex:1 1 10rem">${ic('search', 's14 muted')}<span class="ph">Search extensions</span></div>
+      <span class="seg" role="group" aria-label="Show"><button aria-pressed="true">All</button><button aria-pressed="false">On</button><button aria-pressed="false">Skills</button><button aria-pressed="false">Plugins</button></span></div>
+    <div class="stack">${EXT.map(extRow).join('')}</div>
+    <p class="sm muted row top">${ic('info', 's14')}<span>A short list chosen for Wasify AI. Everything here is already on this computer; nothing is fetched from the internet while you work.</span></p>
+  </div>` });
+add({ id: 'extensions', g: G7, name: 'The short list', menu: true,
+  note: 'A short list, not the whole catalogue: a few of Wasify AI’s own, a few public ones, and what the person added. Each is on or off for the project chosen at the top. A plugin that brings more than text has “Look and switch on” in place of the switch. The names are stand-ins; the list is the owner’s to choose.',
+  render: () => extPage() });
+
+const SKILL_TEXT = `---
+name: code-review
+description: Review the changes of a turn and list what could go wrong.
+triggers: review, check my changes, what could go wrong
+---
+
+# Code review
+
+When you are asked to review changes:
+
+1. Read every changed file in full, not only the changed lines.
+2. List what could go wrong, the worst first. Say where, and why.
+3. Say plainly when you found nothing.
+4. Do not change any file during a review unless you are asked to.`;
+const extDetail = (over = '', plugin = false) => shell({ current: 'code.extensions', over, body: `<div class="pagepad">
+    <div class="pagehead"><div class="stack g4"><button class="btn link sm" data-go="extensions" style="justify-self:start">${ic('arrow-left', 's14')} Extensions</button>
+        <h1 class="row wrap">${plugin ? 'Release notes' : 'Code review'} <span class="badge ${plugin ? 'tag' : 'fill'}">${plugin ? 'Plugin' : 'Skill'}</span></h1>
+        <p>${plugin ? 'Writes the notes for a new version from the changes since the last one.' : 'Reads the changes of a turn and lists what could go wrong, the worst first.'}</p>
+        <p class="sm">From the OpenHands catalogue · version 0.42.0 · already on this computer</p></div>
+      <div class="stack g4 sideacts"><button class="btn" ${plugin ? 'data-go="extension-approve"' : ''}>${plugin ? 'Look and switch on' : 'Switch on for bakery-site'}</button><span class="xs muted">Off for bakery-site</span></div></div>
+    <div class="field"><span class="lab">When the agent uses it</span><p class="sm">When your message is about a review, for example “review this”, “check my changes” or “what could go wrong”.</p></div>
+    <div class="field"><span class="lab">The text it gives the agent</span>
+      <div class="notice slim t-warn"><span class="mark">!</span><h3>This text was not written by Wasify AI</h3><p>Read it before you switch it on. It can steer how the agent works. It cannot widen what the agent may do: the folder, the internet and your approvals stay as they are.</p></div>
+      <div class="card flat" style="padding:0"><div class="out" style="max-height:200px;white-space:pre-wrap" tabindex="0">${esc(SKILL_TEXT)}</div><div class="outfoot"><span>SKILL.md · 14 lines · shown as plain text</span></div></div></div>
+    <div class="field"><span class="lab">Where it is on</span>
+      <div class="stack g4">
+        <div class="row between sm"><span class="row">${ic('folder', 's14 muted')} bakery-site</span><button class="switch" role="switch" aria-checked="false" aria-label="On for bakery-site"></button></div>
+        <div class="row between sm"><span class="row">${ic('folder', 's14 muted')} club-newsletter</span><button class="switch" role="switch" aria-checked="true" aria-label="On for club-newsletter"></button></div>
+        <div class="row between sm"><span class="row">${ic('folder', 's14 muted')} recipe-cards</span><button class="switch" role="switch" aria-checked="false" aria-label="On for recipe-cards"></button></div>
+      </div></div>
+  </div>` });
+add({ id: 'extension-detail', g: G7, name: 'An entry’s details, with its text', menu: true,
+  note: 'Before anything is switched on, the person can read exactly what the skill tells the agent, as plain text, with a note that it comes from outside and cannot widen what the agent may do. Under it: on and off for each project.',
+  render: () => extDetail() });
+
+add({ id: 'extension-add', g: G7, name: 'Adding one from a folder', menu: true,
+  note: 'After the folder picker: what was found in the folder, its text, and which project to switch it on for. The folder is copied in; nothing comes from the internet.',
+  render: () => extPage(`<div class="scrim"><div class="dialog" role="dialog" aria-label="Add an extension from a folder">
+    <h2>Add an extension from a folder</h2>
+    <div class="row top">${ic('folder-open', 's20 muted')}<div class="grow"><div class="strong sm">house-style</div><div class="xs muted"><code>~/Documents/house-style</code></div></div><button class="btn outline sm">Choose another</button></div>
+    <div class="notice slim t-ok"><span class="mark">✓</span><h3>Found a skill: “House style”</h3><p><code>SKILL.md</code>, 1.2 KB. It brings text only: no hook and no tool connection.</p></div>
+    <div class="card flat" style="padding:0"><div class="out" style="max-height:104px;white-space:pre-wrap" tabindex="0">${esc(`---
+name: house-style
+description: How this shop's pages are worded and laid out.
+---
+
+Write short sentences. Prices always with the pound sign.
+Opening hours in 24-hour time, "07:30 to 17:00".`)}</div></div>
+    <div class="field"><span class="lab">Switch it on for</span><div class="select"><span class="v row">${ic('folder', 's14 muted')} bakery-site</span>${ic('chevron-down', 's14')}</div>
+      <span class="hint">It is copied into Wasify AI; your folder is not changed. A folder is an extension when it has a <code>SKILL.md</code> or a <code>.plugin/plugin.json</code>.</span></div>
+    <div class="acts"><button class="btn outline" data-go="extensions">Cancel</button><button class="btn" data-go="extensions">Add the skill</button></div>
+  </div></div>`) });
+
+add({ id: 'extension-approve', g: G7, name: 'Approving a plugin that brings more than text', menu: true,
+  note: 'A plugin with a hook or a tool connection is approved once, with everything it brings listed in plain words. Until then it stays off. A hook must finish within a second.',
+  render: () => extDetail(`<div class="scrim"><div class="dialog" role="alertdialog" aria-label="Allow Release notes to bring more than text?">
+    <h2>Allow “Release notes” to bring more than text?</h2>
+    <p class="sm muted">A skill is only text. This plugin also brings parts that run on this computer. You are asked once, for every project.</p>
+    <ul class="stack g12 sm">
+      <li class="row top">${ic('sparkles', 'muted')}<span><span class="strong">2 skills</span> · “Write release notes” and “Version numbers”<br><span class="muted">Text, shown on the plugin’s page.</span></span></li>
+      <li class="row top">${ic('wrench', 'tone t-warn')}<span><span class="strong">1 hook</span> · runs <code>check-version.sh</code> before each command of the agent<br><span class="muted">It must finish within one second, or it is stopped.</span></span></li>
+      <li class="row top">${ic('plug', 'tone t-warn')}<span><span class="strong">1 tool connection</span> · “changelog”<br><span class="muted">A small program on this computer that the agent can call to read and write <code>CHANGELOG.md</code>.</span></span></li>
+    </ul>
+    <p class="xs muted row top">${ic('lock', 's12')}<span>Both run under the agent’s limits: the project’s folder only, and no internet. You can take this back on the plugin’s page.</span></p>
+    <div class="acts"><button class="btn outline" data-go="extensions">Not now</button><button class="btn" data-go="extensions">Allow and switch on</button></div>
+  </div></div>`, true) });
+</script>
+<script>
+/* ================================================================== 8 · Settings › Optional parts */
+const G8 = '8 · Settings › Optional parts';
+const meter = (title, pct) => `<div class="stack g4"><div class="row between sm"><span>${title}</span><span class="muted tnum">${pct}%</span></div><div class="progress"><i style="width:${pct}%"></i></div></div>`;
+const part = (title, said, body = '', btns = '', hi = false) => `<li class="stack" style="border:1px solid ${hi ? 'color-mix(in oklch, var(--accent) 45%, var(--border))' : 'var(--border)'};border-radius:var(--radius-sm);padding:12px;background:var(--surface)">
+    <div class="row between wrap"><span class="strong">${title}</span><span class="sm muted">${said}</span></div>${body}${btns ? `<div class="row wrap">${btns}</div>` : ''}</li>`;
+const CODING_LINE = `<p class="sm muted">Lets an agent read, change and run code in a folder you choose. It runs in a protected area of this computer.</p>`;
+const codingPart = (state) => ({
+  none: part('Coding engine', 'Not set up · about 385 MB', CODING_LINE, `<button class="btn sm" data-go="settings-states">Set up</button>`, true),
+  installing: part('Coding engine', 'Setting up', CODING_LINE + meter('Step 2 of 4: Fetching the engine', 46), `<button class="btn outline sm">Stop</button>`, true),
+  installed: part('Coding engine', 'Set up · 1.62.0', CODING_LINE, `<button class="btn outline sm">Repair</button><button class="btn outline sm" data-go="settings-remove">Remove</button>`, true),
+  repairing: part('Coding engine', 'Repairing', CODING_LINE + meter('Step 1 of 3: Checking every file against its checksum', 72), `<button class="btn outline sm">Stop</button>`, true),
+  failed: part('Coding engine', '<span style="color:var(--danger)">Setting up stopped: the download was cut off</span>', CODING_LINE + `<p class="sm">212 MB of 385 MB arrived. Check the internet connection and try again; what arrived is kept.</p>`, `<button class="btn sm">Try again</button>`, true),
+  unsupported: part('Coding engine', 'Not available on this computer yet', `<p class="sm muted">The coding engine works on a Mac for now. Windows and Linux come later.</p>`, '', true),
+}[state]);
+const settingsPage = (inner, over = '') => shell({ current: 'settings', title: 'Settings', over, body: `<div class="setgrid" style="max-width:64rem;margin:0 auto;padding:32px 32px 40px;display:grid;gap:32px;grid-template-columns:12rem minmax(0,1fr)">
+    <aside><div class="stack g12"><div class="input">${ic('search', 's14 muted')}<span class="ph">Search settings</span></div>
+      <nav class="stack g4" aria-label="Settings groups">${['General', 'Models', 'Your keys', 'Privacy and sharing', 'Other apps', 'Advanced'].map((g) => `<button class="mi" style="padding:6px 10px;font-size:.875rem;${g === 'Models' ? 'background:var(--accent-soft)' : ''}">${g}</button>`).join('')}</nav></div></aside>
+    <div class="stack g16"><h2 style="font-size:1.125rem;font-weight:600;border-bottom:1px solid var(--border);padding-bottom:8px">Models</h2>
+      <section class="stack"><h3 style="font-size:1rem;font-weight:600">Optional parts</h3>
+        <p class="sm muted">Parts of the app that are added only when you use what needs them. Each is fetched once, checked against its pinned checksum, and kept on this computer.</p>
+        ${inner}</section></div></div>` });
+const otherParts = () => part('Image engine (ComfyUI)', 'Set up · 0.3.60 · on Metal', '', `<button class="btn outline sm">Repair</button><button class="btn outline sm">Remove</button>`) + part('Language engine (llama.cpp)', 'Not set up · about 96 MB', '', `<button class="btn sm">Set up</button>`);
+
+add({ id: 'settings', g: G8, name: 'The Coding engine, not set up', menu: true,
+  note: 'The coding engine is one more row in the list of optional parts that exists today, with the same words and buttons as the others: what it is, its size, Set up.',
+  render: () => settingsPage(`<ul class="stack" aria-label="Optional parts">${otherParts()}${codingPart('none')}</ul>`) });
+
+add({ id: 'settings-states', g: G8, name: 'Every state of the row', menu: true,
+  note: 'Not a real screen: the same row in each state it can be in. Setting up shows the step and how far; a failure says what happened and what to do; a computer that cannot run it says so and offers no button.',
+  render: () => settingsPage(`<div class="gal">${[['Not set up, with its size', 'none'], ['Setting up', 'installing'], ['Set up', 'installed'], ['Repairing', 'repairing'], ['Setting up failed', 'failed'], ['Not available on this computer yet', 'unsupported']]
+    .map(([l, s]) => `<div><div class="lbl">${l}</div><ul>${codingPart(s)}</ul></div>`).join('')}</div>`) });
+
+add({ id: 'settings-remove', g: G8, name: 'Removing it', menu: true,
+  note: 'Remove asks first and says what stops and what is kept: the person’s projects, sessions and schedules are not touched.',
+  render: () => settingsPage(`<ul class="stack" aria-label="Optional parts">${otherParts()}${codingPart('installed')}</ul>`,
+    `<div class="scrim"><div class="dialog" role="alertdialog" aria-label="Remove Coding engine?"><h2>Remove Coding engine?</h2>
+      <p class="sm muted">Code stops working until it is set up again, and schedules do not run. Your projects and their files, your sessions and your schedules are not touched.</p>
+      <div class="acts"><button class="btn outline" data-go="settings">Cancel</button><button class="btn danger" data-go="settings">Remove</button></div></div></div>`) });
+
+/* ================================================================== 9 · States that are easy to forget */
+const G9 = '9 · States that are easy to forget';
+add({ id: 'no-engine', g: G9, name: 'Code opened, engine not set up', menu: true,
+  note: 'Opening Code without its engine shows one card: what the part is, where it comes from, its size and one button. Nothing is fetched before the click, and the work goes on in the tray if the person leaves.',
+  render: () => shell({ current: 'code.projects', body: `<div class="pagepad narrow">
+    <div class="pagehead"><div><h1>Code needs one more part</h1><p>Wasify AI can read, change and run code with an agent. The part that does it is added only when you want it.</p></div></div>
+    <div class="card stack g12">
+      <div class="row top">${ic('code', 's24 muted')}<div class="grow"><div class="strong">Coding engine</div>
+        <div class="sm muted">The OpenHands agent engine, from the project’s published packages. Fetched once, checked against its pinned checksum, and kept on this computer.</div></div></div>
+      <dl class="stack g4 sm"><div class="row"><dt class="muted" style="width:8rem;flex:none">Size</dt><dd>about 385 MB</dd></div>
+        <div class="row"><dt class="muted" style="width:8rem;flex:none">While it runs</dt><dd>340 to 510 MB of memory</dd></div>
+        <div class="row"><dt class="muted" style="width:8rem;flex:none">Works on</dt><dd>a Mac, for now</dd></div></dl>
+      <div class="row wrap"><button class="btn" data-go="settings-states">${ic('download')} Set up · 385 MB</button><button class="btn outline">Not now</button></div>
+      <p class="xs muted">You can remove it at any time in Settings › Optional parts.</p>
+    </div>
+    ${rulesCards()}
+  </div>` }) });
+
+add({ id: 'engine-starting', g: G9, name: 'The engine is starting', menu: false,
+  note: 'The engine starts when a project is opened and takes a few seconds. The session is already laid out; the box says why it waits.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'New session' }), right: sessRight('starting', '$0.00'),
+    body: session({ tab: 'files',
+      panel: `<div class="panehead"><div class="skel" style="width:180px;height:14px"></div></div><div class="stack g12" style="padding:16px">${[70, 45, 60, 38, 52, 66, 30].map((w) => `<div class="skel" style="width:${w}%"></div>`).join('')}</div>`,
+      thread: thread(`<div class="hello">${ic('loader', 's24 spin tone t-info')}<h2>Starting the coding engine…</h2><p class="muted sm" style="max-width:36ch">This takes 5 to 9 seconds. It starts when you open a project and stops when you quit Wasify AI.</p></div>`, 'center'),
+      composer: { off: true, tall: true, note: 'You can write as soon as it is ready.' } }) }) });
+
+add({ id: 'error', g: G9, name: 'An error in a session', menu: false,
+  note: 'When the engine stops in the middle of a turn: what happened in plain words, what is true about the files, and what to do. The raw text is under “Details for experts”. The turn counts as not checked.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('notchecked', '$0.09'),
+    body: session({ tab: 'changes', n: 2, pane: { count: 2 },
+      thread: thread(ASK + ai(LOOKED, PLAN_P, steps(edit('Changed', 'src/pages/home.html', 13, 2), edit('Added', 'src/hours.js', 22, 0)))
+        + `<div class="notice slim t-bad" role="alert"><span class="mark">!</span><h3>The coding engine stopped</h3>
+            <p>It stopped while the agent was working. The 2 files it had changed are still changed, and the check did not run. Start the engine again to go on, or undo the turn.</p>
+            <div class="acts"><button class="btn sm">Start it again</button><button class="btn outline sm" data-go="changes-undone">${ic('undo', 's14')} Undo this turn</button></div>
+            <details class="experts" style="grid-column:2;margin-top:6px"><summary>${ic('chevron-right', 's14')} Details for experts</summary><div class="out" style="padding:6px 0 0">agent-server exited with status 137 after 41 s
+logs: Wasify AI data folder › logs › coding-engine.log</div></details></div>`, 'toend'),
+      composer: { off: true, note: 'The coding engine is not running.' } }) }) });
+
+add({ id: 'error-folder', g: G9, name: 'A project’s folder is gone', menu: true,
+  note: 'A folder that was moved, renamed or deleted outside the app: the project stays in the list with its sessions, says what is wrong, and offers the two things that can be done.',
+  render: () => shell({ current: 'code.projects', body: `<div class="pagepad">
+    <div class="pagehead"><div><h1>Projects</h1><p>The folders the agent works in. Each keeps its own sessions, check and extensions.</p></div>
+      <button class="btn">${ic('folder-open')} Choose a folder</button></div>
+    <div class="stack">
+      <div class="notice t-warn" role="status"><span class="mark">!</span><h3>The folder of bakery-site is not where it was</h3>
+        <p>Wasify AI looked in <code>~/Projects/bakery-site</code>. It may have been moved, renamed or deleted. Its 3 sessions are kept, and its schedules are paused.</p>
+        <div class="acts"><button class="btn sm">Show where it is now</button><button class="btn outline sm">Remove from the list</button></div></div>
+      ${projRow({ name: 'club-newsletter', path: '~/Documents/club-newsletter', sessions: '7 sessions', tone: 't-ok', icon: 'circle-check', word: 'Check passed', last: 'Fix the sign-up form · today 09:15' })}
+    </div></div>` }) });
+
+add({ id: 'empty-scheduled', g: G9, name: 'An empty list: Scheduled', menu: true,
+  note: 'A list with nothing in it says what goes there and gives the first step. The note about the app being open is already there.',
+  render: () => shell({ current: 'code.scheduled', body: `<div class="pagepad">
+    <div class="pagehead"><div><h1>Scheduled</h1><p>Work the agent does by itself at times you set.</p></div></div>
+    ${awake()}
+    <div class="card"><div class="empty"><span class="round">${ic('calendar-clock', 's24')}</span><h3>No schedules yet</h3>
+      <p>A schedule asks the agent to do something by itself: every night, on chosen weekdays, or once. It works on a copy of the project, and you look at the result before anything is applied.</p>
+      <div style="margin-top:8px"><button class="btn" data-go="schedule-new">${ic('plus')} New schedule</button></div></div></div>
+  </div>` }) });
+
+add({ id: 'empty-changes', g: G9, name: 'An empty list: Changes', menu: false,
+  note: 'Before the agent has changed anything, the Changes tab says what will appear there.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'New session' }), right: sessRight('none', '$0.01'),
+    body: session({ tab: 'changes', small: 'changes', pane: { empty: true },
+      thread: thread(user('What does site.js do?') + ai(steps(read('src/site.js')), p('It opens and closes the menu on small screens, and nothing else.'), under()), ''),
+      composer: {} }) }) });
+
+const LONG = Array.from({ length: 30 }, (_, i) => `<span class="dim">${String(4783 + i).padStart(5, ' ')}</span>  dist/assets/photo-${String(118 + i).padStart(3, '0')}.webp  ${(38 + (i * 7) % 61)}.${i % 10} kB`).join('\n')
+  + `\n<span class="dim"> 4813</span>  <span class="g">✓ built in 1 min 11 s</span>`;
+add({ id: 'long-output', g: G9, name: 'A very long output', menu: false,
+  note: 'A command that printed thousands of lines stays one quiet line in the chat. Opened, it shows only the end, in a box that scrolls by itself. “See all of it” opens the whole output beside the chat, loaded a part at a time, and it can be saved as a file.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'Build for the web' }), right: sessRight('passed', '$0.17'),
+    body: session({ tab: 'terminal', small: 'chat',
+      panel: `<div class="panehead"><span class="strong sm">Output of</span><code>npm run build</code><span class="xs muted">4,813 lines · 1 min 12 s · no errors</span>
+          <span class="end row"><button class="btn ghost xs">${ic('search', 's12')} Find</button><button class="btn ghost xs">${ic('download', 's12')} Save as a file</button><button class="tool" aria-label="Close" data-go="terminal">${ic('x')}</button></span></div>
+        <div style="padding:8px 12px 0"><button class="btn outline xs">${ic('arrow-up', 's12')} Load the 4,782 lines before these</button></div>
+        <div class="term" tabindex="0" style="white-space:pre;overflow:auto">${LONG}</div>`,
+      thread: thread(user('Install what the project needs and build it.') + ai(
+        steps(cmd('npm install', '· 48 s · no errors', '', false)),
+        cmd('npm run build', '· 1 min 12 s · no errors', LONG, true, `<span>The last 31 of 4,813 lines</span><button class="btn link" style="font-size:.75rem">See all of it</button><button class="btn link" style="font-size:.75rem">Save as a file</button>`),
+        p('The site is built: 148 pictures and 12 pages are in <code>dist/</code>.'), PASSCARD(), under()), 'toend'),
+      composer: {} }) }) });
+
+add({ id: 'stopped', g: G9, name: 'Stopped by the person', menu: false,
+  note: 'Stop ends the turn (and a running check) at once. The chat says who stopped it, what had already changed, and that nothing was checked; the bar says “Not checked”. The person can run the check, undo the turn, or say what to do next.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot(), right: sessRight('notchecked', '$0.09'),
+    body: session({ tab: 'changes', n: 2, pane: { count: 2 },
+      thread: thread(ASK + ai(LOOKED, PLAN_P, steps(edit('Changed', 'src/pages/home.html', 13, 2), edit('Added', 'src/hours.js', 22, 0)))
+        + marker('You stopped this turn · 14:06')
+        + checkCard('notchecked', { line: 'The agent had changed 2 files when you stopped it. They are kept as they are, and the check did not run.',
+          btns: `<button class="btn outline sm" data-go="check-running">${ic('play', 's12')} Run the check now</button><button class="btn outline sm" data-go="changes-undone">${ic('undo', 's14')} Undo this turn</button><button class="btn ghost sm" data-go="changes">See the changes</button>` }), 'toend'),
+      composer: { placeholder: 'Say what to do next' } }) }) });
+
+add({ id: 'cost-limit', g: G9, name: 'The session reached its cost limit', menu: false,
+  note: 'The engine counts and limits what a session costs. At the limit the turn stops and asks; nothing is lost, and the turn counts as not checked until it goes on.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'Move every page to the new layout' }), right: sessRight('notchecked', '$2.00'),
+    body: session({ tab: 'changes', n: 9,
+      thread: thread(marker('Turn 6') + ai(steps(edit('Changed', 'src/pages/bread.html', 41, 37), edit('Changed', 'src/pages/about.html', 28, 30)))
+        + `<div class="notice slim t-warn" role="status"><span class="mark">!</span><h3>This session reached its limit of $2.00</h3>
+            <p>The agent stopped in the middle of a turn. The files it changed are kept, and the check has not run. Raise the limit to let it go on.</p>
+            <div class="acts"><button class="btn sm">Raise the limit to $4.00 and go on</button><button class="btn outline sm">Stop here</button></div></div>`, 'toend'),
+      composer: { off: true, note: 'Waiting for your choice above.' } }) }) });
+</script>
+
+<script>
+/* ================================================================== the page around the window */
+const q = new URLSearchParams(location.search);
+const S = {
+  id: q.get('s') || location.hash.slice(1) || SCREENS[0].id,
+  theme: q.get('theme') === 'dark' ? 'dark' : 'light',
+  size: q.get('size') === 'small' ? 'small' : 'usual',
+  all: q.get('all') === '1' || location.hash === '#all',
+  menu: null, // null: as the screen says; true or false once the person pressed the bar's button
+};
+if (q.get('bare') === '1') document.body.classList.add('bare');
+if (!SCREENS.some((s) => s.id === S.id)) S.id = SCREENS[0].id;
+const byId = (id) => SCREENS.find((s) => s.id === id);
+
+function winHTML(s) {
+  const open = S.menu ?? s.menu;
+  return `<div class="win" data-theme="${S.theme}" data-size="${S.size}" data-menu="${open ? 'open' : 'closed'}" data-screen="${s.id}">${s.render()}</div>`;
+}
+function settle(root) {
+  root.querySelectorAll('.thread.toend').forEach((t) => { t.scrollTop = t.scrollHeight; });
+  root.querySelectorAll('.term, .tcard .out, .thread .stepbody .out').forEach((t) => { t.scrollTop = t.scrollHeight; });
+  root.querySelectorAll('.side .items').forEach((m) => { const c = m.querySelector('[aria-current=page]'); if (c && c.offsetTop + c.offsetHeight > m.clientHeight) m.scrollTop = c.offsetTop + c.offsetHeight - m.clientHeight + 6; });
+  root.querySelectorAll('[data-act=theme] use').forEach((u) => u.setAttribute('href', S.theme === 'dark' ? '#i-sun' : '#i-moon'));
+}
+function render() {
+  const stage = document.getElementById('stage');
+  if (S.all) {
+    stage.innerHTML = `<div class="allgrid">${SCREENS.map((s) => `<section id="all-${s.id}"><div class="cap"><h2>${s.g} › ${s.name}</h2><p>${s.note}</p></div><div class="frame">${winHTML(s)}</div></section>`).join('')}</div>`;
+  } else {
+    const s = byId(S.id);
+    stage.innerHTML = `<div class="cap"><h2>${s.g} › ${s.name}</h2><p>${s.note}</p></div><div class="frame">${winHTML(s)}</div>`;
+  }
+  settle(stage);
+  const groups = [...new Set(SCREENS.map((s) => s.g))];
+  document.getElementById('rail').innerHTML = `<h1>Code in Wasify AI</h1><p class="sub">Mockups of every screen. Nothing here is built. ${SCREENS.length} screens.</p>` + groups.map((g) =>
+    `<h2>${g}</h2>` + SCREENS.filter((s) => s.g === g).map((s) => `<button data-screen="${s.id}" aria-current="${!S.all && s.id === S.id}">${s.name}</button>`).join('')).join('');
+  document.querySelectorAll('#themeseg button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.theme === S.theme));
+  document.querySelectorAll('#sizeseg button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.size === S.size));
+  document.getElementById('allbtn').textContent = S.all ? 'One screen at a time' : 'All screens on one page';
+  const i = SCREENS.findIndex((s) => s.id === S.id);
+  document.getElementById('where').textContent = S.all ? `${SCREENS.length} screens` : `Screen ${i + 1} of ${SCREENS.length} · ← → move between screens`;
+  if (!document.body.classList.contains('bare')) history.replaceState(null, '', S.all ? '#all' : `#${S.id}`);
+  document.querySelector('.rail [aria-current=true]')?.scrollIntoView({ block: 'nearest' });
+}
+function go(id) { if (!byId(id)) return; S.id = id; S.all = false; S.menu = null; render(); window.scrollTo(0, 0); }
+function move(d) { const i = SCREENS.findIndex((s) => s.id === S.id); go(SCREENS[(i + d + SCREENS.length) % SCREENS.length].id); }
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button, [data-act], [data-go], [role=switch], [role=checkbox], [role=radio]');
+  if (!t) return;
+  if (t.dataset.screen) return go(t.dataset.screen);
+  if (t.closest('#themeseg')) { S.theme = t.dataset.theme; return render(); }
+  if (t.closest('#sizeseg')) { S.size = t.dataset.size; return render(); }
+  if (t.id === 'prev') return move(-1);
+  if (t.id === 'next') return move(1);
+  if (t.id === 'allbtn') { S.all = !S.all; return render(); }
+  const win = t.closest('.win');
+  if (!win) return;
+  if (t.dataset.act === 'menu') { S.menu = win.dataset.menu !== 'open'; if (S.all) { win.dataset.menu = S.menu ? 'open' : 'closed'; S.menu = null; return; } return render(); }
+  if (t.dataset.act === 'theme') { S.theme = S.theme === 'dark' ? 'light' : 'dark'; return render(); }
+  if (t.dataset.act === 'check') return go('check-setup');
+  if (t.dataset.act === 'cost') return go('session-cost');
+  if (t.dataset.go) return go(t.dataset.go);
+  if (t.getAttribute('role') === 'switch' || t.getAttribute('role') === 'checkbox') { const on = t.getAttribute('aria-checked') !== 'true'; t.setAttribute('aria-checked', on); if (t.classList.contains('check')) t.innerHTML = on ? ic('check') : ''; return; }
+  if (t.closest('.seg, [role=group]') && t.hasAttribute('aria-pressed') && t.classList.contains('chip')) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') !== 'true'); return; }
+  if (t.closest('.seg')) { t.closest('.seg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', b === t)); }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, textarea') || e.metaKey || e.ctrlKey || e.altKey || S.all) return;
+  if (e.key === 'ArrowRight') move(1);
+  if (e.key === 'ArrowLeft') move(-1);
+});
+addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id === 'all') { S.all = true; render(); } else if (byId(id) && id !== S.id) go(id); });
+render();
+</script>
+</body>
+</html>

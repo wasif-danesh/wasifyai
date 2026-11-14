@@ -156,6 +156,59 @@ class StopOut(BaseModel):
     state: str
 
 
+class NewIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    parent: str = Field(
+        min_length=1,
+        max_length=1024,
+        description=(
+            "The whole path of a folder that exists; the new project's folder is made inside it."
+        ),
+    )
+    name: str = Field(
+        min_length=1,
+        max_length=64,
+        description=(
+            "The project's name, which becomes the new folder's name. Letters, digits, spaces, "
+            "dots, dashes, underlines."
+        ),
+    )
+    starter: str = Field(
+        "web", max_length=32, description="What to start from: web (a small web app)."
+    )
+    model: str = Field(
+        "", max_length=64, description="The model to work with. Empty: the first choice."
+    )
+
+
+class PreviewIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    session_id: str = Field(min_length=1, max_length=64, description="The coding session.")
+    do: Literal["start", "stop", "state"] = Field(
+        "start", description="Start the preview, stop it, or only say where it is."
+    )
+    command: str | None = Field(
+        None,
+        max_length=2000,
+        description=(
+            "The command that starts the project, for example `npm run dev`. Left out, the one "
+            "that is set, or the one the project's files suggest."
+        ),
+    )
+
+
+class PreviewOut(BaseModel):
+    session_id: str
+    command: str
+    state: str  # none, starting, running, ended
+    port: int | None = None
+    url: str = ""
+    open_to_network: bool = False
+    output: str = ""
+
+
 def _sessions(ctx: ActionContext) -> Any:
     return sessions_for(need_deps(ctx).state)
 
@@ -184,10 +237,97 @@ async def _start(p: StartIn, ctx: ActionContext) -> Outcome:
         + (
             "The agent can read the folder and cannot change it."
             if made["mode"] == "plan"
-            else "The agent can read the folder and change its files; it runs no command."
+            else "The agent can read the folder, change its files and run commands inside it."
         )
         + " Send it a message with code.session.send.",
     )
+
+
+async def _new(p: NewIn, ctx: ActionContext) -> Outcome:
+    try:
+        made = await _sessions(ctx).start_new(
+            owner_of(ctx.actor), parent=p.parent, name=p.name, starter=p.starter, model=p.model
+        )
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    return Outcome.ok(
+        {
+            "session_id": made["id"],
+            "product_id": PRODUCT_ID,
+            "uri": f"wasify://creation/{KIND}/{made['id']}",
+            "title": made["title"],
+            "folder": made["folder"],
+            "mode": made["mode"],
+            "model": made["model"],
+        },
+        f'The project "{made["project"]}" was made in {made["folder"]}, with a check '
+        f"({made['check_command']}) and a preview ({made['preview_command']}). Send the agent a "
+        "message with code.session.send, or start the preview with code.session.preview.",
+    )
+
+
+async def _preview(p: PreviewIn, ctx: ActionContext) -> Outcome:
+    import asyncio
+
+    owner = owner_of(ctx.actor)
+    try:
+        sessions = _sessions(ctx)
+        if p.do == "stop":
+            seen = await sessions.stop_preview(owner, p.session_id)
+        elif p.do == "start":
+            seen = sessions.preview(owner, p.session_id)
+            command = (
+                p.command
+                or seen["command"]
+                or (seen["suggested"][0]["command"] if seen["suggested"] else "")
+            )
+            if not command:
+                return Outcome.refused(
+                    "Nothing in the project's files says how to start it. Give the command.",
+                    "no_command",
+                )
+            seen = await sessions.start_preview(owner, p.session_id, command)
+            for _ in range(120):  # up to a minute for it to listen
+                if not seen["running"] or seen["running"]["state"] != "starting":
+                    break
+                await asyncio.sleep(0.5)
+                seen = sessions.preview(owner, p.session_id)
+        else:
+            seen = sessions.preview(owner, p.session_id)
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    running = seen["running"]
+    out = {
+        "session_id": p.session_id,
+        "command": seen["command"],
+        "state": running["state"] if running else "none",
+        "port": running["port"] if running else None,
+        "url": running["url"] if running else "",
+        "open_to_network": bool(running and running["open_to_network"]),
+        "output": (running["output"] if running else "")[-ANSWER_CHARS:],
+    }
+    if running is None:
+        return Outcome.ok(out, "No preview is running.")
+    if running["state"] == "running":
+        return Outcome.ok(
+            out,
+            f"The preview runs at {running['url']} on this computer. The person sees it in the "
+            "Preview tab of the session."
+            + (
+                " It listens on every address, so other computers on the network can open it."
+                if running["open_to_network"]
+                else ""
+            ),
+        )
+    if running["state"] == "ended":
+        return Outcome.ok(
+            out, f"The preview ended (exit code {running['exit_code']}). Its output says why."
+        )
+    return Outcome.ok(out, "The preview has started and listens on no port yet.")
 
 
 async def _send(p: SendIn, ctx: ActionContext) -> Outcome:
@@ -442,6 +582,53 @@ def actions() -> list[Action]:
             long=True,
             product=PRODUCT_ID,
             bind=CallBinding(_check),
+            ui="code.projects",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.project.new",
+            title="Start a new coding project",
+            summary="Make a new project from a starter in a new folder, with a session on it.",
+            description=(
+                "Make a new project in a new, empty folder and open a coding session on it. The "
+                "starter `web` is a small web app with no build step: one page with its script "
+                "and styles, tests, and a preview that loads again when a file changes. Give "
+                "the folder the new one is made in (parent) and the project's name. Nothing is "
+                "written anywhere else, and a folder that already holds files is refused. The "
+                "project's check and preview commands are set. It returns the session's id."
+            ),
+            input=NewIn,
+            output=StartOut,
+            examples=({"parent": "/Users/me/Projects", "name": "bakery-site"},),
+            effect="make",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            product=PRODUCT_ID,
+            bind=CallBinding(_new),
+            ui="code.projects",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.session.preview",
+            title="Start or stop a project's preview",
+            summary="Run a coding project on this computer and say where it can be seen.",
+            description=(
+                "Start a coding project's own run command (for example `npm run dev`) inside "
+                "the project's sandbox, and say on which port of this computer it listens; the "
+                "person sees the page in the session's Preview tab. With do stop it ends the "
+                "preview and everything it started; with do state it only says where it is. "
+                "The preview reaches the internet only to install packages."
+            ),
+            input=PreviewIn,
+            output=PreviewOut,
+            examples=(
+                {"session_id": SAMPLE_ID},
+                {"session_id": SAMPLE_ID, "do": "stop"},
+            ),
+            effect="change",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            long=True,
+            product=PRODUCT_ID,
+            bind=CallBinding(_preview),
             ui="code.projects",
             surfaces=("assistant",),
         ),

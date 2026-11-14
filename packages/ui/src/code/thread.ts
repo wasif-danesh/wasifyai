@@ -110,6 +110,15 @@ export function stepLine(
     const command = typeof g.command === "string" ? g.command : "";
     const short = command.length > 80 ? `${command.slice(0, 80)}…` : command;
     if (g.is_input) return `Typed ${short || "a key"} into what runs`;
+    const made = /(?:^|&&|;)\s*wasify-make\s+(picture|speech)\b/.exec(command)?.[1];
+    if (made) {
+      // Wasify AI's own product makes it, outside the terminal: said in those words, and that it takes time
+      const what = made === "picture" ? "a picture" : "speech";
+      if (step.status === "ok") return `Wasify AI made ${what}`;
+      if (step.status === "refused") return `Wasify AI did not make ${what}: you said no`;
+      if (step.status === "error") return `Wasify AI could not make ${what}`;
+      return `Wasify AI is making ${what}. This can take a few minutes`;
+    }
     if (step.status === "ok") return `Ran ${short}`;
     if (step.status === "refused") return `Did not run ${short}: you said no`;
     if (step.status === "error") return `Could not run ${short}`;

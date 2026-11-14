@@ -14,6 +14,9 @@ kind for one project, and take that back. An allowance is for one project and on
                    one inside a `.git` folder. Asked from stage C2
     delete         a command that deletes files or throws work away (`rm`, `git clean`,
                    `git reset --hard`). Asked from stage C3
+    make           the command `wasify-make`: a picture or speech made by Wasify AI's own
+                   products and put into the project (stage C4). Asked in every mode, also in
+                   "Work on its own", until the person allows it for the project
     install        a command that installs packages (`pip install`, `npm install`, `cargo add`).
                    Asked from stage C3. Letting one through is also what opens the install
                    proxy to the agent's commands for a while (`coding_proxy.py`)
@@ -29,10 +32,14 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-NOT_UNDOABLE, DELETE, INSTALL = "not_undoable", "delete", "install"
-KINDS = (NOT_UNDOABLE, DELETE, INSTALL)
+NOT_UNDOABLE, DELETE, INSTALL, MAKE = "not_undoable", "delete", "install", "make"
+KINDS = (NOT_UNDOABLE, DELETE, INSTALL, MAKE)
+# asked in every mode, also in "Work on its own", unless the person allowed it for the project:
+# it uses Wasify AI's own products for the person, which may cost time or money (stage C4)
+ALWAYS_ASKED = (MAKE,)
+MAKE_COMMAND = "wasify-make"
 # kinds a real session can meet at this stage; the others are shown as "from a later version"
-ASKED_NOW = (NOT_UNDOABLE, DELETE, INSTALL)
+ASKED_NOW = (NOT_UNDOABLE, DELETE, INSTALL, MAKE)
 
 YES, ALLOW, NO = "yes", "allow", "no"
 ANSWERS = (YES, ALLOW, NO)
@@ -74,6 +81,8 @@ def command_kind(command: str) -> str | None:
         words = _LEAD.sub("", part.strip())
         if not words:
             continue
+        if words.split()[0] == MAKE_COMMAND:
+            return MAKE  # a picture or speech from Wasify AI's own products: asked first
         if _DELETE.search(words):
             return DELETE
         if found is None and _INSTALL.search(words):
@@ -116,7 +125,9 @@ def decide(mode: str, allowed: Sequence[str], kinds: Sequence[str | None]) -> tu
     question, `(ALLOWED, kind)` to let them run because the kind is allowed for the project, or
     `("ask", kind)` to ask the person about the first kind that is not."""
     found = [k for k in kinds if k]
-    if not found or mode == "own":
+    if mode == "own":  # nothing of the list is asked, but for what is asked in every mode
+        found = [k for k in found if k in ALWAYS_ASKED]
+    if not found:
         return YES, ""
     for kind in found:
         if kind not in allowed:

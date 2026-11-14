@@ -1077,6 +1077,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * New Project
+         * @description A new project from a starter, in a new folder inside `parent`, and a session on it.
+         */
+        post: operations["new_project_products_wasifyai_code_code_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/sessions": {
         parameters: {
             query?: never;
@@ -1368,6 +1388,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/sessions/{session_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preview
+         * @description The project's preview: its command, what the files suggest, and the running one
+         *     (its state, its port on this computer, the end of its output).
+         */
+        get: operations["get_preview_products_wasifyai_code_code_sessions__session_id__preview_get"];
+        /** Put Preview */
+        put: operations["put_preview_products_wasifyai_code_code_sessions__session_id__preview_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/preview/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Preview
+         * @description Start the project inside its sandbox. It answers at once; the state is read again
+         *     until it runs.
+         */
+        post: operations["start_preview_products_wasifyai_code_code_sessions__session_id__preview_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/preview/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Preview
+         * @description Stop the preview and everything it started.
+         */
+        post: operations["stop_preview_products_wasifyai_code_code_sessions__session_id__preview_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/sessions/{session_id}/project": {
         parameters: {
             query?: never;
@@ -1578,6 +1661,26 @@ export interface paths {
          * @description Put the project's files back to how they were before this turn.
          */
         post: operations["undo_turn_products_wasifyai_code_code_sessions__session_id__turns__turn_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/starters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Starters
+         * @description What a new project can be started from.
+         */
+        get: operations["list_starters_products_wasifyai_code_code_starters_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5317,6 +5420,43 @@ export interface components {
         CodeMessageIn: {
             /** Text */
             text: string;
+        };
+        /**
+         * CodeNewIn
+         * @description A new project from a starter, in a new folder inside a folder the person chose.
+         */
+        CodeNewIn: {
+            /**
+             * Mode
+             * @default ask
+             * @enum {string}
+             */
+            mode: "plan" | "ask" | "own";
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /** Name */
+            name: string;
+            /** Parent */
+            parent: string;
+            /**
+             * Starter
+             * @default web
+             */
+            starter: string;
+        };
+        /**
+         * CodePreviewIn
+         * @description The command that starts the project for its preview; empty means none is set.
+         */
+        CodePreviewIn: {
+            /**
+             * Command
+             * @default
+             */
+            command: string;
         };
         /**
          * CodeRefusalEvent
@@ -9158,6 +9298,41 @@ export interface operations {
             };
         };
     };
+    new_project_products_wasifyai_code_code_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeNewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_sessions_products_wasifyai_code_code_sessions_get: {
         parameters: {
             query?: {
@@ -9778,6 +9953,146 @@ export interface operations {
             };
         };
     };
+    get_preview_products_wasifyai_code_code_sessions__session_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_preview_products_wasifyai_code_code_sessions__session_id__preview_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodePreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_preview_products_wasifyai_code_code_sessions__session_id__preview_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CodePreviewIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_preview_products_wasifyai_code_code_sessions__session_id__preview_stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_project_products_wasifyai_code_code_sessions__session_id__project_get: {
         parameters: {
             query?: never;
@@ -10181,6 +10496,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_starters_products_wasifyai_code_code_starters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

@@ -34,6 +34,22 @@
   "body": "# Find the chapters\n\nAction: `audiobook.plan`\n\n## What it is for\n\nFind the chapters of a long text and how long each takes to read aloud. Nothing is spoken.\n\n## Steps in the app\n\n1. Open **Voice › Audiobook**.\n2. Paste or open the text and choose **Find the chapters**; they are listed on the right to read and change.\n\n## Fields\n\n- `text`: The book.\n- `target`: About how long a chapter is, when the text has no headings.\n\n## Limits\n\n- Up to 400,000 characters; 200 chapters.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- How many chapters is this book?\n\n## Problems\n\n- **Too long** Split the text into two books."
  },
  {
+  "action": "code.project.new",
+  "title": "Start a new coding project",
+  "screen": "code.projects",
+  "synonyms": [
+   "new project",
+   "start a new app",
+   "make a web app",
+   "new coding project",
+   "start from scratch",
+   "empty folder",
+   "scaffold a project",
+   "create a website"
+  ],
+  "body": "# Start a new coding project\n\nAction: `code.project.new`\n\n## What it is for\n\nMake a new project in a new, empty folder, and open a coding session on it. You name the project and choose the\nfolder it is made in. Wasify AI writes a starter's files there, sets the project's check and its preview, and\nthe agent can go on from your first message.\n\nThe starter today is **a small web app**: one page with its script and its styles, tests, and a preview that\nloads again when a file changes. It has no build step and nothing to install.\n\n## Steps in the app\n\n1. Open **Code › Projects** and choose \"Start in a new, empty folder\".\n2. Give the project a name. It becomes the name of the new folder.\n3. Choose the folder it is made in, then \"Make the project\".\n4. The session opens. Ask for what you want built; open the Preview tab to see it run.\n\nYou can also ask the assistant in the chat: \"Start a new web app called bakery-site in ~/Projects\".\n\n## Fields\n\n- `parent`: The whole path of a folder that exists. The new project's folder is made inside it.\n- `name`: The project's name: letters, digits, spaces, dots, dashes and underlines, up to 64 characters.\n- `starter`: What to start from. `web` is the small web app.\n- `model`: The model to work with. Left empty, the first choice is used.\n\n## Limits\n\n- One starter for now.\n- A folder of that name that already holds files is refused. Nothing in it is changed.\n- The app's own folders, your Library and hidden folders of your home folder cannot hold a project.\n- The starter needs Node. If your own Node is in your home folder (nvm and the like), the agent cannot read\n  it there: set up \"Node for coding projects\" in Settings, under Optional parts.\n\n## Needs\n\n- The coding engine set up (Settings, under Optional parts), and a model that is ready.\n- Node for coding projects (Settings, under Optional parts), or a Node in a system folder.\n\n## Examples\n\n- Start a new web app called bakery-site in /Users/me/Projects.\n- Make a new project named \"Tax Shop\" in my Projects folder.\n\n## Problems\n\n- **The folder already holds files** Choose another name.\n- **There is no folder at that path** Choose a folder that exists to make the project in.\n- **Give the project a name of letters, digits, spaces, dots, dashes or underlines** Use a plain name."
+ },
+ {
   "action": "code.session.check",
   "title": "Set or run a project's check",
   "screen": "code.projects",
@@ -48,6 +64,22 @@
    "try the check now"
   ],
   "body": "# Set or run a project's check\n\nAction: `code.session.check`\n\n## What it is for\n\nA project's check is one command, such as `npm test` or `python3 -m pytest`. After every turn in which the\ncoding agent changed files, Wasify AI runs it. If it fails, the agent gets the command, its exit code and the\nend of the output, and tries again, up to three rounds. The session then says one of four words: passed,\nfailed, not checked, or could not check.\n\nUse this to see which check is set, to set or change it, and to run it now.\n\n## Steps in the app\n\n1. In **Code › Projects**, open the session.\n2. Choose the check's word in the bar at the top (for example \"Not checked\"), or \"Change the check\" on a\n   check card in the chat.\n3. Type the command, or choose one of the suggestions read from the project's files.\n4. Choose \"Try it now\" to run it, then \"Save the check\".\n\nYou can also ask the assistant in the chat: \"Set the check of the bakery site to npm test and run it\".\n\n## Fields\n\n- `session_id`: The coding session.\n- `command`: The check command. Left out, the one that is set is kept. An empty text removes the check.\n- `run`: Run the check now and wait for its result. On unless you say otherwise.\n\n## Limits\n\n- One command for each project. Build, lint and test as separate steps are not built yet.\n- The check runs inside the project's sandbox: it can write only inside the project, cannot read your other\n  folders, and does not reach the internet.\n- A check is stopped after 10 minutes unless you change that. A check that was stopped, that could not start\n  or whose command was not found is never counted as passed.\n- Not while the agent is working. Stop it or wait.\n- The check is kept by Wasify AI, outside the project, where the agent cannot change it.\n\n## Needs\n\n- A coding session.\n\n## Examples\n\n- Set the check of this project to `npm test`.\n- Run the check of the bakery site session now.\n- What is the check for this project?\n\n## Problems\n\n- **Could not check** The command was not found, took too long, or crashed. Change the check, or install what\n  it needs in the Terminal tab.\n- **This project has no check yet** Set one first.\n- **The agent is working** Stop it or wait, then try again."
+ },
+ {
+  "action": "code.session.preview",
+  "title": "Start or stop a project's preview",
+  "screen": "code.projects",
+  "synonyms": [
+   "preview my project",
+   "run my app",
+   "start the dev server",
+   "see the result",
+   "show the site",
+   "run the project",
+   "stop the preview",
+   "open the app"
+  ],
+  "body": "# Start or stop a project's preview\n\nAction: `code.session.preview`\n\n## What it is for\n\nRun a coding project on this computer and see it. The preview starts the project's own command (for example\n`npm run dev`) inside the same protected area as the agent's commands, finds the port it listens on, and shows\nthe page in the session's Preview tab.\n\n## Steps in the app\n\n1. In **Code › Projects**, open the session.\n2. Open the **Preview** tab and choose \"Start the preview\". The command is suggested from the project's files;\n   \"Change the command\" lets you type another.\n3. The page appears in the tab. Choose the phone shape to see it narrow, \"Load again\" to load it again, the\n   arrow to open it in your own browser, and \"Stop\" to end it.\n\nYou can also ask the assistant in the chat: \"Start the preview of the bakery site\".\n\n## Fields\n\n- `session_id`: The coding session.\n- `do`: `start` (the default), `stop`, or `state` to only say where it is.\n- `command`: The command that starts the project. Left out, the one that is set, or the one the project's\n  files suggest.\n\n## Limits\n\n- One preview for each session. Starting again stops the one that runs.\n- It runs inside the project's protected area: it can write only inside the project, cannot read your other\n  folders, and reaches the internet only to install packages.\n- The page is served from this computer. If the program listens on every address of this computer, other\n  computers on your network can open it too; the tab says so when that is the case.\n- The page is loaded again when a turn changes files. A tool that reloads by itself also does.\n- A preview stops when the session is deleted or the app is closed.\n\n## Needs\n\n- A coding session, and the tools the command uses where the protected area can find them (for Node: the\n  optional part \"Node for coding projects\").\n\n## Examples\n\n- Start the preview of the bakery site session.\n- Stop the preview.\n\n## Problems\n\n- **npm was not found** Set up \"Node for coding projects\" in Settings, under Optional parts.\n- **Nothing in the project's files says how to start it** Give the command.\n- **The preview has ended** The tab shows its exit code and the end of what it printed."
  },
  {
   "action": "code.session.send",

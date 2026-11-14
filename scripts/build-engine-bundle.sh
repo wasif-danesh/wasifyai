@@ -124,6 +124,7 @@ if ! ls "$CODING_SRC"/requirements-*.lock >/dev/null 2>&1; then
 fi
 mkdir -p "$OUT/coding-engine"
 cp "$CODING_SRC/VERSION" "$CODING_SRC/engine.sb.template" "$CODING_SRC/wasify_rules.py" \
+  "$CODING_SRC/wasify-make" \
   "$CODING_SRC/build-constraints.txt" \
   "$CODING_SRC"/requirements-*.lock "$OUT/coding-engine/"
 

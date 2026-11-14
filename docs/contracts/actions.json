@@ -395,6 +395,121 @@
       "help": "docs/help/audiobook.plan.md"
     },
     {
+      "id": "code.project.new",
+      "title": "Start a new coding project",
+      "summary": "Make a new project from a starter in a new folder, with a session on it.",
+      "description": "Make a new project in a new, empty folder and open a coding session on it. The starter `web` is a small web app with no build step: one page with its script and styles, tests, and a preview that loads again when a file changes. Give the folder the new one is made in (parent) and the project's name. Nothing is written anywhere else, and a folder that already holds files is refused. The project's check and preview commands are set. It returns the session's id.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "parent": {
+            "description": "The whole path of a folder that exists; the new project's folder is made inside it.",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Parent",
+            "type": "string"
+          },
+          "name": {
+            "description": "The project's name, which becomes the new folder's name. Letters, digits, spaces, dots, dashes, underlines.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "starter": {
+            "default": "web",
+            "description": "What to start from: web (a small web app).",
+            "maxLength": 32,
+            "title": "Starter",
+            "type": "string"
+          },
+          "model": {
+            "default": "",
+            "description": "The model to work with. Empty: the first choice.",
+            "maxLength": 64,
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent",
+          "name"
+        ],
+        "title": "NewIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "folder": {
+            "title": "Folder",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "product_id",
+          "uri",
+          "title",
+          "folder",
+          "mode",
+          "model"
+        ],
+        "title": "StartOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "parent": "/Users/me/Projects",
+          "name": "bakery-site"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": "code.projects",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.project.new.md"
+    },
+    {
       "id": "code.session.check",
       "title": "Set or run a project's check",
       "summary": "Set the command that checks a coding project, and run it.",
@@ -525,6 +640,134 @@
       ],
       "consent": "",
       "help": "docs/help/code.session.check.md"
+    },
+    {
+      "id": "code.session.preview",
+      "title": "Start or stop a project's preview",
+      "summary": "Run a coding project on this computer and say where it can be seen.",
+      "description": "Start a coding project's own run command (for example `npm run dev`) inside the project's sandbox, and say on which port of this computer it listens; the person sees the page in the session's Preview tab. With do stop it ends the preview and everything it started; with do state it only says where it is. The preview reaches the internet only to install packages.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "description": "The coding session.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "do": {
+            "default": "start",
+            "description": "Start the preview, stop it, or only say where it is.",
+            "enum": [
+              "start",
+              "stop",
+              "state"
+            ],
+            "title": "Do",
+            "type": "string"
+          },
+          "command": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The command that starts the project, for example `npm run dev`. Left out, the one that is set, or the one the project's files suggest.",
+            "title": "Command"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "PreviewIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Port"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "open_to_network": {
+            "default": false,
+            "title": "Open To Network",
+            "type": "boolean"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "command",
+          "state"
+        ],
+        "title": "PreviewOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "session_id": "0b7c1f9e000040008000000000000000"
+        },
+        {
+          "session_id": "0b7c1f9e000040008000000000000000",
+          "do": "stop"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-code",
+      "ui": "code.projects",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.session.preview.md"
     },
     {
       "id": "code.session.send",

@@ -24,7 +24,7 @@ export type CodeEnding = "finished" | "stopped" | "step_limit" | "error" | "refu
 export type CodeMode = "plan" | "ask" | "own";
 
 /** A kind of request the agent asks about, and a person can allow for one project. */
-export type CodeAskKind = "not_undoable" | "delete" | "install";
+export type CodeAskKind = "not_undoable" | "delete" | "install" | "make";
 
 /** A person's answer to an approval card. "allow" is yes, and that kind is not asked again in this project. */
 export type CodeAnswer = "yes" | "allow" | "no";
@@ -50,6 +50,10 @@ export type CodeSession = {
   needs_you?: boolean;
   /** the project's check command; empty when it has none */
   check_command?: string;
+  /** the command that starts the project for its preview; empty when none is set */
+  preview_command?: string;
+  /** the project's preview is starting or running */
+  previewing?: boolean;
   turns: number;
   answer: string;
   ended: CodeEnding;
@@ -175,6 +179,35 @@ export type CodeCheckInfo = {
   running: boolean;
   checks: CodeCheck[];
 };
+
+/** A running (or ended) preview of the project. */
+export type CodePreviewRun = {
+  state: "starting" | "running" | "ended";
+  command: string;
+  /** the port it listens on, on this computer; null until it does */
+  port: number | null;
+  url: string;
+  /** it listens on every address: other computers on the same network could reach it */
+  open_to_network: boolean;
+  /** it has run for a while and listens on no port */
+  listens_nowhere: boolean;
+  exit_code: number | null;
+  /** the person stopped it */
+  stopped: boolean;
+  /** the end of what it printed */
+  output: string;
+};
+
+/** The project's preview: its command, what the project's files suggest, and the running one. */
+export type CodePreview = {
+  project: string;
+  command: string;
+  suggested: { command: string; why: string }[];
+  running: CodePreviewRun | null;
+};
+
+/** Something a new project can be started from. */
+export type CodeStarter = { id: string; title: string; says: string; needs: string[] };
 
 /** A terminal of the person's own in the project. */
 export type CodeTerminal = {
@@ -419,6 +452,34 @@ export function createCodeApi(transport: Transport) {
         post(),
       );
       return out.session;
+    },
+    /** The project's preview. */
+    preview(id: string): Promise<CodePreview> {
+      return json<CodePreview>(`${BASE}/sessions/${encodeURIComponent(id)}/preview`);
+    },
+    /** Start the project inside its protected area; `command` is kept as the project's when given. */
+    startPreview(id: string, command?: string): Promise<CodePreview> {
+      return json<CodePreview>(
+        `${BASE}/sessions/${encodeURIComponent(id)}/preview/start`,
+        post(command ? { command } : undefined),
+      );
+    },
+    /** Stop the preview and everything it started. */
+    stopPreview(id: string): Promise<CodePreview> {
+      return json<CodePreview>(`${BASE}/sessions/${encodeURIComponent(id)}/preview/stop`, post());
+    },
+    /** What a new project can be started from. */
+    async starters(): Promise<CodeStarter[]> {
+      return (await json<{ items: CodeStarter[] }>(`${BASE}/starters`)).items;
+    },
+    /** A new project from a starter, in a new folder inside `parent`, and a session on it. */
+    newProject(input: {
+      parent: string;
+      name: string;
+      starter?: string;
+      model?: string;
+    }): Promise<CodeSession> {
+      return json<CodeSession>(`${BASE}/projects`, post(input));
     },
     async terminals(id: string): Promise<CodeTerminal[]> {
       return (

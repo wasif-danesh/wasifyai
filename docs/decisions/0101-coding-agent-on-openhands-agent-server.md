@@ -119,3 +119,17 @@ routes of the coding product. They are written in `docs/contracts/sse-events.md`
 4. **One new action:** `code.session.check` (read, set and run the check). The person's terminal is a tool of the
    screen and has no action: an assistant that could type into it would be a second way to run commands, outside
    the rules.
+
+## Amendment (2026-11-15, owner): the routes and actions of stage C4
+
+The owner agreed on 2026-11-15 to routes and actions for the preview and for a new project. Nothing changes
+on a coding session's stream.
+
+1. **Routes:** the project's preview (`GET`, `PUT .../preview`, `POST .../preview/start`,
+   `POST .../preview/stop`), the starters (`GET /code/starters`) and a new project from one
+   (`POST /code/projects`).
+2. **Actions:** `code.session.preview` (start, stop, or say where it is) and `code.project.new`.
+3. **A starter is plain files of ours**, copied into a new folder inside a folder the person chose
+   (`starters.py`, `starters/web/`). The first one is a small web app with no build step and nothing to
+   install; its check (`npm test`) and its preview (`npm run dev`) are set with it, because they are part of
+   what was made.

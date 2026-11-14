@@ -53,6 +53,13 @@ export const KINDS: Record<
     covers: "the agent deletes files",
     why: "This command deletes files or throws work away. Undo puts back a deleted file unless your project ignores it.",
   },
+  make: {
+    title: "The agent wants Wasify AI to make a picture or speech",
+    rule: "Ask before Wasify AI makes a picture or speech",
+    allowed: "making pictures and speech with Wasify AI",
+    covers: "the agent has Wasify AI make a picture or speech",
+    why: "It is made by Wasify AI’s own products, with the model you use for them, which can take time or cost money. The file goes into this project and into your library. This is asked in every mode.",
+  },
   install: {
     title: "The agent wants to install packages",
     rule: "Ask before installing packages",
@@ -105,7 +112,7 @@ export function AskCard({
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={() => say("yes")} disabled={sent !== null}>
-              {command ? "Yes, run it" : "Yes, change it"}
+              {ask.ask === "make" ? "Yes, make it" : command ? "Yes, run it" : "Yes, change it"}
             </Button>
             <Button
               size="sm"

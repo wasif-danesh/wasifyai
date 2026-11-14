@@ -74,6 +74,7 @@ from wasifyai_api.components.comfyui import ComfyUiComponent
 from wasifyai_api.components.desktop import service_components
 from wasifyai_api.components.llamacpp import LlamaCppComponent
 from wasifyai_api.components.manifest import load_manifest
+from wasifyai_api.components.node import NodeComponent
 from wasifyai_api.config import Settings, get_settings
 from wasifyai_api.creation_index import (
     ContextIndexer,
@@ -1041,6 +1042,9 @@ def _desktop_components(s: ApiServices, desktop: Desktop) -> Registry:
             data_dir, manifest, coding_files(s.products_dir), uv, desktop.coding
         )
         registry.add(coding, coding.installer)
+        # Node is for coding projects only: it is offered where the coding engine is
+        node = NodeComponent(data_dir, manifest)
+        registry.add(node, node.installer)
     for part in service_components(s, desktop):
         registry.add(part)
     events = s.events

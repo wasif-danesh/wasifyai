@@ -70,3 +70,11 @@ answer from outside the sandbox, and it switches off the server's own `git init`
 conversation (it replaces `EventService._ensure_workspace_is_git_repo`). When the pinned version moves, that
 name may move too: the server then refuses to start (an `assert`), and
 `test_a_command_waits_then_runs_inside_the_sandbox_and_the_agent_may_make_a_repository` says so.
+
+## `wasify-make`
+
+The one command through which a session asks Wasify AI's own products for a picture or speech. The supervisor
+copies it into `<app data>/coding-fixed/bin/`, which the sandbox reads, cannot write, and has first on its
+path. It reaches nothing: the Wasify engine makes the file outside the sandbox when the command is let through
+(`wasifyai_code/assets.py`) and leaves a note beside it, and this program prints what the note says.
+

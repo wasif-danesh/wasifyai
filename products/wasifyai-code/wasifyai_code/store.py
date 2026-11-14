@@ -64,6 +64,8 @@ COLUMNS = (
     ("turns", "undone_at", "TEXT"),  # when the person undid the turn
     ("turns", "redo_commit", "TEXT"),  # the files just before that undo: "Bring it back"
     ("workspaces", "allowed", "TEXT NOT NULL DEFAULT '[]'"),  # kinds allowed for the project
+    # stage C4: the command that starts the project for the Preview tab
+    ("workspaces", "preview_command", "TEXT NOT NULL DEFAULT ''"),
 )
 
 LEFT_WORKING = "It was stopped when the app closed."
@@ -135,7 +137,8 @@ CREATE TABLE IF NOT EXISTS workspaces(
   check_command TEXT NOT NULL DEFAULT '',
   check_from TEXT NOT NULL DEFAULT '' CHECK (check_from IN ('', 'suggested', 'person')),
   check_limit_s INTEGER NOT NULL DEFAULT 600,
-  last_pass TEXT, created_at TEXT NOT NULL, allowed TEXT NOT NULL DEFAULT '[]');
+  last_pass TEXT, created_at TEXT NOT NULL, allowed TEXT NOT NULL DEFAULT '[]',
+  preview_command TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS sessions(
   {_OWNED},
   workspace_id TEXT NOT NULL, title TEXT NOT NULL DEFAULT '',
@@ -311,6 +314,16 @@ class CodeStore:
         n = self.db.exec(
             f"UPDATE workspaces SET allowed = ? WHERE id = ? AND {_MINE}",
             (json.dumps(sorted(set(kinds))), item, *_who(owner)),
+        )
+        if n == 0:
+            raise NotFound(f"workspaces: {item}")
+        return self.get_workspace(owner, item)
+
+    def set_preview(self, owner: Owner, item: str, command: str) -> dict[str, Any]:
+        """The command that starts the project for its preview; empty for none."""
+        n = self.db.exec(
+            f"UPDATE workspaces SET preview_command = ? WHERE id = ? AND {_MINE}",
+            (command, item, *_who(owner)),
         )
         if n == 0:
             raise NotFound(f"workspaces: {item}")

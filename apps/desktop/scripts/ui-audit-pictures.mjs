@@ -48,6 +48,14 @@
 //                                                               asked first and undone, and git init by the agent;
 //                                                               all read back from disk. A throwaway folder and
 //                                                               DESKTOP_DATA_DIR as for code-plan
+//   WASIFYAI_AUDIT_FOLDER=<an empty folder> apps/desktop/scripts/ui-audit.sh light code-build
+//                                                               Code (C4): a new project from the starter, its
+//                                                               preview and check, then "a to-do web app with a
+//                                                               logo" built by a real model with the logo made by
+//                                                               Wasify AI's picture product; read back from disk
+//                                                               and used in the running page. Needs the coding
+//                                                               engine, Node for coding projects and a picture
+//                                                               model in DESKTOP_DATA_DIR
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -2300,6 +2308,157 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(800);
       await shot(page, "code-check-terminal-small");
       await page.setViewportSize({ width: 1440, height: 900 });
+    });
+  }
+  // stage C4 of the coding agent: a new project from the starter, its preview, and the gate's request ("a
+  // to-do web app with a logo") built by a real model, with the logo made by Wasify AI's own picture product.
+  // WASIFYAI_AUDIT_FOLDER is an empty throwaway folder the project is made in. Node comes from the optional
+  // part alone; the results are read back from disk and from the running page.
+  if (scheme === "light" && names.has("code-build")) {
+    await attempt("code-build", async () => {
+      const { readFileSync, existsSync, statSync } = await import("node:fs");
+      const parent = process.env.WASIFYAI_AUDIT_FOLDER ?? "";
+      const folder = join(parent, "todo-app");
+      const at = (name) => join(folder, name);
+      const secs = (began) => ((Date.now() - began) / 1000).toFixed(1);
+      await open(page, "/code");
+      await page.getByRole("button", { name: "Start in a new, empty folder" }).first().click();
+      const dialog = page.getByRole("dialog", { name: "Start in a new, empty folder" });
+      await dialog.getByText("A small web app").waitFor();
+      await dialog.getByLabel("The project’s name").fill("todo-app");
+      await dialog.getByRole("button", { name: "Choose a folder" }).click();
+      await dialog.getByText(/todo-app$/).waitFor();
+      await shot(page, "code-build-new");
+      await dialog.getByRole("button", { name: "Make the project" }).click();
+      const box = page.getByRole("textbox", { name: "Ask about this project" });
+      await box.waitFor({ timeout: 60_000 });
+      for (const name of [
+        "package.json",
+        "index.html",
+        "src/logic.js",
+        "tests/logic.test.js",
+        "dev-server.mjs",
+      ]) {
+        if (!existsSync(at(name))) throw new Error(`the starter did not write ${name}`);
+      }
+      console.log(`code-build: the starter is in ${folder}`);
+      const idle = () =>
+        page
+          .getByRole("region", { name: "Chat" })
+          .getByRole("button", { name: "Stop", exact: true })
+          .waitFor({ state: "detached", timeout: 2_400_000 });
+      // 1. the preview of the untouched starter
+      const tabs = page.getByRole("tablist", { name: "Beside the chat" });
+      await tabs.getByRole("tab", { name: "Preview" }).click();
+      const pane = page.getByRole("region", { name: "Preview" });
+      let began = Date.now();
+      await pane.getByRole("button", { name: "Start the preview" }).click();
+      const frame = page.frameLocator('iframe[title="The preview of todo-app"]');
+      await frame.getByRole("heading", { name: "todo-app" }).waitFor({ timeout: 60_000 });
+      console.log(
+        `code-build: the starter's page was shown ${secs(began)} s after "Start the preview"; the bar says: ${(await pane.locator("output").first().innerText()).trim()}, ${(await pane.getByText(/port \d+/).innerText()).replace(/\s+/g, " ")}`,
+      );
+      if (
+        (await pane.getByText("Other computers on your network can open this too").count()) !== 0
+      ) {
+        throw new Error("the starter's preview listens to more than this computer");
+      }
+      await shot(page, "code-build-preview-starter", 1000);
+      // 2. the check that came with the starter, tried by hand
+      await page.getByRole("button", { name: /^The check: / }).click();
+      const check = page.getByRole("dialog", { name: /^The check for / });
+      began = Date.now();
+      await check.getByRole("button", { name: "Try it now" }).click();
+      await check.getByText(/^Passed in /).waitFor({ timeout: 120_000 });
+      console.log(
+        `code-build: the starter's own check (npm test) passed inside the protected area: ${(await check.getByText(/^Passed in /).innerText()).trim()}`,
+      );
+      await check.getByRole("button", { name: "Cancel" }).click();
+      // 3. the gate's request
+      began = Date.now();
+      await box.fill(
+        "Build a to-do web app in this project. The page has a text box and an Add button. Below is the list of to-dos; each has a checkbox that marks it done and a Remove button. Keep the to-dos in localStorage so they survive a reload. Put the list's logic in src/logic.js as pure functions and test them in tests/logic.test.js. Give the page a logo at the top: ask Wasify AI for a picture of a simple checklist logo saved as assets/logo.png, and show it with an img tag. Give the text box the placeholder 'What needs doing?'.",
+      );
+      await box.press("Enter");
+      const card = page.getByRole("region", {
+        name: "The agent wants Wasify AI to make a picture or speech",
+      });
+      await card.getByRole("button", { name: "Yes, make it" }).waitFor({ timeout: 2_400_000 });
+      console.log(
+        `code-build: asked before the picture after ${secs(began)} s: ${(await card.locator("code").first().innerText()).trim()}`,
+      );
+      if (existsSync(at("assets/logo.png")))
+        throw new Error("the logo was there before the answer");
+      await shot(page, "code-build-ask-picture", 1500);
+      const asked = Date.now();
+      await card.getByRole("button", { name: "Yes, make it" }).click();
+      await card.getByText("You said yes.").waitFor({ timeout: 2_400_000 });
+      console.log(`code-build: the picture step ended ${secs(asked)} s after the yes`);
+      // the agent may ask again before it is done (it tidies up what it started): each card is answered yes
+      const chat = page.getByRole("region", { name: "Chat" });
+      let others = 0;
+      for (;;) {
+        const more = chat.getByRole("button", { name: /^Yes, (run|change|make) it$/ });
+        const stopBtn = chat.getByRole("button", { name: "Stop", exact: true });
+        if ((await stopBtn.count()) === 0) break;
+        if ((await more.count()) > 0 && (await more.first().isEnabled())) {
+          const what = await chat.locator("section code").last().innerText();
+          console.log(`  asked again, answered yes: ${what.trim().slice(0, 160)}`);
+          await more.first().click();
+          others += 1;
+        }
+        if (Date.now() - began > 2_400_000) throw new Error("the turn did not end in 40 minutes");
+        await page.waitForTimeout(1500);
+      }
+      console.log(
+        `code-build: the turn ended after ${secs(began)} s, with ${others} more question(s)`,
+      );
+      // what is on disk
+      if (!existsSync(at("assets/logo.png"))) throw new Error("there is no assets/logo.png");
+      const logo = readFileSync(at("assets/logo.png"));
+      const png = logo.subarray(0, 8).toString("hex") === "89504e470d0a1a0a";
+      console.log(
+        `  assets/logo.png: ${statSync(at("assets/logo.png")).size} bytes, ${png ? "a PNG" : "NOT a PNG"}, ${logo.readUInt32BE(16)} by ${logo.readUInt32BE(20)}`,
+      );
+      if (!png || logo.length < 10_000) throw new Error("the logo is not a real picture");
+      const word = await page.getByRole("button", { name: /^The check: / }).innerText();
+      const last = ((await engine("/products/wasifyai-code/code/sessions?limit=200"))?.items ?? [])
+        .filter((x) => x.folder.endsWith("todo-app"))
+        .sort((x, y) => (x.created_at < y.created_at ? 1 : -1))[0];
+      const turns =
+        (await engine(`/products/wasifyai-code/code/sessions/${last.id}/turns`))?.items ?? [];
+      const t = turns.at(-1);
+      console.log(
+        `  the bar says: ${word.trim()}; the turn: result ${t?.result}, ${t?.rounds} rounds, ${t?.changed} files changed, ${t?.steps} steps, ended ${t?.why}`,
+      );
+      await shot(page, "code-build-done", 1800);
+      // 4. the running result, used
+      await tabs.getByRole("tab", { name: "Preview" }).click();
+      const input = frame.getByPlaceholder("What needs doing?");
+      await input.waitFor({ timeout: 60_000 });
+      await input.fill("Buy bread");
+      await frame.getByRole("button", { name: /add/i }).first().click();
+      await frame.getByText("Buy bread").first().waitFor({ timeout: 10_000 });
+      const shown = await frame
+        .locator("img")
+        .first()
+        .evaluate((img) => img.complete && img.naturalWidth > 0);
+      console.log(
+        `  in the preview: "Buy bread" was added to the list; the logo ${shown ? "is shown" : "is NOT shown"}`,
+      );
+      await page.waitForTimeout(600);
+      await shot(page, "code-build-preview", 1000);
+      if (!shown) throw new Error("the logo is not shown in the running app");
+      // it survives a reload, as asked
+      await pane.getByRole("button", { name: "Load again" }).click();
+      await frame.getByText("Buy bread").first().waitFor({ timeout: 15_000 });
+      console.log("  after loading the page again the to-do is still there");
+      await pane.getByRole("button", { name: "Phone" }).click();
+      await page.waitForTimeout(600);
+      await shot(page, "code-build-preview-phone", 1000);
+      if (t?.result !== "passed") throw new Error(`the turn's check did not pass: ${t?.result}`);
+      await pane.getByRole("button", { name: "Stop" }).click();
+      await pane.getByText("Nothing is running yet").waitFor({ timeout: 20_000 });
     });
   }
   if (scheme === "light" && names.has("u11-make")) {

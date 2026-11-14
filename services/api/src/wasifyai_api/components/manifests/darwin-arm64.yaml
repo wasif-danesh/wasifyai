@@ -50,6 +50,19 @@ components:
       sha256: 29dc7e492abbe175d50af328388954c88aec0b9d42d54c549f66e2b6d733c711
       kind: tar.gz
       strip: 1
+  node:
+    # Node for coding projects (stage C4): the sandbox cannot read a Node in a person's home folder (nvm and
+    # the like), so the agent, the check, the preview and the person's terminal get this one. The LTS line.
+    title: Node for coding projects
+    version: 24.22.3
+    source: nodejs.org
+    min_free_bytes: 536870912
+    archive:
+      url: https://nodejs.org/dist/v24.22.3/node-v24.22.3-darwin-arm64.tar.gz
+      size: 53084299
+      sha256: ff6e17d4874b76d272212b908cc020d6e815fba5a6c7eaaa06add725840307fd
+      kind: tar.gz
+      strip: 1
 # What the parts the engine's services set up fetch (stage F2; these were the *_pins.json files).
 # Paths in them are relative to the wasifyai_api package. Every platform carries every part, so
 # an engine anywhere can say what a part needs and that it is not available on this computer.

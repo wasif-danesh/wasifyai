@@ -39,6 +39,7 @@ import contextlib
 import difflib
 import logging
 import os
+import shutil
 import tempfile
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -46,10 +47,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from wasifyai_platform_sdk import search_text
+from wasifyai_platform_sdk import Identity, search_text
 
-from wasifyai_code import PRODUCT_ID, checks, rules
+from wasifyai_code import PRODUCT_ID, assets, checks, rules, starters
 from wasifyai_code import place as places
+from wasifyai_code import preview as previews
 from wasifyai_code import store as rows
 from wasifyai_code.checkpoints import CheckpointError, CheckpointStore
 from wasifyai_code.checks import is_test_file
@@ -148,7 +150,9 @@ def owner_of(identity: Any) -> Owner:
 # ---- which folders may be a workspace ---------------------------------------------------------
 
 
-def check_folder(folder: str, *, data_dir: Path | None, home: Path | None = None) -> Path:
+def check_folder(
+    folder: str, *, data_dir: Path | None, home: Path | None = None, must_exist: bool = True
+) -> Path:
     """The folder a session may be opened on, as its real path, or `Refused`.
 
     The sandbox opens a workspace to the coding engine, so a folder must not hold anything the
@@ -158,7 +162,7 @@ def check_folder(folder: str, *, data_dir: Path | None, home: Path | None = None
     if not folder.strip() or not os.path.isabs(os.path.expanduser(folder.strip())):
         raise Refused("bad_folder", "Give the folder's whole path, starting at the top.")
     path = Path(os.path.realpath(os.path.expanduser(folder.strip())))
-    if not path.is_dir():
+    if must_exist and not path.is_dir():
         raise Refused("no_folder", f"There is no folder at {path}.")
     home = Path(os.path.realpath(home or Path.home()))
     if path == home or path in home.parents:
@@ -361,6 +365,10 @@ class Sessions:
         )
         own = getattr(self.place, "sandbox", None)
         self.terminals = Terminals(
+            (lambda folder: own(folder, who="person")) if own is not None else None
+        )
+        # the preview is the person's own: like their terminal, it may fetch from a package index
+        self.previews = previews.Previews(
             (lambda folder: own(folder, who="person")) if own is not None else None
         )
 
@@ -616,6 +624,90 @@ class Sessions:
         """Three more rounds: a new turn that tells the agent the check still fails."""
         return await self.send(owner, session_id, TRY_AGAIN)
 
+    # ---- the preview ----------------------------------------------------------------------------
+
+    def preview(self, owner: Owner, session_id: str) -> dict[str, Any]:
+        """The project's preview: its command, what the project's files suggest, and where the
+        running one is."""
+        session = self._session(owner, session_id)
+        workspace = self.store.get_workspace(owner, session["workspace_id"])
+        try:
+            found = previews.suggest(Path(workspace["path"]))
+        except OSError:
+            found = []
+        running = self.previews.get(session_id)
+        return {
+            "project": workspace["name"],
+            "command": workspace["preview_command"],
+            "suggested": found,
+            "running": running.view() if running is not None else None,
+        }
+
+    def set_preview(self, owner: Owner, session_id: str, command: str) -> dict[str, Any]:
+        session = self._session(owner, session_id)
+        command = command.strip()
+        if len(command) > previews.MAX_COMMAND or "\0" in command:
+            raise Refused("bad_command", "That command is too long.")
+        self.store.set_preview(owner, session["workspace_id"], command)
+        return self.preview(owner, session_id)
+
+    async def start_preview(
+        self, owner: Owner, session_id: str, command: str | None = None
+    ) -> dict[str, Any]:
+        """Start the project in its sandbox. `command` is kept as the project's when given."""
+        session = self._session(owner, session_id)
+        if command is not None and command.strip():
+            self.set_preview(owner, session_id, command)
+        workspace = self.store.get_workspace(owner, session["workspace_id"])
+        try:
+            await self.previews.start(
+                session_id, Path(workspace["path"]), workspace["preview_command"]
+            )
+        except previews.PreviewError as e:
+            raise Refused(e.code, e.message) from None
+        except PlaceError as e:
+            raise Refused("no_sandbox", str(e) or "A preview is not available here.") from None
+        return self.preview(owner, session_id)
+
+    async def stop_preview(self, owner: Owner, session_id: str) -> dict[str, Any]:
+        self._session(owner, session_id)
+        await self.previews.stop(session_id)
+        return self.preview(owner, session_id)
+
+    # ---- a new project from a starter -----------------------------------------------------------
+
+    async def start_new(
+        self,
+        owner: Owner,
+        *,
+        parent: str,
+        name: str,
+        starter: str = "web",
+        model: str = "",
+        mode: str = rows.ASK,
+    ) -> dict[str, Any]:
+        """A new project in a new folder inside `parent`, from a starter, and a session on it.
+        The starter's own preview and check commands are set: they are part of what was made."""
+        inside = check_folder(
+            (parent.strip().rstrip("/") or "/") + "/x",  # a folder inside it: is that allowed?
+            data_dir=self.state.desktop_dir,
+            must_exist=False,
+        ).parent
+        try:
+            chosen = starters.get(starter)
+            folder = await asyncio.to_thread(starters.make, starter, inside, name)
+        except starters.StarterError as e:
+            raise Refused(e.code, e.message) from None
+        try:
+            made = await self.start(owner, folder=str(folder), model=model, mode=mode)
+        except Refused:
+            await asyncio.to_thread(shutil.rmtree, folder, True)
+            raise
+        workspace_id = self.store.get_session(owner, made["id"])["workspace_id"]
+        self.store.set_check(owner, workspace_id, chosen.check, source="suggested")
+        self.store.set_preview(owner, workspace_id, chosen.preview)
+        return self.view(owner, made["id"])
+
     # ---- the person's terminal -------------------------------------------------------------------
 
     async def open_terminal(
@@ -803,6 +895,7 @@ class Sessions:
         session = self._session(owner, session_id)
         await self.stop(owner, session_id)
         await self.terminals.close_session(session_id)
+        await self.previews.stop(session_id)
         end = getattr(self.place, "end", None)
         if session["place_session"] and end is not None:
             with contextlib.suppress(PlaceError):
@@ -831,6 +924,10 @@ class Sessions:
             or bool(last and last["state"] == rows.CHECKING and session_id in self._turns),
             "needs_you": bool(last and last["needs_you"]) and not self.running(session_id),
             "check_command": workspace["check_command"],
+            "preview_command": workspace["preview_command"],
+            "previewing": bool(
+                (shown := self.previews.get(session_id)) and shown.state != previews.ENDED
+            ),
             "waiting": bool(
                 session_id in self._turns
                 and any(not a.done() for a in self._turns[session_id].asks.values())
@@ -893,6 +990,7 @@ class Sessions:
         """The engine is closing: every turn in flight is stopped, every terminal closed."""
         await self.stop_all()
         await self.terminals.close_all()
+        await self.previews.close_all()
         close = getattr(self.place, "close", None)
         if close is not None:
             await close()
@@ -1115,6 +1213,12 @@ class Sessions:
         for step, found in zip(steps, kinds, strict=True):
             if mark and found:
                 flight.marks[str(step.get("id") or "")] = mark
+        if mark != rules.NO:
+            # a picture or speech that was let through is made now, by the app itself and for
+            # the person, before the command that asked for it runs and reads how it went
+            for step, found in zip(steps, kinds, strict=True):
+                if found == rules.MAKE:
+                    await self._make(owner, workspace, str(step.get("command") or ""))
         if flight.where is not None:
             # a no is for this one step: said too strongly, a model went on to refuse the
             # person's later requests for the same file by itself (docs/spikes/coding-c2.md)
@@ -1127,6 +1231,14 @@ class Sessions:
                 await self.place.answer(
                     flight.where, ask_id, mark != rules.NO, no if mark == rules.NO else ""
                 )
+
+    async def _make(self, owner: Owner, workspace: dict[str, Any], command: str) -> None:
+        data = self.state.desktop_dir
+        if data is None:
+            return
+        identity = Identity(owner.tenant_id, owner.user_id)
+        notes = Path(data) / "coding-fixed" / assets.NOTES
+        await assets.make(self.state, identity, Path(workspace["path"]), notes, command)
 
     def _relay(
         self, feed: Feed, session: dict[str, Any], turn: dict[str, Any], flight: _Turn, event: Any

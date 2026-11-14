@@ -10,6 +10,8 @@ import type {
   CodeCheck,
   CodeCheckInfo,
   CodeEvent,
+  CodePreview,
+  CodePreviewRun,
   CodeProject,
   CodeSession,
   CodeTurn,
@@ -190,6 +192,25 @@ const CHECK_INFO: CodeCheckInfo = {
   checks: [],
 };
 
+const PREVIEW: CodePreview = {
+  project: "bakery-site",
+  command: "",
+  suggested: [{ command: "npm run dev", why: '`package.json` has a "dev" script' }],
+  running: null,
+};
+
+const RUNNING: CodePreviewRun = {
+  state: "running",
+  command: "npm run dev",
+  port: 5173,
+  url: "http://localhost:5173/",
+  open_to_network: false,
+  listens_nowhere: false,
+  exit_code: null,
+  stopped: false,
+  output: "Serving this project at http://127.0.0.1:5173/",
+};
+
 let seq = 0;
 const ev = (e: Record<string, unknown>, run = "t1") =>
   ({ seq: ++seq, run_id: run, thread_id: "s1", ts: "", ...e }) as CodeEvent;
@@ -295,6 +316,13 @@ function api(over: Partial<CodeApi> = {}): CodeApi {
     terminalSize: async () => undefined,
     closeTerminal: async () => undefined,
     terminalEvents: async function* () {},
+    preview: async () => PREVIEW,
+    startPreview: async () => ({ ...PREVIEW, command: "npm run dev", running: RUNNING }),
+    stopPreview: async () => PREVIEW,
+    starters: async () => [
+      { id: "web", title: "A small web app", says: "One page with tests.", needs: ["Node"] },
+    ],
+    newProject: async () => session({ id: "s9", project: "tax-shop", mode: "ask" }),
     ...over,
   } as CodeApi;
 }
@@ -1040,6 +1068,15 @@ describe("a session whose turns are checked", () => {
     expect(stepLine({ ...ran, status: "ok" })).toBe("Ran npm test");
     expect(stepLine({ ...ran, status: "error" })).toBe("Could not run npm test");
     expect(stepLine({ ...ran, status: "refused" })).toBe("Did not run npm test: you said no");
+    const make = {
+      tool: "terminal",
+      given: { command: 'cd /p && wasify-make picture "a logo" assets/logo.png' },
+    };
+    expect(stepLine({ ...make, status: "started" })).toBe(
+      "Wasify AI is making a picture. This can take a few minutes",
+    );
+    expect(stepLine({ ...make, status: "ok" })).toBe("Wasify AI made a picture");
+    expect(stepLine({ ...make, status: "error" })).toBe("Wasify AI could not make a picture");
     expect(
       stepLine({ tool: "terminal", given: { command: "x".repeat(200) }, status: "ok" }),
     ).toHaveLength(85);
@@ -1459,5 +1496,193 @@ describe("the Terminal tab", () => {
       .replace(/\s+/g, " ")
       .trim();
     expect(XTERM_CSS.replace(/\s+/g, " ").trim()).toBe(css);
+  });
+});
+
+describe("the Preview tab and a new project", () => {
+  const editing = session({ mode: "ask", turns: 1, state: "done" });
+  const openTab = async (given: Partial<CodeApi>) => {
+    render(
+      <Code
+        api={api({
+          sessions: async () => [editing],
+          session: async () => editing,
+          turns: async () => [turn()],
+          ...given,
+        })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    await userEvent.click(
+      (await screen.findAllByRole("tab", { name: "Preview" }))[0] as HTMLElement,
+    );
+    return screen.findByRole("region", { name: "Preview" });
+  };
+
+  it("offers the suggested command, starts it and shows the page from this computer", async () => {
+    const startPreview = vi.fn(async () => ({
+      ...PREVIEW,
+      command: "npm run dev",
+      running: RUNNING,
+    }));
+    const stopPreview = vi.fn(async () => ({ ...PREVIEW, command: "npm run dev" }));
+    const pane = await openTab({ startPreview, stopPreview });
+    expect(await within(pane).findByText("Nothing is running yet")).toBeTruthy();
+    expect(within(pane).getByText(/package.json has a "dev" script/)).toBeTruthy();
+    await userEvent.click(within(pane).getByRole("button", { name: "Start the preview" }));
+    expect(startPreview).toHaveBeenCalledWith("s1", "npm run dev");
+    const frame = (await within(pane).findByTitle(
+      "The preview of bakery-site",
+    )) as HTMLIFrameElement;
+    expect(frame.getAttribute("src")).toBe("http://localhost:5173/");
+    expect(within(pane).getByText(/port 5173/)).toBeTruthy();
+    expect(within(pane).getByText(/Only this computer can open it/)).toBeTruthy();
+    expect(
+      within(pane).getByRole("link", { name: "Open in your own browser" }).getAttribute("href"),
+    ).toBe("http://localhost:5173/");
+    await userEvent.click(within(pane).getByRole("button", { name: "Phone" }));
+    expect(within(pane).getByRole("button", { name: "Phone" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    await userEvent.click(within(pane).getByRole("button", { name: "Stop" }));
+    expect(stopPreview).toHaveBeenCalledWith("s1");
+    expect(await within(pane).findByText("Nothing is running yet")).toBeTruthy();
+  });
+
+  it("says so when the program listens to more than this computer", async () => {
+    const pane = await openTab({
+      preview: async () => ({
+        ...PREVIEW,
+        command: "npm run dev",
+        running: { ...RUNNING, open_to_network: true },
+      }),
+    });
+    expect(
+      await within(pane).findByText("Other computers on your network can open this too"),
+    ).toBeTruthy();
+    expect(within(pane).queryByText(/Only this computer can open it/)).toBeNull();
+  });
+
+  it("shows why a preview ended, and where Node is set up when npm was not found", async () => {
+    const onOpenSetup = vi.fn();
+    render(
+      <Code
+        api={api({
+          sessions: async () => [editing],
+          session: async () => editing,
+          turns: async () => [turn()],
+          preview: async () => ({
+            ...PREVIEW,
+            command: "npm run dev",
+            running: {
+              ...RUNNING,
+              state: "ended",
+              port: null,
+              url: "",
+              exit_code: 127,
+              output: "sh: npm: command not found",
+            },
+          }),
+        })}
+        {...props}
+        onOpenSetup={onOpenSetup}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    await userEvent.click(
+      (await screen.findAllByRole("tab", { name: "Preview" }))[0] as HTMLElement,
+    );
+    const pane = await screen.findByRole("region", { name: "Preview" });
+    expect(await within(pane).findByText("The preview has ended")).toBeTruthy();
+    expect(within(pane).getByText(/ended with exit code 127/)).toBeTruthy();
+    expect(within(pane).getByText("npm was not found")).toBeTruthy();
+    await userEvent.click(within(pane).getByRole("button", { name: "Open Optional parts" }));
+    expect(onOpenSetup).toHaveBeenCalled();
+    // another command can be typed
+    await userEvent.click(within(pane).getByRole("button", { name: "Change the command" }));
+    expect((within(pane).getByLabelText(/The command that starts/) as HTMLInputElement).value).toBe(
+      "npm run dev",
+    );
+  });
+
+  it("starts a project in a new, empty folder from a starter", async () => {
+    const newProject = vi.fn(async () => session({ id: "s9", project: "tax-shop", mode: "ask" }));
+    const pickFolder = vi.fn(async () => "/Users/me/Projects");
+    const onOpenChange = vi.fn();
+    render(
+      <Code
+        api={api({ newProject })}
+        {...props}
+        pickFolder={pickFolder}
+        onOpenChange={onOpenChange}
+      />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Start in a new, empty folder" }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Start in a new, empty folder" });
+    expect(await within(dialog).findByText("A small web app")).toBeTruthy();
+    const make = within(dialog).getByRole("button", { name: "Make the project" });
+    expect((make as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.type(within(dialog).getByLabelText("The project’s name"), "tax-shop");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Choose a folder" }));
+    expect(await within(dialog).findByText("/Users/me/Projects/tax-shop")).toBeTruthy();
+    expect(within(dialog).getByText(/It needs Node/)).toBeTruthy();
+    await userEvent.click(make);
+    expect(newProject).toHaveBeenCalledWith({
+      parent: "/Users/me/Projects",
+      name: "tax-shop",
+      starter: "web",
+      model: "claude-sonnet-5-5",
+    });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith("s9"));
+  });
+
+  it("asks before Wasify AI makes a picture, in the words of making", async () => {
+    const asking = session({
+      mode: "own",
+      working: true,
+      waiting: true,
+      state: "working",
+      turns: 1,
+    });
+    const stream = feed();
+    stream.push(
+      ev({
+        event: "interrupt",
+        interrupt_id: "q1",
+        kind: "code_ask",
+        payload: {
+          ask: "make",
+          step_id: "a",
+          tool: "terminal",
+          command: 'wasify-make picture "a round logo of a loaf" assets/logo.png',
+          path: "",
+          says: "",
+          project: "bakery-site",
+          undo: true,
+          steps: 1,
+        },
+      }),
+    );
+    render(
+      <Code
+        api={api({
+          sessions: async () => [asking],
+          session: async () => asking,
+          turns: async () => [turn({ state: "working", answer: "" })],
+          events: () => stream.events(),
+        })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    const card = await screen.findByRole("region", {
+      name: "The agent wants Wasify AI to make a picture or speech",
+    });
+    expect(within(card).getByText(/a round logo of a loaf/)).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "Yes, make it" })).toBeTruthy();
+    expect(within(card).getByText(/This is asked in every mode/)).toBeTruthy();
   });
 });

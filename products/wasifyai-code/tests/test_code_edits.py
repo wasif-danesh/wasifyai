@@ -243,6 +243,7 @@ async def test_allow_for_this_project_stops_the_question_until_it_is_taken_back(
         {"id": "not_undoable", "allowed": False, "asked_now": True},
         {"id": "delete", "allowed": False, "asked_now": True},
         {"id": "install", "allowed": False, "asked_now": True},
+        {"id": "make", "allowed": False, "asked_now": True},
     ]
     await live.send(ME, made["id"], "Set the key to 2")
     asked = await card(live, made)

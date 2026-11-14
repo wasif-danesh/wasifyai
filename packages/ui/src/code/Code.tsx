@@ -38,6 +38,7 @@ import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { PageHeader } from "../window-bar";
 import { AskCard, MODES, MayDialog, ModePill } from "./Asking";
+import { type BrowserHost, BrowserPane } from "./Browser";
 import { Changes } from "./Changes";
 import { CheckCard, CheckDialog, CheckWord, WORDS } from "./Checks";
 import { Files } from "./Files";
@@ -69,6 +70,8 @@ export type CodeProps = {
    */
   openId?: string | null;
   onOpenChange?: (id: string | null) => void;
+  /** What shows web pages in the Browser tab: the desktop shell's second webview. None: the tab says so. */
+  browser?: BrowserHost;
 };
 
 const STARTERS = [
@@ -88,6 +91,7 @@ export function Code({
   onOpenKeys,
   openId,
   onOpenChange,
+  browser,
 }: CodeProps) {
   const code = useCode(api);
   const { state } = code;
@@ -160,6 +164,7 @@ export function Code({
         onTryAgain={code.tryAgain}
         onReload={code.reload}
         onOpenSetup={onOpenSetup}
+        browser={browser}
         filesTick={state.filesTick}
         undoNote={state.undoNote}
       />
@@ -455,11 +460,12 @@ function Projects({
 
 // ---- a session ---------------------------------------------------------------------------------
 
-type Side = "files" | "changes" | "terminal" | "preview";
+type Side = "files" | "changes" | "terminal" | "browser" | "preview";
 const SIDES: Record<Side, string> = {
   files: "Files",
   changes: "Changes",
   terminal: "Terminal",
+  browser: "Browser",
   preview: "Preview",
 };
 
@@ -493,10 +499,12 @@ function Session({
   onTryAgain,
   onReload,
   onOpenSetup,
+  browser,
   filesTick,
   undoNote,
 }: {
   api: CodeApi;
+  browser?: BrowserHost;
   session: CodeSession;
   models: CodeModel[];
   thread: TurnView[];
@@ -525,6 +533,16 @@ function Session({
   const [pane, setPane] = useState<"chat" | Side>("chat");
   // beside the chat, on a wide window: the files, the changes or the person's terminal
   const [side, setSide] = useState<Side>("files");
+  // on a wide window the chat and one tab are side by side; on a narrow one the tab is hidden behind the chat
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const at = window.matchMedia?.("(min-width: 64rem)");
+    if (!at) return;
+    const read = () => setWide(at.matches);
+    read();
+    at.addEventListener("change", read);
+    return () => at.removeEventListener("change", read);
+  }, []);
   const [may, setMay] = useState(false);
   const [check, setCheck] = useState(false);
   const showSide = (which: Side) => {
@@ -589,7 +607,7 @@ function Session({
         role="tablist"
         aria-label="What to show"
       >
-        {(["chat", "files", "changes", "terminal", "preview"] as const).map((p) => (
+        {(["chat", "files", "changes", "terminal", "browser", "preview"] as const).map((p) => (
           <button
             key={p}
             type="button"
@@ -728,7 +746,7 @@ function Session({
             role="tablist"
             aria-label="Beside the chat"
           >
-            {(["files", "changes", "terminal", "preview"] as const).map((p) => (
+            {(["files", "changes", "terminal", "browser", "preview"] as const).map((p) => (
               <button
                 key={p}
                 type="button"
@@ -741,7 +759,21 @@ function Session({
               </button>
             ))}
           </div>
-          {side === "files" ? (
+          {/* the browser stays where it is while another tab is shown: its page is not loaded again */}
+          <section
+            aria-label="Browser"
+            className={cn("min-h-0 min-w-0 flex-1", side === "browser" ? "" : "hidden")}
+          >
+            <BrowserPane
+              host={browser}
+              shown={side === "browser" && (pane !== "chat" || wide)}
+              onAddToChat={(words) => {
+                setText((was) => (was ? `${was}\n\n${words}` : words));
+                setPane("chat");
+              }}
+            />
+          </section>
+          {side === "browser" ? null : side === "files" ? (
             <section aria-label="Files" className="min-h-0 min-w-0 flex-1">
               <Files api={api} sessionId={session.id} project={session.project} tick={filesTick} />
             </section>

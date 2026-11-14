@@ -125,3 +125,22 @@ The decisions above stand. What was settled while building, under the owner's st
     each; the run's session can be opened to read what the agent did); the web.
 
 Measured in `docs/spikes/coding-c6.md`.
+
+## Amendment (2026-11-15): starting at login and the menu bar, as built
+
+Decision 12's second half, moved here from stage C6 and built with the Browser tab:
+
+1. **One switch on the Scheduled screen:** "Open Wasify AI when I log in, and keep it in the menu bar". Off
+   unless the person switches it on. A Mac only; elsewhere it is not shown.
+2. **At login** the app is started by a launch agent of the person's own, one plain file,
+   `~/Library/LaunchAgents/ai.wasifyai.desktop.login.plist`, which starts the app once with `--hidden` and
+   does not keep it alive. Whether the switch is on is that file being there. **No Tauri plugin was added**
+   (this ADR expected one): the file is a dozen lines, and nothing is downloaded.
+3. **In the menu bar** an item with "Open Wasify AI" and "Quit Wasify AI" (Tauri's `tray-icon` feature, for
+   the Mac build only).
+4. **Closing the window** then hides it; the engine and the timer go on. Quit ends the app as before. A
+   click on the Dock icon brings the window back.
+5. **Not built:** the newer macOS way of registering a login item (it shows the app by name in System
+   Settings; the launch agent shows as a background item); waking the computer; the same on Windows and Linux.
+
+Measured in `docs/spikes/coding-browser.md`.

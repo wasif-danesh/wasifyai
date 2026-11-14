@@ -20,6 +20,7 @@ import type {
   CodeTurn,
 } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { type BrowserHost, pageForChat } from "./Browser";
 import { whyNot } from "./Checks";
 import { CARRY_OUT, Code } from "./Code";
 import { Extensions, bringsWords } from "./Extensions";
@@ -2199,5 +2200,157 @@ describe("Scheduled", () => {
     expect(applyRun).toHaveBeenCalledWith("r1");
     expect(await screen.findByText(/1 file was written into the project/)).toBeTruthy();
     expect(screen.getByText(/because you changed it meanwhile: notes.txt/)).toBeTruthy();
+  });
+});
+
+describe("The Browser tab", () => {
+  const host = (over: Partial<BrowserHost> = {}) => {
+    let tell: (now: { url: string; loading: boolean }) => void = () => {};
+    const made: BrowserHost = {
+      show: vi.fn(async () => undefined),
+      hide: vi.fn(),
+      close: vi.fn(),
+      go: vi.fn(async () => undefined),
+      text: vi.fn(async () => ({
+        url: "https://example.org/getDay",
+        title: "getDay",
+        text: "Returns the day of the week.",
+        cut: false,
+      })),
+      onChange: (told) => {
+        tell = told;
+        return () => {};
+      },
+      openOutside: vi.fn(),
+      ...over,
+    };
+    return { made, tell: (now: { url: string; loading: boolean }) => tell(now) };
+  };
+  const open = async (browser?: BrowserHost) => {
+    const one = session();
+    render(
+      <Code
+        api={api({ sessions: async () => [one], session: async () => one })}
+        {...props}
+        browser={browser}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    const tabs = await screen.findByRole("tablist", { name: "Beside the chat" });
+    await userEvent.click(within(tabs).getByRole("tab", { name: "Browser" }));
+    return screen.getByRole("region", { name: "Browser" });
+  };
+
+  it("puts a page into words for the chat, and says when only its beginning is given", () => {
+    const words = pageForChat({
+      url: "https://a.example/x",
+      title: "T",
+      text: "Hello",
+      cut: false,
+    });
+    expect(words).toContain('A page I am reading, "T" (https://a.example/x):');
+    expect(words).toContain("<page>\nHello\n</page>");
+    const long = pageForChat({
+      url: "https://a.example/x",
+      title: "",
+      text: "a".repeat(20_000),
+      cut: false,
+    });
+    expect(long).toContain("(https://a.example/x), its beginning:");
+    expect(long.length).toBeLessThan(12_400);
+  });
+
+  it("says where the browser is when this is not the desktop window", async () => {
+    const pane = await open(undefined);
+    expect(within(pane).getByText("The browser is part of the desktop app")).toBeTruthy();
+  });
+
+  it("opens what is typed over the tab's own area, follows the page, and adds it to the chat", async () => {
+    const box = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ left: 420, top: 96, width: 700, height: 560 } as DOMRect);
+    const { made, tell } = host();
+    const pane = await open(made);
+    expect(
+      within(pane).getByText(/The agent cannot open pages or reach the internet/),
+    ).toBeTruthy();
+    const address = within(pane).getByLabelText("An address, or words to search for");
+    await userEvent.type(address, "date getDay{Enter}");
+    expect(made.show).toHaveBeenCalledWith(
+      { x: 420, y: 96, width: 700, height: 560 },
+      "date getDay",
+    );
+    tell({ url: "https://example.org/getDay", loading: false });
+    await waitFor(() =>
+      expect((address as HTMLInputElement).value).toBe("https://example.org/getDay"),
+    );
+    await userEvent.click(within(pane).getByRole("button", { name: "Load again" }));
+    expect(made.go).toHaveBeenCalledWith("reload");
+    await userEvent.click(within(pane).getByRole("button", { name: "Open in your own browser" }));
+    expect(made.openOutside).toHaveBeenCalledWith("https://example.org/getDay");
+    await userEvent.click(within(pane).getByRole("button", { name: /Add this page to the chat/ }));
+    const message = (await screen.findByRole("textbox", {
+      name: "Ask about this project",
+    })) as HTMLTextAreaElement;
+    await waitFor(() => expect(message.value).toContain("Returns the day of the week."));
+    expect(message.value).toContain('"getDay" (https://example.org/getDay)');
+    // another tab: the page is taken off the screen, and it is not loaded again when the tab comes back
+    const tabs = screen.getByRole("tablist", { name: "Beside the chat" });
+    await userEvent.click(within(tabs).getByRole("tab", { name: "Files" }));
+    await waitFor(() => expect(made.hide).toHaveBeenCalled());
+    expect(made.close).not.toHaveBeenCalled();
+    box.mockRestore();
+  });
+
+  it("says in words why a page could not be opened", async () => {
+    const box = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ left: 0, top: 0, width: 700, height: 560 } as DOMRect);
+    const { made } = host({
+      show: vi.fn(async () => {
+        throw "that is not a web address";
+      }),
+    });
+    const pane = await open(made);
+    await userEvent.type(
+      within(pane).getByLabelText("An address, or words to search for"),
+      "file:///etc/passwd{Enter}",
+    );
+    expect((await within(pane).findByRole("alert")).textContent).toBe("that is not a web address");
+    box.mockRestore();
+  });
+});
+
+describe("Staying open for the schedules", () => {
+  it("shows the switch only where the shell offers it, and flips it", async () => {
+    const set = vi.fn(async (on: boolean) => ({ supported: true, on }));
+    render(
+      <Scheduled
+        api={api({ schedules: async () => ({ items: [], time_zone: "UTC" }) } as Partial<CodeApi>)}
+        stayOpen={{ get: async () => ({ supported: true, on: false }), set }}
+        onOpenProjects={vi.fn()}
+        onOpenSession={vi.fn()}
+      />,
+    );
+    const flip = await screen.findByRole("switch", {
+      name: "Open Wasify AI when I log in, and keep it in the menu bar",
+    });
+    expect(screen.getByText(/closing the window quits Wasify AI/)).toBeTruthy();
+    await userEvent.click(flip);
+    expect(set).toHaveBeenCalledWith(true);
+    expect(await screen.findByText(/Quit it from its item in the menu bar/)).toBeTruthy();
+  });
+
+  it("has no switch where there is none to offer", async () => {
+    render(
+      <Scheduled
+        api={api({ schedules: async () => ({ items: [], time_zone: "UTC" }) } as Partial<CodeApi>)}
+        stayOpen={{ get: async () => ({ supported: false, on: false }), set: vi.fn() }}
+        onOpenProjects={vi.fn()}
+        onOpenSession={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText("No schedules yet")).toBeTruthy();
+    expect(screen.queryByRole("switch")).toBeNull();
   });
 });

@@ -40,7 +40,7 @@ import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 
 const say = (e: unknown, fallback: string) =>
-  e instanceof Error && e.message ? e.message : fallback;
+  typeof e === "string" && e ? e : e instanceof Error && e.message ? e.message : fallback;
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const SELECT =
@@ -133,7 +133,27 @@ function Switch({
   );
 }
 
-function Awake() {
+/** "Open Wasify AI when I log in, and keep it in the menu bar": the desktop shell's switch. */
+export type StayOpen = {
+  get: () => Promise<{ supported: boolean; on: boolean }>;
+  set: (on: boolean) => Promise<{ supported: boolean; on: boolean }>;
+};
+
+function Awake({ stayOpen }: { stayOpen?: StayOpen }) {
+  const [stays, setStays] = useState<{ supported: boolean; on: boolean } | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    let gone = false;
+    stayOpen
+      ?.get()
+      .then((now) => {
+        if (!gone) setStays(now);
+      })
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [stayOpen]);
   return (
     <Notice
       tone="info"
@@ -141,6 +161,35 @@ function Awake() {
     >
       A time that passes while the app is closed or the computer sleeps is written down as missed. A
       schedule can ask to run once when the app is back.
+      {stayOpen && stays?.supported ? (
+        <span className="mt-2 flex items-start gap-2.5">
+          <Switch
+            on={stays.on}
+            label="Open Wasify AI when I log in, and keep it in the menu bar"
+            onChange={(on) => {
+              setProblem(null);
+              stayOpen
+                .set(on)
+                .then(setStays)
+                .catch((e) => setProblem(say(e, "That could not be changed.")));
+            }}
+          />
+          <span>
+            Open Wasify AI when I log in, and keep it in the menu bar
+            <br />
+            <span className="text-xs">
+              {stays.on
+                ? "On: closing the window leaves Wasify AI open. Quit it from its item in the menu bar."
+                : "Off: closing the window quits Wasify AI, and its schedules wait."}
+            </span>
+            {problem ? (
+              <span role="alert" className="block text-xs text-destructive">
+                {problem}
+              </span>
+            ) : null}
+          </span>
+        </span>
+      ) : null}
     </Notice>
   );
 }
@@ -153,10 +202,13 @@ type View =
 
 export function Scheduled({
   api,
+  stayOpen,
   onOpenProjects,
   onOpenSession,
 }: {
   api: CodeApi;
+  /** The desktop shell's switch for staying open; none: the switch is not shown. */
+  stayOpen?: StayOpen;
   /** Where a project is opened (Code, Projects). */
   onOpenProjects: () => void;
   /** Open a run's session, to read what the agent did. */
@@ -243,7 +295,7 @@ export function Scheduled({
           </Button>
         ) : null}
       </div>
-      <Awake />
+      <Awake stayOpen={stayOpen} />
       {problem ? (
         <Notice tone="error" title="That did not work">
           {problem}

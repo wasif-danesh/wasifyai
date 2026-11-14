@@ -107,6 +107,30 @@ class CodeStateEvent(_Envelope):
     cost_usd: float = 0.0
     # with `state: "done"`, in a session that may change files: how many files the turn changed
     changed: int | None = None
+    # the check (stage C3). `round`: how many times the check has run in this turn so far (with
+    # `checking`: the one that begins). `needs_you`: the turn stopped and a person must decide.
+    # `check_why`: why the check has the result it has, when `why` is "finished" (no_change,
+    # no_command, rounds_used, time_limit, missing_command, ...)
+    round: int | None = None
+    needs_you: bool | None = None
+    check_why: str = ""
+
+
+class CodeCheckEvent(_Envelope):
+    """One run of the project's check has ended (ADR-0103; stage C3). The check is run by the
+    app after a turn that changed files; a failed one goes back to the agent."""
+
+    event: Literal["code_check"] = "code_check"
+    id: str  # the check's row: its whole output is read with it
+    round: int  # 1, 2, 3; 0 for a check the person ran by hand
+    rounds: int  # how many rounds a turn may use
+    command: str
+    result: Literal["passed", "failed", "not_checked", "could_not_check"]
+    why: str = ""  # for could_not_check and not_checked
+    exit_code: int | None = None
+    seconds: float = 0.0
+    changed_tests: list[str] = Field(default_factory=list)  # tests the agent changed or deleted
+    tail: str = ""  # the end of the output, cut to 4,000 characters
 
 
 class CodeMessageEvent(_Envelope):
@@ -137,6 +161,7 @@ SseEvent = Annotated[
     | ErrorEvent
     | DoneEvent
     | CodeStateEvent
+    | CodeCheckEvent
     | CodeMessageEvent
     | CodeRefusalEvent,
     Field(discriminator="event"),

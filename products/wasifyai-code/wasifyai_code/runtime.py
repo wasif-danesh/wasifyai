@@ -1,4 +1,4 @@
-"""The coding sessions in flight (stage C1b: a session that only reads).
+"""The coding sessions in flight.
 
 This is where the product meets the engine's services, which it reads from the app state and never
 imports: the coding server and the model gateway (`state.coding_server`, `state.coding_gateway`)
@@ -12,17 +12,21 @@ become the place "this computer" (`client.py`), and the rows are `state.code_sto
                      session is being made, and while the agent works
 
 **The modes.** In Plan the agent only reads: nothing can change and no checkpoint is taken. In
-"Ask me" and "Work on its own" (stage C2) it changes files with the file editor and runs nothing:
+"Ask me" and "Work on its own" it changes files with the file editor and runs commands in a
+terminal inside the sandbox (stage C3):
 
     before the turn   a checkpoint of the project (`checkpoints.py`), outside the project
-    a change          waits in the coding engine; `rules.py` answers at once, or the person is
-                      asked with a card (`interrupt`, kind `code_ask`) and may allow the kind
+    a change or a     waits in the coding engine; `rules.py` answers at once, or the person is
+    command           asked with a card (`interrupt`, kind `code_ask`) and may allow the kind
                       for the project
     after the turn    a second checkpoint: what the turn changed is the difference
     Sessions.undo     puts the files back to before the turn; `Sessions.redo` brings it back
 
-No check runs yet: the agent cannot run a command, and neither do we until stage C3, when the
-implement, check, fix loop (`loop.py`) takes over the turn. A session's word stays what it was.
+**The check.** Every turn is run by the implement, check, fix loop (`loop.Loop.run_turn`, the one
+function a scheduled run will call too). When the agent says it has finished and files changed,
+the project's check command is run by us, inside a sandbox of our own for that project; a
+failure goes back to the agent, up to three rounds. This file gives the loop its `Hooks`: how a
+session is opened in the place, how a question is answered, and what is said on the feed.
 
 **The relay.** Each session has a `Feed`: the turn's states, the agent's steps, its words and a
 refusal, in order, in the shape of the SSE contract's section "A coding session's stream"
@@ -35,6 +39,7 @@ import contextlib
 import difflib
 import logging
 import os
+import tempfile
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -43,21 +48,29 @@ from typing import Any
 
 from wasifyai_platform_sdk import search_text
 
-from wasifyai_code import PRODUCT_ID, rules
+from wasifyai_code import PRODUCT_ID, checks, rules
 from wasifyai_code import place as places
 from wasifyai_code import store as rows
 from wasifyai_code.checkpoints import CheckpointError, CheckpointStore
 from wasifyai_code.checks import is_test_file
-from wasifyai_code.place import Account, Place, PlaceError, SessionSpec
+from wasifyai_code.loop import CUT_OFF, Hooks, Loop, TurnRunning
+from wasifyai_code.place import Account, Place, PlaceError, PlaceEvent, SessionSpec
 from wasifyai_code.store import CodeStore, Owner
+from wasifyai_code.terminal import Terminal, TerminalError, Terminals
 
 log = logging.getLogger(__name__)
 
 KIND = "code_session"  # what a session is called in search (ADR-0041)
 STEP_LIMIT = 60  # tool steps in one turn of a session that reads
+RUN_STEP_LIMIT = 120  # ... and of one that changes files and runs commands
 STOP_GRACE_S = 3.0  # after Stop, how long the place's own "ended" is waited for
 # the stream's event kinds (the SSE contract, "A coding session's stream")
 STATE, MESSAGE, REFUSAL = "code_state", "code_message", "code_refusal"
+CHECK = "code_check"  # one run of the project's check, with its result
+CHECK_OUTPUTS = "check-output"  # under <app data>/code: the full output of every check
+MAX_CHECK_BYTES = 400_000  # of a check's output, when the window asks for it
+TAIL_SHOWN = 4000
+TRY_AGAIN = "The check still fails. Try again to fix what fails."
 TOOL_CALL, TOOL_RESULT = "tool_call", "tool_result"
 INTERRUPT, ASK_KIND = "interrupt", "code_ask"  # the approval card (the contract's `interrupt`)
 TOKEN, REASONING = "token", "reasoning"  # words as they are written: relayed, never kept
@@ -79,6 +92,24 @@ APP_RESTARTED = (
     "The app was started again since this session's last message, so the agent begins from "
     "this message and does not know the earlier ones."
 )
+
+
+def how_it_ended(why: str) -> tuple[str, str]:
+    """A turn's reason as the window is told it: how the agent's own turn ended (one of the
+    place's five endings), and beside it why the check has the result it has. The loop writes
+    one word for both; when it is a reason of the check, the agent itself had finished."""
+    if not why or why in places.ENDINGS:
+        return why, ""
+    if why == CUT_OFF:
+        return places.ERROR, ""
+    return places.FINISHED, why
+
+
+def _outward(turn: dict[str, Any]) -> dict[str, Any]:
+    why, check_why = how_it_ended(str(turn.get("why") or ""))
+    if not why and turn.get("state") == rows.DONE:
+        why = places.FINISHED  # the check passed: the loop gives no reason for that
+    return {**turn, "why": why, "check_why": check_why}
 
 
 class NotAvailable(Exception):
@@ -213,6 +244,83 @@ class _Turn:
     # the questions that wait for the person: the card's id -> where the answer goes
     asks: "dict[str, asyncio.Future[str]]" = field(default_factory=dict)
     marks: dict[str, str] = field(default_factory=dict)  # a step's id -> how it was answered
+    told: bool = False  # the turn's last state was said on the feed
+
+
+class _Hooks(Hooks):
+    """What the loop asks of the product's sessions."""
+
+    def __init__(self, sessions: "Sessions"):
+        self.s = sessions
+
+    def spec(
+        self, owner: Owner, session: dict[str, Any], workspace: dict[str, Any], unattended: bool
+    ) -> SessionSpec:
+        reads = session["mode"] == rows.PLAN
+        return SessionSpec(
+            Path(workspace["path"]),
+            model=session["model"],
+            step_limit=STEP_LIMIT if reads else RUN_STEP_LIMIT,
+            unattended=unattended,
+            read_only=reads,
+            account=Account(
+                owner.tenant_id, owner.product_id, owner.user_id, session["id"],
+                spent_usd=float(session["cost_usd"]), limit_usd=float(session["cost_limit_usd"]),
+            ),
+        )  # fmt: skip
+
+    async def open(
+        self,
+        owner: Owner,
+        session: dict[str, Any],
+        workspace: dict[str, Any],
+        turn: dict[str, Any],
+        spec: SessionSpec,
+        place: Place,
+    ) -> tuple[str, str | None]:
+        where, cursor = session["place_session"], session["last_event"]
+        adopt = getattr(place, "adopt", None)
+        if where and adopt is not None and not adopt(where, spec):
+            where = None
+            self.s.store.note_turn(owner, turn["id"], APP_RESTARTED)
+        if not where:
+            where, cursor = await place.start(spec), None
+        flight = self.s._turns.get(session["id"])
+        if flight is not None:
+            flight.where = where
+        return where, cursor
+
+    def request(self, owner: Owner, session: dict[str, Any], turn: dict[str, Any]) -> str:
+        return self.s._request(owner, session, turn)
+
+    async def event(
+        self,
+        owner: Owner,
+        session: dict[str, Any],
+        workspace: dict[str, Any],
+        turn: dict[str, Any],
+        where: str,
+        event: PlaceEvent,
+    ) -> None:
+        flight = self.s._turns.get(session["id"])
+        if flight is None:
+            return
+        feed = self.s.feed(session["id"])
+        if event.kind == places.CONFIRM and session["mode"] != rows.PLAN:
+            await self.s._confirm(owner, session, workspace, turn, flight, feed, event)
+        else:
+            self.s._relay(feed, session, turn, flight, event)
+
+    async def ended(
+        self,
+        owner: Owner,
+        session: dict[str, Any],
+        workspace: dict[str, Any],
+        turn: dict[str, Any],
+        why: str,
+        detail: str,
+    ) -> dict[str, Any]:
+        return await self.s._closing(owner, session, workspace, turn, why, detail)
 
 
 class Sessions:
@@ -232,6 +340,29 @@ class Sessions:
         self.place: Any = place
         self._turns: dict[str, _Turn] = {}
         self._feeds: dict[str, Feed] = {}
+        self._checking: set[str] = set()  # sessions whose check the person is running by hand
+        data = state.desktop_dir
+        outputs = (
+            Path(data) / "code" / CHECK_OUTPUTS
+            if data is not None
+            else Path(tempfile.gettempdir()) / "wasify-code-checks"
+        )
+        self.loop = Loop(
+            self.place,
+            self.store,
+            checkpoints=self._cps,
+            outputs=outputs,
+            on_event=self._on_loop,
+            hooks=_Hooks(self),
+            stop_wait_s=STOP_GRACE_S,
+            # the check never runs outside a sandbox: a place that has none runs it as it is
+            # only in tests, where the place is pretended
+            sandbox=getattr(self.place, "sandbox", None),
+        )
+        own = getattr(self.place, "sandbox", None)
+        self.terminals = Terminals(
+            (lambda folder: own(folder, who="person")) if own is not None else None
+        )
 
     # ---- what the actions and routes call ------------------------------------------------------
 
@@ -239,7 +370,7 @@ class Sessions:
         return self._feeds.setdefault(session_id, Feed())
 
     def running(self, session_id: str) -> bool:
-        return session_id in self._turns
+        return session_id in self._turns or session_id in self._checking
 
     async def models(self) -> list[dict[str, Any]]:
         return await self.state.coding_gateway.list_models()
@@ -288,7 +419,7 @@ class Sessions:
         if not text.strip():
             raise Refused("nothing_to_do", "Say what the agent should look at.")
         session = self._session(owner, session_id)
-        if session_id in self._turns:
+        if self.running(session_id):
             raise Refused(
                 "busy", "The agent is still working on the last message. Stop it or wait."
             )
@@ -314,14 +445,15 @@ class Sessions:
         turns = self.store.list_turns(owner, session_id)
         if not turns:
             raise Refused("no_turn", "Nothing was asked in this session yet.")
-        return turns[-1]
+        return _outward(turns[-1])
 
     async def stop(self, owner: Owner, session_id: str) -> bool:
         """Stop the session's turn. False when none is running. Returns once the turn is closed."""
         self._session(owner, session_id)
         flight = self._turns.get(session_id)
         if flight is None:
-            return False
+            # no turn: a check the person started by hand may be running
+            return self.loop.stop(session_id)
         flight.stop.set()
         if flight.task is not None:
             with contextlib.suppress(Exception):
@@ -392,6 +524,128 @@ class Sessions:
         kinds = kinds | {kind} if allowed else kinds - {kind}
         self.store.set_allowed(owner, workspace["id"], sorted(kinds))
         return self.project(owner, session_id)
+
+    # ---- the check ------------------------------------------------------------------------------
+
+    def check(self, owner: Owner, session_id: str) -> dict[str, Any]:
+        """The project's check: the command, where it came from, what the project's files
+        suggest, and the checks of this session, the newest first."""
+        session = self._session(owner, session_id)
+        workspace = self.store.get_workspace(owner, session["workspace_id"])
+        try:
+            found = checks.suggest(Path(workspace["path"]))
+        except OSError:
+            found = []
+        return {
+            "project": workspace["name"],
+            "command": workspace["check_command"],
+            "source": workspace["check_from"],
+            "limit_s": int(workspace["check_limit_s"]),
+            "rounds": self.loop.rounds,
+            "suggested": [{"command": f.command, "why": f.why} for f in found],
+            "result": session["result"],
+            "running": session_id in self._checking,
+            "checks": [
+                _check_row(row)
+                for row in reversed(self.store.list_checks(owner, session_id=session_id))
+            ][:20],
+        }
+
+    def set_check(
+        self, owner: Owner, session_id: str, command: str, limit_s: int | None = None
+    ) -> dict[str, Any]:
+        """Set the project's check command; empty means the project has none."""
+        session = self._session(owner, session_id)
+        command = command.strip()
+        if len(command) > 2000 or "\0" in command:
+            raise Refused("bad_command", "That command is too long.")
+        if limit_s is not None and not 5 <= limit_s <= 3600:
+            raise Refused("bad_limit", "A check may run between 5 seconds and one hour.")
+        workspace = self.store.get_workspace(owner, session["workspace_id"])
+        try:
+            suggested = {f.command for f in checks.suggest(Path(workspace["path"]))}
+        except OSError:
+            suggested = set()
+        self.store.set_check(
+            owner, workspace["id"], command,
+            source="suggested" if command in suggested else "person", limit_s=limit_s,
+        )  # fmt: skip
+        return self.check(owner, session_id)
+
+    async def check_now(self, owner: Owner, session_id: str) -> dict[str, Any]:
+        """Run the project's check now, outside a turn, and give its row."""
+        session = self._session(owner, session_id)
+        if self.running(session_id):
+            raise Refused("busy", "The agent is working. Stop it or wait, then try again.")
+        workspace = self.store.get_workspace(owner, session["workspace_id"])
+        if not workspace["check_command"].strip():
+            raise Refused("no_check", "This project has no check yet. Set one first.")
+        turns = self.store.list_turns(owner, session_id)
+        self._checking.add(session_id)
+        feed = self.feed(session_id)
+        turn_id = turns[-1]["id"] if turns else ""
+        cost = self._cost(session_id)
+        feed.add(STATE, session_id, turn_id, state=rows.CHECKING, round=0, cost_usd=cost)
+        try:
+            row = await self.loop.check_now(owner, session_id)
+        except TurnRunning:
+            raise Refused("busy", "The agent is working. Stop it or wait.") from None
+        finally:
+            self._checking.discard(session_id)
+        feed.add(
+            STATE, session_id, turn_id, state=rows.DONE, result=row["result"], why=row["why"],
+            cost_usd=self._cost(session_id),
+        )  # fmt: skip
+        return _check_row(row)
+
+    def check_output(self, owner: Owner, session_id: str, check_id: str) -> dict[str, Any]:
+        """The whole output of one check of this session (its end, when it is very long)."""
+        self._session(owner, session_id)
+        mine = self.store.list_checks(owner, session_id=session_id)
+        row = next((r for r in mine if r["id"] == check_id), None)
+        if row is None:
+            raise Refused("not_found", "There is no such check in this session.")
+        text, cut = "", False
+        with contextlib.suppress(OSError):
+            data = Path(row["output_file"]).read_bytes() if row["output_file"] else b""
+            cut = len(data) > MAX_CHECK_BYTES
+            text = data[-MAX_CHECK_BYTES:].decode("utf-8", "replace")
+        return {**_check_row(row), "output": text, "cut": cut}
+
+    async def try_again(self, owner: Owner, session_id: str) -> dict[str, Any]:
+        """Three more rounds: a new turn that tells the agent the check still fails."""
+        return await self.send(owner, session_id, TRY_AGAIN)
+
+    # ---- the person's terminal -------------------------------------------------------------------
+
+    async def open_terminal(
+        self, owner: Owner, session_id: str, cols: int = 80, rows: int = 24
+    ) -> dict[str, Any]:
+        """A new terminal of the person's own in the session's project, inside the sandbox."""
+        session = self._session(owner, session_id)
+        workspace = self.store.get_workspace(owner, session["workspace_id"])
+        try:
+            made = await self.terminals.open(session_id, Path(workspace["path"]), cols, rows)
+        except TerminalError as e:
+            raise Refused(e.code, e.message) from None
+        except PlaceError as e:
+            raise Refused("no_sandbox", str(e) or "A terminal is not available here.") from None
+        return made.view()
+
+    def terminal(self, owner: Owner, session_id: str, terminal_id: str) -> Terminal:
+        self._session(owner, session_id)
+        try:
+            return self.terminals.get(session_id, terminal_id)
+        except TerminalError as e:
+            raise Refused(e.code, e.message) from None
+
+    def list_terminals(self, owner: Owner, session_id: str) -> list[dict[str, Any]]:
+        self._session(owner, session_id)
+        return [t.view() for t in self.terminals.of(session_id)]
+
+    async def close_terminal(self, owner: Owner, session_id: str, terminal_id: str) -> bool:
+        self._session(owner, session_id)
+        return await self.terminals.close(session_id, terminal_id)
 
     # ---- changes and undo -----------------------------------------------------------------------
 
@@ -500,7 +754,7 @@ class Sessions:
         self, owner: Owner, session_id: str, turn_id: str, *, back: bool
     ) -> dict[str, Any]:
         session = self._session(owner, session_id)
-        if session_id in self._turns:
+        if self.running(session_id):
             raise Refused("busy", "The agent is working. Stop it or wait, then try again.")
         workspace = self.store.get_workspace(owner, session["workspace_id"])
         turns = self._turn_rows(owner, session_id)
@@ -548,6 +802,7 @@ class Sessions:
         """Forget a session. The folder is the person's and is not touched."""
         session = self._session(owner, session_id)
         await self.stop(owner, session_id)
+        await self.terminals.close_session(session_id)
         end = getattr(self.place, "end", None)
         if session["place_session"] and end is not None:
             with contextlib.suppress(PlaceError):
@@ -571,7 +826,11 @@ class Sessions:
             "mode": session["mode"],
             "model": session["model"],
             "state": last["state"] if last else "new",
-            "working": session_id in self._turns,
+            "working": self.running(session_id),
+            "checking": session_id in self._checking
+            or bool(last and last["state"] == rows.CHECKING and session_id in self._turns),
+            "needs_you": bool(last and last["needs_you"]) and not self.running(session_id),
+            "check_command": workspace["check_command"],
             "waiting": bool(
                 session_id in self._turns
                 and any(not a.done() for a in self._turns[session_id].asks.values())
@@ -579,7 +838,7 @@ class Sessions:
             "result": session["result"],
             "turns": len(turns),
             "answer": last["answer"] if last else "",
-            "ended": last["why"] if last and last["state"] == rows.DONE else "",
+            "ended": _outward(last)["why"] if last and last["state"] == rows.DONE else "",
             "cost_usd": round(float(session["cost_usd"]), 6),
             # 0 in the row means "the usual limit": say the number that holds
             "cost_limit_usd": float(session["cost_limit_usd"]) or self._usual_limit(),
@@ -604,9 +863,11 @@ class Sessions:
 
     def turns(self, owner: Owner, session_id: str) -> list[dict[str, Any]]:
         self._session(owner, session_id)
-        keep = ("id", "position", "request", "state", "result", "why", "answer", "steps", "notes",
-                "started_at", "finished_at", "changed")  # fmt: skip
-        found = self._turn_rows(owner, session_id)
+        keep = (
+            "id", "position", "request", "state", "result", "why", "check_why", "answer",
+            "steps", "notes", "started_at", "finished_at", "changed", "rounds", "needs_you",
+        )  # fmt: skip
+        found = [_outward(t) for t in self._turn_rows(owner, session_id)]
         undo, redo = (None, None) if session_id in self._turns else self._marks(found)
         return [
             {
@@ -629,8 +890,9 @@ class Sessions:
         return len(tasks)
 
     async def close(self) -> None:
-        """The engine is closing: every turn in flight is stopped."""
+        """The engine is closing: every turn in flight is stopped, every terminal closed."""
         await self.stop_all()
+        await self.terminals.close_all()
         close = getattr(self.place, "close", None)
         if close is not None:
             await close()
@@ -651,61 +913,111 @@ class Sessions:
         turn: dict[str, Any],
         flight: _Turn,
     ) -> dict[str, Any]:
-        """One turn from the message to its closed row. It never raises."""
-        feed = self.feed(session["id"])
-        self._tell(feed, session, turn, rows.WORKING)
-        why, detail = places.ERROR, ""
-        work = asyncio.ensure_future(self._work(owner, session, workspace, turn, flight, feed))
+        """One turn from the message to its closed row, run by the loop. It never raises."""
+        sid = session["id"]
+        run = asyncio.ensure_future(
+            self.loop.run_turn(owner, sid, turn["request"], turn=turn, stop=flight.stop)
+        )
         stopping = asyncio.ensure_future(flight.stop.wait())
         try:
-            done, _ = await asyncio.wait({work, stopping}, return_when=asyncio.FIRST_COMPLETED)
-            if work in done:
-                why, detail = work.result()
-            else:
-                why, detail = places.STOPPED, ""
+            done, _ = await asyncio.wait({run, stopping}, return_when=asyncio.FIRST_COMPLETED)
+            if run not in done:
+                self.loop.stop(sid)  # a check that runs is ended at once
                 for waiting in flight.asks.values():  # a card that waits is closed, unanswered
                     if not waiting.done():
                         waiting.set_result("")
-                if flight.where is not None:  # the agent may be working: interrupt it
-                    with contextlib.suppress(PlaceError, TimeoutError):
-                        await asyncio.wait_for(self.place.stop(flight.where), STOP_GRACE_S)
-                    # read on to the place's own "ended", so the next turn begins after it
-                    await asyncio.wait({work}, timeout=STOP_GRACE_S)
-                    if not work.done():  # it did not end: ask once more, and let go of it
-                        with contextlib.suppress(PlaceError, TimeoutError):
-                            await asyncio.wait_for(self.place.stop(flight.where), STOP_GRACE_S)
-        except Exception:
-            log.exception("a coding turn failed")
-            detail = "Something went wrong in the app while the agent worked."
+                if flight.where is not None:
+                    # the loop interrupts the place and reads on to its "ended"; not for ever
+                    await asyncio.wait({run}, timeout=STOP_GRACE_S * 4)
+                if not run.done():  # the session is still being made, or nothing answers
+                    run.cancel()
+            await asyncio.gather(run, return_exceptions=True)
+            if not run.cancelled() and run.exception() is not None:
+                log.error("a coding turn failed", exc_info=run.exception())
         finally:
-            for task in (work, stopping):
-                task.cancel()
-            await asyncio.gather(work, stopping, return_exceptions=True)
-        changed = await self._after(owner, workspace, turn)
-        return await self._close_turn(owner, session, turn, flight, feed, why, detail, changed)
+            stopping.cancel()
+            await asyncio.gather(stopping, return_exceptions=True)
+            if not flight.told:
+                # the loop was cut off before it said the end: its row is closed, say it here
+                self._turns.pop(sid, None)
+                closed = self.store.get_turn(owner, turn["id"])
+                why = places.STOPPED if flight.stop.is_set() else places.ERROR
+                self.feed(sid).add(
+                    STATE, sid, turn["id"], state=rows.DONE, why=why, result=closed["result"],
+                    detail="" if flight.stop.is_set()
+                    else "Something went wrong in the app while the agent worked.",
+                    cost_usd=self._cost(sid),
+                )  # fmt: skip
+        return _outward(self.store.get_turn(owner, turn["id"]))
 
-    async def _before(
-        self, owner: Owner, session: dict[str, Any], workspace: dict[str, Any], turn: dict[str, Any]
-    ) -> None:
-        """Keep the project as it is before a turn that may change it. When git cannot, the turn
-        goes on and says that it cannot be undone."""
-        cps = self._cps(workspace)
-        try:
-            if cps is None:
-                raise CheckpointError("this deployment keeps no checkpoints")
-            made = await asyncio.to_thread(cps.checkpoint, turn["request"][:80])
-        except CheckpointError as e:
-            log.warning("no checkpoint before a coding turn: %s", e)
-            self.store.note_turn(
-                owner, turn["id"], "No checkpoint could be taken, so this turn cannot be undone."
-            )
+    def _cost(self, session_id: str) -> float:
+        cost = 0.0
+        with contextlib.suppress(Exception):
+            cost = float(self.state.coding_gateway.spent(session_id)["usd"])
+        return round(cost, 6)
+
+    def _on_loop(self, event: dict[str, Any]) -> None:
+        """What the loop says, said on the session's feed in the contract's words."""
+        sid = str(event["session_id"])
+        feed = self.feed(sid)
+        if event["kind"] == "check":
+            feed.add(
+                CHECK, sid, str(event.get("turn_id") or ""), id=event["id"],
+                round=int(event["round"]), rounds=self.loop.rounds, command=event["command"],
+                result=event["result"], why=event["why"], exit_code=event["exit_code"],
+                seconds=float(event["seconds"]), changed_tests=list(event["changed_tests"]),
+                tail=str(event.get("tail") or "")[-TAIL_SHOWN:],
+            )  # fmt: skip
             return
-        row = self.store.add_checkpoint(
-            owner, workspace_id=workspace["id"], kind="turn", commit_id=made.id,
-            tree_id=made.tree, label=turn["request"][:80], session_id=session["id"],
-            turn_id=turn["id"],
-        )  # fmt: skip
-        self.store.set_turn(owner, turn["id"], checkpoint_id=row["id"])
+        state = str(event["state"])
+        more: dict[str, Any] = {}
+        for key in ("why", "result", "detail", "changed", "needs_you"):
+            if event.get(key) not in (None, ""):
+                more[key] = event[key]
+        if event.get("needs_you") is False:
+            more.pop("needs_you", None)
+        if "why" in more:
+            more["why"], check_why = how_it_ended(str(more["why"]))
+            if check_why:
+                more["check_why"] = check_why
+        if "round" in event or "rounds" in event:
+            more["round"] = int(event.get("round") or event.get("rounds") or 0)
+        if state == rows.DONE:
+            more.setdefault("result", "")
+            more.setdefault("why", places.FINISHED)
+            flight = self._turns.pop(sid, None)  # closed before it is said: who hears "done"
+            if flight is not None:  # and asks at once must not find it still working
+                flight.told = True
+        feed.add(STATE, sid, str(event["turn_id"]), state=state, cost_usd=self._cost(sid), **more)
+
+    async def _closing(
+        self,
+        owner: Owner,
+        session: dict[str, Any],
+        workspace: dict[str, Any],
+        turn: dict[str, Any],
+        why: str,
+        detail: str,
+    ) -> dict[str, Any]:
+        """The turn is over: its words and steps are written, what it changed is counted, and a
+        refusal is said. What is given back goes out with the turn's last state."""
+        flight = self._turns.get(session["id"])
+        answer, steps = (flight.answer, flight.steps) if flight is not None else ("", 0)
+        store, feed = self.store, self.feed(session["id"])
+        if why == places.REFUSED:
+            # the model's own words, as a plain message: not an error
+            answer = detail or answer
+            feed.add(REFUSAL, session["id"], turn["id"], message=answer)
+        elif why == places.ERROR and detail:
+            store.note_turn(owner, turn["id"], detail)
+        store.set_turn_answer(owner, turn["id"], answer=answer, steps=steps)
+        more: dict[str, Any] = {}
+        if why in (places.ERROR, places.REFUSED) and detail:
+            more["detail"] = detail
+        changed = await self._after(owner, workspace, turn)
+        if changed is not None:
+            more["changed"] = changed
+        return more
 
     async def _after(
         self, owner: Owner, workspace: dict[str, Any], turn: dict[str, Any]
@@ -726,79 +1038,6 @@ class Sessions:
             return None
         self.store.set_turn_changes(owner, turn["id"], after_commit=made.id, changed=changed)
         return changed
-
-    async def _work(
-        self,
-        owner: Owner,
-        session: dict[str, Any],
-        workspace: dict[str, Any],
-        turn: dict[str, Any],
-        flight: _Turn,
-        feed: Feed,
-    ) -> tuple[str, str]:
-        """Give the place the message and follow it to the turn's end: why it ended, and the
-        detail."""
-        spec = SessionSpec(
-            Path(workspace["path"]),
-            model=session["model"],
-            step_limit=STEP_LIMIT,
-            read_only=session["mode"] == rows.PLAN,
-            account=Account(
-                owner.tenant_id, owner.product_id, owner.user_id, session["id"],
-                spent_usd=float(session["cost_usd"]), limit_usd=float(session["cost_limit_usd"]),
-            ),
-        )  # fmt: skip
-        try:
-            if not spec.read_only:
-                await self._before(owner, session, workspace, turn)
-            request = self._request(owner, session, turn)
-            where, cursor = session["place_session"], session["last_event"]
-            adopt = getattr(self.place, "adopt", None)
-            if where and adopt is not None and not adopt(where, spec):
-                where = None
-                self.store.note_turn(owner, turn["id"], APP_RESTARTED)
-            if not where:
-                where, cursor = await self.place.start(spec), None
-                self.store.set_place_session(owner, session["id"], where)
-            flight.where = where
-            # listen first, then speak: words as they are written go only to who is listening
-            opened = asyncio.Event()
-            if getattr(self.place, "connects_first", False):
-                stream = self.place.follow(where, after=cursor, opened=opened)
-            else:
-                stream = self.place.follow(where, after=cursor)
-                opened.set()
-            first = asyncio.ensure_future(anext(stream, None))
-            listening = asyncio.ensure_future(opened.wait())
-            try:
-                await asyncio.wait({first, listening}, return_when=asyncio.FIRST_COMPLETED)
-                if flight.stop.is_set():  # stopped before anything was asked
-                    return places.STOPPED, ""
-                await self.place.send(where, request, run=True)
-                if flight.stop.is_set():  # Stop came while the message was on its way
-                    await self.place.stop(where)
-                event = await first
-                while event is not None:
-                    if event.kind != places.PIECE:  # a piece is not kept: nothing follows it
-                        self.store.set_cursor(owner, session["id"], event.id)
-                    if event.kind == places.ENDED:
-                        return (
-                            str(event.data.get("why") or places.ERROR),
-                            str(event.data.get("detail") or ""),
-                        )
-                    if event.kind == places.CONFIRM and not spec.read_only:
-                        await self._confirm(owner, session, workspace, turn, flight, feed, event)
-                    else:
-                        self._relay(feed, session, turn, flight, event)
-                    event = await anext(stream, None)
-            finally:
-                for task in (first, listening):
-                    task.cancel()
-                await asyncio.gather(first, listening, return_exceptions=True)
-                await stream.aclose()
-            return places.ERROR, "The coding engine stopped sending events."
-        except PlaceError as e:
-            return places.ERROR, str(e) or "The coding engine could not do that."
 
     def _request(self, owner: Owner, session: dict[str, Any], turn: dict[str, Any]) -> str:
         """The person's message as the agent gets it: with what the agent cannot know by itself
@@ -929,48 +1168,6 @@ class Sessions:
                     flight.where, confirmation, False, "This session only reads."
                 )
 
-    async def _close_turn(
-        self,
-        owner: Owner,
-        session: dict[str, Any],
-        turn: dict[str, Any],
-        flight: _Turn,
-        feed: Feed,
-        why: str,
-        detail: str,
-        changed: int | None = None,
-    ) -> dict[str, Any]:
-        """Write how the turn ended. No check runs at this stage, so the session's word stays
-        what it was. `changed` is how many files the turn changed (None: no checkpoint)."""
-        store = self.store
-        try:
-            store.set_turn(owner, turn["id"], state=rows.TURN_ENDED)
-            self._tell(feed, session, turn, rows.TURN_ENDED, why=why)
-            if why == places.REFUSED:
-                # the model's own words, as a plain message: not an error
-                flight.answer = detail or flight.answer
-                feed.add(REFUSAL, session["id"], turn["id"], message=flight.answer)
-            elif why == places.ERROR and detail:
-                store.note_turn(owner, turn["id"], detail)
-            store.set_turn_answer(owner, turn["id"], answer=flight.answer, steps=flight.steps)
-            standing = store.get_session(owner, session["id"])["result"]
-            closed = store.finish_turn(owner, turn["id"], result=standing, why=why)
-            more = {} if changed is None else {"changed": changed}
-            self._tell(
-                feed, session, turn, rows.DONE, why=why, result=standing, detail=detail, **more
-            )
-            return closed
-        finally:
-            self._turns.pop(session["id"], None)
-
-    def _tell(
-        self, feed: Feed, session: dict[str, Any], turn: dict[str, Any], state: str, **more: Any
-    ) -> None:
-        cost = 0.0
-        with contextlib.suppress(Exception):
-            cost = float(self.state.coding_gateway.spent(session["id"])["usd"])
-        feed.add(STATE, session["id"], turn["id"], state=state, cost_usd=round(cost, 6), **more)
-
     # ---- cost and search -----------------------------------------------------------------------
 
     async def _on_call(self, call: Any) -> None:
@@ -1057,3 +1254,10 @@ def _shown(path: str, before: bytes | None, after: bytes | None) -> dict[str, An
         lines += [{"t": "add", "text": line, "b": j1 + n + 1} for n, line in enumerate(b[j1:j2])]
     out["lines"] = lines
     return out
+
+
+def _check_row(row: dict[str, Any]) -> dict[str, Any]:
+    """A check as the window is given it: never where its output file is."""
+    keep = ("id", "turn_id", "round", "command", "result", "why", "exit_code", "seconds",
+            "changed_tests", "created_at")  # fmt: skip
+    return {k: row[k] for k in keep}

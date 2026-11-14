@@ -283,3 +283,87 @@ def is_test_file(path: str) -> bool:
     # FooTest.java, FooTests.cs, FooSpec.scala: a capital letter starts the last word
     original = p.name.rsplit(".", 1)[0]
     return any(original.endswith(word) and original != word for word in ("Test", "Tests", "Spec"))
+
+
+# ---- which command a project's check could be (decision 2) ---------------------------------------
+
+
+@dataclass(frozen=True)
+class Suggestion:
+    command: str
+    why: str  # one sentence for the person: which file says so
+
+
+def _python(folder: Path) -> str:
+    """The project's own Python when it has an environment, else whichever is first found."""
+    for name in (".venv", "venv"):
+        if (folder / name / "bin" / "python").exists():
+            return f"{name}/bin/python"
+    return "python3"
+
+
+def suggest(folder: Path) -> list[Suggestion]:
+    """The commands that could be this project's check, the likeliest first, read from the
+    project's own files. Nothing is run and nothing is stored: the person sees the first one as
+    a suggestion and chooses."""
+    import json
+    import re
+
+    found: list[Suggestion] = []
+
+    def text(name: str) -> str:
+        try:
+            return (folder / name).read_text(errors="replace")[:200_000]
+        except OSError:
+            return ""
+
+    package = text("package.json")
+    if package:
+        try:
+            scripts = json.loads(package).get("scripts") or {}
+        except (ValueError, AttributeError):
+            scripts = {}
+        runner = (
+            "pnpm" if (folder / "pnpm-lock.yaml").exists()
+            else "yarn" if (folder / "yarn.lock").exists()
+            else "bun" if (folder / "bun.lockb").exists()
+            else "npm"
+        )  # fmt: skip
+        if isinstance(scripts, dict):
+            test = str(scripts.get("test") or "")
+            if test and "no test specified" not in test:
+                found.append(Suggestion(f"{runner} test", '`package.json` has a "test" script'))
+            for name in ("build", "lint", "typecheck", "check"):
+                if scripts.get(name):
+                    found.append(
+                        Suggestion(f"{runner} run {name}", f'`package.json` has a "{name}" script')
+                    )
+    if (folder / "Cargo.toml").exists():
+        found.append(Suggestion("cargo test", "`Cargo.toml` makes this a Rust project"))
+    if (folder / "go.mod").exists():
+        found.append(Suggestion("go test ./...", "`go.mod` makes this a Go project"))
+    python = _python(folder)
+    pyproject = text("pyproject.toml")
+    uses_pytest = (
+        "pytest" in pyproject
+        or any((folder / n).exists() for n in ("pytest.ini", "conftest.py", "tests/conftest.py"))
+        or "pytest" in text("requirements.txt") + text("requirements-dev.txt") + text("tox.ini")
+    )
+    has_tests = any(
+        True
+        for pattern in ("test_*.py", "*_test.py", "tests/test_*.py", "tests/*_test.py")
+        for _ in folder.glob(pattern)
+    )
+    if uses_pytest:
+        found.append(Suggestion(f"{python} -m pytest", "the project names pytest"))
+    elif has_tests:
+        found.append(Suggestion(f"{python} -m unittest", "the project has Python test files"))
+    makefile = text("Makefile")
+    if re.search(r"^test\s*:", makefile, re.M):
+        found.append(Suggestion("make test", "the `Makefile` has a `test` target"))
+    if (folder / "Gemfile").exists() and (folder / "spec").is_dir():
+        found.append(Suggestion("bundle exec rspec", "the project has a `spec` folder"))
+    seen: dict[str, Suggestion] = {}
+    for one in found:
+        seen.setdefault(one.command, one)
+    return list(seen.values())

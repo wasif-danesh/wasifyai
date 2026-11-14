@@ -13,13 +13,16 @@ Open one project's folder for the coding agent. A session has one of three modes
 write in:
 
 - **Plan**: the agent only reads. It can find and read the files of that folder and cannot change one.
-- **Ask me**: the agent also changes files. Before it changes a file that Undo cannot put back (one your
-  project ignores, such as `.env`), it asks you. You can answer yes, no, or "Allow for this project".
-- **Work on its own**: the agent changes files and does not ask.
+- **Ask me**: the agent also changes files and runs commands in the folder. It asks you before a command that
+  deletes files, before one that installs packages, and before it changes a file that Undo cannot put back
+  (one your project ignores, such as `.env`). You can answer yes, no, or "Allow for this project".
+- **Work on its own**: the agent changes files and runs commands and does not ask.
 
-In every mode the agent cannot leave the folder, cannot reach the internet and cannot run a command. Every
-turn that changed files can be undone in the Changes tab. Starting a session reads nothing yet and starts
-nothing. The agent begins when you send it a message.
+In every mode the agent cannot leave the folder. Its commands run in a protected area: they can write only
+inside the project, cannot read your other folders, and reach the internet only to install packages from the
+usual package indexes. After a turn that changed files, Wasify AI runs the project's check and tells the agent
+when it fails. Every turn that changed files can be undone in the Changes tab. Starting a session reads
+nothing yet and starts nothing. The agent begins when you send it a message.
 
 ## Steps in the app
 
@@ -46,8 +49,10 @@ shows a card first.
 - One folder per session. Choose a project's folder, not your whole home folder or a disk.
 - Some folders cannot be opened: the app's own folders, your Library, and hidden folders at the top of
   your home folder (such as `.ssh`). They hold keys and settings the agent must never read.
-- The agent cannot run a command, a test or a program in this version, and it cannot delete a file. Running
-  commands comes in a later version.
+- In Plan the agent cannot run a command or change a file.
+- A command cannot reach the internet, except an install of packages from PyPI, npm, crates.io, the Go proxy
+  or RubyGems. Tools such as `ps`, `top` and `sudo` do not work inside the protected area.
+- The agent finds the tools your computer has (Python, Node, git). Wasify AI does not install them for it.
 - Undo does not put back files your project ignores (such as `.env`) or changes inside a `.git` folder.
   That is why "Ask me" asks before the agent changes one.
 - Only on Apple-silicon Macs for now.

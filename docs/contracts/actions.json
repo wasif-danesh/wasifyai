@@ -395,10 +395,142 @@
       "help": "docs/help/audiobook.plan.md"
     },
     {
+      "id": "code.session.check",
+      "title": "Set or run a project's check",
+      "summary": "Set the command that checks a coding project, and run it.",
+      "description": "A coding project's check is one command (for example `npm test`) that the app runs after every turn that changed files; when it fails the agent is told and fixes it, up to three rounds. This action reads the check, sets it with command, and with run (the default) runs it now and gives the result and the end of its output. The check runs inside the project's sandbox: it can write only inside the project. Without command and with run false it only says which check is set and what the project's files suggest.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "description": "The coding session.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "command": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The project's check command, for example `npm test` or `python3 -m pytest`. Leave it out to keep the one that is set. An empty text removes the check.",
+            "title": "Command"
+          },
+          "run": {
+            "default": true,
+            "description": "Run the check now and wait for its result.",
+            "title": "Run",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "CheckIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "suggested": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggested",
+            "type": "array"
+          },
+          "ran": {
+            "title": "Ran",
+            "type": "boolean"
+          },
+          "result": {
+            "default": "",
+            "title": "Result",
+            "type": "string"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exit Code"
+          },
+          "seconds": {
+            "default": 0.0,
+            "title": "Seconds",
+            "type": "number"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "command",
+          "suggested",
+          "ran"
+        ],
+        "title": "CheckOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "session_id": "0b7c1f9e000040008000000000000000",
+          "command": "npm test"
+        },
+        {
+          "session_id": "0b7c1f9e000040008000000000000000",
+          "run": false
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-code",
+      "ui": "code.projects",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.session.check.md"
+    },
+    {
       "id": "code.session.send",
       "title": "Ask the coding agent",
       "summary": "Send a coding session a message and get the agent's answer.",
-      "description": "Send a message to a coding session and wait for the agent's answer. Use it for questions about a project (\"analyse this codebase\", \"where is the login handled?\"), for a plan of a change and, in a session whose mode is ask or own, for the change itself. The agent reads the files it needs; in a plan session it changes nothing. It can take from seconds to several minutes. With a cloud model, the parts of the files the agent reads are sent to that model's provider, and the session's cost is counted and limited. It returns how the turn ended (finished, stopped, step_limit, refused), the answer, the number of steps, how many files were changed and the cost so far.",
+      "description": "Send a message to a coding session and wait for the agent's answer. Use it for questions about a project (\"analyse this codebase\", \"where is the login handled?\"), for a plan of a change and, in a session whose mode is ask or own, for the change itself. The agent reads the files it needs; in a plan session it changes nothing. It can take from seconds to several minutes. With a cloud model, the parts of the files the agent reads are sent to that model's provider, and the session's cost is counted and limited. After a turn that changed files the app runs the project's check and sends a failure back to the agent, up to three rounds. It returns how the turn ended (finished, stopped, step_limit, refused), the answer, the number of steps, how many files were changed, the check's result and the cost so far.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -458,6 +590,21 @@
             "default": 0,
             "title": "Changed",
             "type": "integer"
+          },
+          "result": {
+            "default": "",
+            "title": "Result",
+            "type": "string"
+          },
+          "rounds": {
+            "default": 0,
+            "title": "Rounds",
+            "type": "integer"
+          },
+          "needs_you": {
+            "default": false,
+            "title": "Needs You",
+            "type": "boolean"
           }
         },
         "required": [
@@ -508,7 +655,7 @@
       "id": "code.session.start",
       "title": "Start a coding session",
       "summary": "Open a project's folder for the coding agent to read.",
-      "description": "Start a coding session on one folder of this computer. By default the session only reads (mode plan): the agent can find and read the files of that folder and cannot change a file. With mode ask or own it can also change files of that folder; it can never run a command, and every turn can be undone. Nothing runs yet and nothing is read until a message is sent with code.session.send. Give the folder's whole path. The home folder, a whole disk and the app's own folders are refused. It returns the session's id.",
+      "description": "Start a coding session on one folder of this computer. By default the session only reads (mode plan): the agent can find and read the files of that folder and cannot change a file. With mode ask or own it can also change files of that folder and run commands there, inside a sandbox that keeps it to that folder; every turn can be undone. Nothing runs yet and nothing is read until a message is sent with code.session.send. Give the folder's whole path. The home folder, a whole disk and the app's own folders are refused. It returns the session's id.",
       "input": {
         "additionalProperties": false,
         "properties": {

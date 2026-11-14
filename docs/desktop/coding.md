@@ -82,9 +82,9 @@ The profile starts from "allow" and closes these. Where two rules match, the lat
 
 | | Closed | Opened again |
 |---|---|---|
-| Writes | Everything | `<app data>/coding`, the workspaces of sessions that may write, the terminal folder. **Closed again:** `<workspace>/.git` of a workspace that has no git of its own when the engine starts (the Agent Server runs `git init` in a workspace by itself; a person's folder does not become a repository because it was opened) |
+| Writes | Everything | `<app data>/coding`, the workspaces of sessions that may write, the terminal folder. Since stage C3 the profile no longer closes `<workspace>/.git`: the Agent Server's own `git init` is switched off in our rules module instead, and the agent may make a repository when it is asked to |
 | Reads | `/Users`, `/Volumes`, the per-user temp folders, `/tmp`, the app's own data folder | The same three, and read-only: `engine/coding`, the Python it was made with, **the workspaces of sessions that only read**, and `<app data>/coding-fixed` |
-| Network | Everything | This computer |
+| Network | Everything | This computer. Since stage C3 that includes our install proxy on loopback, which lets a program through to the package indexes on its list and nowhere else (below) |
 | Other programs | A signal to a process outside the sandbox, opening an app or a file with `open`, a message to another app, a job handed to the system | Signals inside the sandbox |
 
 The system and the tools stay readable: `/usr`, `/bin`, `/System`, `/Library`, `/opt/homebrew`, `/Applications`.
@@ -168,6 +168,27 @@ Three things the pinned Agent Server does, each found by a real run (`docs/spike
 Undo goes back one turn at a time, the newest that stands first. Files the project ignores are not kept and not
 put back. What the person changed themselves after the turn goes back with it, and the answer says so.
 
+## Commands, the check and the terminal (stage C3)
+
+A session in `ask` or `own` now has four tools: find files, search in files, the file editor and a terminal.
+The terminal is the Agent Server's own and runs inside the server's sandbox. A session in `plan` still has
+none of the last two.
+
+| What | How |
+|---|---|
+| A command | Every use of the terminal waits before it runs, like every change (`wasify_rules.py`, `wait_tools`). `rules.command_kind` reads the command's words: `delete` (`rm`, `rmdir`, `git clean`, `git reset --hard`, `git checkout -- .`, `find -delete`), `install` (`pip install`, `uv add`, `npm install`, `pnpm add`, `yarn`, `npx`, `cargo add`, `go get`, `brew install` and the like), or neither. In "Ask me" a kind that is not allowed for the project is asked with the same card; in "Work on its own" nothing is asked |
+| An install | The sandbox reaches this computer only. The programs inside are given `HTTPS_PROXY` and its relatives, pointing at `coding_proxy.InstallProxy` on loopback. It opens a tunnel only to the hosts of `coding_install_hosts.txt` (PyPI, npm and Yarn, crates.io, the Go proxy, RubyGems) on port 443. The agent's commands and the check are let through only for ten minutes after an install step was let through; the person's terminal always. It keeps the host of each request and whether it was let through, nothing else |
+| A repository | The Agent Server's `git init` at the start of a conversation is replaced by nothing in `wasify_rules.py`. The agent can run `git init` itself |
+| The turn | Run by `Loop.run_turn` (`loop.py`), through the hooks `runtime.py` gives it. The states of a turn are those of section 6 of the start plan |
+| The check | One command for each project, kept on the workspace's row. `checks.suggest` reads the project's files and suggests; nothing is set until the person saves it. After a turn that changed files it runs in a sandbox of our own for that project (`CodingServer.sandbox_for`: the same profile template, filled for the one folder), in its own process group, with a time limit (ten minutes unless changed). Its whole output is a file under `<app data>/code/check-output/` |
+| A failure | The command, the exit code and the end of the output go back to the agent, which goes on. Three rounds; then the turn ends "failed" and "needs you". A check that could not run (not found, the time limit, a crash) is "could not check", never "passed". A turn that changed nothing runs no check, and the last word stands |
+| Stop | Ends a running check at once (its whole process group), interrupts the agent, and the turn is "not checked" |
+| The person's terminal | `terminal.py`: a shell (`zsh -f -i`) on a pseudo-terminal, started by the Wasify engine inside the project's own sandbox, with its controlling terminal set by a small launcher in a child of its own. Output goes to the window as a stream, input and the size come back as calls. Up to four for a session. Closing one ends the shell and everything under it. Nothing typed or printed is kept on disk; the last 512 KB of output are held in memory so a tab can be opened again |
+
+What a person meets in the terminal: the home folder is the sandbox's own, so their start-up files are not
+read; `ps`, `top` and `sudo` do not work; `python3` is the coding engine's own Python unless the project has an
+environment; a write outside the project is refused by the operating system. The tab says the first three.
+
 ## The screens
 
 | Where | What |
@@ -175,6 +196,8 @@ put back. What the person changed themselves after the turn goes back with it, a
 | `packages/ui/src/shell/menu.ts` | The group **Code** with Projects, Scheduled and Extensions. The window shows Projects only until the other two are built; the web hides all three (`apps/web/lib/parity.ts`: desktop only) |
 | `packages/ui/src/code/Code.tsx` | The first screen (what the agent may and may not do, what leaves this computer, Choose a folder), the projects with their sessions ("Waiting for you" on one that waits), and the session view: the request, the agent's steps as quiet lines that open, its answer, what the turn changed with "Look at the changes" and "Undo this turn", an undone turn with "Bring it back", a plan with "Carry out this plan"; the box with the mode and Stop; the bar with the project, the model, the state and the cost |
 | `packages/ui/src/code/Asking.tsx` | The approval card (three answers, and what was answered afterwards), the mode pill with its menu, and "What this project may do" |
+| `packages/ui/src/code/Checks.tsx` | The check: its word in the session's bar (it opens the dialog), the card of each run in the chat (checking with "Stop the check", passed, failed with the end of the output and "sent back to the agent", "needs you" with "Try 3 more rounds" and "Undo this turn", not checked with "Run the check now", could not check with "Change the check"), the tests the agent changed, and the dialog: the command, the suggestions, "Try it now", "No check for this project", the time limit |
+| `packages/ui/src/code/Terminal.tsx`, `xterm-css.ts` | The Terminal tab: the note about its limits, the person's terminals as small tabs, "New", and the terminal itself drawn by xterm.js, which is loaded when the tab is first opened. Its style sheet is carried as text, so no bundler has to load one from a package; a test compares it with the package's |
 | `packages/ui/src/code/Changes.tsx` | The Changes tab: one turn at a time, its files (a test file is marked), one file before, after or both, "Undo this turn" and "Bring it back", and what undo does not put back |
 | `packages/ui/src/code/Files.tsx` | The Files tab beside the chat: the project's folders as a tree, opened a folder at a time, and one file to read with its line numbers. Reading only. On a narrow window the chat and the files are two tabs |
 | `packages/ui/src/code/thread.ts`, `use-code.ts` | The stream turned into what is drawn, and the screen's state. A turn from before the app was started shows what was kept: the request, the answer and how many steps it took |
@@ -192,7 +215,10 @@ A session that nobody named is called by what was asked first. Walk it for real 
 `WASIFYAI_AUDIT_FOLDER=<a project> apps/desktop/scripts/ui-audit.sh light code-plan` on a throwaway
 `DESKTOP_DATA_DIR` that has the coding engine (pictures `docs/ui-audit/desktop/code-*.png`). The walk of a
 session that changes files is `... ui-audit.sh light code-edit` (pictures `code-edit-*.png`): it reads the
-project's files on disk after each change, undo, "bring it back", yes, no, allow and Stop.
+project's files on disk after each change, undo, "bring it back", yes, no, allow and Stop. The walk of stage C3
+is `... ui-audit.sh light code-check` on an empty throwaway folder (pictures `code-check-*.png`): the check set
+and tried, a failed round and a pass, a two-minute check, Stop, "needs you", the terminal, a delete that is
+asked first, and `git init` by the agent.
 
 ## The model gateway (ADR-0102, decision 4)
 
@@ -218,6 +244,7 @@ address on loopback and a token for one session, and every model call of that se
 | `code.session.send` | A message; waits for the agent's answer (a long action: it can become a job, and cancelling the job stops the turn) |
 | `code.session.stop` | Stops the turn at once |
 | `code.session.undo` | Puts the project's files back to before a turn (the newest that changed files, when none is named) |
+| `code.session.check` | Reads the project's check, sets it, and runs it now (a long action) |
 
 They are offered to the assistant and not to outside apps: an outside app that could open a session on any
 folder would be handed that folder's content. Help is in `docs/help/code.session.*.md`.
@@ -236,6 +263,12 @@ folder would be handed that folder's content. Help is in `docs/help/code.session
 | `GET /sessions/{id}/changes`, `GET /sessions/{id}/changes/{turn_id}/file?path=` | The turns that changed files with their files, and one file before, after and as lines |
 | `POST /sessions/{id}/turns/{turn_id}/undo`, `.../redo` | Undo a turn, and bring it back |
 | `GET /sessions/{id}/project`, `PUT /sessions/{id}/project/allowed/{kind}` | What the project may do, and allowing a kind or taking that back |
+| `GET /sessions/{id}/check`, `PUT /sessions/{id}/check` | The project's check (command, where it came from, the time limit, what the files suggest, the session's last checks), and setting it (`command`, empty for none; `limit_s`) |
+| `POST /sessions/{id}/check/run`, `GET /sessions/{id}/checks/{check_id}` | Run the check now, outside a turn (it answers when the check has ended; Stop ends it), and one check with its whole output |
+| `POST /sessions/{id}/check/again` | "Try 3 more rounds": a new turn that tells the agent the check still fails (202) |
+| `GET /sessions/{id}/terminals`, `POST /sessions/{id}/terminals` | The person's terminals in this session, and opening one (`cols`, `rows`) |
+| `GET /sessions/{id}/terminals/{tid}/events` | What the terminal prints, as a stream: `terminal_output` (`data`: the bytes in base64) and `terminal_ended` (`exit_code`); `Last-Event-ID` comes back after a number |
+| `POST .../terminals/{tid}/input`, `POST .../terminals/{tid}/size`, `DELETE .../terminals/{tid}` | What the person typed (`data`), the window's size, and closing it |
 | `GET /sessions/{id}/events` | The session's stream, open across turns; `Last-Event-ID` comes back after a number |
 
 A session is found by search (ADR-0041) by its title, its project's name and what was asked first (kind
@@ -267,17 +300,24 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 | `products/wasifyai-code/tests/test_code_events.py`, `test_code_sessions.py` | The event translation and the sessions on the pretended place | `make test` |
 | `products/wasifyai-code/tests/test_code_edits.py` | A session that changes files, on the pretended place with a real git: the checkpoints, the card and its three answers, allowances, the Changes data, undo and "bring it back" (files compared byte for byte, with permissions), the person's own git, the rules | `make test` |
 | `services/api/tests/integration/test_coding_session_real.py` | The same against the real server in its sandbox with a scripted model: a session that only reads, and one that edits (it waits, a yes, a no, Stop while it waits, nothing outside the project, the checkpoint store out of reach, no `.git` made). It records the event streams the fake replays | `make test-coding`, opt-in |
+| `products/wasifyai-code/tests/test_code_checked.py` | Sessions whose turns are checked, on the pretended place with a real check command: the review's case (one refusal, one fix, one pass, the check file untouched), three rounds and "needs you", a question in a project whose check fails, no check set, Plan, Stop during a check, a check that runs while other calls answer, the check's settings, which command is suggested, what kind a command is, and the questions before a command | `make test` |
+| `products/wasifyai-code/tests/test_terminal.py` | The person's terminal without a sandbox: a real shell on a real pseudo-terminal, the size, Ctrl-C, closing ends what it started, the limit of four, and no terminal where there is no sandbox | `make test` |
+| `services/api/tests/test_coding_proxy.py` | The install proxy on loopback: the person let through, the agent only while an install is allowed, every other request refused, and no password in what it says of itself | `make test` |
 | `services/api/tests/integration/test_coding_sandbox.py` | Hostile tests against the real server in its sandbox | `make test-coding`, opt-in |
 | `apps/desktop/scripts/ui-audit.sh light coding-setup` (then `coding-repair`, `coding-remove`) | The part set up, repaired and removed from the real window's Settings, with the real downloads | By hand, on a throwaway `DESKTOP_DATA_DIR` |
 
 ## Not built
 
-- The dot for files changed in a session, in the Files tab; the Terminal, Browser and Preview tabs; "Start in
-  a new, empty folder"; the approval card on other screens while a session waits (the list of projects says
-  "Waiting for you"); a project's "More" menu.
-- Commands, the check and the implement, check, fix loop: stage C3. Until then a turn that changed files says
-  "Not checked", and `loop.py` and `checks.py` are library code that nothing calls. The session's turn is still
-  run by `runtime.py`; handing it to `Loop.run_turn` is the first step of C3.
+- The dot for files changed in a session, in the Files tab; the Browser and Preview tabs; "Start in a new,
+  empty folder"; the approval card on other screens while a session waits (the list of projects says "Waiting
+  for you"); a project's "More" menu.
+- "Show what is running": the list of everything started in a project by the person, the agent or a check,
+  with a way to stop each (mockup `terminal-processes`). The Terminal tab says that `ps` does not work and
+  offers nothing in its place yet.
+- Build, lint and test as separate steps of the check; the number of rounds in the dialog; the check's output
+  through the storage interface.
+- What is asked in every mode (going on past the cost limit).
+- Managed Node and the other tools a project needs: the sandbox finds what the computer has.
 - Dropping old checkpoints. The store under `<app data>/code/checkpoints` grows with the project.
 - The scheduler: stage C6.
 - A session going on after the app was closed and opened again: the session's token is gone, so its next

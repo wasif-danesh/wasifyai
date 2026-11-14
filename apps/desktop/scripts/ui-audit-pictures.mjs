@@ -39,6 +39,15 @@
 //                                                               project needs src/pages/home.html, a .env with
 //                                                               OPEN=0 and a .gitignore naming it; a throwaway
 //                                                               DESKTOP_DATA_DIR as for code-plan
+//   WASIFYAI_AUDIT_FOLDER=<an empty folder> apps/desktop/scripts/ui-audit.sh light code-check
+//                                                               Code (C3): the check set and tried, a question in a
+//                                                               project whose check fails, a failed round that goes
+//                                                               back and a pass, a two-minute check with the screen
+//                                                               live, Stop during a check, "needs you" after three
+//                                                               rounds, the person's terminal, a delete that is
+//                                                               asked first and undone, and git init by the agent;
+//                                                               all read back from disk. A throwaway folder and
+//                                                               DESKTOP_DATA_DIR as for code-plan
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -2021,6 +2030,276 @@ for (const scheme of ["light", "dark"]) {
       await open(page, "/code");
       await page.getByRole("heading", { name: "Projects" }).waitFor();
       await shot(page, "code-edit-projects");
+    });
+  }
+  // stage C3 of the coding agent: commands, the check and the person's terminal, with a real model. The
+  // project (WASIFYAI_AUDIT_FOLDER) is a throwaway folder; the walk writes the review's case into it (an old
+  // bug, a check that covers it and a function still to be added) and reads the files on disk to see what
+  // really happened.
+  if (scheme === "light" && names.has("code-check")) {
+    await attempt("code-check", async () => {
+      const { readFileSync, writeFileSync, existsSync } = await import("node:fs");
+      const { execFileSync } = await import("node:child_process");
+      const { homedir } = await import("node:os");
+      const folder = process.env.WASIFYAI_AUDIT_FOLDER ?? "";
+      const at = (name) => join(folder, name);
+      const read = (name) => readFileSync(at(name), "utf8");
+      const CHECK = [
+        "import prices",
+        "assert prices.total([]) == 0, 'total of nothing must be 0'",
+        "assert prices.with_tax(100) == 120, 'with_tax is missing or wrong'",
+        "print('all good')",
+        "",
+      ].join("\n");
+      writeFileSync(at("prices.py"), "def total(xs):\n    return sum(xs) if xs else None\n");
+      writeFileSync(at("check.py"), CHECK);
+      writeFileSync(at("notes.txt"), "to do: the tax\n");
+      const secs = (began) => ((Date.now() - began) / 1000).toFixed(1);
+      await open(page, "/code");
+      await page.getByRole("button", { name: "Choose a folder" }).first().waitFor();
+      await page.getByRole("button", { name: "Choose a folder" }).first().click();
+      const box = page.getByRole("textbox", { name: "Ask about this project" });
+      await box.waitFor();
+      const mine = ((await engine("/products/wasifyai-code/code/sessions?limit=200"))?.items ?? [])
+        .filter((s) => s.folder.endsWith(folder.split("/").pop()))
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+      if (!mine) throw new Error("the session was not found");
+      const base = `/products/wasifyai-code/code/sessions/${mine.id}`;
+      const idle = () =>
+        page
+          .getByRole("button", { name: "Stop", exact: true })
+          .waitFor({ state: "detached", timeout: 900_000 });
+      const ask = async (text) => {
+        await box.fill(text);
+        await box.press("Enter");
+      };
+      // 1. the check: none yet; the dialog suggests nothing for this project, a command is typed and tried
+      const word = page.getByRole("button", { name: /^The check: / });
+      await word.waitFor();
+      console.log(`code-check: the bar says: ${await word.innerText()}`);
+      await word.click();
+      const dialog = page.getByRole("dialog", { name: /^The check for / });
+      await dialog.getByLabel("Command").fill("python3 -B check.py");
+      await shot(page, "code-check-dialog");
+      let began = Date.now();
+      await dialog.getByRole("button", { name: "Try it now" }).click();
+      await dialog.getByText(/Failed with exit code 1/).waitFor({ timeout: 120_000 });
+      console.log(`code-check: tried at once, failed as it must (the old bug) in ${secs(began)} s`);
+      await shot(page, "code-check-dialog-tried");
+      await dialog.getByRole("button", { name: "Save the check" }).click();
+      await dialog.waitFor({ state: "detached" });
+      await page
+        .getByRole("button", { name: "The check: Check failed. Change the check" })
+        .waitFor();
+      // 2. a question in a project whose check fails: it is answered, and no file changes
+      const before = [read("prices.py"), read("check.py")];
+      began = Date.now();
+      await ask(
+        "What does the function total in prices.py return for an empty list? Answer in one sentence and change nothing.",
+      );
+      await page
+        .getByText(/The last check still stands: check failed/)
+        .waitFor({ timeout: 900_000 });
+      console.log(`code-check: a question was answered in ${secs(began)} s; no check ran`);
+      if (read("prices.py") !== before[0] || read("check.py") !== before[1]) {
+        throw new Error("a question changed a file");
+      }
+      await shot(page, "code-check-question", 1300);
+      // 3. the review's case: the task adds a function, the check also covers the old bug
+      began = Date.now();
+      await ask(
+        "Add a function with_tax(x) to prices.py that returns x * 120 // 100. Only add that function: do not run anything and do not change anything else.",
+      );
+      const failed = page.getByRole("region", { name: "Check failed", exact: true });
+      // (the check tried by hand in the dialog left a card of its own: the round's card is the next one)
+      await page.getByText("Round 2 of 3").waitFor({ timeout: 900_000 });
+      console.log(
+        `code-check: round 1 failed after ${secs(began)} s; the card says: ${(await failed.last().innerText()).replace(/\s+/g, " ").slice(0, 260)}`,
+      );
+      await shot(page, "code-check-round", 1400);
+      const passed = page.getByRole("region", { name: "Check passed" });
+      await passed.waitFor({ timeout: 900_000 });
+      await idle();
+      console.log(`code-check: one refusal, one fix, one pass, in ${secs(began)} s`);
+      if (read("check.py") !== CHECK) throw new Error("the check file was touched");
+      if (!read("prices.py").includes("def with_tax")) throw new Error("with_tax was not added");
+      const says = execFileSync("python3", ["-B", "check.py"], { cwd: folder }).toString();
+      if (!says.includes("all good")) throw new Error("the check does not pass on disk");
+      const checksNow = (await engine(`${base}/check`))?.checks ?? [];
+      console.log(
+        `  the checks of this session, the newest first: ${checksNow.map((c) => `${c.round}:${c.result}`).join(" ")}`,
+      );
+      await page.getByRole("button", { name: "The check: Passed. Change the check" }).waitFor();
+      await shot(page, "code-check-passed", 1500);
+      // 4. a check of two minutes: the screen stays live and every other call answers within a second
+      await word.click();
+      await dialog.getByLabel("Command").fill("sleep 120; python3 -B check.py");
+      await dialog.getByRole("button", { name: "Save the check" }).click();
+      await dialog.waitFor({ state: "detached" });
+      await ask(
+        "Add the comment line '# prices' at the very top of prices.py. Do not run anything and change nothing else.",
+      );
+      const running = page.getByRole("region", { name: "The check is running" });
+      await running.waitFor({ timeout: 900_000 });
+      began = Date.now();
+      await shot(page, "code-check-running", 1400);
+      let slowest = 0;
+      let calls = 0;
+      while ((await running.count()) && Date.now() - began < 150_000) {
+        for (const path of ["", "/turns", "/changes", "/check", "/files?path="]) {
+          const t = Date.now();
+          if ((await engine(`${base}${path}`)) === null) throw new Error(`no answer from ${path}`);
+          slowest = Math.max(slowest, Date.now() - t);
+          calls += 1;
+        }
+        // and the screen answers: the Files tab opens and lists the project
+        await page
+          .getByRole("tablist", { name: "Beside the chat" })
+          .getByRole("tab", { name: "Files" })
+          .click();
+        await page
+          .getByRole("region", { name: "Files" })
+          .getByText("prices.py")
+          .first()
+          .waitFor({ timeout: 2000 });
+        await page.waitForTimeout(5000);
+      }
+      await passed.last().waitFor({ timeout: 60_000 });
+      await idle();
+      console.log(
+        `code-check: a check of ${secs(began)} s ran; ${calls} other calls, the slowest ${slowest} ms`,
+      );
+      if (slowest >= 1000) throw new Error("a call took a second or more while the check ran");
+      // 5. Stop during a check: within a second, and nothing is left running
+      await ask(
+        "Change the comment at the top of prices.py to '# the prices'. Do not run anything and change nothing else.",
+      );
+      await running.waitFor({ timeout: 900_000 });
+      await page.waitForTimeout(3000);
+      began = Date.now();
+      await running.getByRole("button", { name: "Stop the check" }).click();
+      await page.getByRole("region", { name: "Not checked" }).waitFor({ timeout: 30_000 });
+      const stopMs = Date.now() - began;
+      await idle();
+      await page.waitForTimeout(700);
+      let left = "";
+      try {
+        left = execFileSync("pgrep", ["-fl", "sleep 120"]).toString();
+      } catch {
+        left = ""; // pgrep found nothing
+      }
+      console.log(
+        `code-check: Stop during a check: ${stopMs} ms; left running: ${left.trim() || "nothing"}`,
+      );
+      if (stopMs >= 1000) throw new Error("Stop during a check took a second or more");
+      if (left.trim()) throw new Error("the check left a process behind");
+      await shot(page, "code-check-stopped", 1400);
+      // 6. a check that cannot pass: three rounds, then "needs you"
+      await word.click();
+      await dialog
+        .getByLabel("Command")
+        .fill("python3 -B check.py && echo 'this check can never pass' && exit 1");
+      await dialog.getByRole("button", { name: "Save the check" }).click();
+      await dialog.waitFor({ state: "detached" });
+      began = Date.now();
+      await ask(
+        "Change the comment at the top of prices.py to '# all prices'. Do not run anything.",
+      );
+      const needs = page.getByRole("region", { name: "Check failed · needs you" });
+      await needs.waitFor({ timeout: 1_500_000 });
+      await idle();
+      console.log(
+        `code-check: needs you after ${secs(began)} s; the card says: ${(await needs.innerText()).replace(/\s+/g, " ").slice(0, 300)}`,
+      );
+      const rounds = ((await engine(`${base}/turns`))?.items ?? []).at(-1);
+      console.log(
+        `  the turn: result ${rounds?.result}, ${rounds?.rounds} rounds, why ${rounds?.check_why}`,
+      );
+      await page
+        .getByRole("button", { name: "The check: Check failed · needs you. Change the check" })
+        .waitFor();
+      await shot(page, "code-check-needs-you", 1700);
+      // 7. the person's terminal: inside the same protected area
+      await word.click();
+      await dialog.getByLabel("Command").fill("python3 -B check.py");
+      await dialog.getByRole("button", { name: "Save the check" }).click();
+      await dialog.waitFor({ state: "detached" });
+      await page
+        .getByRole("tablist", { name: "Beside the chat" })
+        .getByRole("tab", { name: "Terminal" })
+        .click();
+      const term = page.getByRole("region", { name: "Terminal" });
+      await term.getByRole("button", { name: "Open a terminal" }).click();
+      const screenOf = term.locator(".xterm-rows");
+      await screenOf.waitFor({ timeout: 30_000 });
+      const type = async (line, until) => {
+        await term.locator(".xterm").click();
+        await page.keyboard.type(line);
+        await page.keyboard.press("Enter");
+        await page.waitForFunction(
+          ([sel, text]) =>
+            (document.querySelector(sel)?.textContent ?? "").replace(/\u00a0/g, " ").includes(text),
+          [".xterm-rows", until],
+          { timeout: 60_000 },
+        );
+      };
+      await type("python3 -B check.py; echo ran-$((40+2))", "ran-42");
+      // (`~` is the protected area's own home in this terminal: the person's real one is named in full)
+      await type(`ls ${homedir()} > /dev/null 2>&1; echo home-$?-`, "home-");
+      await type("echo x > ../outside-by-the-terminal.txt; echo out-$?-", "out-");
+      await type("ps > /dev/null 2>&1; echo ps-$?-", "ps-");
+      const shown = ((await screenOf.textContent()) ?? "").replace(/\u00a0/g, " ");
+      console.log(`code-check: the terminal showed: ${shown.replace(/\s+/g, " ").slice(-420)}`);
+      for (const [mark, what] of [
+        ["home-0-", "read the home folder"],
+        ["out-0-", "wrote outside the project"],
+        ["ps-0-", "ran ps"],
+      ]) {
+        if (shown.includes(mark)) throw new Error(`the terminal ${what}`);
+      }
+      if (existsSync(join(folder, "..", "outside-by-the-terminal.txt")))
+        throw new Error("a file was written outside");
+      await shot(page, "code-check-terminal", 1100);
+      // 8. a command that deletes is asked first in "Ask me"; a yes runs it, and Undo brings the file back
+      began = Date.now();
+      await ask("Delete the file notes.txt with the command rm notes.txt. Do nothing else.");
+      const del = page.getByRole("region", { name: "The agent wants to delete files" });
+      await del.getByRole("button", { name: "Yes, run it" }).waitFor({ timeout: 900_000 });
+      console.log(
+        `code-check: asked before the delete after ${secs(began)} s: ${(await del.locator("code").first().innerText()).trim()}`,
+      );
+      if (!existsSync(at("notes.txt"))) throw new Error("notes.txt was deleted before the answer");
+      await shot(page, "code-check-ask-delete", 1500);
+      await del.getByRole("button", { name: "Yes, run it" }).click();
+      await idle();
+      if (existsSync(at("notes.txt"))) throw new Error("notes.txt is still there after the yes");
+      const changedCard = page.getByRole("region", { name: "What this turn changed" }).last();
+      await changedCard.getByRole("button", { name: "Undo this turn" }).click();
+      await page
+        .getByRole("region", { name: "An undone turn" })
+        .last()
+        .waitFor({ timeout: 60_000 });
+      if (read("notes.txt") !== "to do: the tax\n")
+        throw new Error("Undo did not bring notes.txt back");
+      console.log("code-check: the delete ran after the yes, and Undo brought the file back");
+      // 9. the agent may make a repository when asked; opening the project did not
+      if (existsSync(at(".git"))) throw new Error("the project has a .git it was not asked for");
+      await ask(
+        "Run git init in this project so that it becomes a git repository. Do nothing else.",
+      );
+      await idle();
+      console.log(
+        `code-check: after "run git init": .git ${existsSync(at(".git")) ? "is there" : "is NOT there"}`,
+      );
+      if (!existsSync(at(".git"))) throw new Error("the agent could not make a repository");
+      await page.setViewportSize({ width: 720, height: 520 });
+      await page
+        .getByRole("tablist", { name: "What to show" })
+        .getByRole("tab", { name: "Terminal" })
+        .click();
+      await page.waitForTimeout(800);
+      await shot(page, "code-check-terminal-small");
+      await page.setViewportSize({ width: 1440, height: 900 });
     });
   }
   if (scheme === "light" && names.has("u11-make")) {

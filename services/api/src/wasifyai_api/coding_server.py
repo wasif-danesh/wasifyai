@@ -38,6 +38,7 @@ The window never talks to this server and never sees its key (ADR-0101, decision
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import logging
 import os
@@ -300,14 +301,17 @@ class CodingServer:
         startup_timeout_s: float = 90.0,
         *,
         sandbox_exec: str | None = SANDBOX_EXEC,
+        proxy: Any = None,
     ) -> None:
         """`files` is the build's `services/coding-engine` folder (the sandbox profile).
+        `proxy` is the engine's install proxy.
         `sandbox_exec` is None only in unit tests that run the fake server, which starts no
         command; the engine never passes it."""
         self._data_dir = data_dir
         self._files = files
         self._timeout = startup_timeout_s
         self._sandbox_exec = sandbox_exec
+        self._proxy = proxy  # `coding_proxy.InstallProxy`, or None
         self._proc: asyncio.subprocess.Process | None = None
         self._url: str | None = None
         self._key: str | None = None
@@ -343,6 +347,11 @@ class CodingServer:
     def read_only(self) -> tuple[Path, ...]:
         """The folders the running server may read and not write."""
         return self._read_only if self.running else ()
+
+    @property
+    def proxy(self) -> Any:
+        """The install proxy (`coding_proxy.InstallProxy`), or None."""
+        return self._proxy
 
     @property
     def install(self) -> CodingInstall | None:
@@ -415,6 +424,8 @@ class CodingServer:
         """The address of a running server that may write to `workspaces` (and to its own
         default workspace) and may read, but not write, `read_only`; starting it, or starting
         it again when the folders differ. A folder named in both may be written."""
+        if self._proxy is not None:
+            await self._proxy.start()
         want = await asyncio.to_thread(_resolved, workspaces)
         reads = tuple(p for p in await asyncio.to_thread(_resolved, read_only) if p not in want)
         async with self._lock:
@@ -500,8 +511,6 @@ class CodingServer:
                     write=[run, *workspaces, terminal],
                     read_only=[root, python_home, plan.parent, *read_only],
                     closed=[*(Path(c) for c in CLOSED), data],
-                    # a project with no git of its own does not get one from the engine
-                    no_write=[w / ".git" for w in workspaces if not (w / ".git").exists()],
                 )
             )
             profile.chmod(0o600)
@@ -512,6 +521,32 @@ class CodingServer:
         # another disk) cannot be followed from inside the sandbox. The Python file is the
         # exception: it is the link that makes the folder an environment.
         venv_bin = Path(os.path.realpath(found.python.parent))
+        env = self._environment(found, home, tmp)
+        env.update(
+            {
+                "TMUX_TMPDIR": str(terminal),
+                # everything it keeps is under its own state
+                "OH_PERSISTENCE_DIR": str(state / "persistence"),
+                "OH_CONVERSATIONS_PATH": str(state / "conversations"),
+                "OH_BASH_EVENTS_DIR": str(state / "bash-events"),
+                "OH_CONVERSATION_WORKTREE_ROOT": str(state / "worktrees"),
+                "OPENHANDS_AGENT_SERVER_CONFIG_PATH": str(state / "config.json"),
+                "OH_WORKSPACE_PATH": str(workspace),
+                "OH_ENABLE_BROWSER": "false",
+                "OH_ENABLE_VSCODE": "false",
+            }
+        )
+        return {
+            "env": env, "profile": profile, "terminal": terminal, "cwd": state,
+            "python": venv_bin / found.python.name, "fixed": plan.parent,
+        }  # fmt: skip
+
+    def _environment(self, found: CodingInstall, home: Path, tmp: Path) -> dict[str, str]:
+        """What a program inside the sandbox is given: a home and a temp folder under the
+        coding engine's own folder, the tools' folders, and nothing of this engine's own
+        environment (no key can be in it). The same for the server, for a check we run and for
+        the person's terminal, so that all three find the same programs."""
+        venv_bin = Path(os.path.realpath(found.python.parent))
         env = {
             "HOME": str(home),
             "USER": os.environ.get("USER", "user"),
@@ -520,7 +555,6 @@ class CodingServer:
             "TERM": "xterm-256color",
             "SHELL": "/bin/zsh",
             "TMPDIR": str(tmp),
-            "TMUX_TMPDIR": str(terminal),
             "PATH": os.pathsep.join(
                 [
                     str(venv_bin),
@@ -539,20 +573,68 @@ class CodingServer:
             "LITELLM_LOCAL_MODEL_COST_MAP": "True",
             "OPENHANDS_SUPPRESS_BANNER": "1",
             "LOG_JSON": "true",  # one line per record in logs/coding-server.log
-            # everything it keeps is under its own state
-            "OH_PERSISTENCE_DIR": str(state / "persistence"),
-            "OH_CONVERSATIONS_PATH": str(state / "conversations"),
-            "OH_BASH_EVENTS_DIR": str(state / "bash-events"),
-            "OH_CONVERSATION_WORKTREE_ROOT": str(state / "worktrees"),
-            "OPENHANDS_AGENT_SERVER_CONFIG_PATH": str(state / "config.json"),
-            "OH_WORKSPACE_PATH": str(workspace),
-            "OH_ENABLE_BROWSER": "false",
-            "OH_ENABLE_VSCODE": "false",
         }
+        env.update(self.install_env("agent"))
+        return env
+
+    def install_env(self, who: str) -> dict[str, str]:
+        """How a program inside the sandbox reaches the package indexes: through our own proxy
+        on this computer, which lets through only the hosts on its list (`coding_proxy.py`).
+        Empty when this engine has no proxy."""
+        proxy = self._proxy
+        if proxy is None or not proxy.address:
+            return {}
+        url = proxy.url_for(who)
         return {
-            "env": env, "profile": profile, "terminal": terminal, "cwd": state,
-            "python": venv_bin / found.python.name, "fixed": plan.parent,
+            "HTTPS_PROXY": url, "https_proxy": url, "HTTP_PROXY": url, "http_proxy": url,
+            "ALL_PROXY": url, "NO_PROXY": "localhost,127.0.0.1,::1",
+            "no_proxy": "localhost,127.0.0.1,::1",
         }  # fmt: skip
+
+    async def sandbox_for(self, workspace: Path, *, who: str = "person") -> dict[str, Any]:
+        """A sandbox of our own for one project: for the check we run and for the person's
+        terminal (ADR-0103, decision 1). The same profile template as the server's, filled for
+        this one folder, so it holds whether or not the server is running and whatever other
+        folders the server has open. Gives `wrapper` (put in front of a command) and `env`."""
+        found = self.install
+        if found is None:
+            raise CodingError(
+                "not_installed",
+                "The coding engine is not set up yet. Set it up in Settings first.",
+            )
+        if not self.supported:
+            raise CodingError(
+                "unsupported", "The coding engine is not available for this computer yet."
+            )
+        if self._proxy is not None:
+            await self._proxy.start()
+        return await asyncio.to_thread(self._own_sandbox, found, Path(workspace), who)
+
+    def _own_sandbox(self, found: CodingInstall, workspace: Path, who: str) -> dict[str, Any]:
+        template = self._template()
+        run = Path(os.path.realpath(self.run_dir))
+        workspace = Path(os.path.realpath(workspace))
+        home, tmp, profiles = run / "home", run / "tmp-own", run / "profiles"
+        for folder in (home, tmp, profiles):
+            folder.mkdir(parents=True, exist_ok=True)
+        root = Path(os.path.realpath(found.root))
+        python_home = Path(os.path.realpath(found.python)).parents[1]
+        data = Path(os.path.realpath(self._data_dir))
+        name = hashlib.sha256(str(workspace).encode()).hexdigest()[:16]
+        profile = profiles / f"{name}.sb"
+        profile.write_text(
+            fill_profile(
+                template,
+                write=[home, tmp, workspace],
+                read_only=[root, python_home],
+                closed=[*(Path(c) for c in CLOSED), data],
+            )
+        )
+        profile.chmod(0o600)
+        env = self._environment(found, home, tmp)
+        env.update(self.install_env(who))
+        wrapper = [self._sandbox_exec, "-f", str(profile)] if self._sandbox_exec else []
+        return {"wrapper": wrapper, "env": env, "profile": profile}
 
     def _sweep_terminal(self, run: Path) -> None:
         """Remove the terminal folder a run that was not stopped left in /tmp."""
@@ -705,4 +787,6 @@ class CodingServer:
 
     async def close(self) -> None:
         await self.stop()
+        if self._proxy is not None:
+            await self._proxy.close()
         await self._http.aclose()

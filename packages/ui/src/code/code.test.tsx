@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -5,14 +7,65 @@ import type {
   CodeApi,
   CodeChange,
   CodeChangeFile,
+  CodeCheck,
+  CodeCheckInfo,
   CodeEvent,
   CodeProject,
   CodeSession,
   CodeTurn,
 } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { whyNot } from "./Checks";
 import { CARRY_OUT, Code } from "./Code";
 import { buildThread, stepLine } from "./thread";
+import { XTERM_CSS } from "./xterm-css";
+
+// the terminal's picture is xterm.js, which needs a real screen: here it is a stand-in that keeps what it
+// was given and lets the test type
+const terms: {
+  written: string[];
+  type: (text: string) => void;
+  resize: (cols: number, rows: number) => void;
+}[] = [];
+vi.mock("@xterm/xterm", () => ({
+  Terminal: class {
+    cols = 80;
+    rows = 24;
+    written: string[] = [];
+    private data: ((d: string) => void)[] = [];
+    private sizes: ((s: { cols: number; rows: number }) => void)[] = [];
+    constructor() {
+      terms.push({
+        written: this.written,
+        type: (text) => {
+          for (const f of this.data) f(text);
+        },
+        resize: (cols, rows) => {
+          for (const f of this.sizes) f({ cols, rows });
+        },
+      });
+    }
+    loadAddon() {}
+    open() {}
+    write(d: Uint8Array | string) {
+      this.written.push(typeof d === "string" ? d : new TextDecoder().decode(d));
+    }
+    onData(f: (d: string) => void) {
+      this.data.push(f);
+      return { dispose() {} };
+    }
+    onResize(f: (s: { cols: number; rows: number }) => void) {
+      this.sizes.push(f);
+      return { dispose() {} };
+    }
+    dispose() {}
+  },
+}));
+vi.mock("@xterm/addon-fit", () => ({
+  FitAddon: class {
+    fit() {}
+  },
+}));
 
 vi.mock("../chat/thread/markdown/Markdown", () => ({
   Markdown: ({ text }: { text: string }) => <div data-markdown="">{text}</div>,
@@ -73,8 +126,8 @@ const PROJECT: CodeProject = {
   mode: "ask",
   kinds: [
     { id: "not_undoable", allowed: false, asked_now: true },
-    { id: "delete", allowed: false, asked_now: false },
-    { id: "install", allowed: false, asked_now: false },
+    { id: "delete", allowed: false, asked_now: true },
+    { id: "install", allowed: false, asked_now: true },
   ],
 };
 
@@ -105,6 +158,36 @@ const CHANGE: CodeChange = {
     { path: "src/home.html", what: "changed", test: false },
     { path: "tests/home.test.js", what: "added", test: true },
   ],
+};
+
+function check(over: Partial<CodeCheck> = {}): CodeCheck {
+  return {
+    id: "c1",
+    turn_id: "t1",
+    round: 1,
+    command: "npm test",
+    result: "passed",
+    why: "",
+    exit_code: 0,
+    seconds: 12,
+    changed_tests: [],
+    ...over,
+  };
+}
+
+const CHECK_INFO: CodeCheckInfo = {
+  project: "bakery-site",
+  command: "",
+  source: "",
+  limit_s: 600,
+  rounds: 3,
+  suggested: [
+    { command: "npm test", why: '`package.json` has a "test" script' },
+    { command: "npm run build", why: '`package.json` has a "build" script' },
+  ],
+  result: "",
+  running: false,
+  checks: [],
 };
 
 let seq = 0;
@@ -197,6 +280,21 @@ function api(over: Partial<CodeApi> = {}): CodeApi {
       kinds: PROJECT.kinds.map((k) => (k.id === kind ? { ...k, allowed } : k)),
     }),
     events: () => feed().events(),
+    check: async () => CHECK_INFO,
+    setCheck: async (_id: string, command: string, limitS?: number) => ({
+      ...CHECK_INFO,
+      command,
+      limit_s: limitS ?? 600,
+    }),
+    runCheck: async () => ({ check: check(), session: session({ result: "passed" }) }),
+    checkOutput: async () => ({ ...check(), output: "the whole output\n", cut: false }),
+    tryAgain: async () => session({ working: true, state: "working" }),
+    terminals: async () => [],
+    openTerminal: async () => ({ id: "term1", folder: FOLDER, ended: false, exit_code: null }),
+    terminalInput: async () => undefined,
+    terminalSize: async () => undefined,
+    closeTerminal: async () => undefined,
+    terminalEvents: async function* () {},
     ...over,
   } as CodeApi;
 }
@@ -867,9 +965,8 @@ describe("a session that changes files", () => {
     );
     await userEvent.click(screen.getByRole("menuitem", { name: /What this project may do/ }));
     expect(await screen.findByRole("heading", { name: "What bakery-site may do" })).toBeTruthy();
-    expect(
-      screen.getByText(/once the agent can run commands/, { selector: "li:nth-child(2) *" }),
-    ).toBeTruthy();
+    expect(screen.getByText("Deleting files")).toBeTruthy();
+    expect(screen.getByText("Installing packages")).toBeTruthy();
     await userEvent.click(
       screen.getByRole("button", { name: "Allow: changing files Undo cannot put back" }),
     );
@@ -911,5 +1008,456 @@ describe("a session that changes files", () => {
     const sessions = async () => [session({ title: "Set the key", working: true, waiting: true })];
     render(<Code api={api({ sessions })} {...props} />);
     expect(await screen.findByText("Waiting for you")).toBeTruthy();
+  });
+
+  it("says the check's word on the list of projects, and who needs the person", async () => {
+    const sessions = async () => [
+      session({ id: "a", title: "Add the hours", turns: 2, result: "passed" }),
+      session({ id: "b", title: "Fix the form", turns: 3, result: "failed", needs_you: true }),
+      session({ id: "c", title: "Tidy up", working: true, checking: true }),
+    ];
+    render(<Code api={api({ sessions })} {...props} />);
+    expect(await screen.findByText("Passed · 2 asked")).toBeTruthy();
+    expect(screen.getByText("Check failed · needs you")).toBeTruthy();
+    expect(screen.getByText("Checking")).toBeTruthy();
+  });
+});
+
+describe("a session whose turns are checked", () => {
+  const editing = (over: Partial<CodeSession> = {}) =>
+    session({ mode: "ask", turns: 1, state: "done", check_command: "npm test", ...over });
+  const open = async (given: Partial<CodeApi>, events: CodeEvent[] = []) => {
+    const stream = feed();
+    for (const e of events) stream.push(e);
+    render(<Code api={api({ events: () => stream.events(), ...given })} {...props} />);
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    return stream;
+  };
+
+  it("says a command in plain words, as it runs and afterwards", () => {
+    const ran = { tool: "terminal", given: { command: "npm test" } };
+    expect(stepLine({ ...ran, status: "started" })).toBe("Running npm test");
+    expect(stepLine({ ...ran, status: "ok" })).toBe("Ran npm test");
+    expect(stepLine({ ...ran, status: "error" })).toBe("Could not run npm test");
+    expect(stepLine({ ...ran, status: "refused" })).toBe("Did not run npm test: you said no");
+    expect(
+      stepLine({ tool: "terminal", given: { command: "x".repeat(200) }, status: "ok" }),
+    ).toHaveLength(85);
+  });
+
+  it("builds the rounds of a turn: a failed check goes back, the next one passes", () => {
+    const [view] = buildThread(
+      [turn({ state: "working", changed: 0 })],
+      [
+        ev({ event: "code_state", state: "working", cost_usd: 0 }),
+        ev({ event: "tool_call", id: "a", name: "terminal", arguments: { command: "npm test" } }),
+        ev({
+          event: "tool_result",
+          id: "a",
+          name: "terminal",
+          status: "ok",
+          output: { text: "1 failed" },
+        }),
+        ev({ event: "code_state", state: "turn_ended", why: "finished", cost_usd: 0 }),
+        ev({ event: "code_state", state: "checking", round: 1, cost_usd: 0 }),
+        ev({
+          event: "code_check",
+          ...check({ result: "failed", exit_code: 1, seconds: 9 }),
+          rounds: 3,
+          tail: "Tests: 1 failed",
+        }),
+        ev({ event: "code_state", state: "working", round: 1, cost_usd: 0 }),
+        ev({ event: "code_message", text: "I am fixing that." }),
+        ev({ event: "code_state", state: "turn_ended", why: "finished", cost_usd: 0 }),
+        ev({ event: "code_state", state: "checking", round: 2, cost_usd: 0 }),
+      ],
+    );
+    expect(view?.parts.map((p) => p.kind)).toEqual(["steps", "check", "round", "message", "check"]);
+    const [, first, round, , second] = view?.parts ?? [];
+    expect(first).toMatchObject({
+      result: "failed",
+      sentBack: true,
+      tail: "Tests: 1 failed",
+      round: 1,
+    });
+    expect(round).toEqual({ kind: "round", round: 2, of: 3 });
+    expect(second).toMatchObject({ running: true, round: 2 });
+    expect(view?.working).toBe(true);
+    // the turn ends: passed, and nothing waits
+    const [done] = buildThread(
+      [turn({ state: "working" })],
+      [
+        ev({ event: "code_state", state: "checking", round: 2, cost_usd: 0 }),
+        ev({ event: "code_check", ...check({ id: "c2", round: 2 }), rounds: 3, tail: "ok" }),
+        ev({
+          event: "code_state",
+          state: "done",
+          why: "finished",
+          result: "passed",
+          round: 2,
+          changed: 1,
+          cost_usd: 0,
+        }),
+      ],
+    );
+    expect(done).toMatchObject({
+      working: false,
+      ended: "finished",
+      result: "passed",
+      needsYou: false,
+      changed: 1,
+    });
+    expect(done?.parts).toHaveLength(1);
+  });
+
+  it("keeps a turn's ending when the person runs the check by hand afterwards", () => {
+    const [view] = buildThread(
+      [turn({ changed: 2, result: "not_checked", why: "stopped" })],
+      [
+        ev({ event: "code_state", state: "checking", round: 0, cost_usd: 0 }),
+        ev({ event: "code_check", ...check({ round: 0 }), rounds: 3, tail: "" }),
+        ev({ event: "code_state", state: "done", result: "passed", cost_usd: 0 }),
+      ],
+    );
+    expect(view).toMatchObject({ ended: "stopped", result: "passed", working: false });
+    expect(view?.parts[0]).toMatchObject({ kind: "check", round: 0, result: "passed" });
+    // tried in the dialog before anything was asked: it belongs to no turn, and makes none
+    expect(
+      buildThread(
+        [],
+        [ev({ event: "code_check", ...check({ round: 0 }), rounds: 3, tail: "" }, "")],
+      ),
+    ).toEqual([]);
+  });
+
+  it("shows a turn from before the app started with its checks, read from their rows", () => {
+    const [view] = buildThread(
+      [turn({ changed: 1, result: "failed", check_why: "rounds_used", needs_you: 1, rounds: 3 })],
+      [],
+      [3, 1, 2].map((n) => check({ id: `c${n}`, round: n, result: "failed", exit_code: 1 })),
+    );
+    expect(
+      view?.parts.filter((p) => p.kind === "check").map((p) => "round" in p && p.round),
+    ).toEqual([1, 2, 3]);
+    expect(view).toMatchObject({ result: "failed", checkWhy: "rounds_used", needsYou: true });
+  });
+
+  it("shows a passed check and the word in the bar", async () => {
+    await open(
+      {
+        sessions: async () => [editing({ result: "passed" })],
+        session: async () => editing({ result: "passed" }),
+        turns: async () => [turn({ changed: 2, result: "passed", can_undo: true })],
+      },
+      [
+        ev({ event: "code_state", state: "checking", round: 1, cost_usd: 0 }),
+        ev({ event: "code_check", ...check(), rounds: 3, tail: "Tests: 12 passed" }),
+        ev({
+          event: "code_state",
+          state: "done",
+          why: "finished",
+          result: "passed",
+          changed: 2,
+          cost_usd: 0,
+        }),
+      ],
+    );
+    const card = await screen.findByRole("region", { name: "Check passed" });
+    expect(within(card).getByText("npm test")).toBeTruthy();
+    expect(within(card).getByText("round 1 of 3")).toBeTruthy();
+    expect(within(card).queryByRole("button")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "The check: Passed. Change the check" }),
+    ).toBeTruthy();
+    expect(screen.getByText(/The check passed\./)).toBeTruthy();
+  });
+
+  it("says “needs you” after three rounds, with what still fails and the tests the agent changed", async () => {
+    const tryAgain = vi.fn(async () => session({ mode: "ask", working: true, state: "working" }));
+    const undo = vi.fn(async (_id: string, turnId: string) => ({
+      turn_id: turnId,
+      undone: true,
+      files: 1,
+      own_changes: false,
+      notes: [],
+    }));
+    const failed = editing({ result: "failed", needs_you: true });
+    await open(
+      {
+        sessions: async () => [failed],
+        session: async () => failed,
+        turns: async () => [
+          turn({
+            changed: 1,
+            result: "failed",
+            check_why: "rounds_used",
+            needs_you: true,
+            can_undo: true,
+          }),
+        ],
+        tryAgain,
+        undo,
+      },
+      [
+        ...[1, 2, 3].flatMap((n) => [
+          ev({ event: "code_state", state: "checking", round: n, cost_usd: 0 }),
+          ev({
+            event: "code_check",
+            ...check({
+              id: `c${n}`,
+              round: n,
+              result: "failed",
+              exit_code: 1,
+              changed_tests: n === 3 ? ["tests/site.test.js"] : [],
+            }),
+            rounds: 3,
+            tail: `✗ says "Closed today" on a Monday (try ${n})`,
+          }),
+          ...(n < 3 ? [ev({ event: "code_state", state: "working", round: n, cost_usd: 0 })] : []),
+        ]),
+        ev({
+          event: "code_state",
+          state: "done",
+          why: "finished",
+          check_why: "rounds_used",
+          result: "failed",
+          needs_you: true,
+          round: 3,
+          changed: 1,
+          cost_usd: 0,
+        }),
+      ],
+    );
+    const card = await screen.findByRole("region", { name: "Check failed · needs you" });
+    expect(within(card).getByText(/still fails after 3 rounds/)).toBeTruthy();
+    expect(within(card).getByText(/on a Monday \(try 3\)/)).toBeTruthy();
+    expect(within(card).getByText("tests/site.test.js")).toBeTruthy();
+    expect(screen.getAllByRole("region", { name: "Check failed" })).toHaveLength(2);
+    expect(screen.getByText("Round 2 of 3")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "The check: Check failed · needs you. Change the check" }),
+    ).toBeTruthy();
+    await userEvent.click(within(card).getByRole("button", { name: "Show the whole output" }));
+    expect(await within(card).findByText("the whole output")).toBeTruthy();
+    await userEvent.click(within(card).getByRole("button", { name: "Undo this turn" }));
+    expect(undo).toHaveBeenCalledWith("s1", "t1");
+    await userEvent.click(within(card).getByRole("button", { name: "Try 3 more rounds" }));
+    expect(tryAgain).toHaveBeenCalledWith("s1");
+  });
+
+  it("never shows a check that could not run as passed, and stops a running one", async () => {
+    expect(whyNot("missing_command", "npm tset")).toMatch(/“npm tset” was not found.*not a pass/);
+    expect(whyNot("time_limit", "x")).toMatch(/not a pass/);
+    const stop = vi.fn(async () => editing());
+    const stream = await open(
+      {
+        sessions: async () => [editing({ working: true, checking: true, state: "checking" })],
+        session: async () => editing({ working: true, checking: true, state: "checking" }),
+        turns: async () => [turn({ state: "checking", changed: 0 })],
+        stop,
+      },
+      [ev({ event: "code_state", state: "checking", round: 1, cost_usd: 0 })],
+    );
+    const running = await screen.findByRole("region", { name: "The check is running" });
+    expect(within(running).getByText("npm test")).toBeTruthy();
+    expect(screen.getAllByText("Checking").length).toBeGreaterThan(1);
+    await userEvent.click(within(running).getByRole("button", { name: "Stop the check" }));
+    expect(stop).toHaveBeenCalledWith("s1");
+    stream.push(
+      ev({
+        event: "code_check",
+        ...check({
+          result: "could_not_check",
+          why: "missing_command",
+          exit_code: 127,
+          command: "npm tset",
+        }),
+        rounds: 3,
+        tail: "sh: npm tset: command not found",
+      }),
+    );
+    const card = await screen.findByRole("region", { name: "Could not check" });
+    expect(within(card).getByText(/That is not a pass/)).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Check passed" })).toBeNull();
+  });
+
+  it("offers to set a check when a project has none", async () => {
+    const none = editing({ result: "not_checked", check_command: "" });
+    const setCheck = vi.fn(async (_id: string, command: string) => ({ ...CHECK_INFO, command }));
+    const runCheck = vi.fn(async () => ({
+      check: check(),
+      session: editing({ result: "passed" }),
+    }));
+    await open({
+      sessions: async () => [none],
+      session: async () => none,
+      turns: async () => [turn({ changed: 1, result: "not_checked", check_why: "no_command" })],
+      setCheck,
+      runCheck,
+    });
+    expect(await screen.findByText(/this project has no check yet/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Set a check" }));
+    const dialog = await screen.findByRole("dialog", { name: "The check for bakery-site" });
+    // the first suggestion is filled in, and says where it comes from; the other is offered
+    const box = within(dialog).getByLabelText("Command") as HTMLInputElement;
+    await waitFor(() => expect(box.value).toBe("npm test"));
+    expect(
+      within(dialog).getByText(/Suggested because package.json has a "test" script/),
+    ).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "npm run build" }));
+    expect(box.value).toBe("npm run build");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Try it now" }));
+    await waitFor(() => expect(setCheck).toHaveBeenCalledWith("s1", "npm run build", 600));
+    expect(runCheck).toHaveBeenCalledWith("s1");
+    expect(await within(dialog).findByText("Passed in 12 s")).toBeTruthy();
+    // no check at all
+    await userEvent.click(
+      within(dialog).getByRole("checkbox", { name: "No check for this project" }),
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save the check" }));
+    await waitFor(() => expect(setCheck).toHaveBeenLastCalledWith("s1", "", 600));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("asks before a command in the words of a command", async () => {
+    const asking = editing({ working: true, waiting: true, state: "working" });
+    await open(
+      {
+        sessions: async () => [asking],
+        session: async () => asking,
+        turns: async () => [turn({ state: "working", answer: "" })],
+      },
+      [
+        ev({
+          event: "tool_call",
+          id: "a",
+          name: "terminal",
+          arguments: { command: "rm -rf build" },
+        }),
+        ev({
+          event: "interrupt",
+          interrupt_id: "q1",
+          kind: "code_ask",
+          payload: {
+            ask: "delete",
+            step_id: "a",
+            tool: "terminal",
+            command: "rm -rf build",
+            path: "",
+            says: "",
+            project: "bakery-site",
+            undo: true,
+            steps: 1,
+          },
+        }),
+      ],
+    );
+    const card = await screen.findByRole("region", { name: "The agent wants to delete files" });
+    expect(within(card).getByText("rm -rf build")).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "Yes, run it" })).toBeTruthy();
+    expect(
+      within(card).getByText(/Undo puts back a deleted file unless your project ignores it/),
+    ).toBeTruthy();
+  });
+});
+
+describe("the Terminal tab", () => {
+  afterEach(() => {
+    terms.length = 0;
+    localStorage.clear();
+  });
+  const editing = session({ mode: "ask", turns: 1, state: "done" });
+  const b64 = (text: string) => btoa(text);
+
+  it("opens a terminal, shows what it prints, sends what is typed and its size, and closes it", async () => {
+    const out = feed();
+    const openTerminal = vi.fn(async () => ({
+      id: "term1",
+      folder: FOLDER,
+      ended: false,
+      exit_code: null,
+    }));
+    const terminalInput = vi.fn(async () => undefined);
+    const terminalSize = vi.fn(async () => undefined);
+    const closeTerminal = vi.fn(async () => undefined);
+    render(
+      <Code
+        api={api({
+          sessions: async () => [editing],
+          session: async () => editing,
+          turns: async () => [turn()],
+          openTerminal,
+          terminalInput,
+          terminalSize,
+          closeTerminal,
+          terminalEvents: () => out.events() as never,
+        })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    await userEvent.click(
+      (await screen.findAllByRole("tab", { name: "Terminal" }))[0] as HTMLElement,
+    );
+    const pane = await screen.findByRole("region", { name: "Terminal" });
+    expect(within(pane).getByText(/same limits as the agent/)).toBeTruthy();
+    expect(within(pane).getByText(/do not work here/)).toBeTruthy();
+    await userEvent.click(within(pane).getByRole("button", { name: "Open a terminal" }));
+    expect(openTerminal).toHaveBeenCalledWith("s1", 80, 24);
+    await waitFor(() => expect(terms).toHaveLength(1));
+    const term = terms[0];
+    await waitFor(() => expect(terminalSize).toHaveBeenCalledWith("s1", "term1", 80, 24));
+    out.push({ seq: 1, data: b64("bakery-site % ") } as never);
+    await waitFor(() => expect(term?.written.join("")).toBe("bakery-site % "));
+    term?.type("npm test\r");
+    await waitFor(() => expect(terminalInput).toHaveBeenCalledWith("s1", "term1", "npm test\r"));
+    term?.resize(120, 40);
+    await waitFor(() => expect(terminalSize).toHaveBeenLastCalledWith("s1", "term1", 120, 40));
+    // the shell ends: the tab says so
+    out.push({ seq: 2, exit_code: 0 } as never);
+    expect(await within(pane).findByRole("tab", { name: "Terminal 1 · ended" })).toBeTruthy();
+    expect(term?.written.join("")).toMatch(/This terminal has ended/);
+    await userEvent.click(within(pane).getByRole("button", { name: "Close terminal 1" }));
+    expect(closeTerminal).toHaveBeenCalledWith("s1", "term1");
+    expect(await within(pane).findByRole("button", { name: "Open a terminal" })).toBeTruthy();
+    // the note can be hidden, and stays hidden
+    await userEvent.click(within(pane).getByRole("button", { name: "Hide this note" }));
+    expect(within(pane).queryByText(/same limits as the agent/)).toBeNull();
+    expect(localStorage.getItem("wasify.code.terminal-note")).toBe("hidden");
+  });
+
+  it("says why a terminal could not be opened", async () => {
+    render(
+      <Code
+        api={api({
+          sessions: async () => [editing],
+          session: async () => editing,
+          turns: async () => [turn()],
+          openTerminal: async () => {
+            throw new Error("This session has 4 terminals open. Close one first.");
+          },
+        })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    await userEvent.click(
+      (await screen.findAllByRole("tab", { name: "Terminal" }))[0] as HTMLElement,
+    );
+    const pane = await screen.findByRole("region", { name: "Terminal" });
+    await userEvent.click(within(pane).getByRole("button", { name: "Open a terminal" }));
+    expect(await within(pane).findByRole("alert")).toHaveProperty(
+      "textContent",
+      "This session has 4 terminals open. Close one first.",
+    );
+  });
+
+  it("carries the style sheet of the xterm.js it is built with", () => {
+    const require = createRequire(import.meta.url);
+    const css = readFileSync(require.resolve("@xterm/xterm/css/xterm.css"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    expect(XTERM_CSS.replace(/\s+/g, " ").trim()).toBe(css);
   });
 });

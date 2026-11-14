@@ -19,6 +19,7 @@ from wasifyai_platform_sdk import Identity, RouteDeps, parse_ids
 
 from wasifyai_code import PRODUCT_ID, files
 from wasifyai_code.runtime import NotAvailable, Refused, Sessions, owner_of, sessions_for, store_for
+from wasifyai_code.terminal import TerminalError
 
 
 class CodeSessionIn(BaseModel):
@@ -52,6 +53,28 @@ class CodeAllowIn(BaseModel):
     allowed: bool
 
 
+class CodeCheckIn(BaseModel):
+    """The project's check: one command; empty means the project has none."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    command: str = Field("", max_length=2000)
+    limit_s: int | None = Field(None, ge=5, le=3600)
+
+
+class CodeTerminalIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cols: int = Field(80, ge=2, le=500)
+    rows: int = Field(24, ge=2, le=300)
+
+
+class CodeTerminalInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    data: str = Field(min_length=1, max_length=65536)
+
+
 class CodeMessageIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -68,7 +91,15 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(404, str(e)) from None
 
     def refuse(e: Refused) -> HTTPException:
-        status = {"not_found": 404, "busy": 409, "model_not_ready": 409, "not_last": 409}.get(
+        status = {
+            "not_found": 404,
+            "busy": 409,
+            "model_not_ready": 409,
+            "not_last": 409,
+            "too_many": 409,
+            "no_check": 409,
+            "ended": 409,
+        }.get(  # fmt: skip
             e.code, 422
         )
         return HTTPException(status, {"code": e.code, "message": e.message})
@@ -258,6 +289,153 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
         )
+
+    # ---- the check ------------------------------------------------------------------------------
+
+    @router.get("/sessions/{session_id}/check")
+    async def get_check(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """The project's check: its command, what the project's files suggest, and the last
+        checks of this session."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            return await asyncio.to_thread(live.check, owner, session_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.put("/sessions/{session_id}/check")
+    async def put_check(
+        session_id: str, body: CodeCheckIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Set the project's check command. It is kept by the app, outside the project."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            return await asyncio.to_thread(
+                live.set_check, owner, session_id, body.command, body.limit_s
+            )
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/sessions/{session_id}/check/run")
+    async def run_check(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Run the check now, outside a turn. It answers when the check has ended; Stop ends
+        it."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            row = await live.check_now(owner, session_id)
+            return {"check": row, "session": live.view(owner, session_id)}
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.get("/sessions/{session_id}/checks/{check_id}")
+    async def check_output(
+        session_id: str, check_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """One check of this session with its whole output."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            return await asyncio.to_thread(live.check_output, owner, session_id, check_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/sessions/{session_id}/check/again", status_code=202)
+    async def try_again(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Three more rounds: a new turn that tells the agent the check still fails."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            turn = await live.try_again(owner, session_id)
+            return {"turn_id": turn["id"], "session": live.view(owner, session_id)}
+        except Refused as e:
+            raise refuse(e) from None
+
+    # ---- the person's terminal -------------------------------------------------------------------
+
+    @router.get("/sessions/{session_id}/terminals")
+    async def list_terminals(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        try:
+            return {"items": sessions().list_terminals(owner_of(identity), session_id)}
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/sessions/{session_id}/terminals", status_code=201)
+    async def open_terminal(
+        session_id: str, body: CodeTerminalIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Open a terminal of the person's own in the project, inside the sandbox."""
+        try:
+            return await sessions().open_terminal(
+                owner_of(identity), session_id, body.cols, body.rows
+            )
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.get("/sessions/{session_id}/terminals/{terminal_id}/events")
+    async def terminal_events(
+        session_id: str,
+        terminal_id: str,
+        last_event_id: str | None = Header(None),
+        identity: Identity = Depends(deps.identity),
+    ) -> StreamingResponse:
+        """What the terminal prints, as it comes (`terminal_output`, the bytes in base64), and
+        `terminal_ended` when its shell has ended."""
+        try:
+            found = sessions().terminal(owner_of(identity), session_id, terminal_id)
+        except Refused as e:
+            raise refuse(e) from None
+        after = int(last_event_id) if last_event_id and last_event_id.isdigit() else 0
+        return StreamingResponse(
+            _stream(found.follow(after), deps.state.heartbeat_s),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+        )
+
+    @router.post("/sessions/{session_id}/terminals/{terminal_id}/input", status_code=204)
+    async def terminal_input(
+        session_id: str,
+        terminal_id: str,
+        body: CodeTerminalInput,
+        identity: Identity = Depends(deps.identity),
+    ) -> Response:
+        """What the person typed."""
+        try:
+            sessions().terminal(owner_of(identity), session_id, terminal_id).write(body.data)
+        except Refused as e:
+            raise refuse(e) from None
+        except TerminalError as e:
+            raise HTTPException(409, {"code": e.code, "message": e.message}) from None
+        return Response(status_code=204)
+
+    @router.post("/sessions/{session_id}/terminals/{terminal_id}/size", status_code=204)
+    async def terminal_size(
+        session_id: str,
+        terminal_id: str,
+        body: CodeTerminalIn,
+        identity: Identity = Depends(deps.identity),
+    ) -> Response:
+        try:
+            found = sessions().terminal(owner_of(identity), session_id, terminal_id)
+        except Refused as e:
+            raise refuse(e) from None
+        found.resize(body.cols, body.rows)
+        return Response(status_code=204)
+
+    @router.delete("/sessions/{session_id}/terminals/{terminal_id}", status_code=204)
+    async def close_terminal(
+        session_id: str, terminal_id: str, identity: Identity = Depends(deps.identity)
+    ) -> Response:
+        """Close a terminal: its shell and everything it started are ended."""
+        try:
+            await sessions().close_terminal(owner_of(identity), session_id, terminal_id)
+        except Refused as e:
+            raise refuse(e) from None
+        return Response(status_code=204)
 
     def workspace_of(session_id: str, identity: Identity) -> str:
         try:

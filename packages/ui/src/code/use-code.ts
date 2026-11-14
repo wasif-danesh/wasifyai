@@ -4,6 +4,7 @@
 import type {
   CodeAnswer,
   CodeApi,
+  CodeCheck,
   CodeEngine,
   CodeEvent,
   CodeMode,
@@ -26,6 +27,8 @@ export type CodeState = {
   session: CodeSession | null;
   turns: CodeTurn[];
   events: CodeEvent[];
+  /** the session's checks, the newest first: what a turn from before the app started shows of its check */
+  checks: CodeCheck[];
   /** a message was sent and the engine has not answered yet, or Stop was pressed */
   busy: "sending" | "stopping" | null;
   /** it goes up when the project's files may have changed: a turn ended, an undo, a "bring it back" */
@@ -44,12 +47,25 @@ export function useCode(api: CodeApi) {
     session: null,
     turns: [],
     events: [],
+    checks: [],
     busy: null,
     filesTick: 0,
     undoNote: null,
   });
   const patch = useCallback((p: Partial<CodeState>) => setState((s) => ({ ...s, ...p })), []);
   const openId = state.session?.id ?? null;
+
+  // the session's checks, for the turns whose events are not known; an engine that has none answers nothing
+  const checksOf = useCallback(
+    async (id: string): Promise<CodeCheck[]> => {
+      try {
+        return (await api.check(id)).checks;
+      } catch {
+        return [];
+      }
+    },
+    [api],
+  );
 
   const refresh = useCallback(async () => {
     try {
@@ -87,10 +103,26 @@ export function useCode(api: CodeApi) {
             );
             if (event.event === "code_state" && event.state === "done") {
               // the turn is closed: its row now says how it ended, and the session what it cost
-              const [session, turns] = await Promise.all([api.session(openId), api.turns(openId)]);
+              const [session, turns, checks] = await Promise.all([
+                api.session(openId),
+                api.turns(openId),
+                checksOf(openId),
+              ]);
               if (!gone) {
-                setState((s) => ({ ...s, session, turns, busy: null, filesTick: s.filesTick + 1 }));
+                setState((s) => ({
+                  ...s,
+                  session,
+                  turns,
+                  checks,
+                  busy: null,
+                  filesTick: s.filesTick + 1,
+                }));
               }
+            } else if (event.event === "code_state" && event.state === "checking") {
+              // the bar says "Checking" while the check runs
+              setState((s) =>
+                s.session?.id === openId ? { ...s, session: { ...s.session, checking: true } } : s,
+              );
             }
           }
         } catch {
@@ -103,22 +135,26 @@ export function useCode(api: CodeApi) {
       gone = true;
       stop.abort();
     };
-  }, [api, openId]);
+  }, [api, openId, checksOf]);
 
   const open = useCallback(
     async (id: string) => {
       try {
-        const [session, turns] = await Promise.all([api.session(id), api.turns(id)]);
-        patch({ session, turns, events: [], error: null, busy: null });
+        const [session, turns, checks] = await Promise.all([
+          api.session(id),
+          api.turns(id),
+          checksOf(id),
+        ]);
+        patch({ session, turns, checks, events: [], error: null, busy: null });
       } catch (e) {
         patch({ error: say(e, "That session could not be opened.") });
       }
     },
-    [api, patch],
+    [api, patch, checksOf],
   );
 
   const close = useCallback(() => {
-    patch({ session: null, turns: [], events: [], busy: null });
+    patch({ session: null, turns: [], events: [], checks: [], busy: null });
     void refresh();
   }, [patch, refresh]);
 
@@ -126,7 +162,7 @@ export function useCode(api: CodeApi) {
     async (folder: string, model?: string, mode: CodeMode = "ask") => {
       try {
         const session = await api.start({ folder, model, mode });
-        patch({ session, turns: [], events: [], error: null, busy: null });
+        patch({ session, turns: [], events: [], checks: [], error: null, busy: null });
         return session;
       } catch (e) {
         patch({ error: say(e, "That folder could not be opened.") });
@@ -234,6 +270,41 @@ export function useCode(api: CodeApi) {
   const undo = useCallback((turnId: string) => putBack(turnId, true), [putBack]);
   const redo = useCallback((turnId: string) => putBack(turnId, false), [putBack]);
 
+  /** Read the open session again: its check was changed or tried. */
+  const reload = useCallback(async () => {
+    if (!openId) return;
+    try {
+      const [session, checks] = await Promise.all([api.session(openId), checksOf(openId)]);
+      setState((s) => (s.session?.id === openId ? { ...s, session, checks } : s));
+    } catch {
+      // what is shown stays
+    }
+  }, [api, openId, checksOf]);
+
+  /** Run the project's check now, outside a turn. Its card arrives on the stream. */
+  const runCheck = useCallback(async () => {
+    if (!openId) return;
+    try {
+      const out = await api.runCheck(openId);
+      patch({ session: out.session, error: null });
+    } catch (e) {
+      patch({ error: say(e, "The check could not be run.") });
+    }
+  }, [api, openId, patch]);
+
+  /** Three more rounds: a new turn that tells the agent the check still fails. */
+  const tryAgain = useCallback(async () => {
+    if (!openId) return;
+    patch({ busy: "sending", error: null });
+    try {
+      const session = await api.tryAgain(openId);
+      const turns = await api.turns(openId);
+      patch({ session, turns, busy: null });
+    } catch (e) {
+      patch({ busy: null, error: say(e, "The agent could not be asked again.") });
+    }
+  }, [api, openId, patch]);
+
   const setLimit = useCallback(
     async (usd: number) => {
       if (!openId) return;
@@ -261,5 +332,8 @@ export function useCode(api: CodeApi) {
     answer,
     undo,
     redo,
+    reload,
+    runCheck,
+    tryAgain,
   };
 }

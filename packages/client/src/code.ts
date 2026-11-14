@@ -44,6 +44,12 @@ export type CodeSession = {
   waiting: boolean;
   /** the check's word; empty when nothing was ever checked */
   result: "" | "passed" | "failed" | "not_checked" | "could_not_check";
+  /** the project's check is running now */
+  checking?: boolean;
+  /** the last turn stopped and a person must decide (the check still fails, or could not run) */
+  needs_you?: boolean;
+  /** the project's check command; empty when it has none */
+  check_command?: string;
   turns: number;
   answer: string;
   ended: CodeEnding;
@@ -71,6 +77,11 @@ export type CodeTurn = {
   finished_at: string | null;
   /** how many files the turn changed */
   changed: number;
+  /** why the check has its result when the agent itself finished: no_change, no_command, rounds_used, ... */
+  check_why?: string;
+  /** how many times the check ran in this turn */
+  rounds?: number;
+  needs_you?: boolean | number;
   /** the person undid the turn */
   undone: boolean;
   /** it is the turn "Undo this turn" would undo now, or "Bring it back" would bring back */
@@ -135,6 +146,49 @@ export type CodeUndone = {
   notes: string[];
 };
 
+/** One run of the project's check. `round` is 0 for a check the person ran by hand. */
+export type CodeCheck = {
+  id: string;
+  turn_id: string | null;
+  round: number;
+  command: string;
+  result: "passed" | "failed" | "not_checked" | "could_not_check";
+  /** for could_not_check and not_checked: missing_command, time_limit, crashed, could_not_start, stopped */
+  why: string;
+  exit_code: number | null;
+  seconds: number;
+  /** test files the agent changed or deleted in the turn */
+  changed_tests: string[];
+  created_at?: string;
+};
+
+/** The project's check: its command, what the project's files suggest, and this session's last checks. */
+export type CodeCheckInfo = {
+  project: string;
+  command: string;
+  /** "suggested" or "person"; empty when there is no check */
+  source: string;
+  limit_s: number;
+  rounds: number;
+  suggested: { command: string; why: string }[];
+  result: CodeSession["result"];
+  running: boolean;
+  checks: CodeCheck[];
+};
+
+/** A terminal of the person's own in the project. */
+export type CodeTerminal = {
+  id: string;
+  folder: string;
+  ended: boolean;
+  exit_code: number | null;
+};
+
+/** What a terminal's stream sends: bytes it printed (base64), or its end. */
+export type CodeTerminalEvent =
+  | { seq: number; data: string }
+  | { seq: number; exit_code: number | null; data?: undefined };
+
 /** What a project may do: each kind of request, and whether the person allowed it. */
 export type CodeProject = {
   project: string;
@@ -154,7 +208,12 @@ export type CodeEvent = { seq: number; run_id: string; thread_id: string; ts: st
       cost_usd: number;
       /** with "done", in a session that may change files: how many files the turn changed */
       changed?: number;
+      /** how many times the check has run in this turn; with "checking", the round that begins */
+      round?: number;
+      needs_you?: boolean;
+      check_why?: string;
     }
+  | ({ event: "code_check"; rounds: number; tail: string } & CodeCheck)
   | { event: "interrupt"; interrupt_id: string; kind: "code_ask"; payload: CodeAsk }
   | { event: "tool_call"; id: string; name: string; arguments: Record<string, unknown> }
   | {
@@ -327,6 +386,88 @@ export function createCodeApi(transport: Transport) {
           body: JSON.stringify({ allowed }),
         },
       );
+    },
+    /** The project's check. */
+    check(id: string): Promise<CodeCheckInfo> {
+      return json<CodeCheckInfo>(`${BASE}/sessions/${encodeURIComponent(id)}/check`);
+    },
+    /** Set the project's check command; an empty one means the project has no check. */
+    setCheck(id: string, command: string, limitS?: number): Promise<CodeCheckInfo> {
+      return json<CodeCheckInfo>(`${BASE}/sessions/${encodeURIComponent(id)}/check`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(limitS ? { command, limit_s: limitS } : { command }),
+      });
+    },
+    /** Run the check now, outside a turn. It answers when the check has ended. */
+    runCheck(id: string): Promise<{ check: CodeCheck; session: CodeSession }> {
+      return json(`${BASE}/sessions/${encodeURIComponent(id)}/check/run`, post());
+    },
+    /** One check with its whole output. */
+    checkOutput(
+      id: string,
+      checkId: string,
+    ): Promise<CodeCheck & { output: string; cut: boolean }> {
+      return json(
+        `${BASE}/sessions/${encodeURIComponent(id)}/checks/${encodeURIComponent(checkId)}`,
+      );
+    },
+    /** Three more rounds: a new turn that tells the agent the check still fails. */
+    async tryAgain(id: string): Promise<CodeSession> {
+      const out = await json<{ session: CodeSession }>(
+        `${BASE}/sessions/${encodeURIComponent(id)}/check/again`,
+        post(),
+      );
+      return out.session;
+    },
+    async terminals(id: string): Promise<CodeTerminal[]> {
+      return (
+        await json<{ items: CodeTerminal[] }>(
+          `${BASE}/sessions/${encodeURIComponent(id)}/terminals`,
+        )
+      ).items;
+    },
+    /** Open a terminal of the person's own in the project, inside the sandbox. */
+    openTerminal(id: string, cols: number, rows: number): Promise<CodeTerminal> {
+      return json<CodeTerminal>(
+        `${BASE}/sessions/${encodeURIComponent(id)}/terminals`,
+        post({ cols, rows }),
+      );
+    },
+    /** What the person typed. */
+    async terminalInput(id: string, terminalId: string, data: string): Promise<void> {
+      await call(
+        `${BASE}/sessions/${encodeURIComponent(id)}/terminals/${encodeURIComponent(terminalId)}/input`,
+        post({ data }),
+      );
+    },
+    async terminalSize(id: string, terminalId: string, cols: number, rows: number): Promise<void> {
+      await call(
+        `${BASE}/sessions/${encodeURIComponent(id)}/terminals/${encodeURIComponent(terminalId)}/size`,
+        post({ cols, rows }),
+      );
+    },
+    async closeTerminal(id: string, terminalId: string): Promise<void> {
+      await call(
+        `${BASE}/sessions/${encodeURIComponent(id)}/terminals/${encodeURIComponent(terminalId)}`,
+        { method: "DELETE" },
+      );
+    },
+    /** What a terminal prints, as it comes; `after` is the number of the last event the caller has. */
+    async *terminalEvents(
+      id: string,
+      terminalId: string,
+      after = 0,
+      signal?: AbortSignal,
+    ): AsyncGenerator<CodeTerminalEvent> {
+      const res = await call(
+        `${BASE}/sessions/${encodeURIComponent(id)}/terminals/${encodeURIComponent(terminalId)}/events`,
+        { headers: after > 0 ? { "last-event-id": String(after) } : undefined, signal },
+      );
+      if (!res.body) return;
+      for await (const parsed of parseSse(res.body)) {
+        yield parsed.data as unknown as CodeTerminalEvent;
+      }
     },
     /** One file of the session's project, to read. */
     file(id: string, path: string): Promise<CodeFile> {

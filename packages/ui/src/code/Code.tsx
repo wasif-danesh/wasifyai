@@ -2,7 +2,9 @@
 // Code (ADR-0101; mockups in docs/spikes/coding-mockups.html): where coding lives, the projects, and a
 // session. In Plan the agent reads the project and answers or gives a plan. In "Ask me" and "Work on its
 // own" it also changes files, asks first where a rule says so, and every turn can be undone in the Changes
-// tab. It runs no command yet. The window calls the coding product's routes and never the coding engine.
+// tab. It also runs commands inside the project's protected area; after a turn that changed files the app runs
+// the project's check and sends a failure back to it. The person has a terminal of their own in the Terminal
+// tab. The window calls the coding product's routes and never the coding engine.
 import type { CodeAnswer, CodeApi, CodeMode, CodeModel, CodeSession } from "@wasifyai/client";
 import {
   ArrowUp,
@@ -35,8 +37,18 @@ import { Textarea } from "../components/textarea";
 import { PageHeader } from "../window-bar";
 import { AskCard, MODES, MayDialog, ModePill } from "./Asking";
 import { Changes } from "./Changes";
+import { CheckCard, CheckDialog, CheckWord, WORDS } from "./Checks";
 import { Files } from "./Files";
-import { type Step, type TurnView, buildThread, isEdit, stepLine } from "./thread";
+import { TerminalPane } from "./Terminal";
+import {
+  type CheckPart,
+  type Step,
+  type TurnView,
+  buildThread,
+  isCommand,
+  isEdit,
+  stepLine,
+} from "./thread";
 import { useCode } from "./use-code";
 
 export type CodeProps = {
@@ -114,7 +126,7 @@ export function Code({
         api={api}
         session={state.session}
         models={state.models}
-        thread={buildThread(state.turns, state.events)}
+        thread={buildThread(state.turns, state.events, state.checks)}
         busy={state.busy}
         error={state.error}
         onDismiss={code.dismiss}
@@ -126,6 +138,9 @@ export function Code({
         onAnswer={code.answer}
         onUndo={code.undo}
         onRedo={code.redo}
+        onRunCheck={code.runCheck}
+        onTryAgain={code.tryAgain}
+        onReload={code.reload}
         filesTick={state.filesTick}
         undoNote={state.undoNote}
       />
@@ -363,16 +378,22 @@ function Projects({
                   <span
                     className={cn(
                       "ms-auto shrink-0 text-xs text-muted-foreground",
-                      s.waiting && "font-medium text-foreground",
+                      (s.waiting || s.needs_you) && "font-medium text-foreground",
                     )}
                   >
                     {s.waiting
                       ? "Waiting for you"
-                      : s.working
-                        ? "Working"
-                        : s.turns
-                          ? `${s.turns} asked`
-                          : "Nothing asked yet"}
+                      : s.checking
+                        ? "Checking"
+                        : s.working
+                          ? "Working"
+                          : s.needs_you
+                            ? "Check failed · needs you"
+                            : s.result
+                              ? `${WORDS[s.result]} · ${s.turns} asked`
+                              : s.turns
+                                ? `${s.turns} asked`
+                                : "Nothing asked yet"}
                   </span>
                 </button>
                 <button
@@ -406,9 +427,13 @@ function Projects({
 
 // ---- a session ---------------------------------------------------------------------------------
 
+type Side = "files" | "changes" | "terminal";
+const SIDES: Record<Side, string> = { files: "Files", changes: "Changes", terminal: "Terminal" };
+
 function chipFor(session: CodeSession, thread: TurnView[], busy: string | null, waiting: boolean) {
   if (busy === "stopping") return "Stopping";
   if (waiting) return "Waiting for you";
+  if (session.checking) return "Checking";
   if (session.working || busy === "sending") return "Working";
   const last = thread[thread.length - 1];
   if (last?.ended === "error") return "Stopped with a problem";
@@ -431,6 +456,9 @@ function Session({
   onAnswer,
   onUndo,
   onRedo,
+  onRunCheck,
+  onTryAgain,
+  onReload,
   filesTick,
   undoNote,
 }: {
@@ -449,16 +477,21 @@ function Session({
   onAnswer: (askId: string, answer: CodeAnswer) => void;
   onUndo: (turnId: string) => Promise<void>;
   onRedo: (turnId: string) => Promise<void>;
+  onRunCheck: () => Promise<void>;
+  onTryAgain: () => Promise<void>;
+  /** the check was changed or tried in its dialog */
+  onReload: () => Promise<void>;
   filesTick: number;
   undoNote: string | null;
 }) {
   const [text, setText] = useState("");
   // on a narrow window one pane shows at a time: the chat, the files, or the changes
-  const [pane, setPane] = useState<"chat" | "files" | "changes">("chat");
-  // beside the chat, on a wide window: the files or the changes
-  const [side, setSide] = useState<"files" | "changes">("files");
+  const [pane, setPane] = useState<"chat" | Side>("chat");
+  // beside the chat, on a wide window: the files, the changes or the person's terminal
+  const [side, setSide] = useState<Side>("files");
   const [may, setMay] = useState(false);
-  const showSide = (which: "files" | "changes") => {
+  const [check, setCheck] = useState(false);
+  const showSide = (which: Side) => {
     setSide(which);
     setPane(which);
   };
@@ -505,6 +538,13 @@ function Session({
             {working ? <Spinner className="size-3" /> : null}
             {chipFor(session, thread, busy, waiting)}
           </output>
+          {session.mode === "plan" && !session.result ? null : (
+            <CheckWord
+              session={session}
+              checking={Boolean(session.checking) && working}
+              onOpen={() => setCheck(true)}
+            />
+          )}
           <Cost session={session} model={model} onSetLimit={onSetLimit} />
         </div>
       </PageHeader>
@@ -513,7 +553,7 @@ function Session({
         role="tablist"
         aria-label="What to show"
       >
-        {(["chat", "files", "changes"] as const).map((p) => (
+        {(["chat", "files", "changes", "terminal"] as const).map((p) => (
           <button
             key={p}
             type="button"
@@ -522,7 +562,7 @@ function Session({
             onClick={() => (p === "chat" ? setPane(p) : showSide(p))}
             className="rounded-md px-3 py-1 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring aria-selected:bg-accent aria-selected:font-semibold"
           >
-            {p === "chat" ? "Chat" : p === "files" ? "Files" : "Changes"}
+            {p === "chat" ? "Chat" : SIDES[p]}
           </button>
         ))}
       </div>
@@ -568,6 +608,13 @@ function Session({
                   onUndo={onUndo}
                   onRedo={onRedo}
                   onCarryOut={() => void carryOut()}
+                  command={session.check_command ?? ""}
+                  standing={session.result}
+                  onStop={onStop}
+                  onRunCheck={() => void onRunCheck()}
+                  onTryAgain={() => void onTryAgain()}
+                  onOpenCheck={() => setCheck(true)}
+                  readOutput={async (id) => (await api.checkOutput(session.id, id)).output}
                 />
               ))}
               {error ? (
@@ -645,7 +692,7 @@ function Session({
             role="tablist"
             aria-label="Beside the chat"
           >
-            {(["files", "changes"] as const).map((p) => (
+            {(["files", "changes", "terminal"] as const).map((p) => (
               <button
                 key={p}
                 type="button"
@@ -654,13 +701,17 @@ function Session({
                 onClick={() => showSide(p)}
                 className="rounded-md px-3 py-1 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring aria-selected:bg-accent aria-selected:font-semibold"
               >
-                {p === "files" ? "Files" : "Changes"}
+                {SIDES[p]}
               </button>
             ))}
           </div>
           {side === "files" ? (
             <section aria-label="Files" className="min-h-0 min-w-0 flex-1">
               <Files api={api} sessionId={session.id} project={session.project} tick={filesTick} />
+            </section>
+          ) : side === "terminal" ? (
+            <section aria-label="Terminal" className="min-h-0 min-w-0 flex-1">
+              <TerminalPane api={api} sessionId={session.id} project={session.project} />
             </section>
           ) : (
             <section aria-label="Changes" className="min-h-0 min-w-0 flex-1">
@@ -678,6 +729,15 @@ function Session({
         </div>
       </div>
       {may ? <MayDialog api={api} sessionId={session.id} onClose={() => setMay(false)} /> : null}
+      {check ? (
+        <CheckDialog
+          api={api}
+          sessionId={session.id}
+          working={working}
+          onClose={() => setCheck(false)}
+          onSaved={() => void onReload()}
+        />
+      ) : null}
     </div>
   );
 }
@@ -814,11 +874,22 @@ type TurnActions = {
   onUndo: (turnId: string) => void;
   onRedo: (turnId: string) => void;
   onCarryOut: () => void;
+  /** the project's check command */
+  command: string;
+  /** the session's word now */
+  standing: CodeSession["result"];
+  onStop: () => void;
+  onRunCheck: () => void;
+  onTryAgain: () => void;
+  onOpenCheck: () => void;
+  readOutput: (checkId: string) => Promise<string>;
 };
 
 function Turn({ turn, ...actions }: { turn: TurnView } & TurnActions) {
   const knows = turn.parts.some((p) => p.kind === "steps");
   const asking = turn.parts.some((p) => p.kind === "ask" && p.open);
+  const checking = turn.parts.some((p) => p.kind === "check" && p.running);
+  const checks = turn.parts.filter((p): p is CheckPart => p.kind === "check");
   return (
     <article className="grid gap-3" aria-label={turn.request || "A turn"}>
       {turn.request ? (
@@ -846,6 +917,35 @@ function Turn({ turn, ...actions }: { turn: TurnView } & TurnActions) {
             />
           );
         }
+        if (part.kind === "round") {
+          return (
+            <p
+              key={key}
+              className="m-0 flex items-center gap-3 text-xs text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
+            >
+              Round {part.round} of {part.of}
+            </p>
+          );
+        }
+        if (part.kind === "check") {
+          return (
+            <CheckCard
+              key={key}
+              part={part}
+              command={actions.command}
+              needsYou={turn.needsYou}
+              last={part === checks[checks.length - 1]}
+              canAct={actions.last && actions.idle && !turn.working}
+              canUndo={turn.canUndo}
+              onStop={actions.onStop}
+              onTryAgain={actions.onTryAgain}
+              onUndo={() => actions.onUndo(turn.id)}
+              onChange={actions.onOpenCheck}
+              onRun={actions.onRunCheck}
+              readOutput={actions.readOutput}
+            />
+          );
+        }
         if (part.kind === "refusal") {
           return (
             <Notice key={key} tone="info" title="The model declined this request">
@@ -859,7 +959,7 @@ function Turn({ turn, ...actions }: { turn: TurnView } & TurnActions) {
           </div>
         );
       })}
-      {turn.working ? (
+      {turn.working && !checking ? (
         <output className="m-0 flex items-center gap-2 text-sm text-muted-foreground">
           {asking ? (
             <>
@@ -883,8 +983,9 @@ function Steps({ steps }: { steps: Step[] }) {
   const running = steps.some((s) => s.status === "started");
   const [one] = steps;
   const edits = steps.filter((s) => isEdit(s) && s.status === "ok").length;
+  const ran = steps.filter((s) => isCommand(s) && s.status !== "refused").length;
   const mark = (s: Step) =>
-    s.status === "error" && !isEdit(s)
+    s.status === "error" && !isEdit(s) && !isCommand(s)
       ? " · did not work"
       : s.answer === "allowed"
         ? " · allowed for this project"
@@ -923,8 +1024,11 @@ function Steps({ steps }: { steps: Step[] }) {
         />
         {running ? <Spinner className="size-3.5" /> : null}
         <span>
-          {steps.some(isEdit) ? `Took ${steps.length} steps` : `Looked at ${steps.length} things`}
+          {steps.some((s) => isEdit(s) || isCommand(s))
+            ? `Took ${steps.length} steps`
+            : `Looked at ${steps.length} things`}
           {edits ? ` · changed ${edits} time${edits === 1 ? "" : "s"}` : ""}
+          {ran ? ` · ran ${ran} command${ran === 1 ? "" : "s"}` : ""}
           {allowed ? ` · ${allowed} allowed for this project` : ""}
           {failed ? ` · ${failed} did not work` : ""}
         </span>
@@ -986,8 +1090,7 @@ function Changed({ turn, ...actions }: { turn: TurnView } & TurnActions) {
       <p className="m-0 flex items-start gap-2">
         <FileDiff aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
         <span>
-          <strong className="font-semibold">Changed {files}.</strong> Not checked: the agent cannot
-          run your tests yet.
+          <strong className="font-semibold">Changed {files}.</strong> {checkedLine(turn)}
         </span>
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -999,9 +1102,39 @@ function Changed({ turn, ...actions }: { turn: TurnView } & TurnActions) {
             <Undo2 /> Undo this turn
           </Button>
         ) : null}
+        {turn.result === "not_checked" && turn.checkWhy === "no_command" && actions.last ? (
+          <Button size="sm" variant="ghost" onClick={actions.onOpenCheck}>
+            Set a check
+          </Button>
+        ) : null}
+        {turn.result === "not_checked" &&
+        turn.checkWhy !== "no_command" &&
+        actions.command &&
+        actions.last &&
+        actions.idle &&
+        !turn.parts.some((p) => p.kind === "check") ? (
+          <Button size="sm" variant="ghost" onClick={actions.onRunCheck}>
+            Run the check now
+          </Button>
+        ) : null}
       </div>
     </section>
   );
+}
+
+/** What the check said of a turn that changed files, in a sentence beside "Changed 2 files". */
+function checkedLine(turn: TurnView): string {
+  if (turn.result === "passed") {
+    return turn.checkWhy === "same_as_last_pass"
+      ? "The files are again exactly what passed the check."
+      : "The check passed.";
+  }
+  if (turn.result === "failed") return "The check still fails.";
+  if (turn.result === "could_not_check") return "The check could not run, which is not a pass.";
+  if (turn.checkWhy === "no_command") return "Not checked: this project has no check yet.";
+  if (turn.ended === "stopped") return "Not checked: the turn was stopped first.";
+  if (turn.ended === "step_limit") return "Not checked: the agent reached its step limit first.";
+  return "Not checked.";
 }
 
 function Ending({ turn, ...actions }: { turn: TurnView } & TurnActions) {
@@ -1024,7 +1157,12 @@ function Ending({ turn, ...actions }: { turn: TurnView } & TurnActions) {
       );
     }
     if (actions.mode !== "plan") {
-      return <p className="m-0 text-sm text-muted-foreground">No file was changed.</p>;
+      return (
+        <p className="m-0 text-sm text-muted-foreground">
+          No file was changed.
+          {turn.result ? ` The last check still stands: ${WORDS[turn.result].toLowerCase()}.` : ""}
+        </p>
+      );
     }
     return (
       <section

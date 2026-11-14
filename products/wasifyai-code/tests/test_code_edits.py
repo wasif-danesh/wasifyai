@@ -241,8 +241,8 @@ async def test_allow_for_this_project_stops_the_question_until_it_is_taken_back(
     assert before["mode"] == rows.ASK and before["project"] == "bakery-site"
     assert before["kinds"] == [
         {"id": "not_undoable", "allowed": False, "asked_now": True},
-        {"id": "delete", "allowed": False, "asked_now": False},
-        {"id": "install", "allowed": False, "asked_now": False},
+        {"id": "delete", "allowed": False, "asked_now": True},
+        {"id": "install", "allowed": False, "asked_now": True},
     ]
     await live.send(ME, made["id"], "Set the key to 2")
     asked = await card(live, made)

@@ -493,7 +493,8 @@ async def test_folders_that_must_stay_closed_are_refused(box, tmp_path):
         (str(box.data), "private_folder"),  # the app's own data: its keys are there
         (str(box.data / "code"), "private_folder"),
         (str(tmp_path), "private_folder"),  # it holds the app's data folder
-        (str(home / "Library"), "private_folder"),
+        # the Mac's Library; on a computer that has none it is simply a folder that is not there
+        (str(home / "Library"), "private_folder" if (home / "Library").is_dir() else "no_folder"),
     ):
         r = await box.http.post(f"{BASE}/sessions", json={"folder": folder})
         assert r.status_code == 422 and r.json()["detail"]["code"] == code, folder

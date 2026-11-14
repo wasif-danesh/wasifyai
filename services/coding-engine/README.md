@@ -10,7 +10,8 @@ what pins it. There is no package of ours here and none of OpenHands' source.
 | `leave-out.txt` | Packages the four pull in that nothing we use imports. They are taken out of the lock |
 | `requirements-aarch64-apple-darwin.lock` | Every package that is installed, with its version and hashes. Written by `scripts/lock-coding-engine.sh`; never edited by hand |
 | `build-constraints.txt` | The one build tool, with its hash. One package of the lock (`func-timeout`) is published as source only and is built while installing; without this file uv would fetch the newest `setuptools`, unchecked |
-| `engine.sb.template` | The macOS sandbox profile. The Wasify engine fills in four lists of folders at every start |
+| `engine.sb.template` | The macOS sandbox profile. The Wasify engine fills in five lists of folders at every start |
+| `wasify_rules.py` | Our rules as the Agent Server loads them (ADR-0102, decision 6): every use of a tool that changes something waits for an answer. It is the one file here that imports OpenHands, and it runs only inside the sandbox; the Wasify engine never imports it. It is copied to `<app data>/coding-fixed` at every start and named with `--import-modules` |
 
 Where each is used:
 

@@ -51,7 +51,9 @@ def test_a_failed_tool_a_refused_one_and_an_error_told_to_the_agent_are_not_ok()
     )
     # the tool's name is remembered from the step when the event does not carry it
     assert no == (
-        places.RESULT, {"id": "c1", "tool": "planning_file_editor", "ok": False, "text": "Not now."}
+        places.RESULT,
+        {"id": "c1", "tool": "planning_file_editor", "ok": False, "text": "Not now.",
+         "refused": True},
     )  # fmt: skip
 
 

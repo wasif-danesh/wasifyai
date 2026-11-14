@@ -21,6 +21,16 @@ check the agent never sees: Python run in a **copy** of the finished workspace; 
 For a question the check reads the agent's final answer from the file named by its first argument.
 A read-only task also fails if any file changed.
 
+**Undo is measured too (stage C2's gate).** With a folder for checkpoints (`--data` gives one,
+under the app's data, where the sandbox lets the coding engine neither read nor write), each task
+is kept before and after the agent's turn. After the hidden check the task is undone, and every
+file must be exactly what it was (its bytes, its permissions, no file more and none less); then it
+is brought back, and every file must be exactly what the agent left. `undo` in a result says so.
+
+A session that changes files waits before each change, and somebody must say yes
+(`wasifyai_code/rules.py`). Here nobody is there: a change to a file is let through, as in "Work
+on its own", and any other question is refused.
+
 The hidden check is run the way the product runs any check (`wasifyai_code.checks`): in its own
 process group, with a time limit, and behind an optional wrapper, which is where the sandbox goes.
 """
@@ -32,6 +42,7 @@ import json
 import os
 import shlex
 import shutil
+import stat
 import sys
 import tempfile
 import time
@@ -40,8 +51,10 @@ from pathlib import Path
 from typing import Any
 
 from wasifyai_code import place as places
+from wasifyai_code import rules
+from wasifyai_code.checkpoints import CheckpointError, CheckpointStore
 from wasifyai_code.checks import Check
-from wasifyai_code.place import Place, SessionSpec
+from wasifyai_code.place import Account, Place, SessionSpec
 
 TASKS = Path(__file__).with_name("tasks.json")
 ENGINE_FILES = Path(__file__).resolve().parents[3] / "services" / "coding-engine"
@@ -128,6 +141,45 @@ async def check_start(
     return results
 
 
+def exact(folder: Path) -> dict[str, tuple[str, int, bytes]]:
+    """Everything under a folder, for "exactly as it was": each file with its bytes and its
+    permissions, each link with where it points, each folder (an empty one counts)."""
+    out: dict[str, tuple[str, int, bytes]] = {}
+    for path in sorted(folder.rglob("*")):
+        name = str(path.relative_to(folder))
+        mode = stat.S_IMODE(path.lstat().st_mode)
+        if path.is_symlink():
+            out[name] = ("link", 0, os.readlink(path).encode())
+        elif path.is_dir():
+            out[name] = ("folder", 0, b"")
+        else:
+            out[name] = ("file", mode, path.read_bytes())
+    return out
+
+
+def measure_undo(
+    store: CheckpointStore, workspace: Path, before: str, was: dict[str, Any]
+) -> dict[str, Any]:
+    """Undo the turn and bring it back, and say whether each was exact."""
+    left = exact(workspace)
+    try:
+        after = store.checkpoint("after the turn")
+        changed = len(store.changes(before, after.id))
+        undone = store.undo(before)
+        back_exact = exact(workspace) == was
+        store.undo(undone.before.id)
+        again_exact = exact(workspace) == left
+    except CheckpointError as e:
+        return {"measured": False, "why": str(e)}
+    return {
+        "measured": True,
+        "changed": changed,
+        "undone_exactly": back_exact,
+        "brought_back_exactly": again_exact,
+        "notes": list(undone.notes),
+    }
+
+
 async def run_task(
     place: Place,
     task: dict[str, Any],
@@ -136,15 +188,22 @@ async def run_task(
     model: str = "",
     step_limit: int = STEP_LIMIT,
     limit_s: float = TASK_LIMIT_S,
+    checkpoints: Path | None = None,
+    account: Account | None = None,
     **check: Any,
 ) -> dict[str, Any]:
     """One task in a new session of the place: its files, the request, the agent's turn to its
     end (or to the time limit), then the hidden check."""
     workspace = folder / task["id"] / "workspace"
     write_start(task, workspace)
+    store = before = was = None
+    if checkpoints is not None:
+        store = CheckpointStore(checkpoints / task["id"], workspace)
+        before = (await asyncio.to_thread(store.checkpoint, "before the turn")).id
+        was = exact(workspace)
     started = time.monotonic()
     session = await place.start(
-        SessionSpec(workspace, model=model, step_limit=step_limit, unattended=True)
+        SessionSpec(workspace, model=model, step_limit=step_limit, unattended=True, account=account)
     )
     await place.send(session, task["prompt"], run=True)
 
@@ -159,8 +218,15 @@ async def run_task(
             elif event.kind == places.STEP:
                 steps += 1
                 tools.add(str(event.data.get("tool", "")))
-            elif event.kind == places.CONFIRM:  # nobody is there to say yes
-                await place.answer(session, event.data["id"], False, "an evaluation run")
+            elif event.kind == places.CONFIRM:
+                # nobody is there: steps of tools that wait are let through (a change to a file,
+                # and whatever the model asked for in the same breath: the answer is for all of
+                # them); a question that names no step is refused
+                waits = event.data.get("steps") or []
+                yes = any(s.get("tool") in rules.WRITE_TOOLS for s in waits)
+                await place.answer(
+                    session, event.data["id"], yes, "" if yes else "an evaluation run"
+                )
             elif event.kind == places.ENDED:
                 return str(event.data.get("why", places.ERROR)), str(event.data.get("detail", ""))
         return places.ERROR, "the place stopped sending events"
@@ -177,6 +243,9 @@ async def run_task(
     changed = changed_files(task, workspace)
     if task["readonly"] and changed:
         passed, why = False, "files changed in a read-only task: " + ", ".join(changed)
+    undo: dict[str, Any] = {"measured": False, "why": "no folder for checkpoints was given"}
+    if store is not None and before is not None and was is not None:
+        undo = await asyncio.to_thread(measure_undo, store, workspace, before, was)
     return {
         "id": task["id"],
         "kind": task["kind"],
@@ -188,6 +257,7 @@ async def run_task(
         "steps": steps,
         "tools": sorted(tools),
         "changed": changed,
+        "undo": undo,
     }
 
 
@@ -197,24 +267,46 @@ async def run_all(
     folder: Path,
     *,
     on_result: Callable[[dict[str, Any]], None] | None = None,
+    spent: Callable[[str], float] | None = None,
+    limit_usd: float = 0.0,
     **more: Any,
 ) -> dict[str, Any]:
-    """Every task, one new session each, one after another."""
+    """Every task, one new session each, one after another. With `limit_usd` and `spent` (what
+    a session has cost so far, by its id) the run stops before the task that would begin at or
+    over the limit, and no single task may cost more than what is left."""
     results = []
+    total = 0.0
     for task in tasks:
+        if limit_usd and spent is not None:
+            left = limit_usd - total
+            if left <= 0:
+                break
+            more["account"] = Account(
+                "-", "wasifyai-code", "-", f"eval-{task['id']}", limit_usd=left
+            )
         result = await run_task(place, task, folder, **more)
+        if spent is not None:
+            result["cost_usd"] = round(spent(f"eval-{task['id']}"), 4)
+            total += result["cost_usd"]
         results.append(result)
         if on_result is not None:
             on_result(result)
-    return summary(results)
+    out = summary(results)
+    out["not_run"] = [t["id"] for t in tasks[len(results) :]]
+    if spent is not None:
+        out["cost_usd"] = round(total, 4)
+    return out
 
 
 @contextlib.asynccontextmanager
 async def real_place(
-    data: Path, folder: Path, *, ollama_url: str = "", app_keys: bool = False
+    data: Path, folder: Path | None = None, *, ollama_url: str = "", app_keys: bool = False
 ) -> AsyncIterator[tuple[Any, Any]]:
     """This computer as the place, and the gateway that counts its model calls: the coding
-    engine set up in `data`, in its sandbox, allowed to write under `folder` only.
+    engine set up in `data`, in its sandbox. With `folder` the engine is started once and may
+    write anywhere under it; without, each task's own folder is opened as the product opens a
+    project (the engine starts again for each), which is what the undo measurement needs: a
+    project's folder is then closed to the engine's own `git init`.
 
     The engine's own parts are used as they are (imported here, not by the product): the
     supervisor that starts the sandboxed server, and the gateway, served on a port of its own.
@@ -247,7 +339,8 @@ async def real_place(
         async with serve_alone(gateway) as url:
             address[0] = url
             place = ThisComputer(server, gateway)
-            await place.open_folder(folder, write=True)  # one start for every task's folder
+            if folder is not None:
+                await place.open_folder(folder, write=True)  # one start for every task's folder
             yield place, gateway
     finally:
         await server.close()
@@ -259,9 +352,17 @@ def summary(results: Sequence[dict[str, Any]]) -> dict[str, Any]:
     for r in results:
         passed, of = kinds.setdefault(r["kind"], [0, 0])
         kinds[r["kind"]] = [passed + bool(r["passed"]), of + 1]
+    measured = [r["undo"] for r in results if r.get("undo", {}).get("measured")]
+    with_changes = [u for u in measured if u["changed"]]
     return {
         "passed": sum(bool(r["passed"]) for r in results),
         "of": len(results),
+        "undo": {
+            "measured": len(measured),
+            "changed_files": len(with_changes),
+            "undone_exactly": sum(bool(u["undone_exactly"]) for u in measured),
+            "brought_back_exactly": sum(bool(u["brought_back_exactly"]) for u in measured),
+        },
         "kinds": {k: {"passed": p, "of": n} for k, (p, n) in sorted(kinds.items())},
         "results": list(results),
     }
@@ -283,6 +384,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="read a cloud model's key from the app's own secret store (costs money)",
     )
     parser.add_argument("--work", type=Path, help="where the tasks' folders are made")
+    parser.add_argument(
+        "--limit-usd", type=float, default=0.0, help="the most the whole run may cost"
+    )
     parser.add_argument("tasks", nargs="*", help="task ids (default: all 36)")
     args = parser.parse_args(argv)
     tasks = load_tasks(only=args.tasks)
@@ -322,25 +426,55 @@ async def _run_for_real(
     started = time.monotonic()
 
     def show(r: dict[str, Any]) -> None:
+        u = r["undo"]
+        undo = (
+            f"undo {'exact' if u['undone_exactly'] and u['brought_back_exactly'] else 'NOT EXACT'}"
+            f" ({u['changed']} changed)"
+            if u["measured"]
+            else "undo not measured"
+        )
         print(
             f"{'pass' if r['passed'] else 'FAIL'}  {r['id']:32} {r['status']:10} "
-            f"{r['seconds']:6.1f} s  {r['steps']:2} steps  {r['why'][:80]}",
+            f"{r['seconds']:6.1f} s  {r['steps']:2} steps  {undo}  {r['why'][:80]}",
             flush=True,
         )
 
-    async with real_place(
-        args.data,
-        folder,
-        ollama_url=os.environ.get("CODING_OLLAMA_URL", ""),
-        app_keys=args.app_keys,
-    ) as (place, gateway):
-        result = await run_all(place, tasks, folder, model=args.model, on_result=show)
-        result["model"] = gateway.model(args.model or None).id
+    # under the app's data: where the sandbox lets the coding engine neither read nor write
+    stores = args.data.resolve() / "code" / "eval-checkpoints" / folder.name
+    try:
+        async with real_place(
+            args.data,
+            ollama_url=os.environ.get("CODING_OLLAMA_URL", ""),
+            app_keys=args.app_keys,
+        ) as (place, gateway):
+
+            def spent(session: str) -> float:
+                try:
+                    return float(gateway.spent(session)["usd"])
+                except Exception:  # noqa: BLE001  (a session that made no call is not known)
+                    return 0.0
+
+            result = await run_all(
+                place, tasks, folder, model=args.model, on_result=show, checkpoints=stores,
+                spent=spent, limit_usd=args.limit_usd,
+            )  # fmt: skip
+            result["model"] = gateway.model(args.model or None).id
+    finally:
+        shutil.rmtree(stores, ignore_errors=True)
     result["seconds"] = round(time.monotonic() - started, 1)
     if args.out:
         args.out.write_text(json.dumps({"mode": "real", **result}, indent=1))
+    u = result["undo"]
     print(f"== {result['passed']} of {result['of']} passed in {result['seconds']} s")
-    return 0 if result["passed"] == result["of"] else 1
+    if result.get("not_run"):
+        print(f"== not run, the cost limit was reached: {', '.join(result['not_run'])}")
+    print(f"== counted cost: ${result.get('cost_usd', 0):.2f}")
+    print(
+        f"== undo: {u['undone_exactly']} of {u['measured']} undone exactly, "
+        f"{u['brought_back_exactly']} brought back exactly; {u['changed_files']} changed files"
+    )
+    exact_all = u["undone_exactly"] == u["brought_back_exactly"] == u["measured"] == result["of"]
+    return 0 if result["passed"] == result["of"] and exact_all else 1
 
 
 if __name__ == "__main__":

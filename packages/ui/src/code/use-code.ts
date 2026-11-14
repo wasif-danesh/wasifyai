@@ -2,9 +2,11 @@
 // What the coding screens keep track of: the engine (is it set up), the models, the sessions, and the one
 // session that is open with its turns and its stream.
 import type {
+  CodeAnswer,
   CodeApi,
   CodeEngine,
   CodeEvent,
+  CodeMode,
   CodeModel,
   CodeSession,
   CodeTurn,
@@ -26,6 +28,10 @@ export type CodeState = {
   events: CodeEvent[];
   /** a message was sent and the engine has not answered yet, or Stop was pressed */
   busy: "sending" | "stopping" | null;
+  /** it goes up when the project's files may have changed: a turn ended, an undo, a "bring it back" */
+  filesTick: number;
+  /** what the last undo or "bring it back" said beside doing it (the person's own changes went with it) */
+  undoNote: string | null;
 };
 
 export function useCode(api: CodeApi) {
@@ -39,6 +45,8 @@ export function useCode(api: CodeApi) {
     turns: [],
     events: [],
     busy: null,
+    filesTick: 0,
+    undoNote: null,
   });
   const patch = useCallback((p: Partial<CodeState>) => setState((s) => ({ ...s, ...p })), []);
   const openId = state.session?.id ?? null;
@@ -80,7 +88,9 @@ export function useCode(api: CodeApi) {
             if (event.event === "code_state" && event.state === "done") {
               // the turn is closed: its row now says how it ended, and the session what it cost
               const [session, turns] = await Promise.all([api.session(openId), api.turns(openId)]);
-              if (!gone) patch({ session, turns, busy: null });
+              if (!gone) {
+                setState((s) => ({ ...s, session, turns, busy: null, filesTick: s.filesTick + 1 }));
+              }
             }
           }
         } catch {
@@ -93,7 +103,7 @@ export function useCode(api: CodeApi) {
       gone = true;
       stop.abort();
     };
-  }, [api, openId, patch]);
+  }, [api, openId]);
 
   const open = useCallback(
     async (id: string) => {
@@ -113,9 +123,9 @@ export function useCode(api: CodeApi) {
   }, [patch, refresh]);
 
   const start = useCallback(
-    async (folder: string, model?: string) => {
+    async (folder: string, model?: string, mode: CodeMode = "ask") => {
       try {
-        const session = await api.start({ folder, model });
+        const session = await api.start({ folder, model, mode });
         patch({ session, turns: [], events: [], error: null, busy: null });
         return session;
       } catch (e) {
@@ -165,7 +175,64 @@ export function useCode(api: CodeApi) {
     [api, patch, refresh],
   );
 
-  const dismiss = useCallback(() => patch({ error: null }), [patch]);
+  const dismiss = useCallback(() => patch({ error: null, undoNote: null }), [patch]);
+
+  const setMode = useCallback(
+    async (mode: CodeMode) => {
+      if (!openId) return false;
+      try {
+        patch({ session: await api.setMode(openId, mode), error: null });
+        return true;
+      } catch (e) {
+        patch({ error: say(e, "The mode could not be changed.") });
+        return false;
+      }
+    },
+    [api, openId, patch],
+  );
+
+  const answer = useCallback(
+    async (askId: string, value: CodeAnswer) => {
+      if (!openId) return;
+      try {
+        await api.answer(openId, askId, value);
+      } catch (e) {
+        patch({ error: say(e, "The answer could not be sent.") });
+      }
+    },
+    [api, openId, patch],
+  );
+
+  const putBack = useCallback(
+    async (turnId: string, back: boolean) => {
+      if (!openId) return;
+      try {
+        const done = back ? await api.undo(openId, turnId) : await api.redo(openId, turnId);
+        const [session, turns] = await Promise.all([api.session(openId), api.turns(openId)]);
+        const notes = [...done.notes];
+        if (done.own_changes) {
+          notes.unshift(
+            back
+              ? "Files you changed yourself after this turn went back too. “Bring it back” returns them."
+              : "Files you changed yourself since the undo were replaced. “Undo this turn” returns them.",
+          );
+        }
+        setState((s) => ({
+          ...s,
+          session,
+          turns,
+          error: null,
+          undoNote: notes.length ? notes.join(" ") : null,
+          filesTick: s.filesTick + 1,
+        }));
+      } catch (e) {
+        patch({ error: say(e, "The files could not be put back.") });
+      }
+    },
+    [api, openId, patch],
+  );
+  const undo = useCallback((turnId: string) => putBack(turnId, true), [putBack]);
+  const redo = useCallback((turnId: string) => putBack(turnId, false), [putBack]);
 
   const setLimit = useCallback(
     async (usd: number) => {
@@ -179,5 +246,20 @@ export function useCode(api: CodeApi) {
     [api, openId, patch],
   );
 
-  return { state, refresh, open, close, start, send, stop, remove, dismiss, setLimit };
+  return {
+    state,
+    refresh,
+    open,
+    close,
+    start,
+    send,
+    stop,
+    remove,
+    dismiss,
+    setLimit,
+    setMode,
+    answer,
+    undo,
+    redo,
+  };
 }

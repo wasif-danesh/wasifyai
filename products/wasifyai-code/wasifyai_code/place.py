@@ -24,9 +24,12 @@ STATE = "state"  # data: {"state": "running" | "idle"}
 TEXT = "text"  # a finished message of the agent; data: {"text": ...}
 PIECE = "piece"  # a few characters of a message as it is written; data: {"text": ...}
 STEP = "step"  # one use of a tool; data: {"tool": ..., "id": ..., and what the tool was given}
-# what a step gave back; data: {"id": the step's, "tool": ..., "ok": bool, "text": ...}
+# what a step gave back; data: {"id": the step's, "tool": ..., "ok": bool, "text": ...,
+# "refused": True when it did not run because the answer to a `confirm` was no}
 RESULT = "result"
-CONFIRM = "confirm"  # the agent waits for a yes or no; data: {"id": ..., "what": ...}
+# the agent waits for a yes or no before the steps it names run;
+# data: {"id": ..., "what": ..., "steps": [{"id", "tool", and what the tool was given}]}
+CONFIRM = "confirm"
 ENDED = "ended"  # the turn is over; data: {"why": one of ENDINGS, "detail": ..., "steps": n}
 EVENT_KINDS = (STATE, TEXT, PIECE, STEP, RESULT, CONFIRM, ENDED)
 
@@ -162,13 +165,38 @@ class FakeTurn:
         self.step("file_editor", path=path)
         (self.workspace / path).unlink()
 
-    async def confirm(self, what: str) -> bool:
-        """Ask for a yes or no and wait for it."""
+    async def confirm(self, what: str, **step: Any) -> bool:
+        """Ask for a yes or no and wait for it. `step` is the step that waits (its tool and
+        what the tool was given), for a place that waits before a use of a tool."""
         ask = uuid.uuid4().hex
         waiting: asyncio.Future[tuple[bool, str]] = asyncio.get_running_loop().create_future()
         self._session.confirmations[ask] = waiting
-        self._place._emit(self._session, CONFIRM, {"id": ask, "what": what})
+        steps = [{"id": ask, **step}] if step else []
+        self._place._emit(self._session, CONFIRM, {"id": ask, "what": what, "steps": steps})
         allow, _reason = await waiting
+        return allow
+
+    async def edit(self, path: str, content: str, *, command: str = "create") -> bool:
+        """Change a file the way the real place does: the step is said, it waits for a yes or
+        no, and only then is the file written. False when the answer was no."""
+        target = str(self.workspace / path)
+        call = uuid.uuid4().hex
+        self.step("file_editor", id=call, command=command, path=target)
+        ask = uuid.uuid4().hex
+        waiting: asyncio.Future[tuple[bool, str]] = asyncio.get_running_loop().create_future()
+        self._session.confirmations[ask] = waiting
+        step = {"id": call, "tool": "file_editor", "command": command, "path": target}
+        self._place._emit(self._session, CONFIRM, {"id": ask, "what": path, "steps": [step]})
+        allow, reason = await waiting
+        if allow:
+            (self.workspace / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.workspace / path).write_text(content)
+        self._place._emit(
+            self._session,
+            RESULT,
+            {"id": call, "tool": "file_editor", "ok": allow, "refused": not allow,
+             "text": "" if allow else reason},
+        )  # fmt: skip
         return allow
 
 

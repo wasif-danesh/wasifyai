@@ -3,7 +3,7 @@
 // time, and one file to read. Reading only: a change goes through the chat.
 import type { CodeApi, CodeEntry, CodeFile } from "@wasifyai/client";
 import { ChevronRight, Eye, File, FileText, Folder, FolderOpen, Search } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../cn";
 import { EmptyState } from "../components/empty-state";
 import { Spinner } from "../components/spinner";
@@ -17,7 +17,14 @@ export function Files({
   api,
   sessionId,
   project,
-}: { api: CodeApi; sessionId: string; project: string }) {
+  tick = 0,
+}: {
+  api: CodeApi;
+  sessionId: string;
+  project: string;
+  /** it goes up when the project's files may have changed (a turn ended, an undo): what is open is read again */
+  tick?: number;
+}) {
   const [folders, setFolders] = useState<Loaded>({});
   const [open, setOpen] = useState<Set<string>>(() => new Set([""]));
   const [file, setFile] = useState<CodeFile | null>(null);
@@ -70,6 +77,29 @@ export function Files({
     setChosen(null);
     void load("");
   }, [load]);
+
+  // the files may have changed: read the open folders and the open file again, keeping what is open
+  const seenTick = useRef(tick);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a change of `tick` reads again
+  useEffect(() => {
+    if (seenTick.current === tick) return;
+    seenTick.current = tick;
+    for (const path of open) {
+      api
+        .files(sessionId, path)
+        .then((entries) => setFolders((f) => ({ ...f, [path]: entries })))
+        .catch(() => setFolders((f) => ({ ...f, [path]: "failed" })));
+    }
+    if (chosen) {
+      api
+        .file(sessionId, chosen)
+        .then(setFile)
+        .catch(() => {
+          setFile(null);
+          setProblem("That file is not there any more.");
+        });
+    }
+  }, [tick]);
 
   const toggle = (path: string) => {
     setOpen((was) => {

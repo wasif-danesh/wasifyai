@@ -85,6 +85,12 @@ class Conversation:
         self.stop = threading.Event()
         self.turn: threading.Thread | None = None
         self.drop_after: int | None = None
+        # a replay that rests in the middle: "answer" (it waits for a yes or no) or "run" (a no
+        # was given, and it rests until it is told to go on)
+        self.parked: str | None = None
+        self.go = threading.Event()
+        self.answers: list[dict] = []
+        self.abandoned = False  # a no the recording did not hold: what was left is not replayed
 
     def emit(self, event: dict, keep: bool = True) -> dict:
         event = {**event, "id": str(uuid.uuid4()), "timestamp": now()}
@@ -119,18 +125,56 @@ class Conversation:
 
     def begin(self, text: str = "") -> None:
         self.stop.clear()
-        self.turn = threading.Thread(target=self.play, args=(text,), daemon=True)
+        target, self.abandoned = (self.finish, False) if self.abandoned else (self.play, False)
+        self.turn = threading.Thread(target=target, args=(text,), daemon=True)
         self.say_status("running")
         self.turn.start()
 
+    def finish(self, text: str = "") -> None:
+        """Going on after a no the recording did not hold: the agent has nothing more to say."""
+        self.say_status("finished")
+
+    def go_on(self) -> bool:
+        """`run` for a replay that rests after a no. False when none does."""
+        if self.parked != "run":
+            return False
+        self.go.set()
+        return True
+
+    def respond(self, body: dict) -> bool:
+        """A yes or no for a replay that waits. False when nothing waits."""
+        if self.parked != "answer":
+            return False
+        self.answers.append(body)
+        self.go.set()
+        return True
+
     def interrupt(self) -> None:
-        was = self.status == "running"
+        # as the real server: a conversation that waits for a yes or no is not paused by an
+        # interrupt; one that runs, or rests after a no, is
+        was = self.status == "running" or (self.status == "idle" and self.turn is not None)
+        if self.status == "waiting_for_confirmation":
+            return
         self.stop.set()
         if self.turn is not None:
             self.turn.join(timeout=5)
+        self.turn = None
         if was:
             self.emit({"kind": "InterruptEvent", "source": "user"})
             self.say_status("paused")
+
+    def _rest(self, why: str) -> bool:
+        """Rest in the middle of a replay until the answer or the word to go on comes. False
+        when the turn was interrupted instead."""
+        self.go.clear()
+        self.parked = why
+        try:
+            while not self.go.wait(0.02):
+                if self.stop.is_set():
+                    return False
+            return True
+        finally:
+            self.parked = None
 
     def play(self, text: str) -> None:
         """The "agent": a recording replayed, or a turn that hangs until it is interrupted."""
@@ -149,22 +193,56 @@ class Conversation:
         recording = json.loads((RECORDINGS / f"{name}.json").read_text())
         workspace = str((self.request.get("workspace") or {}).get("working_dir") or "")
         renamed: dict[str, str] = {}
-        for item in recording["events"]:
+        waiting: dict[str, dict] = {}  # the steps said and not yet answered by a result
+        items = recording["events"]
+        for n, item in enumerate(items):
             if self.stop.wait(wait):
                 return
             event = json.loads(json.dumps(item["event"]).replace(WORKSPACE_MARK, workspace))
-            if event.get("kind") == "ConversationStateUpdateEvent":
+            kind = event.get("kind")
+            if kind == "ConversationStateUpdateEvent":
                 if event.get("key") == "execution_status":
-                    if event.get("value") != "running":  # it is running already
-                        self.say_status(str(event.get("value")))
+                    value = str(event.get("value"))
+                    if value == "running" and self.status == "idle" and not self._rest("run"):
+                        return  # (a no was given: it rests until it is told to go on)
+                    if value != self.status:
+                        self.say_status(value)
+                    if value == "waiting_for_confirmation":
+                        # nothing more happens until a yes or no comes (or the turn is stopped)
+                        if not self._rest("answer"):
+                            return
+                        after = items[n + 1]["event"] if n + 1 < len(items) else {}
+                        holds_a_no = (
+                            after.get("key") == "execution_status" and after.get("value") == "idle"
+                        )
+                        if not self.answers[-1].get("accept") and not holds_a_no:
+                            # a no where the recording holds a yes: what waited is refused, the
+                            # conversation rests, and the rest of the recording is not replayed
+                            self.abandoned = True
+                            self.say_status("idle")
+                            for action in waiting.values():
+                                self.emit(
+                                    {
+                                        "kind": "UserRejectObservation", "source": "environment",
+                                        "action_id": action["id"],
+                                        "tool_name": action.get("tool_name"),
+                                        "tool_call_id": action.get("tool_call_id"),
+                                        "rejection_reason": self.answers[-1].get("reason") or "",
+                                    }
+                                )  # fmt: skip
+                            return
                     continue
             old = event.pop("id", None)
             event.pop("timestamp", None)
             if event.get("action_id") in renamed:
                 event["action_id"] = renamed[event["action_id"]]
-            made = self.emit(event, keep=event.get("kind") != "StreamingDeltaEvent")
+            made = self.emit(event, keep=kind != "StreamingDeltaEvent")
             if old:
                 renamed[old] = made["id"]
+            if kind == "ActionEvent":
+                waiting[str(made.get("tool_call_id"))] = made
+            elif kind in ("ObservationEvent", "UserRejectObservation", "AgentErrorEvent"):
+                waiting.pop(str(made.get("tool_call_id")), None)
 
 
 class State:
@@ -310,8 +388,19 @@ def serve() -> None:
                 if parts[3] == "run":
                     if found.status == "running":
                         return self._send(409, {"detail": "Conversation already running."})
-                    found.begin()
+                    if not found.go_on():
+                        found.begin()
                     return self._send(200, {"success": True})
+            if parts[:2] == ["api", "conversations"] and parts[3:] == [
+                "events",
+                "respond_to_confirmation",
+            ]:
+                found = self._conversation(parts[2])
+                if found is None:
+                    return None
+                if not found.respond(body):
+                    return self._send(400, {"detail": "No pending confirmation."})
+                return self._send(200, {"success": True})
             return self._send(404, {"detail": "Not Found"})
 
         def _socket(self, found_id: str, query: dict) -> None:

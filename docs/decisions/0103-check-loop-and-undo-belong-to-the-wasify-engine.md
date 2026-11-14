@@ -80,3 +80,29 @@ restored.
   are dropped is decided in C2.
 - The evaluation of spike 3 ran without the loop. Running it with the loop, on tasks whose first attempt fails, is
   the measure of what the loop adds.
+
+## Amendment (2026-11-14, owner): the three open points of undo, settled in stage C2
+
+Decision 13 left three points to stage C2 and proposed an answer to two. The owner's answer on 2026-11-14:
+"Yes to the undo questions". The third was tried and settled by measurement (`docs/spikes/coding-cores.md`).
+
+1. **Undo also restores the person's own git state:** where `HEAD` points, the commit of that branch, and the index
+   (what was staged). Commits the agent made are not deleted; they stay reachable from the person's reflog. Other
+   branches, tags, stashes and a merge in progress are not restored.
+2. **Ignored files are not kept in checkpoints**, `.env` included, and the app says so: at the foot of the Changes
+   tab, in the help, and by asking first. In "Ask me" a change to a file a checkpoint does not hold (one the project
+   ignores, or one inside a `.git` folder) waits for the person's yes (ADR-0102, amendment of 2026-11-14).
+3. **A project that holds another git folder inside it:** the inner project's files are kept as plain files, like
+   any others, and are restored. The inner project's own git state is not saved.
+
+Also settled while building it:
+
+4. **A checkpoint before and one after every turn of a session that may change files.** What the turn changed is
+   the difference of the two. A session in Plan takes none.
+5. **Undo goes back one turn at a time, the newest that still stands first.** "Bring it back" returns the turn
+   undone last, and only while no later turn has changed files.
+6. **What the person changed themselves since the turn goes back with it**, because undo restores the whole
+   project to the checkpoint. The answer says so, and "Bring it back" returns it: undo always takes a checkpoint
+   first.
+7. **The agent is told** with the person's next message that its last turn was undone.
+8. **When old checkpoints are dropped is not decided.** Nothing is dropped yet; the store grows with the project.

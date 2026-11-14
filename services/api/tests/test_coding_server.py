@@ -172,6 +172,20 @@ def test_the_profile_names_what_may_be_written_read_and_what_is_closed():
         assert rule in text
 
 
+def test_a_project_with_no_git_of_its_own_does_not_get_one_from_the_engine():
+    """The Agent Server runs `git init` in a workspace by itself. The folder it would make is
+    closed to writing, after the rule that opens the project."""
+    text = fill_profile(
+        template(), write=[Path("/Users/me/project")], read_only=[], closed=[],
+        no_write=[Path("/Users/me/project/.git")],
+    )  # fmt: skip
+    refused = '(deny file-write*\n  (subpath "/Users/me/project/.git"))'
+    assert refused in text and text.index("(allow file-write*") < text.index(refused)
+    # with nothing to close there is no rule at all: a bare deny would refuse every write
+    plain = fill_profile(template(), write=[Path("/Users/me/project")], read_only=[], closed=[])
+    assert plain.count("(deny file-write*") == 1 and "{{" not in plain
+
+
 def test_a_folder_name_that_could_end_a_rule_is_refused():
     for bad in ('/data/a"b', "/data/a\\b", "/data/a\nb"):
         with pytest.raises(CodingError, match="bad_path"):
@@ -271,7 +285,13 @@ async def test_it_starts_on_a_free_port_with_a_key_only_the_engine_holds(tmp_pat
         assert "SOMETHING_OF_THE_PERSONS" not in env and "ANTHROPIC_API_KEY" not in env
         assert "VIRTUAL_ENV" not in env and "WASIFY_PARENT_FD" not in env
         assert with_["cwd"] == str(run / "state")
-        assert with_["args"] == ["--host", "127.0.0.1", "--port", url.rsplit(":", 1)[1]]
+        fixed = tmp_path.resolve() / "coding-fixed"
+        assert with_["args"] == [
+            "--host", "127.0.0.1", "--port", url.rsplit(":", 1)[1],
+            "--import-modules", "wasify_rules", "--extra-python-path", str(fixed),
+        ]  # fmt: skip
+        # our rules are copied where the sandbox lets the server read and not write
+        assert (fixed / "wasify_rules.py").read_text() == (FILES / "wasify_rules.py").read_text()
         # its own session, so its own process group
         assert with_["sid"] == with_["pid"] == with_["pgid"] == s.pid
         assert with_["sid"] != os.getsid(0)

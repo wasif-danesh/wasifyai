@@ -9,9 +9,17 @@ Action: `code.session.start`
 
 ## What it is for
 
-Open one project's folder for the coding agent. In this version every session only reads: the agent can
-find and read the files of that folder, and it cannot change a file or run a command. Starting a session
-reads nothing yet and starts nothing. The agent begins when you send it a message.
+Open one project's folder for the coding agent. A session has one of three modes, shown in the box you
+write in:
+
+- **Plan**: the agent only reads. It can find and read the files of that folder and cannot change one.
+- **Ask me**: the agent also changes files. Before it changes a file that Undo cannot put back (one your
+  project ignores, such as `.env`), it asks you. You can answer yes, no, or "Allow for this project".
+- **Work on its own**: the agent changes files and does not ask.
+
+In every mode the agent cannot leave the folder, cannot reach the internet and cannot run a command. Every
+turn that changed files can be undone in the Changes tab. Starting a session reads nothing yet and starts
+nothing. The agent begins when you send it a message.
 
 ## Steps in the app
 
@@ -30,14 +38,18 @@ shows a card first.
 - `model`: The model to work with. Left empty, the first choice is used (Claude Sonnet 5.5, with your own
   Anthropic key).
 - `cost_limit_usd`: The most this session may cost, in US dollars. 0 uses the usual limit of 5 dollars.
+- `mode`: `plan`, `ask` or `own`. Asked through the assistant, a session only reads (`plan`) unless you
+  say otherwise. A session you open on the Code screen starts in "Ask me".
 
 ## Limits
 
 - One folder per session. Choose a project's folder, not your whole home folder or a disk.
 - Some folders cannot be opened: the app's own folders, your Library, and hidden folders at the top of
   your home folder (such as `.ssh`). They hold keys and settings the agent must never read.
-- The agent cannot change or run anything in this version. Editing with undo, and running commands, come
-  in later versions.
+- The agent cannot run a command, a test or a program in this version, and it cannot delete a file. Running
+  commands comes in a later version.
+- Undo does not put back files your project ignores (such as `.env`) or changes inside a `.git` folder.
+  That is why "Ask me" asks before the agent changes one.
 - Only on Apple-silicon Macs for now.
 
 ## Needs

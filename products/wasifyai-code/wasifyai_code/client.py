@@ -48,8 +48,9 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus, WebSocketExce
 
 from wasifyai_code import place as places
 from wasifyai_code.agent_types import SendMessageRequest, StartConversationRequest
-from wasifyai_code.events import RUNNING, Reader
+from wasifyai_code.events import RUNNING, WAITING, Reader
 from wasifyai_code.place import Busy, NoSuchSession, PlaceError, PlaceEvent, SessionSpec
+from wasifyai_code.rules import path_in
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +58,17 @@ log = logging.getLogger(__name__)
 READ_TOOLS = ("glob", "grep", "planning_file_editor")
 # its tools that write a file or run a command: never given to a session that only reads
 WRITE_TOOLS = ("terminal", "file_editor", "apply_patch", "task_tracker", "browser_tool_set")
+# the tools of a session that may change files (stage C2): it reads and edits, and runs nothing
+EDIT_TOOLS = ("glob", "grep", "file_editor")
+# our rules as the Agent Server loads them (`services/coding-engine/wasify_rules.py`): every use
+# of these tools that changes something waits, and `wasifyai_code/rules.py` gives the answer
+RULES_KIND = "WasifyRules"
+WAIT_TOOLS = ("file_editor",)
+EDIT_NOTE = (
+    "You can read and change the files of this project with the file editor. You cannot run a "
+    "command, a test or a program in this session, and you cannot delete a file: do not try. "
+    "When something should be run, say in your final message what the person should run."
+)
 READ_ONLY_NOTE = (
     "This session only reads. You have no tool that changes a file or runs a command, and the "
     "file viewer cannot edit anything, the plan file included: do not try. Look at the files "
@@ -211,11 +223,20 @@ class ThisComputer:
                 for name in READ_TOOLS
             ]
             settings["agent_context"] = {"system_message_suffix": READ_ONLY_NOTE}
+        else:
+            settings["tools"] = [{"name": name} for name in EDIT_TOOLS]
+            settings["agent_context"] = {"system_message_suffix": EDIT_NOTE}
         body: StartConversationRequest = {
             "workspace": {"working_dir": str(workspace)},
             "max_iterations": spec.step_limit,
             "agent_settings": settings,
         }
+        if not spec.read_only:
+            # a change waits before it happens (ADR-0102, decision 6); the answer is ours
+            body["security_analyzer"] = {"kind": RULES_KIND, "wait_tools": list(WAIT_TOOLS)}
+            body["confirmation_policy"] = {
+                "kind": "ConfirmRisky", "threshold": "HIGH", "confirm_unknown": False,
+            }  # fmt: skip
         answer = await self._call("POST", "/api/conversations", json=body, wait_s=START_TIMEOUT_S)
         if answer.status_code not in (200, 201):
             self.gateway.close_session(account)
@@ -256,7 +277,18 @@ class ThisComputer:
         live.turn_open = True
 
     async def stop(self, session: str) -> None:
-        self._get(session)
+        live = self._get(session)
+        if live.reader.status == WAITING:
+            # a conversation that waits for a yes or no is not running, and an interrupt alone
+            # leaves it waiting for ever: what waits is refused first (nothing of it runs),
+            # which brings the conversation to rest, and the interrupt then ends the turn
+            with contextlib.suppress(PlaceError):
+                await self._call(
+                    "POST",
+                    f"/api/conversations/{session}/events/respond_to_confirmation",
+                    json={"accept": False, "reason": "The person stopped the turn."},
+                    wait_s=STOP_TIMEOUT_S,
+                )
         answer = await self._call(
             "POST", f"/api/conversations/{session}/interrupt", wait_s=STOP_TIMEOUT_S
         )
@@ -264,7 +296,9 @@ class ThisComputer:
             raise NoSuchSession(session)
 
     async def answer(self, session: str, confirmation: str, allow: bool, reason: str = "") -> None:
-        self._get(session)
+        live = self._get(session)
+        if allow and not live.spec.read_only:
+            await asyncio.to_thread(self._make_folders, live)
         answer = await self._call(
             "POST",
             f"/api/conversations/{session}/events/respond_to_confirmation",
@@ -272,6 +306,25 @@ class ThisComputer:
         )
         if answer.status_code >= 400:
             raise PlaceError("Nothing is waiting for an answer in this session.")
+        if not allow:
+            # after a no the conversation rests until it is told to go on: the agent is told
+            # what was refused and finds another way, or says that it cannot
+            with contextlib.suppress(Busy):
+                await self.run(session)
+
+    def _make_folders(self, live: _Live) -> None:
+        """The file editor cannot make a file in a folder that is not there, and the agent has
+        no command to make one. So the folders a waiting "create" needs are made here, at the
+        moment it is let through, and only inside the session's own project."""
+        workspace = self._real(live.spec.workspace)
+        for step in live.reader.waiting():
+            if step.get("tool") != "file_editor" or step.get("command") != "create":
+                continue
+            inside = path_in(workspace, str(step.get("path") or ""))
+            if inside is None:
+                continue
+            with contextlib.suppress(OSError):
+                (workspace / inside).parent.mkdir(parents=True, exist_ok=True)
 
     async def end(self, session: str) -> None:
         """Forget a session: its token stops working. The conversation itself stays in the

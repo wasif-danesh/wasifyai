@@ -5,7 +5,7 @@
                 only file that knows the Agent Server's API
     events      the Agent Server's events in the place's own words
     runtime     the sessions in flight, their turns and the relay inside the engine
-    actions     code.session.start, code.session.send, code.session.stop
+    actions     code.session.start, code.session.send, code.session.stop, code.session.undo
     routes      /products/wasifyai-code/code/...
     index       sessions in My creations search
     store       the rows

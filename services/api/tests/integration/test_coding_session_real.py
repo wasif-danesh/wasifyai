@@ -42,7 +42,8 @@ import pytest
 from wasifyai_api.coding_gateway import ANTHROPIC, CodingGateway, ModelRoute, serve_alone
 from wasifyai_api.coding_server import SANDBOX_EXEC, CodingServer, find_install
 from wasifyai_code import place as places
-from wasifyai_code.client import READ_TOOLS, WRITE_TOOLS, ThisComputer
+from wasifyai_code.checkpoints import CheckpointStore
+from wasifyai_code.client import EDIT_TOOLS, READ_TOOLS, WRITE_TOOLS, ThisComputer
 from wasifyai_code.place import Account, SessionSpec
 from wasifyai_platform_sdk.secrets import InMemorySecretStore
 from wasifyai_platform_sdk.usage import InMemoryUsageRecorder
@@ -254,8 +255,12 @@ class Real:
             account=Account("t1", "wasifyai-code", "u1", session), **more,
         )  # fmt: skip
 
-    async def turn(self, session: str, text: str, after: str | None = None, seconds: float = 90):
-        """Listen, send, and read the turn to its end: the events, and the server's own."""
+    async def turn(
+        self, session: str, text: str, after: str | None = None, seconds: float = 90,
+        on_confirm: Any = None,
+    ):  # fmt: skip
+        """Listen, send, and read the turn to its end: the events, and the server's own.
+        `on_confirm` is called with each `confirm` event (a session that edits waits there)."""
         opened = asyncio.Event()
         stream = self.place.follow(session, after=after, opened=opened)
         first = asyncio.ensure_future(anext(stream))
@@ -269,6 +274,8 @@ class Real:
                     seen.append(event)
                     if event.kind == places.ENDED:
                         return seen
+                    if event.kind == places.CONFIRM and on_confirm is not None:
+                        await on_confirm(event)
                     event = await anext(stream)
         finally:
             first.cancel()
@@ -339,7 +346,9 @@ async def real(tmp_path_factory):
             model.close()
 
 
-def record(name: str, real: Real, events: list[dict[str, Any]], task: str) -> None:
+def record(
+    name: str, real: Real, events: list[dict[str, Any]], task: str, workspace: Path | None = None
+) -> None:
     """Keep one turn's events, as the server sent them, for the fake server to replay."""
     if not RECORD:
         return
@@ -350,7 +359,7 @@ def record(name: str, real: Real, events: list[dict[str, Any]], task: str) -> No
             continue  # the engine's own long instructions and the person's message are not ours to keep
         text = json.dumps(event)
         for path, mark in (
-            (str(real.project), "{{WORKSPACE}}"),
+            (str(workspace or real.project), "{{WORKSPACE}}"),
             (str(real.server.plan_file), "{{PLAN}}"),
             (str(real.data), "{{DATA}}"),
         ):
@@ -369,6 +378,17 @@ def record(name: str, real: Real, events: list[dict[str, Any]], task: str) -> No
         )
         + "\n"
     )
+
+
+def whole_turn(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The events of the last turn of a session that waits in the middle: from the first time
+    the conversation ran after the person's last message (it runs, waits, and runs again)."""
+    said = [
+        n
+        for n, e in enumerate(raw)
+        if e.get("kind") == "MessageEvent" and e.get("source") == "user"
+    ]
+    return raw[said[-1] + 1 :] if said else raw
 
 
 def turn_events(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -582,3 +602,159 @@ async def test_each_call_is_counted_and_the_key_is_found_nowhere_inside_the_sand
     assert KEY not in env
     # what it does hold is the session's token, which opens one session's model calls and nothing else
     assert "wcg-" not in env
+
+
+# ---- a session that changes files (stage C2) -------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def site(tmp_path_factory) -> Path:
+    """A second project, for the sessions that may write."""
+    project = tmp_path_factory.mktemp("hours-site")
+    (project / "src").mkdir()
+    (project / "src" / "home.html").write_text("<h1>Bakery</h1>\n<p>Welcome</p>\n")
+    (project / "run.sh").write_text("#!/bin/sh\necho hi\n")
+    (project / "run.sh").chmod(0o755)
+    return project
+
+
+def edit_spec(real: Real, site: Path, session: str) -> SessionSpec:
+    return SessionSpec(
+        site, model="scripted", read_only=False,
+        account=Account("t1", "wasifyai-code", "u1", session),
+    )  # fmt: skip
+
+
+def files_of(folder: Path) -> dict[str, tuple[str, int]]:
+    return {
+        str(p.relative_to(folder)): (hashlib.sha256(p.read_bytes()).hexdigest(), p.stat().st_mode)
+        for p in sorted(folder.rglob("*")) if p.is_file()
+    }  # fmt: skip
+
+
+async def test_a_session_that_edits_waits_before_each_change_and_a_yes_lets_it_run(real, site):
+    real.model.scripts["edit"] = [
+        use("file_editor", command="view", path=str(site / "src" / "home.html")),
+        use(
+            "file_editor", command="str_replace", path=str(site / "src" / "home.html"),
+            old_str="<p>Welcome</p>", new_str="<p>Open 9 to 5</p>",
+        ),
+        use("file_editor", command="create", path=str(site / "tests" / "home.test.js"), file_text="test('hours', () => {})\n"),
+        use("finish", message="The hours are on the home page."),
+    ]  # fmt: skip
+    cps = CheckpointStore(real.data / "code" / "checkpoints" / "w-edit", site)
+    was = files_of(site)
+    before = cps.checkpoint("before the turn")
+    session = await real.place.start(edit_spec(real, site, "s-edit"))
+    asked: list[Any] = []
+
+    async def yes(event: Any) -> None:
+        asked.append(event)
+        # nothing has run while it waits
+        assert "Welcome" in (site / "src" / "home.html").read_text() or len(asked) > 1
+        await real.place.answer(session, event.data["id"], True)
+
+    events = await real.turn(session, "Add the opening hours. #script:edit", on_confirm=yes)
+    assert events[-1].data["why"] == places.FINISHED, events[-1].data
+    # the model was offered the three tools of a session that edits, and none that runs
+    offered = {t["name"] for r in real.model.requests for t in r.get("tools") or []}
+    assert set(EDIT_TOOLS) <= offered and "terminal" not in offered and "apply_patch" not in offered
+    # looking did not wait; each of the two changes did, and named its step
+    assert [e.data["steps"][0]["command"] for e in asked] == ["str_replace", "create"]
+    assert all(e.data["steps"][0]["tool"] == "file_editor" for e in asked)
+    assert asked[0].data["steps"][0]["path"] == str(site / "src" / "home.html")
+    results = [e for e in events if e.kind == places.RESULT]
+    # (the new file is in a folder that was not there: the place made it when it said yes)
+    assert len(results) == 3 and all(r.data["ok"] for r in results), [r.data for r in results]
+    assert "Open 9 to 5" in (site / "src" / "home.html").read_text()
+    assert (site / "tests" / "home.test.js").is_file()
+    record(
+        "edit-asked", real, whole_turn(await real.raw_events(session)), "Add the opening hours.",
+        site,
+    )  # fmt: skip
+    # and every change is undone exactly, from a store the sandbox cannot reach
+    after = cps.checkpoint("after the turn")
+    assert {(c.path, c.what) for c in cps.changes(before.id, after.id)} == {
+        ("src/home.html", "changed"), ("tests/home.test.js", "added"),
+    }  # fmt: skip
+    cps.undo(before.id)
+    assert files_of(site) == was and not (site / "tests").exists()
+    # the project had no git of its own, and the engine did not give it one
+    assert not (site / ".git").exists()
+
+
+async def test_a_no_leaves_the_file_and_the_agent_goes_on(real, site):
+    real.model.scripts["no"] = [
+        use("file_editor", command="create", path=str(site / "secret.txt"), file_text="x"),
+        use("finish", message="I left it."),
+    ]
+    session = await real.place.start(edit_spec(real, site, "s-no"))
+
+    async def no(event: Any) -> None:
+        await real.place.answer(session, event.data["id"], False, "The person said no.")
+
+    events = await real.turn(session, "Write a secret. #script:no", on_confirm=no)
+    assert events[-1].data["why"] == places.FINISHED, events[-1].data
+    (result,) = [e for e in events if e.kind == places.RESULT]
+    assert result.data["ok"] is False and result.data["refused"] is True
+    assert "said no" in result.data["text"] and not (site / "secret.txt").exists()
+    assert [e.data["text"] for e in events if e.kind == places.TEXT][-1] == "I left it."
+    record(
+        "edit-refused", real, whole_turn(await real.raw_events(session)), "Write a secret.", site
+    )
+
+
+async def test_stop_while_a_change_waits_ends_the_turn_and_nothing_is_written(real, site):
+    real.model.scripts["wait"] = [
+        use("file_editor", command="create", path=str(site / "late.txt"), file_text="x"),
+        use("finish", message="Done."),
+    ]
+    session = await real.place.start(edit_spec(real, site, "s-wait"))
+    took: list[float] = []
+
+    async def stop(event: Any) -> None:
+        began = time.monotonic()
+        await real.place.stop(session)
+        took.append(time.monotonic() - began)
+
+    events = await real.turn(session, "Write late. #script:wait", on_confirm=stop)
+    assert events[-1].data["why"] == places.STOPPED, events[-1].data
+    assert took and took[0] < 1.0 and not (site / "late.txt").exists()
+    # the session can be sent to again
+    real.model.scripts["again"] = [use("finish", message="Here.")]
+    again = await real.turn(session, "Are you there? #script:again", after=events[-1].id)
+    assert again[-1].data["why"] == places.FINISHED
+
+
+async def test_a_session_that_edits_cannot_change_anything_outside_its_project(real, site):
+    store = real.data / "code" / "checkpoints" / "w-edit"
+    CheckpointStore(store, site).checkpoint("one")
+    assert (store / "HEAD").is_file()
+    outside = site.parent / "outside-the-project.txt"
+    real.model.scripts["out"] = [
+        use("file_editor", command="create", path=str(outside), file_text="x"),
+        use("file_editor", command="create", path=str(store / "hooks" / "x"), file_text="x"),
+        use("file_editor", command="view", path=str(store / "HEAD")),
+        use("file_editor", command="create", path=str(real.project / "x.txt"), file_text="x"),
+        use("finish", message="I could not."),
+    ]
+    session = await real.place.start(edit_spec(real, site, "s-out"))
+
+    async def yes(event: Any) -> None:
+        await real.place.answer(session, event.data["id"], True)
+
+    read_only_before = tree(real.project)
+    events = await real.turn(session, "Write elsewhere. #script:out", on_confirm=yes)
+    results = [e for e in events if e.kind == places.RESULT]
+    assert len(results) == 4 and not any(r.data["ok"] for r in results), [r.data for r in results]
+    assert not outside.exists() and not (store / "hooks" / "x").exists()
+    assert tree(real.project) == read_only_before  # a project that is only read stays so
+    # whatever the engine runs: the checkpoint store can be neither read nor written
+    for command in (f"cat '{store}/HEAD'", f"ls '{store}'", f"echo x > '{store}/HEAD'", f"rm '{store}/HEAD'"):  # fmt: skip
+        _, said = await real.sh(f"{command}; echo exit=$?")
+        assert "exit=0" not in said, f"not refused: {command}: {said}"
+    assert (store / "HEAD").read_text().startswith("ref:")
+    # inside its own project it does write
+    code, _ = await real.sh(f"echo x > '{site}/by-the-engine.txt'; echo exit=$?")
+    assert (site / "by-the-engine.txt").is_file()
+    (site / "by-the-engine.txt").unlink()

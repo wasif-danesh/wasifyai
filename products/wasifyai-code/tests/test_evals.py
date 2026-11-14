@@ -137,6 +137,73 @@ async def test_a_session_is_started_for_a_run_with_nobody_there(tmp_path):
     assert r["passed"] is True  # the question was refused, and the work went on
 
 
+async def test_a_change_is_let_through_and_the_task_is_undone_and_brought_back_exactly(tmp_path):
+    async def fixes(turn: FakeTurn) -> None:
+        # the way the real place does it: each change waits for a yes
+        assert await turn.edit("paging.py", FIXED_PAGING, command="str_replace")
+        assert await turn.edit("notes/why.txt", "the last page was dropped\n")
+
+    task = BY_ID["bug-paginate"]
+    r = await run_eval.run_task(
+        FakePlace(fixes), task, tmp_path / "work", checkpoints=tmp_path / "stores"
+    )
+    assert r["passed"] is True
+    assert r["undo"] == {
+        "measured": True, "changed": 2, "undone_exactly": True, "brought_back_exactly": True,
+        "notes": [],
+    }  # fmt: skip
+    # the task is left as the agent left it, and the checkpoints are not in its folder
+    workspace = tmp_path / "work" / task["id"] / "workspace"
+    assert (workspace / "paging.py").read_text() == FIXED_PAGING
+    assert (workspace / "notes" / "why.txt").is_file() and not (workspace / ".git").exists()
+    assert (tmp_path / "stores" / task["id"] / "HEAD").is_file()
+    # without a folder for checkpoints nothing is measured, and the result says so
+    plain = await run_eval.run_task(FakePlace(fixes), task, tmp_path / "plain")
+    assert plain["undo"]["measured"] is False
+    out = run_eval.summary([r, plain])
+    assert out["undo"] == {
+        "measured": 1, "changed_files": 1, "undone_exactly": 1, "brought_back_exactly": 1,
+    }  # fmt: skip
+
+
+async def test_a_change_that_waits_together_with_a_search_is_let_through(tmp_path):
+    """A model may ask for an edit and a search in one breath; the place then waits for one
+    answer for both. A real run on Claude Sonnet 5.5 refused the pair and the task failed."""
+    from wasifyai_code import place as places
+
+    async def both(turn: FakeTurn) -> None:
+        import asyncio as aio
+        import uuid
+
+        ask = uuid.uuid4().hex
+        waiting = aio.get_running_loop().create_future()
+        turn._session.confirmations[ask] = waiting
+        steps = [
+            {"id": "c1", "tool": "file_editor", "command": "str_replace", "path": "paging.py"},
+            {"id": "c2", "tool": "glob", "pattern": "**/test*.py"},
+        ]
+        turn._place._emit(turn._session, places.CONFIRM, {"id": ask, "what": "", "steps": steps})
+        allow, _ = await waiting
+        if allow:
+            turn.write("paging.py", FIXED_PAGING)
+
+    r = await run_eval.run_task(FakePlace(both), BY_ID["bug-paginate"], tmp_path)
+    assert r["passed"] is True
+
+
+async def test_a_run_stops_before_the_task_that_would_begin_over_the_cost_limit(tmp_path):
+    async def agent(turn: FakeTurn) -> None:
+        turn.say("Done.")
+
+    place = FakePlace(agent)
+    tasks = [BY_ID[i] for i in ("bug-paginate", "bug-slug", "ask-what-does")]
+    out = await run_eval.run_all(place, tasks, tmp_path, spent=lambda session: 0.6, limit_usd=1.0)
+    assert out["of"] == 2 and out["not_run"] == ["ask-what-does"] and out["cost_usd"] == 1.2
+    # no single task may cost more than what is left
+    limits = [c[2].account.limit_usd for c in place.calls if c[0] == "start"]
+    assert limits == [1.0, pytest.approx(0.4)]
+
+
 async def test_a_run_of_several_tasks_is_summed_up_by_kind(tmp_path):
     async def agent(turn: FakeTurn) -> None:
         if (turn.workspace / "paging.py").exists():

@@ -79,6 +79,9 @@ CLOSED = ("/Users", "/Volumes", "/private/var/folders", "/private/tmp")
 FIXED_DIR = "coding-fixed"
 PLAN_FILE = "PLAN.md"
 PLAN_TEXT = "This session only reads. Nothing can be written here.\n"
+# our rules, as the Agent Server loads them (ADR-0102, decision 6): copied beside the plan file,
+# into the folder the sandbox may read and not write, at every start
+RULES_FILE, RULES_MODULE = "wasify_rules.py", "wasify_rules"
 
 # What the server is started with in place of `python -m openhands.agent_server`: the same module,
 # after a thread that waits for this engine to go away. It is not a change to OpenHands' packages.
@@ -197,14 +200,23 @@ def _on_the_way(paths: Sequence[Path]) -> list[Path]:
 
 
 def fill_profile(
-    template: str, *, write: Sequence[Path], read_only: Sequence[Path], closed: Sequence[Path]
+    template: str,
+    *,
+    write: Sequence[Path],
+    read_only: Sequence[Path],
+    closed: Sequence[Path],
+    no_write: Sequence[Path] = (),
 ) -> str:
     """The profile for one start. `write` may be written and read; `read_only` may be read;
-    `closed` is closed to reading except for those. Every path must already be resolved (the
-    sandbox compares real paths: `/private/tmp`, never `/tmp`)."""
+    `closed` is closed to reading except for those; `no_write` are folders inside `write` that
+    may not be written after all. Every path must already be resolved (the sandbox compares
+    real paths: `/private/tmp`, never `/tmp`)."""
     opened = [*write, *read_only]
+    # an empty list must give no rule at all: a deny with nothing named would deny every write
+    refused = f"(deny file-write*\n{_rules('subpath', no_write)})" if no_write else ""
     filled = (
         template.replace("{{WRITE}}", _rules("subpath", write))
+        .replace("{{NO_WRITE}}", refused)
         .replace("{{CLOSED}}", _rules("subpath", closed))
         .replace("{{OPEN}}", _rules("subpath", opened))
         .replace("{{WAY}}", _rules("literal", _on_the_way(opened)))
@@ -445,6 +457,15 @@ class CodingServer:
             )
         return path.read_text()
 
+    def _rules(self) -> str:
+        path = self._files / RULES_FILE if self._files is not None else None
+        if path is None or not path.is_file():
+            raise CodingError(
+                "no_rules",
+                "This build carries no rules for the coding engine, so it will not be started.",
+            )
+        return path.read_text()
+
     def _prepare(
         self, found: CodingInstall, workspaces: tuple[Path, ...], read_only: tuple[Path, ...]
     ) -> dict[str, Any]:
@@ -459,6 +480,10 @@ class CodingServer:
         plan.parent.mkdir(parents=True, exist_ok=True)
         if not plan.is_file() or plan.read_text() != PLAN_TEXT:
             plan.write_text(PLAN_TEXT)
+        rules = self._rules()
+        kept = plan.parent / RULES_FILE
+        if not kept.is_file() or kept.read_text() != rules:
+            kept.write_text(rules)
         self._sweep_terminal(run)
         terminal = Path(
             os.path.realpath(tempfile.mkdtemp(prefix=TERMINAL_PREFIX, dir=TERMINAL_ROOT))
@@ -475,6 +500,8 @@ class CodingServer:
                     write=[run, *workspaces, terminal],
                     read_only=[root, python_home, plan.parent, *read_only],
                     closed=[*(Path(c) for c in CLOSED), data],
+                    # a project with no git of its own does not get one from the engine
+                    no_write=[w / ".git" for w in workspaces if not (w / ".git").exists()],
                 )
             )
             profile.chmod(0o600)
@@ -524,7 +551,7 @@ class CodingServer:
         }
         return {
             "env": env, "profile": profile, "terminal": terminal, "cwd": state,
-            "python": venv_bin / found.python.name,
+            "python": venv_bin / found.python.name, "fixed": plan.parent,
         }  # fmt: skip
 
     def _sweep_terminal(self, run: Path) -> None:
@@ -578,6 +605,7 @@ class CodingServer:
             # isolated: no folder of its own state is on its import path, no PYTHON* is read
             str(prepared["python"]), "-I", "-B", "-X", "utf8", "-c", GUARD,
             "--host", "127.0.0.1", "--port", str(port),
+            "--import-modules", RULES_MODULE, "--extra-python-path", str(prepared["fixed"]),
         ]  # fmt: skip
         out = await asyncio.to_thread(self._open_log)
         try:

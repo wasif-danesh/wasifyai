@@ -11,6 +11,9 @@
 {{WRITE}}
   (literal "/dev/null") (literal "/dev/zero") (literal "/dev/tty") (literal "/dev/ptmx")
   (literal "/dev/dtracehelper") (regex #"^/dev/ttys[0-9]+$") (regex #"^/dev/fd/"))
+; ... but not a `.git` folder in a project that has none: the Agent Server runs `git init` in a
+; workspace by itself, and a person's folder must not become a git repository because it was opened.
+{{NO_WRITE}}
 
 ; Reads: the system and the tools stay open. Every person's folders, other disks, temp folders
 ; and the app's own data are closed ...

@@ -1,20 +1,25 @@
 // A coding session's stream as what the screen draws: for each turn, the person's request, the agent's steps
 // as quiet lines, its words, and how the turn ended. Pure, so it is tested without a screen.
-import type { CodeEnding, CodeEvent, CodeTurn } from "@wasifyai/client";
+import type { CodeAnswer, CodeAsk, CodeEnding, CodeEvent, CodeTurn } from "@wasifyai/client";
 
 export type Step = {
   id: string;
   tool: string;
   /** what the tool was given, short: a path, a pattern */
   given: Record<string, unknown>;
-  status: "started" | "ok" | "error";
+  /** "refused": the person said no and it did not run */
+  status: "started" | "ok" | "error" | "refused";
   /** what it gave back (cut by the engine) */
   text: string;
+  /** how its question was answered; "allowed": it ran unasked because its kind is allowed for the project */
+  answer?: CodeAnswer | "allowed";
 };
 
 export type Part =
   | { kind: "steps"; steps: Step[] }
   | { kind: "message"; text: string; writing: boolean }
+  /** the approval card: open while the agent waits; then how it was answered ("": the turn ended first) */
+  | { kind: "ask"; id: string; ask: CodeAsk; open: boolean; answer: CodeAnswer | "" }
   | { kind: "refusal"; message: string };
 
 export type TurnView = {
@@ -27,19 +32,39 @@ export type TurnView = {
   ended: CodeEnding;
   /** a sentence for a person: why it ended in an error, what the engine said */
   detail: string;
+  /** how many files the turn changed */
+  changed: number;
+  /** the person undid the turn */
+  undone: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
+const EDITS = ["create", "str_replace", "insert", "undo_edit"];
+
+/** Whether a step changes a file (or tried to). */
+export function isEdit(step: Pick<Step, "tool" | "given">): boolean {
+  return step.tool === "file_editor" && EDITS.includes(String(step.given.command ?? ""));
+}
+
 /** One line for a step: "Read src/app.py", "Looked for *.py", "Searched for TODO". */
-export function stepLine(step: Pick<Step, "tool" | "given">): string {
+export function stepLine(
+  step: Pick<Step, "tool" | "given"> & Partial<Pick<Step, "status">>,
+): string {
   const g = step.given;
   const path = typeof g.path === "string" ? shortPath(g.path) : "";
   const pattern = typeof g.pattern === "string" ? g.pattern : "";
   if (step.tool === "glob") return `Looked for files named ${pattern || "anything"}`;
   if (step.tool === "grep") return `Searched for “${pattern}”${path ? ` in ${path}` : ""}`;
   if (step.tool === "planning_file_editor" || step.tool === "file_editor") {
-    return g.command === "view" || !g.command
-      ? `Read ${path || "a file"}`
-      : `Tried to change ${path}`;
+    if (g.command === "view" || !g.command) return `Read ${path || "a file"}`;
+    // a session that only reads has no way to change a file: whatever it tried did not happen
+    if (step.tool === "planning_file_editor") return `Tried to change ${path}`;
+    const made = g.command === "create";
+    if (step.status === "ok") return `${made ? "Wrote" : "Changed"} ${path}`;
+    if (step.status === "refused") return `Did not change ${path}: you said no`;
+    if (step.status === "error") return `Could not change ${path}`;
+    return `Wants to ${made ? "write" : "change"} ${path}`;
   }
   return path ? `${step.tool}: ${path}` : step.tool;
 }
@@ -53,7 +78,8 @@ function fromEvents(turn: TurnView, events: CodeEvent[]): TurnView {
   const parts: Part[] = [];
   const steps = new Map<string, Step>();
   let writing = "";
-  let { working, ended, detail } = turn;
+  let { working, ended, detail, changed } = turn;
+  const asks: Extract<Part, { kind: "ask" }>[] = [];
   const flush = () => {
     writing = "";
     const last = parts[parts.length - 1];
@@ -78,7 +104,26 @@ function fromEvents(turn: TurnView, events: CodeEvent[]): TurnView {
       if (step) {
         step.status = e.status;
         step.text = e.output.text ?? "";
+        if (e.output.answer) step.answer = e.output.answer;
       }
+      // the step a card asked about has its result: the card is answered
+      for (const ask of asks) {
+        if (ask.open && ask.ask.step_id === e.id) {
+          ask.open = false;
+          ask.answer = e.output.answer && e.output.answer !== "allowed" ? e.output.answer : "";
+        }
+      }
+    } else if (e.event === "interrupt") {
+      flush();
+      const ask = {
+        kind: "ask" as const,
+        id: e.interrupt_id,
+        ask: e.payload,
+        open: true,
+        answer: "" as const,
+      };
+      asks.push(ask);
+      parts.push(ask);
     } else if (e.event === "token") {
       writing += e.text;
       const last = parts[parts.length - 1];
@@ -95,15 +140,20 @@ function fromEvents(turn: TurnView, events: CodeEvent[]): TurnView {
       parts.push({ kind: "refusal", message: e.message });
     } else if (e.event === "code_state") {
       working = e.state !== "done";
+      if (e.state === "turn_ended" || e.state === "done") {
+        for (const ask of asks) ask.open = false; // a card nobody answered is closed with the turn
+      }
       if (e.state === "done") {
         flush();
         ended = e.why ?? "";
         detail = e.detail ?? "";
+        // the turn's row says it too, once it is read again; until then the event does
+        if (typeof e.changed === "number" && !changed) changed = e.changed;
       }
     }
   }
   const count = [...steps.values()].length;
-  return { ...turn, parts, steps: count || turn.steps, working, ended, detail };
+  return { ...turn, parts, steps: count || turn.steps, working, ended, detail, changed };
 }
 
 /**
@@ -130,6 +180,10 @@ export function buildThread(turns: CodeTurn[], events: CodeEvent[]): TurnView[] 
       working: t.state !== "done",
       ended: t.state === "done" ? t.why : "",
       detail: t.notes[t.notes.length - 1] ?? "",
+      changed: t.changed ?? 0,
+      undone: Boolean(t.undone),
+      canUndo: Boolean(t.can_undo),
+      canRedo: Boolean(t.can_redo),
     };
     const mine = byTurn.get(t.id);
     return mine ? fromEvents({ ...view, parts: [] }, mine) : view;
@@ -139,7 +193,19 @@ export function buildThread(turns: CodeTurn[], events: CodeEvent[]): TurnView[] 
     if (known.has(id)) continue;
     views.push(
       fromEvents(
-        { id, request: "", parts: [], steps: 0, working: true, ended: "", detail: "" },
+        {
+          id,
+          request: "",
+          parts: [],
+          steps: 0,
+          working: true,
+          ended: "",
+          detail: "",
+          changed: 0,
+          undone: false,
+          canUndo: false,
+          canRedo: false,
+        },
         mine,
       ),
     );

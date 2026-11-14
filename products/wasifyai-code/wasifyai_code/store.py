@@ -51,9 +51,20 @@ RUN_WAITING, RUN_RUNNING, RUN_DONE = "waiting", "running", "done"
 RUN_MISSED, RUN_SKIPPED, RUN_FAILED = "missed", "skipped", "failed"
 RUN_STATES = (RUN_WAITING, RUN_RUNNING, RUN_DONE, RUN_MISSED, RUN_SKIPPED, RUN_FAILED)
 
-# how much the agent may do in a session (the plan's three modes; only the first is built)
+# how much the agent may do in a session (the plan's three modes)
 PLAN = "plan"  # it only reads: no tool that writes a file or runs a command
-MODES = (PLAN,)
+ASK = "ask"  # it changes files; what a rule marks waits for the person's yes or no
+OWN = "own"  # it changes files and asks nothing a rule only asks in "Ask me"
+MODES = (PLAN, ASK, OWN)
+
+# columns a file made by an earlier stage lacks (stage C2: changes, undo, allowances)
+COLUMNS = (
+    ("turns", "after_commit", "TEXT"),  # the files when the turn ended, in the checkpoint store
+    ("turns", "changed", "INTEGER NOT NULL DEFAULT 0"),  # how many files the turn changed
+    ("turns", "undone_at", "TEXT"),  # when the person undid the turn
+    ("turns", "redo_commit", "TEXT"),  # the files just before that undo: "Bring it back"
+    ("workspaces", "allowed", "TEXT NOT NULL DEFAULT '[]'"),  # kinds allowed for the project
+)
 
 LEFT_WORKING = "It was stopped when the app closed."
 STILL_RUNNING = "still running"
@@ -124,7 +135,7 @@ CREATE TABLE IF NOT EXISTS workspaces(
   check_command TEXT NOT NULL DEFAULT '',
   check_from TEXT NOT NULL DEFAULT '' CHECK (check_from IN ('', 'suggested', 'person')),
   check_limit_s INTEGER NOT NULL DEFAULT 600,
-  last_pass TEXT, created_at TEXT NOT NULL);
+  last_pass TEXT, created_at TEXT NOT NULL, allowed TEXT NOT NULL DEFAULT '[]');
 CREATE TABLE IF NOT EXISTS sessions(
   {_OWNED},
   workspace_id TEXT NOT NULL, title TEXT NOT NULL DEFAULT '',
@@ -144,7 +155,8 @@ CREATE TABLE IF NOT EXISTS turns(
   why TEXT NOT NULL DEFAULT '', rounds INTEGER NOT NULL DEFAULT 0, needs_you INTEGER NOT NULL DEFAULT 0,
   checkpoint_id TEXT, notes TEXT NOT NULL DEFAULT '[]',
   answer TEXT NOT NULL DEFAULT '', steps INTEGER NOT NULL DEFAULT 0,
-  started_at TEXT NOT NULL, finished_at TEXT);
+  started_at TEXT NOT NULL, finished_at TEXT,
+  after_commit TEXT, changed INTEGER NOT NULL DEFAULT 0, undone_at TEXT, redo_commit TEXT);
 CREATE TABLE IF NOT EXISTS checks(
   {_OWNED},
   workspace_id TEXT NOT NULL, session_id TEXT NOT NULL, turn_id TEXT, round INTEGER NOT NULL,
@@ -191,7 +203,7 @@ def _who(owner: Owner) -> tuple[str, str, str]:
 class CodeStore:
     def __init__(self, db: StoreDb):
         self.db = db
-        db.open_tables(DDL)
+        db.open_tables(DDL, COLUMNS)
         db.exec("INSERT INTO meta VALUES ('schema', ?) ON CONFLICT DO NOTHING", (str(SCHEMA),))
 
     @classmethod
@@ -294,6 +306,16 @@ class CodeStore:
             raise NotFound(f"workspaces: {item}")
         return self.get_workspace(owner, item)
 
+    def set_allowed(self, owner: Owner, item: str, kinds: Sequence[str]) -> dict[str, Any]:
+        """The kinds of request the person allowed for this project ("Allow for this project")."""
+        n = self.db.exec(
+            f"UPDATE workspaces SET allowed = ? WHERE id = ? AND {_MINE}",
+            (json.dumps(sorted(set(kinds))), item, *_who(owner)),
+        )
+        if n == 0:
+            raise NotFound(f"workspaces: {item}")
+        return self.get_workspace(owner, item)
+
     def set_last_pass(self, owner: Owner, item: str, checkpoint_id: str | None) -> None:
         self.db.exec(
             f"UPDATE workspaces SET last_pass = ? WHERE id = ? AND {_MINE}",
@@ -350,6 +372,14 @@ class CodeStore:
         self.db.exec(
             f"UPDATE sessions SET title = ?, updated_at = ? WHERE id = ? AND {_MINE}",
             (title[:200], now(), item, *_who(owner)),
+        )
+
+    def set_session_mode(self, owner: Owner, item: str, mode: str) -> None:
+        if mode not in MODES:
+            raise ValueError(f"no such mode: {mode}")
+        self.db.exec(
+            f"UPDATE sessions SET mode = ?, updated_at = ? WHERE id = ? AND {_MINE}",
+            (mode, now(), item, *_who(owner)),
         )
 
     def set_session_limit(self, owner: Owner, item: str, limit_usd: float) -> None:
@@ -476,6 +506,22 @@ class CodeStore:
             f"UPDATE turns SET answer = ?, steps = ? WHERE id = ? AND {_MINE}",
             (answer, steps, item, *_who(owner)),
         )
+
+    def set_turn_changes(self, owner: Owner, item: str, *, after_commit: str, changed: int) -> None:
+        """What the turn left: the files when it ended, and how many of them it changed."""
+        self.db.exec(
+            f"UPDATE turns SET after_commit = ?, changed = ? WHERE id = ? AND {_MINE}",
+            (after_commit, changed, item, *_who(owner)),
+        )
+
+    def set_turn_undone(self, owner: Owner, item: str, redo_commit: str | None) -> dict[str, Any]:
+        """Mark a turn undone (with the checkpoint that brings it back), or, with None, brought
+        back."""
+        self.db.exec(
+            f"UPDATE turns SET undone_at = ?, redo_commit = ? WHERE id = ? AND {_MINE}",
+            (now() if redo_commit else None, redo_commit, item, *_who(owner)),
+        )
+        return self.get_turn(owner, item)
 
     def note_turn(self, owner: Owner, item: str, note: str) -> None:
         """Write down something that happened in the turn (a question that was refused because
@@ -706,7 +752,7 @@ def _first(row: Any) -> Any:
 
 def _row(row: Any) -> dict[str, Any]:
     out = dict(row)
-    for key in ("rule", "notes", "changed_tests"):
+    for key in ("rule", "notes", "changed_tests", "allowed"):
         if key in out:
             out[key] = json.loads(out[key])
     for key in ("enabled", "run_when_missed", "needs_you"):

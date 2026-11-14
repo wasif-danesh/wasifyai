@@ -2,9 +2,10 @@
 
 The coding agent's product (ADR-0101 to ADR-0105; plan in `docs/v2-coding-agent-start-plan.md`).
 
-**Wired in: a coding session that only reads (stage C1b), with no screen.** The engine finds the product by
-its entry point, opens its store, and serves its three actions and its routes. What is built and how it is
-held is in `docs/desktop/coding.md`; the gate and what was not measured in `docs/spikes/coding-c1b.md`.
+**Wired in: a coding session that reads (stage C1b) or changes files with undo (stage C2).** The engine
+finds the product by its entry point, opens its store, and serves its four actions and its routes. What is
+built and how it is held is in `docs/desktop/coding.md`; the gates and what was not measured in
+`docs/spikes/coding-c1b.md` and `docs/spikes/coding-c2.md`.
 
 | File | What it is |
 |---|---|
@@ -12,11 +13,13 @@ held is in `docs/desktop/coding.md`; the gate and what was not measured in `docs
 | `wasifyai_code/client.py` | The one real place: this computer, OpenHands' Agent Server inside its sandbox. **The only file that knows the Agent Server's API** |
 | `wasifyai_code/events.py` | The Agent Server's events in the place's own words, and how a turn ended |
 | `wasifyai_code/agent_types.py` | The shapes read from the Agent Server. Generated: `scripts/coding-engine-types.py` |
-| `wasifyai_code/runtime.py` | The sessions in flight: start, a turn, Stop, the relay inside the engine, which folders may be a workspace |
-| `wasifyai_code/actions.py`, `routes.py`, `index.py` | `code.session.start`, `send` and `stop`; `/products/wasifyai-code/code/...`; sessions in search |
+| `wasifyai_code/runtime.py` | The sessions in flight: start, a turn, Stop, the relay inside the engine, which folders may be a workspace; the checkpoint around a turn, the approval card, a turn's changes, undo and "bring it back" |
+| `wasifyai_code/rules.py` | What the agent is asked about: the fixed kinds of request, which kind a waiting step is, and whether a person is asked or the project allows it |
+| `wasifyai_code/checkpoints.py` | A git store outside the project: a checkpoint, what changed between two, one file as a checkpoint holds it, undo |
+| `wasifyai_code/actions.py`, `routes.py`, `index.py` | `code.session.start`, `send`, `stop` and `undo`; `/products/wasifyai-code/code/...`; sessions in search |
 | `wasifyai_code/store.py` | The rows: workspaces with their check command, sessions with their mode and cost, turns with their answer, checks, checkpoints, schedules and schedule runs. One class on SQLite or Postgres; every row carries `tenant_id` and `product_id` |
-| `wasifyai_code/checks.py`, `loop.py`, `checkpoints.py`, `schedules.py` | Library code for the stages that edit, run and schedule (C2, C3, C6). Not used by a session that only reads; `docs/spikes/coding-cores.md` |
-| `evals/` | The 36 evaluation tasks with hidden checks and their runner, on the pretended place in tests and on the real one with `--data` |
+| `wasifyai_code/checks.py`, `loop.py`, `schedules.py` | Library code for the stages that run and schedule (C3, C6). Not used yet: no check runs until the agent can run commands; `docs/spikes/coding-cores.md` |
+| `evals/` | The 36 evaluation tasks with hidden checks and their runner, on the pretended place in tests and on the real one with `--data`. A real run also undoes every task and brings it back, and says whether each was exact |
 
 ```
 uv run pytest products/wasifyai-code                          # SQLite; the Postgres half skips when none answers

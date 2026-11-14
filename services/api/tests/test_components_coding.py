@@ -53,6 +53,7 @@ def build_files(tmp_path: Path, lock_text: str = "fake==1.0 --hash=sha256:00\n")
     files = tmp_path / "build" / "coding-engine"
     files.mkdir(parents=True)
     (files / "engine.sb.template").write_text((FILES / "engine.sb.template").read_text())
+    (files / "wasify_rules.py").write_text((FILES / "wasify_rules.py").read_text())
     (files / LOCK).write_text(lock_text)
     (files / BUILD).write_text("setuptools==1.0 --hash=sha256:00\n")
     return files

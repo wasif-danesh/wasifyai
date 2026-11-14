@@ -2012,8 +2012,10 @@ for (const scheme of ["light", "dark"]) {
       if (!env().includes("CLOSED_ON=Monday"))
         throw new Error(".env was not changed once the kind was allowed");
       if ((await card.count()) !== cards) throw new Error("a card came though the kind is allowed");
+      // the closed line of the turn's steps says it (the same words on each step are inside, folded away)
       await page
-        .getByText(/· (1 )?allowed for this project/)
+        .locator("summary")
+        .filter({ hasText: /· (1 )?allowed for this project/ })
         .last()
         .waitFor();
       await shot(page, "code-edit-allowed", 1400);

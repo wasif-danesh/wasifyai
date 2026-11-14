@@ -16,7 +16,7 @@ declares can be proposed in the chat and run from its card (ADR-0071).
 | `models.*` (the desktop's model library), the catalogue of this engine, the export | `services/api/src/wasifyai_api/actions_engine.py` |
 | `styles.*` (the image screens' styles, ADR-0091) | `services/api/src/wasifyai_api/styles_actions.py` |
 | `external.call` (a tool of an outside MCP server, ADR-0070) | `services/api/src/wasifyai_api/mcp_client/actions.py` |
-| `image.*`, `video.*`, `speech.*`, `voice.*`, `music.*`, `dub.*`, `audiobook.*`, `lipsync.*`, `notebook.*` | `actions.py` of the product that owns them |
+| `image.*`, `video.*`, `speech.*`, `voice.*`, `music.*`, `dub.*`, `audiobook.*`, `lipsync.*`, `notebook.*`, `code.session.*` | `actions.py` of the product that owns them |
 | The engine's side (readiness, stores, child runs) | `ApiToolHost` in `services/api/src/wasifyai_api/tool_host.py` |
 | Help for each action | `docs/help/<action id>.md` |
 | The assistant's list of screens (interim, ADR-0071) | `wasifyai_api/assistant_features.py` writes `products/wasifyai-assistant/wasifyai_assistant/features.json`; rerun `--write` after a menu or action change |
@@ -25,8 +25,9 @@ declares can be proposed in the chat and run from its card (ADR-0071).
 ## Adding an action (one file, plus its help)
 
 1. In the product that owns it, add an `Action` to `actions()` in `actions.py`. It needs:
-   - `id` as `domain.verb`, a `title`, a one-line `summary`, and a `description` written for a model (when to use
-     it, when not to, what it returns);
+   - `id` as `domain.verb` (or `domain.thing.verb` where one domain has several kinds of thing, as the coding
+     actions do: `code.session.start`), a `title`, a one-line `summary`, and a `description` written for a
+     model (when to use it, when not to, what it returns);
    - `input` and `output` Pydantic models (extra fields forbidden for input) and at least one entry in `examples`;
    - `effect`: `read` (changes nothing), `make` (adds to the library, spends time or compute), `change` (edits
      what exists) or `destroy` (deletes);

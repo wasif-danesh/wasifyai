@@ -35,7 +35,7 @@ test-comfyui:
 # workspace, the internet and other programs must all be refused. Needs the part set up by the app
 # on a Mac (Settings, Optional parts); CODING_E2E_DATA names another data folder that has it.
 test-coding:
-	CODING_E2E=1 uv run pytest services/api/tests/integration/test_coding_sandbox.py -v
+	CODING_E2E=1 uv run pytest services/api/tests/integration/test_coding_sandbox.py services/api/tests/integration/test_coding_session_real.py -v
 lint:
 	uv run ruff check . && uv run ruff format --check . && uv run pyright
 	pnpm lint && pnpm typecheck

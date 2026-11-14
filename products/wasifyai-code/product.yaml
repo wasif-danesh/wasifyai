@@ -1,0 +1,7 @@
+id: wasifyai-code
+# The coding agent (ADR-0101 to ADR-0105): a chat that reads a project's code; later it edits it and
+# runs it. The agent is OpenHands' Agent Server, an optional part of the desktop app that the engine
+# runs inside a sandbox. This product keeps the sessions and asks that server to work. It has no
+# language-model capability of its own: a session's model is reached through the engine's gateway
+# for coding (wasifyai_api/coding_gateway.py), which holds the key.
+capabilities: {}

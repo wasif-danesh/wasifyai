@@ -73,3 +73,19 @@ Server directly: there is no place for our rules, our search, our usage records,
   gates do that.
 - The stages are C1a, C1b, C2, C3, the Extensions screen, C4, and C6 with the scheduler, in that order
   (`docs/v2-coding-agent-start-plan.md`, section 9). Each has a measured gate.
+
+## Amendment (2026-11-14, owner): the event kinds of a coding session's stream
+
+The plan said the session stream needs new event kinds in the SSE contract, to be agreed in stage C1b before
+any code sends them. The proposal is in `docs/spikes/coding-c1b.md`. The owner's words: "Reuse existing kinds".
+
+1. A coding session's stream reuses four kinds of the contract where the shape fits: `tool_call` and
+   `tool_result` for a tool step, `token` and `reasoning` for words as they are written.
+2. It adds three: `code_state` (a turn's state, how it ended, the session's word and cost), `code_message` (a
+   finished message of the agent) and `code_refusal` (the model declined; not an error).
+3. `token` and `reasoning` are not kept on this stream. A client that connects later gets the `code_message`.
+4. The stream is one per session and stays open across turns; a turn's end is `code_state` with `state: "done"`.
+
+The fields are in `docs/contracts/sse-events.md`, "A coding session's stream". The route and the models are
+built with the session view; until then the engine relays inside itself.
+

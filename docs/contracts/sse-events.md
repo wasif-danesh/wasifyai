@@ -183,3 +183,29 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
   until one ran), `pauses_chat` (on the desktop: the action takes the one memory slot, so the chat model pauses) and, when outside text is in
   the chat, `provenance` (why it asks: "after reading a result from github", "after reading the web"; ADR-0070 decision 5). A tool of an
   outside server the person marked trusted read-only, which the server says only reads, runs without a card, taint or not (decision 4).
+
+## A coding session's stream (ADR-0101, amendment of 2026-11-14)
+
+**Agreed, not built yet.** The owner chose these kinds on 2026-11-14 ("Reuse existing kinds"). The engine
+relays a session's events inside itself today (`wasifyai_code/runtime.py`, `Feed`); the route below and the
+Pydantic models for the three new kinds come with the session view.
+
+- `GET /products/wasifyai-code/code/sessions/{id}/events` answers `text/event-stream` for one session and stays
+  open across its turns. `Last-Event-ID` replays the kept events after that number. The envelope is the one
+  above: `thread_id` is the session, `run_id` the turn, `seq` counts per session.
+- Sending a message is `POST .../sessions/{id}/messages` and Stop is `POST .../sessions/{id}/stop`; neither is a
+  stream.
+
+| Event | New? | When | Payload (besides the envelope) |
+|---|---|---|---|
+| `code_state` | new | A turn changes state | `state` (`working` \| `turn_ended` \| `checking` \| `done`), `why?` (`finished` \| `stopped` \| `step_limit` \| `error` \| `refused`, later the check's reasons), `result?` (one of the four words, or empty), `detail?` (a sentence for a person), `cost_usd` |
+| `tool_call` | existing | The agent uses a tool | `id`, `name`, `arguments`: what the tool was given, short (a path, a pattern, a command), never a file's content |
+| `tool_result` | existing | The tool answered | `id`, `name`, `status` (`ok` \| `error`), `output` `{text}`: the result, cut to 4,000 characters |
+| `token` | existing | Words of the agent's message as they are written | `node: "agent"`, `text`. **Not kept:** a client that connects later does not get them; it gets the `code_message` |
+| `reasoning` | existing | The model's thinking as it is written | `node: "agent"`, `text`. Not kept |
+| `code_message` | new | A message of the agent is complete | `text`. It replaces what the `token` events of that message built |
+| `code_refusal` | new | The model declined the request | `message` (the model's own words, or "The model declined this request."), `category?`. The turn then ends with `code_state` `done`, `why: "refused"`. It is not an `error` |
+
+No `done` event is sent on this stream: a turn's end is `code_state` with `state: "done"`, and the stream stays
+open for the next turn. `error` keeps its meaning (the stream itself failed).
+

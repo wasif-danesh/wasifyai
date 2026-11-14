@@ -161,6 +161,6 @@ def test_the_script_proves_the_checks_without_a_model_and_says_what_it_cannot_do
     assert [r["passed"] for r in json.loads(out.read_text())["results"]] == [False, False]
 
     assert run_eval.main([]) == 2
-    assert "needs a real place" in capsys.readouterr().err
+    assert "--data (the real coding engine)" in capsys.readouterr().err
     with pytest.raises(ValueError, match="no such task: nope"):
         run_eval.main(["--start", "nope"])

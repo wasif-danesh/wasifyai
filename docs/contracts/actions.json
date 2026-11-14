@@ -395,6 +395,297 @@
       "help": "docs/help/audiobook.plan.md"
     },
     {
+      "id": "code.session.send",
+      "title": "Ask the coding agent",
+      "summary": "Send a coding session a message and get the agent's answer.",
+      "description": "Send a message to a coding session and wait for the agent's answer. Use it for questions about a project (\"analyse this codebase\", \"where is the login handled?\") and for a plan of a change. The agent reads the files it needs; it changes nothing. It can take from seconds to several minutes. With a cloud model, the parts of the files the agent reads are sent to that model's provider, and the session's cost is counted and limited. It returns how the turn ended (finished, stopped, step_limit, refused), the answer, the number of steps and the cost so far.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "description": "The coding session.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "text": {
+            "description": "What to ask the agent, in plain words: a question about the code, or a plan to make.",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "text"
+        ],
+        "title": "SendIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "ended": {
+            "title": "Ended",
+            "type": "string"
+          },
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "steps": {
+            "title": "Steps",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "session_id",
+          "turn_id",
+          "ended",
+          "answer",
+          "truncated",
+          "steps",
+          "cost_usd"
+        ],
+        "title": "SendOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "session_id": "0b7c1f9e000040008000000000000000",
+          "text": "Analyse this codebase."
+        }
+      ],
+      "effect": "make",
+      "flags": [
+        "costly",
+        "leaves_device",
+        "private"
+      ],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-code",
+      "ui": null,
+      "ui_exempt": "The coding screens are not built yet: their mockups wait for the owner's approval.",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.session.send.md"
+    },
+    {
+      "id": "code.session.start",
+      "title": "Start a coding session",
+      "summary": "Open a project's folder for the coding agent to read.",
+      "description": "Start a coding session on one folder of this computer. In this version every session only reads: the agent can find and read the files of that folder and cannot change a file or run a command. Nothing runs yet and nothing is read until a message is sent with code.session.send. Give the folder's whole path. The home folder, a whole disk and the app's own folders are refused. It returns the session's id.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "description": "The project's folder on this computer, as a whole path. The agent may read this folder and nothing else of the person's.",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Folder",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "A name for the session.",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          },
+          "model": {
+            "default": "",
+            "description": "The model to work with. Leave empty for the first choice.",
+            "maxLength": 64,
+            "title": "Model",
+            "type": "string"
+          },
+          "cost_limit_usd": {
+            "default": 0,
+            "description": "The most this session may cost, in US dollars. 0 uses the usual limit.",
+            "maximum": 100,
+            "minimum": 0,
+            "title": "Cost Limit Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "StartIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "product_id": {
+            "title": "Product Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "folder": {
+            "title": "Folder",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "product_id",
+          "uri",
+          "title",
+          "folder",
+          "mode",
+          "model"
+        ],
+        "title": "StartOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "folder": "/Users/me/Projects/bakery-site"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": null,
+      "ui_exempt": "The coding screens are not built yet: their mockups wait for the owner's approval.",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.session.start.md"
+    },
+    {
+      "id": "code.session.stop",
+      "title": "Stop the coding agent",
+      "summary": "Stop what a coding session is doing.",
+      "description": "Stop the turn a coding session is working on. It takes effect at once, whatever the agent is doing. The session stays and can be sent another message. Stopping a session that is not working does nothing.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "description": "The coding session.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "StopIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "stopped": {
+            "title": "Stopped",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "stopped",
+          "state"
+        ],
+        "title": "StopOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "session_id": "0b7c1f9e000040008000000000000000"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": null,
+      "ui_exempt": "The coding screens are not built yet: their mockups wait for the owner's approval.",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.session.stop.md"
+    },
+    {
       "id": "creative.add_media",
       "title": "Add to a project",
       "summary": "Make a creation from the library part of a Creative Studio project.",

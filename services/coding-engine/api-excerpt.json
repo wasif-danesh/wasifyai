@@ -1,0 +1,232 @@
+{
+  "version": "1.62.0",
+  "events": {
+    "ActionEvent": {
+      "fields": {
+        "action": "dict?",
+        "critic_result": "dict?",
+        "id": "str",
+        "kind": "str",
+        "llm_response_id": "str",
+        "parent_id": "str?",
+        "reasoning_content": "str?",
+        "responses_reasoning_item": "dict?",
+        "security_risk": "dict",
+        "source": "str",
+        "summary": "str?",
+        "thinking_blocks": "list",
+        "thought": "list",
+        "timestamp": "str",
+        "tool_call": "dict",
+        "tool_call_id": "str",
+        "tool_name": "str"
+      },
+      "required": [
+        "kind",
+        "llm_response_id",
+        "thought",
+        "tool_call",
+        "tool_call_id",
+        "tool_name"
+      ]
+    },
+    "AgentErrorEvent": {
+      "fields": {
+        "classification": "dict?",
+        "error": "str",
+        "id": "str",
+        "kind": "str",
+        "parent_id": "str?",
+        "source": "str",
+        "timestamp": "str",
+        "tool_call_id": "str",
+        "tool_name": "str",
+        "validation_errors": "list?"
+      },
+      "required": [
+        "error",
+        "kind",
+        "tool_call_id",
+        "tool_name"
+      ]
+    },
+    "ConversationErrorEvent": {
+      "fields": {
+        "classification": "dict?",
+        "code": "str",
+        "detail": "str",
+        "id": "str",
+        "kind": "str",
+        "parent_id": "str?",
+        "source": "str",
+        "timestamp": "str"
+      },
+      "required": [
+        "code",
+        "detail",
+        "kind",
+        "source"
+      ]
+    },
+    "ConversationStateUpdateEvent": {
+      "fields": {
+        "id": "str",
+        "key": "str",
+        "kind": "str",
+        "parent_id": "str?",
+        "source": "str",
+        "timestamp": "str",
+        "value": "any"
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "MessageEvent": {
+      "fields": {
+        "activated_skills": "list",
+        "critic_result": "dict?",
+        "extended_content": "list",
+        "id": "str",
+        "kind": "str",
+        "llm_message": "dict",
+        "llm_response_id": "str?",
+        "parent_id": "str?",
+        "sender": "str?",
+        "source": "str",
+        "timestamp": "str"
+      },
+      "required": [
+        "kind",
+        "llm_message",
+        "source"
+      ]
+    },
+    "ObservationEvent": {
+      "fields": {
+        "action_id": "str",
+        "extended_content": "list",
+        "id": "str",
+        "kind": "str",
+        "observation": "dict",
+        "parent_id": "str?",
+        "source": "str",
+        "timestamp": "str",
+        "tool_call_id": "str",
+        "tool_name": "str"
+      },
+      "required": [
+        "action_id",
+        "kind",
+        "observation",
+        "tool_call_id",
+        "tool_name"
+      ]
+    },
+    "StreamingDeltaEvent": {
+      "fields": {
+        "content": "str?",
+        "id": "str",
+        "kind": "str",
+        "parent_id": "str?",
+        "reasoning_content": "str?",
+        "source": "str",
+        "timestamp": "str"
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "UserRejectObservation": {
+      "fields": {
+        "action_id": "str",
+        "id": "str",
+        "kind": "str",
+        "parent_id": "str?",
+        "rejection_reason": "str",
+        "rejection_source": "str",
+        "source": "str",
+        "timestamp": "str",
+        "tool_call_id": "str",
+        "tool_name": "str"
+      },
+      "required": [
+        "action_id",
+        "kind",
+        "tool_call_id",
+        "tool_name"
+      ]
+    }
+  },
+  "requests": {
+    "StartConversationRequest": {
+      "fields": {
+        "agent": "dict",
+        "agent_definitions": "list",
+        "agent_launch_additions": "dict?",
+        "agent_profile_id": "str?",
+        "agent_settings": "dict?",
+        "autotitle": "bool",
+        "client_tools": "list",
+        "confirmation_policy": "dict",
+        "container": "dict?",
+        "conversation_id": "str?",
+        "conversation_runtime": "str?",
+        "hook_config": "dict?",
+        "initial_message": "dict?",
+        "max_budget_per_run": "float?",
+        "max_iterations": "int",
+        "observability_metadata": "dict",
+        "observability_parent_span_context": "str?",
+        "observability_span_name": "str",
+        "observability_tags": "list",
+        "parent_conversation_id": "str?",
+        "plugins": "list?",
+        "prompt": "str?",
+        "secrets": "dict",
+        "secrets_encrypted": "bool",
+        "security_analyzer": "dict?",
+        "stuck_detection": "bool",
+        "tags": "dict",
+        "title_llm_profile": "str?",
+        "tool_module_qualnames": "dict",
+        "user_id": "str?",
+        "workspace": "dict",
+        "worktree": "bool",
+        "worktree_options": "dict?"
+      },
+      "required": [
+        "workspace"
+      ]
+    },
+    "SendMessageRequest": {
+      "fields": {
+        "content": "list",
+        "role": "str",
+        "run": "bool"
+      },
+      "required": []
+    },
+    "ConfirmationResponseRequest": {
+      "fields": {
+        "accept": "bool",
+        "reason": "str"
+      },
+      "required": [
+        "accept"
+      ]
+    }
+  },
+  "calls": [
+    "POST /api/conversations",
+    "GET /api/conversations/{conversation_id}",
+    "DELETE /api/conversations/{conversation_id}",
+    "POST /api/conversations/{conversation_id}/events",
+    "POST /api/conversations/{conversation_id}/run",
+    "POST /api/conversations/{conversation_id}/interrupt",
+    "POST /api/conversations/{conversation_id}/events/respond_to_confirmation",
+    "GET /api/conversations/{conversation_id}/events/search",
+    "GET /api/conversations/{conversation_id}/events/{event_id}",
+    "GET /server_info"
+  ]
+}

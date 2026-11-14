@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     comfyui_base_url: str = "http://host.containers.internal:8188"
     comfyui_video_base_url: str = ""  # the ComfyUI video runs on (ADR-0037); empty: the one above
     ollama_base_url: str = "http://host.containers.internal:11434"
+    # Ollama as this engine itself reaches it, for the coding sessions' local model (the second
+    # run of every coding gate, ADR-0101 decision 7). Empty: that model is not offered
+    coding_ollama_url: str = ""
     # the web's embedder (ADR-0100, decision 4): bge-m3 on llama.cpp's server, as LiteLLM
     # reaches it; seeded into the `creation-embedder` alias (compose names the service `embedder`)
     embedder_base_url: str = "http://embedder:8080"
@@ -128,7 +131,8 @@ class Settings(BaseSettings):
             if not self.products_enabled:
                 self.products_enabled = (
                     "wasifyai-image,wasifyai-video,wasifyai-assistant,wasifyai-notebooks,"
-                    "wasifyai-voice,wasifyai-model3d,wasifyai-training,wasifyai-creative"
+                    "wasifyai-voice,wasifyai-model3d,wasifyai-training,wasifyai-creative,"
+                    "wasifyai-code"
                 )
         return self
 

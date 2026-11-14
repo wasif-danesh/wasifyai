@@ -1,12 +1,20 @@
 """Run the coding evaluation: 36 small tasks with hidden checks (ADR-0101; C0 spike 3).
 
     uv run python products/wasifyai-code/evals/run_eval.py --start
+    CODING_OLLAMA_URL=http://127.0.0.1:11434 uv run python \
+        products/wasifyai-code/evals/run_eval.py --data "<app data with the coding engine>" \
+        --model qwen-27b-ollama --out results.json
 
 `--start` runs no model. It applies each hidden check to the task's untouched starting files, to
-prove that every check can fail. It is the only thing this script can do by itself today: a real
-run needs a real place (the Agent Server in the sandbox), which does not exist yet. The functions
-below are written against the place interface (`wasifyai_code.place`), so the stage that has a
-real place runs the same code: `run_all(place, load_tasks(), folder)`.
+prove that every check can fail.
+
+`--data` runs the tasks for real, on this computer as the place (`wasifyai_code.client`): the
+coding engine that is set up in that data folder, inside its sandbox, with the model reached
+through the engine's gateway for coding (which this script serves on a loopback port of its own).
+The model is one of `wasifyai_api/coding_models.yaml`. A model on this computer needs no key. A
+cloud model costs money and reads its key from the app's own secret store: it runs only with
+`--app-keys`, and only when the owner has said so. The functions below are written against the
+place interface (`wasifyai_code.place`), so the same code runs on the pretended place in tests.
 
 A task (`tasks.json`, schema 1) has files to start from, a request in plain words and a hidden
 check the agent never sees: Python run in a **copy** of the finished workspace; exit 0 is a pass.
@@ -19,13 +27,15 @@ process group, with a time limit, and behind an optional wrapper, which is where
 
 import argparse
 import asyncio
+import contextlib
 import json
+import os
 import shlex
 import shutil
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +44,7 @@ from wasifyai_code.checks import Check
 from wasifyai_code.place import Place, SessionSpec
 
 TASKS = Path(__file__).with_name("tasks.json")
+ENGINE_FILES = Path(__file__).resolve().parents[3] / "services" / "coding-engine"
 CHECK_FILE, ANSWER_FILE = "_hidden_check.py", "_answer.txt"
 CHECK_LIMIT_S = 90.0
 TASK_LIMIT_S = 420.0
@@ -198,6 +209,51 @@ async def run_all(
     return summary(results)
 
 
+@contextlib.asynccontextmanager
+async def real_place(
+    data: Path, folder: Path, *, ollama_url: str = "", app_keys: bool = False
+) -> AsyncIterator[tuple[Any, Any]]:
+    """This computer as the place, and the gateway that counts its model calls: the coding
+    engine set up in `data`, in its sandbox, allowed to write under `folder` only.
+
+    The engine's own parts are used as they are (imported here, not by the product): the
+    supervisor that starts the sandboxed server, and the gateway, served on a port of its own.
+    Without `app_keys` the secret store is empty, so only a model on this computer can run."""
+    from wasifyai_api.coding_gateway import CodingGateway, serve_alone
+    from wasifyai_api.coding_server import CodingServer
+    from wasifyai_code.client import ThisComputer
+    from wasifyai_platform_sdk.secrets import InMemorySecretStore
+    from wasifyai_platform_sdk.usage import InMemoryUsageRecorder
+
+    secrets: Any = InMemorySecretStore()
+    if app_keys:  # the app's own secret store, the way the desktop engine opens it
+        from wasifyai_api.config import Settings
+        from wasifyai_api.desktop import make_secret_store
+        from wasifyai_api.web_search import load_or_create_key
+        from wasifyai_platform_sdk import SecretBox
+
+        settings = Settings(deployment_profile="desktop", desktop_secret_store="keychain")
+        box = SecretBox(await asyncio.to_thread(load_or_create_key, data / "secrets.key"))
+        secrets = make_secret_store(data, settings, box)
+    server = CodingServer(data, ENGINE_FILES)
+    address = [""]
+    gateway = CodingGateway(
+        secrets=secrets,
+        usage=InMemoryUsageRecorder(),
+        base_url=lambda: address[0],
+        ollama_url=ollama_url,
+    )
+    try:
+        async with serve_alone(gateway) as url:
+            address[0] = url
+            place = ThisComputer(server, gateway)
+            await place.open_folder(folder, write=True)  # one start for every task's folder
+            yield place, gateway
+    finally:
+        await server.close()
+        await gateway.close()
+
+
 def summary(results: Sequence[dict[str, Any]]) -> dict[str, Any]:
     kinds: dict[str, list[int]] = {}
     for r in results:
@@ -219,15 +275,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="no model: every hidden check must fail on the starting files",
     )
     parser.add_argument("--out", type=Path, help="write the results here as JSON")
+    parser.add_argument("--data", type=Path, help="an app data folder with the coding engine")
+    parser.add_argument("--model", default="", help="a model of coding_models.yaml")
+    parser.add_argument(
+        "--app-keys",
+        action="store_true",
+        help="read a cloud model's key from the app's own secret store (costs money)",
+    )
+    parser.add_argument("--work", type=Path, help="where the tasks' folders are made")
     parser.add_argument("tasks", nargs="*", help="task ids (default: all 36)")
     args = parser.parse_args(argv)
-    if not args.start:
-        print(
-            "A run with a model needs a real place, which is not built yet. Use --start.",
-            file=sys.stderr,
-        )
-        return 2
     tasks = load_tasks(only=args.tasks)
+    if args.data and not args.start:
+        # under the home folder: the sandbox closes the system's temp folders to the engine
+        made = None if args.work else tempfile.mkdtemp(prefix="wasify-code-eval-", dir=Path.home())
+        folder = Path(os.path.realpath(args.work or made or "."))
+        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            return asyncio.run(_run_for_real(args, tasks, folder))
+        finally:
+            if made:
+                shutil.rmtree(made, ignore_errors=True)
+    if not args.start:
+        print("Give --start (no model) or --data (the real coding engine).", file=sys.stderr)
+        return 2
     with tempfile.TemporaryDirectory(prefix="wasify-code-eval-") as tmp:
         results = asyncio.run(check_start(tasks, Path(tmp)))
     for n, r in enumerate(results, 1):
@@ -242,6 +313,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"== {len(results) - len(wrong)} of {len(results)} hidden checks fail on the starting files"
     )
     return 1 if wrong else 0
+
+
+async def _run_for_real(
+    args: argparse.Namespace, tasks: Sequence[dict[str, Any]], folder: Path
+) -> int:
+    """Every task on the real coding engine, one new session each."""
+    started = time.monotonic()
+
+    def show(r: dict[str, Any]) -> None:
+        print(
+            f"{'pass' if r['passed'] else 'FAIL'}  {r['id']:32} {r['status']:10} "
+            f"{r['seconds']:6.1f} s  {r['steps']:2} steps  {r['why'][:80]}",
+            flush=True,
+        )
+
+    async with real_place(
+        args.data,
+        folder,
+        ollama_url=os.environ.get("CODING_OLLAMA_URL", ""),
+        app_keys=args.app_keys,
+    ) as (place, gateway):
+        result = await run_all(place, tasks, folder, model=args.model, on_result=show)
+        result["model"] = gateway.model(args.model or None).id
+    result["seconds"] = round(time.monotonic() - started, 1)
+    if args.out:
+        args.out.write_text(json.dumps({"mode": "real", **result}, indent=1))
+    print(f"== {result['passed']} of {result['of']} passed in {result['seconds']} s")
+    return 0 if result["passed"] == result["of"] else 1
 
 
 if __name__ == "__main__":

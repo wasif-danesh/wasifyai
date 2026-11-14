@@ -18,7 +18,9 @@ Flag = Literal["costly", "leaves_device", "needs_consent", "private"]
 Surface = Literal["assistant", "mcp"]
 NeedKind = Literal["product", "model", "runtime", "notebooks", "chat", "web"]
 
-ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
+# `domain.verb`, or `domain.thing.verb` where one domain has several kinds of thing to act on
+# (`code.session.start`, `code.extension.*`: ADR-0101 and ADR-0104 name them so)
+ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){1,2}$")
 EFFECTS: tuple[str, ...] = ("read", "make", "change", "destroy")
 PLATFORM = "platform"  # the product id of actions that belong to no product
 
@@ -196,7 +198,9 @@ class Action(BaseModel):
     @model_validator(mode="after")
     def _check(self) -> "Action":
         if not ID_PATTERN.match(self.id):
-            raise ValueError(f"action id {self.id!r} must look like domain.verb")
+            raise ValueError(
+                f"action id {self.id!r} must look like domain.verb or domain.thing.verb"
+            )
         if "needs_consent" in self.flags and not self.consent:
             raise ValueError(f"{self.id}: a needs_consent action must carry its consent statement")
         if self.consent and "needs_consent" not in self.flags:

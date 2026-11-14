@@ -1,0 +1,32 @@
+{
+ "recorded_from": "written by hand before the real server could be set up; to be replaced by a recording",
+ "events": [
+  {
+   "ms": 0,
+   "event": {
+    "kind": "ConversationStateUpdateEvent",
+    "source": "environment",
+    "key": "execution_status",
+    "value": "running"
+   }
+  },
+  {
+   "ms": 0,
+   "event": {
+    "kind": "ConversationErrorEvent",
+    "source": "environment",
+    "code": "LLMServiceUnavailableError",
+    "detail": "The model could not be reached."
+   }
+  },
+  {
+   "ms": 0,
+   "event": {
+    "kind": "ConversationStateUpdateEvent",
+    "source": "environment",
+    "key": "execution_status",
+    "value": "error"
+   }
+  }
+ ]
+}

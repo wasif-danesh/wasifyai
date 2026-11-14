@@ -39,11 +39,16 @@ def make(id="demo.run", **kw) -> Action:
     return Action(**{**base, **kw})
 
 
-def test_an_id_must_look_like_domain_verb():
-    for bad in ("run", "Demo.run", "demo.Run", "demo.run.now", "demo-x.run", "1demo.run"):
+def test_an_id_must_look_like_domain_verb_or_domain_thing_verb():
+    for bad in (
+        "run", "Demo.run", "demo.Run", "demo-x.run", "1demo.run", "demo.run.", "demo..run",
+        "demo.run.Now", "a.b.c.d",
+    ):  # fmt: skip
         with pytest.raises(ValidationError):
             make(bad)
     assert make("speech.speak").domain == "speech"
+    # a domain with several kinds of thing names the thing too (ADR-0101, ADR-0104)
+    assert make("code.session.start").domain == "code"
 
 
 def test_consent_is_stated_exactly_when_the_flag_is_there():

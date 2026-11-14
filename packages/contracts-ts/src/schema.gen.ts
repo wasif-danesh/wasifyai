@@ -1113,6 +1113,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/sessions/{session_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session Events
+         * @description The session's events as they happen. It stays open across turns; a turn's end is
+         *     `code_state` with `state: "done"`.
+         */
+        get: operations["session_events_products_wasifyai_code_code_sessions__session_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read File
+         * @description One file of the session's project, to read.
+         */
+        get: operations["read_file_products_wasifyai_code_code_sessions__session_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Files
+         * @description One folder of the session's project (the Files tab). It is read by this engine for
+         *     the person; the coding engine is not asked.
+         */
+        get: operations["list_files_products_wasifyai_code_code_sessions__session_id__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/sessions/{session_id}/messages": {
         parameters: {
             query?: never;
@@ -4784,10 +4846,71 @@ export interface components {
             /** Take Id */
             take_id: string;
         };
+        /**
+         * CodeMessageEvent
+         * @description A message of the coding agent is complete. It replaces what the `token` events of that
+         *     message built; those are not kept on a coding session's stream.
+         */
+        CodeMessageEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "code_message";
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Seq */
+            seq: number;
+            /** Text */
+            text: string;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /** Ts */
+            ts?: string;
+        };
         /** CodeMessageIn */
         CodeMessageIn: {
             /** Text */
             text: string;
+        };
+        /**
+         * CodeRefusalEvent
+         * @description The model declined the request, in its own words. Not an error: the turn then ends with
+         *     `code_state` `done`, `why: "refused"`.
+         */
+        CodeRefusalEvent: {
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "code_refusal";
+            /** Message */
+            message: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Seq */
+            seq: number;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /** Ts */
+            ts?: string;
         };
         /** CodeSessionIn */
         CodeSessionIn: {
@@ -4808,6 +4931,58 @@ export interface components {
              * @default
              */
             title: string;
+        };
+        /**
+         * CodeStateEvent
+         * @description A turn of a coding session changes state (ADR-0101, amendment of 2026-11-14). On a coding
+         *     session's stream `thread_id` is the session and `run_id` the turn; `state: "done"` is the
+         *     turn's end, and the stream stays open for the next turn.
+         */
+        CodeStateEvent: {
+            /**
+             * Cost Usd
+             * @default 0
+             */
+            cost_usd: number;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "code_state";
+            /**
+             * Result
+             * @default
+             */
+            result: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Seq */
+            seq: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "working" | "turn_ended" | "checking" | "done";
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /** Ts */
+            ts?: string;
+            /**
+             * Why
+             * @default
+             */
+            why: string;
         };
         /** ConfirmReader */
         ConfirmReader: {
@@ -6170,7 +6345,7 @@ export interface components {
             /** Texts */
             texts: string[];
         };
-        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["ReasoningEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"];
+        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["ReasoningEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["CodeStateEvent"] | components["schemas"]["CodeMessageEvent"] | components["schemas"]["CodeRefusalEvent"];
         /** StartIn */
         StartIn: {
             /**
@@ -8609,6 +8784,109 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    session_events_products_wasifyai_code_code_sessions__session_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "last-event-id"?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_file_products_wasifyai_code_code_sessions__session_id__file_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_files_products_wasifyai_code_code_sessions__session_id__files_get: {
+        parameters: {
+            query?: {
+                path?: string;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
             /** @description Validation Error */
             422: {

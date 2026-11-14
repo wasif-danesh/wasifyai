@@ -8,11 +8,14 @@
 import {
   BookOpen,
   Box,
+  CalendarClock,
   Clapperboard,
+  CodeXml,
   FilePlus2,
   FileText,
   Film,
   FlaskConical,
+  FolderOpen,
   Headphones,
   Image as ImageIcon,
   Languages,
@@ -23,6 +26,7 @@ import {
   Music,
   Paintbrush,
   Pencil,
+  Puzzle,
   Scissors,
   Shapes,
   Shuffle,
@@ -93,6 +97,17 @@ export const MENU_GROUPS: MenuGroupDef[] = [
       { id: "music.create", label: "Create", icon: Sparkles },
       { id: "music.lyrics", label: "Lyrics", icon: FileText },
       { id: "music.separate", label: "Split into parts", icon: Scissors },
+    ],
+  },
+  {
+    // the coding agent (ADR-0101): the tabs of a session live inside it, not in the menu
+    id: "code",
+    label: "Code",
+    icon: CodeXml,
+    items: [
+      { id: "code.projects", label: "Projects", icon: FolderOpen },
+      { id: "code.scheduled", label: "Scheduled", icon: CalendarClock },
+      { id: "code.extensions", label: "Extensions", icon: Puzzle },
     ],
   },
 ];

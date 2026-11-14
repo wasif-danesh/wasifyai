@@ -1,5 +1,6 @@
 ---
 action: code.session.start
+screen: code.projects
 synonyms: [coding session, start coding, open a project, open my code, look at my code, code agent, coding agent, read my codebase, new coding session, open a folder for the agent]
 ---
 # Start a coding session
@@ -14,9 +15,12 @@ reads nothing yet and starts nothing. The agent begins when you send it a messag
 
 ## Steps in the app
 
-The coding screens are not built yet. Until they are, a session is started by asking the assistant in the
-chat, for example "Start a coding session on /Users/me/Projects/bakery-site". The assistant shows a card
-first, and nothing happens before you say yes.
+1. Open **Code › Projects** and choose "Choose a folder".
+2. Pick the folder of one project in the computer's folder window.
+3. The session opens. Nothing is read until you ask something.
+
+You can also ask the assistant in the chat ("Start a coding session on /Users/me/Projects/bakery-site"); it
+shows a card first.
 
 ## Fields
 

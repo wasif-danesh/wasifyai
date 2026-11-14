@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "What the main window may ask the shell to do",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-start-dragging", "dialog:allow-save"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "dialog:allow-save",
+    "dialog:allow-open"
+  ]
 }

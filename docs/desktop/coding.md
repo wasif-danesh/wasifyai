@@ -2,9 +2,10 @@
 
 Part of [the desktop profile](../desktop-profile.md). ADR-0101 to ADR-0105; the order of the work is in
 `docs/v2-coding-agent-start-plan.md`. **Built so far: stage C1a**, the engine in the app, and **the engine
-side of stage C1b**, a coding session that only reads, reached through the product's actions and routes.
-**There is no coding screen yet**: the mockups (`docs/spikes/coding-mockups.html`) wait for the owner's
-approval. Measurements are in `docs/spikes/coding-c1a.md` and `docs/spikes/coding-c1b.md`.
+side of stage C1b**, a coding session that only reads, reached through the product's actions and routes,
+and **its first screens**: the menu group Code, Projects, and the session view in Plan (the mockups were
+approved by the owner on 2026-11-14) with its Files tab. Measurements are in
+`docs/spikes/coding-c1a.md` and `docs/spikes/coding-c1b.md`.
 
 ## What it is
 
@@ -132,8 +133,26 @@ action or route -> wasifyai_code.runtime.Sessions -> wasifyai_code.client.ThisCo
   again; that is refused, in words, while another session is in the middle of a turn.
 - **A turn that only reads changes no word.** No checkpoint is taken and no check runs; the session's result
   stays what it was. The implement, check, fix loop (`loop.py`) takes over with the modes that edit (C2).
-- **The session's events are relayed inside the engine only** (`runtime.Feed`). No stream goes to the
-  window until the new event kinds are agreed for the SSE contract (proposed in `docs/spikes/coding-c1b.md`).
+- **The session's events go to the window as one stream per session** (`runtime.Feed`,
+  `GET /code/sessions/{id}/events`), in the kinds the owner agreed on 2026-11-14: `code_state`, `code_message`
+  and `code_refusal` are new, `tool_call`, `tool_result`, `token` and `reasoning` are reused
+  (`docs/contracts/sse-events.md`, "A coding session's stream"; ADR-0101's amendment). Words as they are
+  written are not kept; a window that comes later gets the finished message.
+
+## The screens
+
+| Where | What |
+|---|---|
+| `packages/ui/src/shell/menu.ts` | The group **Code** with Projects, Scheduled and Extensions. The window shows Projects only until the other two are built; the web hides all three (`apps/web/lib/parity.ts`: desktop only) |
+| `packages/ui/src/code/Code.tsx` | The first screen (what the agent may and may not do, what leaves this computer, Choose a folder), the projects with their sessions, and the session view: the request, the agent's steps as quiet lines that open, its answer, the card "Nothing was changed", the box with the Plan pill and Stop; the bar with the project, the model, the state and the cost |
+| `packages/ui/src/code/Files.tsx` | The Files tab beside the chat: the project's folders as a tree, opened a folder at a time, and one file to read with its line numbers. Reading only. On a narrow window the chat and the files are two tabs |
+| `packages/ui/src/code/thread.ts`, `use-code.ts` | The stream turned into what is drawn, and the screen's state. A turn from before the app was started shows what was kept: the request, the answer and how many steps it took |
+| `packages/client/src/code.ts` | The window's calls: the routes above and the stream |
+| `apps/desktop/src/pages/Code.tsx` | The page in the window, with the computer's own folder window (Tauri's dialog plugin, which the app already had; the window is now allowed to open it) |
+
+A session that nobody named is called by what was asked first. Walk it for real with
+`WASIFYAI_AUDIT_FOLDER=<a project> apps/desktop/scripts/ui-audit.sh light code-plan` on a throwaway
+`DESKTOP_DATA_DIR` that has the coding engine (pictures `docs/ui-audit/desktop/code-*.png`).
 
 ## The model gateway (ADR-0102, decision 4)
 
@@ -169,6 +188,8 @@ folder would be handed that folder's content. Help is in `docs/help/code.session
 | `GET /sessions/{id}/turns` | Each turn: the request, how it ended, the answer, the steps |
 | `POST /sessions/{id}/messages` | Begin a turn (202); the agent works on in the engine |
 | `POST /sessions/{id}/stop` | Stop the turn; answers when it is closed |
+| `GET /sessions/{id}/files?path=`, `GET /sessions/{id}/file?path=` | One folder of the project, and one file to read (`wasifyai_code/files.py`). The Wasify engine reads them for the person; the coding engine is not asked. A path is always inside the project, also through a link; the project's `.git` is left out; a file over 400 kB is cut at a line and says so; a file that is not text says so |
+| `GET /sessions/{id}/events` | The session's stream, open across turns; `Last-Event-ID` comes back after a number |
 
 A session is found by search (ADR-0041) by its title, its project's name and what was asked first (kind
 `code_session`). Its card and its filter in the Library come with the screens.
@@ -202,8 +223,10 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 
 ## Not built
 
-- Every screen (the session view, the Files tab): they wait for the mockups' approval. The stream to the
-  window waits for the new event kinds to be agreed.
+- "Find a file by name" in the Files tab, the dot for files changed in a session (nothing changes yet), and
+  the other tabs beside the chat; "Carry out this plan" (it needs a mode that edits, C2);
+  the mode menu, the cost window and "Start in a new, empty folder" of the mockups; a session's own address
+  (an open session is not kept across a reload of the window); the Library card for a session.
 - Edits with undo, commands, the check loop switched on, the scheduler: stages C2 onwards.
 - A session going on after the app was closed and opened again: the session's token is gone, so its next
   message starts a new conversation with the agent, and the turn says so.

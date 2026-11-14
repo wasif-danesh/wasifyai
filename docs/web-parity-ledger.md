@@ -82,4 +82,7 @@ web job's test step fail without one. The desktop's actions are held to the same
 | `music.create` | live | shown when a ready model can do it: a worker, or fal.ai set by an admin in Admin › Media (rows speech.music and speech.sfx) |  |
 | `music.lyrics` | live | shown when a ready model can do it |  |
 | `music.separate` | live | shown when a ready model can do it |  |
+| `code.projects` | desktop-only | the coding agent works in a folder of the person's computer, inside the macOS sandbox | owner, 2026-11-13: desktop and Mac first; the web version of coding is not in v1 (ADR-0101, decision 8) |
+| `code.scheduled` | desktop-only | scheduled coding runs (ADR-0105); not built on the desktop yet either | owner, 2026-11-13: desktop and Mac first (ADR-0101, decision 8) |
+| `code.extensions` | desktop-only | the coding agent's extensions (ADR-0104); not built on the desktop yet either | owner, 2026-11-13: desktop and Mac first (ADR-0101, decision 8) |
 <!-- parity:end -->

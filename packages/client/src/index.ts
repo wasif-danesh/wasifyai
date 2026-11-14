@@ -471,3 +471,16 @@ export {
   type ComponentsApi,
   createComponentsApi,
 } from "./components";
+export {
+  type CodeApi,
+  type CodeEnding,
+  type CodeEngine,
+  type CodeEntry,
+  type CodeEvent,
+  type CodeFile,
+  type CodeModel,
+  type CodeSession,
+  type CodeTurn,
+  CODE_PRODUCT_ID,
+  createCodeApi,
+} from "./code";

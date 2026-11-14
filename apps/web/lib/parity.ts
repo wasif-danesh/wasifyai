@@ -75,4 +75,22 @@ export const PARITY: Record<string, Parity> = {
   },
   "music.lyrics": { status: "live", note: "shown when a ready model can do it" },
   "music.separate": { status: "live", note: "shown when a ready model can do it" },
+
+  // the coding agent runs inside a sandbox on the person's own computer (ADR-0101, ADR-0102)
+  "code.projects": {
+    status: "desktop-only",
+    note: "the coding agent works in a folder of the person's computer, inside the macOS sandbox",
+    accepted:
+      "owner, 2026-11-13: desktop and Mac first; the web version of coding is not in v1 (ADR-0101, decision 8)",
+  },
+  "code.scheduled": {
+    status: "desktop-only",
+    note: "scheduled coding runs (ADR-0105); not built on the desktop yet either",
+    accepted: "owner, 2026-11-13: desktop and Mac first (ADR-0101, decision 8)",
+  },
+  "code.extensions": {
+    status: "desktop-only",
+    note: "the coding agent's extensions (ADR-0104); not built on the desktop yet either",
+    accepted: "owner, 2026-11-13: desktop and Mac first (ADR-0101, decision 8)",
+  },
 };

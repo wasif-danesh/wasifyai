@@ -185,6 +185,17 @@ Not built of the approved mockups, and left for the next pieces: "Find a file by
 address, the Library card. Two differences from the mockups, both because this stage only reads: the rules
 cards say the agent cannot change or run anything, and the plan card has no "Carry out this plan" button.
 
+## The rest of the first screens (2026-11-14, branch `coding-c1b-rest`)
+
+Four small pieces of the approved mockups, each walked for real in the same walk (`code-plan`): a session's
+own address (the window loaded again, the session still open), "Find a file by name", the cost window with a
+limit that can be changed, and the session as a card in the Library under "Coding sessions". Pictures:
+`docs/ui-audit/desktop/code-session-find-cost.png`, `code-library.png`.
+
+Not walked: changing the limit with a paid model (the walk uses the local model, which has no cost; the
+change is tested against the gateway in `test_coding_sessions.py`), and opening a session from a search
+result. Still not built: "Carry out this plan", the mode menu, "Start in a new, empty folder".
+
 ## For the next stages
 
 - **The screens (C1b, second half):** the session view and the Files tab, after the mockups are approved

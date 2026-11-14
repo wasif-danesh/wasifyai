@@ -1110,7 +1110,11 @@ export interface paths {
         delete: operations["delete_session_products_wasifyai_code_code_sessions__session_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Change Session
+         * @description Change the most this session may cost. It holds from the next model call.
+         */
+        patch: operations["change_session_products_wasifyai_code_code_sessions__session_id__patch"];
         trace?: never;
     };
     "/products/wasifyai-code/code/sessions/{session_id}/events": {
@@ -1167,6 +1171,26 @@ export interface paths {
          *     the person; the coding engine is not asked.
          */
         get: operations["list_files_products_wasifyai_code_code_sessions__session_id__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/files/find": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find Files
+         * @description The project's files whose name holds `q` ("Find a file by name").
+         */
+        get: operations["find_files_products_wasifyai_code_code_sessions__session_id__files_find_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4845,6 +4869,11 @@ export interface components {
         ChooseTake: {
             /** Take Id */
             take_id: string;
+        };
+        /** CodeLimitIn */
+        CodeLimitIn: {
+            /** Cost Limit Usd */
+            cost_limit_usd: number;
         };
         /**
          * CodeMessageEvent
@@ -8796,6 +8825,43 @@ export interface operations {
             };
         };
     };
+    change_session_products_wasifyai_code_code_sessions__session_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeLimitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     session_events_products_wasifyai_code_code_sessions__session_id__events_get: {
         parameters: {
             query?: never;
@@ -8868,6 +8934,41 @@ export interface operations {
         parameters: {
             query?: {
                 path?: string;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_files_products_wasifyai_code_code_sessions__session_id__files_find_get: {
+        parameters: {
+            query: {
+                q: string;
             };
             header?: never;
             path: {

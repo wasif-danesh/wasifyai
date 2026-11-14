@@ -390,6 +390,7 @@ class CodingGateway:
         known once the engine listens). `transport` is for tests: the provider, pretended."""
         self._secrets, self._usage, self._base_url = secrets, usage, base_url
         self.default, self.models = models or load_models(ollama_url=ollama_url)
+        self.default_limit_usd = DEFAULT_LIMIT_USD  # for a session that names none
         self._by_token: dict[str, _Session] = {}
         self._by_session: dict[str, _Session] = {}
         self._http = httpx.AsyncClient(timeout=TIMEOUT, transport=transport)

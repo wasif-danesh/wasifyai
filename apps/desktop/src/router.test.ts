@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   NEW_NOTEBOOK,
   chatPath,
+  codePath,
   notebookPath,
+  parseCodeSession,
   parseConversation,
   parseHash,
   parseNotebook,
@@ -66,6 +68,14 @@ describe("router", () => {
     expect(parseNotebook(`#${notebookPath(NEW_NOTEBOOK)}`)).toBe("new");
     expect(parseNotebook("#/notebooks")).toBeNull();
     expect(parseNotebook("#/notebooks/../x")).toBeNull();
+    // a coding session has an address of its own; the projects are `/code`
+    expect(parseCodeSession("#/code/0b7c1f9e000040008000000000000000")).toBe(
+      "0b7c1f9e000040008000000000000000",
+    );
+    expect(parseCodeSession("#/code")).toBeNull();
+    expect(parseCodeSession("#/code/../x")).toBeNull();
+    expect(parseHash(`#${codePath("abc")}`)).toBe("code");
+    expect(parseHash(`#${codePath(null)}`)).toBe("code");
     expect(parseHash("#/notebooks/9f3c")).toBe("notebook");
     expect(parseHash("#/notebooks")).toBe("notebooks");
     expect(notebookPath(null)).toBe("/notebooks");

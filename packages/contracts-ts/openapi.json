@@ -921,6 +921,22 @@
         "title": "ChooseTake",
         "type": "object"
       },
+      "CodeLimitIn": {
+        "additionalProperties": false,
+        "properties": {
+          "cost_limit_usd": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "Cost Limit Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "cost_limit_usd"
+        ],
+        "title": "CodeLimitIn",
+        "type": "object"
+      },
       "CodeMessageEvent": {
         "description": "A message of the coding agent is complete. It replaces what the `token` events of that\nmessage built; those are not kept on a coding session's stream.",
         "properties": {
@@ -8475,6 +8491,59 @@
         "tags": [
           "wasifyai-code"
         ]
+      },
+      "patch": {
+        "description": "Change the most this session may cost. It holds from the next model call.",
+        "operationId": "change_session_products_wasifyai_code_code_sessions__session_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeLimitIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Change Session Products Wasifyai Code Code Sessions  Session Id  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Change Session",
+        "tags": [
+          "wasifyai-code"
+        ]
       }
     },
     "/products/wasifyai-code/code/sessions/{session_id}/events": {
@@ -8641,6 +8710,62 @@
           }
         },
         "summary": "List Files",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/files/find": {
+      "get": {
+        "description": "The project's files whose name holds `q` (\"Find a file by name\").",
+        "operationId": "find_files_products_wasifyai_code_code_sessions__session_id__files_find_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Find Files Products Wasifyai Code Code Sessions  Session Id  Files Find Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Find Files",
         "tags": [
           "wasifyai-code"
         ]

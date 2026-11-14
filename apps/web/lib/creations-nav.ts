@@ -43,6 +43,8 @@ export function hrefOf(target: CreationEntry | MakeTarget): string {
       return "/video/builder";
     case "creative_project":
       return `/creative?open=${encodeURIComponent(target.id)}`;
+    case "code_session":
+      return "/creations"; // coding is on the desktop only (ADR-0101): the web lists no session
     case "notebook":
       return `/notebooks/${target.id}`;
     case "taught":

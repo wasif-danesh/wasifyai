@@ -19,6 +19,7 @@ const NONE = {
   models3d: [],
   compositions: [],
   creativeProjects: [],
+  codeSessions: [],
   notebooks: [],
   taught: [],
 };
@@ -262,6 +263,45 @@ describe("the Library", () => {
     ]);
     await waitFor(() => expect(screen.queryByRole("link", { name: /Autumn/ })).toBeNull());
     expect(screen.getByRole("link", { name: /Rainy day/ })).toBeInTheDocument();
+  });
+
+  it("lists a coding session with a filter of its own, named by what was asked", async () => {
+    const user = userEvent.setup();
+    const others = {
+      ...NONE,
+      codeSessions: [
+        {
+          id: "c1",
+          title: "Where are the opening hours shown?",
+          folder: "/Users/me/Projects/bakery-site",
+          project: "bakery-site",
+          mode: "plan" as const,
+          model: "claude-sonnet-5-5",
+          state: "done" as const,
+          working: false,
+          result: "" as const,
+          turns: 1,
+          answer: "",
+          ended: "finished" as const,
+          cost_usd: 0.2,
+          cost_limit_usd: 5,
+          model_calls: 4,
+          tokens_in: 0,
+          tokens_out: 0,
+          created_at: when,
+          updated_at: when,
+        },
+      ],
+    };
+    render(<MyCreations api={api(Promise.resolve(recent({ others })))} nav={nav()} />);
+    expect(
+      await screen.findByRole("link", { name: /Where are the opening hours shown/ }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Coding sessions/ }));
+    expect(screen.queryByRole("link", { name: /Rainy day/ })).toBeNull();
+    expect(
+      screen.getByRole("link", { name: /Where are the opening hours shown/ }),
+    ).toBeInTheDocument();
   });
 
   it("lists the tools' own kinds with a filter once there is one", async () => {

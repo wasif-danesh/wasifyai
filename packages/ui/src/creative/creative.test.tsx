@@ -27,6 +27,7 @@ const noOthers = {
   models3d: [],
   compositions: [],
   creativeProjects: [],
+  codeSessions: [],
   notebooks: [],
   taught: [],
 };

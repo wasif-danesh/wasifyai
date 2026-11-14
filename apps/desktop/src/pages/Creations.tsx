@@ -2,7 +2,7 @@
 import type { CreationEntry, CreationFilter, CreationUse, CreationsNav } from "@wasifyai/ui";
 import { MyCreations } from "@wasifyai/ui";
 import { creationsApi } from "../api";
-import { type Route, openNotebook } from "../router";
+import { type Route, codePath, openNotebook } from "../router";
 
 /** What the window does to hand an entry to a tool ("Edit this", "Extend this"…): the shell owns those hand-offs. */
 export type HandOff = (entry: CreationEntry, action: CreationUse) => void;
@@ -54,6 +54,8 @@ export function navFor(go: (r: Route) => void, handOff?: HandOff): CreationsNav 
       if (entry.kind === "notebook") {
         openNotebook(entry.id);
         go("notebook");
+      } else if (entry.kind === "code_session") {
+        window.location.hash = codePath(entry.id); // the session itself, at its own address
       } else go(screen[entry.kind]);
     },
     make: (to) => go(make[to]),

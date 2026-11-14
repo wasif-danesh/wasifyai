@@ -186,9 +186,9 @@ data: {"run_id":"…","thread_id":"…","seq":57,"ts":"…","outputs":{"title":"
 
 ## A coding session's stream (ADR-0101, amendment of 2026-11-14)
 
-**Agreed, not built yet.** The owner chose these kinds on 2026-11-14 ("Reuse existing kinds"). The engine
-relays a session's events inside itself today (`wasifyai_code/runtime.py`, `Feed`); the route below and the
-Pydantic models for the three new kinds come with the session view.
+The owner chose these kinds on 2026-11-14 ("Reuse existing kinds"). The models of the three new kinds are in
+`wasifyai_contracts/events.py`; the product makes the events in `wasifyai_code/runtime.py` (`Feed`) and a test
+holds every one of them to the models.
 
 - `GET /products/wasifyai-code/code/sessions/{id}/events` answers `text/event-stream` for one session and stays
   open across its turns. `Last-Event-ID` replays the kept events after that number. The envelope is the one

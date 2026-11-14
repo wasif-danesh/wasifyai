@@ -94,6 +94,36 @@ class DoneEvent(_Envelope):
     outputs: dict[str, Any] = Field(default_factory=dict)
 
 
+class CodeStateEvent(_Envelope):
+    """A turn of a coding session changes state (ADR-0101, amendment of 2026-11-14). On a coding
+    session's stream `thread_id` is the session and `run_id` the turn; `state: "done"` is the
+    turn's end, and the stream stays open for the next turn."""
+
+    event: Literal["code_state"] = "code_state"
+    state: Literal["working", "turn_ended", "checking", "done"]
+    why: str = ""  # how the turn ended: finished, stopped, step_limit, error, refused, ...
+    result: str = ""  # the session's word: passed, failed, not_checked, could_not_check, or none
+    detail: str = ""  # a sentence for a person
+    cost_usd: float = 0.0
+
+
+class CodeMessageEvent(_Envelope):
+    """A message of the coding agent is complete. It replaces what the `token` events of that
+    message built; those are not kept on a coding session's stream."""
+
+    event: Literal["code_message"] = "code_message"
+    text: str
+
+
+class CodeRefusalEvent(_Envelope):
+    """The model declined the request, in its own words. Not an error: the turn then ends with
+    `code_state` `done`, `why: "refused"`."""
+
+    event: Literal["code_refusal"] = "code_refusal"
+    message: str
+    category: str = ""
+
+
 SseEvent = Annotated[
     NodeEvent
     | TokenEvent
@@ -103,7 +133,10 @@ SseEvent = Annotated[
     | ToolResultEvent
     | JobProgressEvent
     | ErrorEvent
-    | DoneEvent,
+    | DoneEvent
+    | CodeStateEvent
+    | CodeMessageEvent
+    | CodeRefusalEvent,
     Field(discriminator="event"),
 ]
 

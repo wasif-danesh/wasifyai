@@ -164,6 +164,27 @@ uses its own names (`code_step`, `code_piece`, `code_text`); the route will map 
 - No screen, no stream to the window, no Library card for a session.
 - Windows, Linux and Intel Macs.
 
+## The first screens (2026-11-14, after the mockups were approved)
+
+Built on branch `coding-c1b-screens`: the stream route in the agreed kinds, the window's client, the menu
+group Code, Projects, and the session view in Plan (`docs/desktop/coding.md`, "The screens").
+
+| | Result |
+|---|---|
+| A real walk in a browser, the window's own code against the real engine, the real coding engine and the local Qwen 27B | **Worked.** First screen, a folder chosen in the folder window (stood in for by the walk), a question asked, the agent's five steps, its answer and "Nothing was changed" after 37 s, then the projects list. Pictures: `docs/ui-audit/desktop/code-*.png` |
+| The Tauri window itself | **Not seen.** The walk runs the window's code in a browser with a stand-in for the shell, so the real folder window was not opened |
+| Tests | 11 screen tests (`packages/ui/src/code/code.test.tsx`), 2 for the stream route; every event the product makes is held to the contract's models |
+
+**The Files tab** was added the same day: a folder at a time, a file to read with line numbers, nothing to
+change it (2 more screen tests, 3 for its routes: listing, a file that is not text, a long file cut, and
+nothing outside the project reachable by `..`, an absolute path or a link). The walk now also opens a folder
+and reads a file, and its last step, the projects list, passes.
+
+Not built of the approved mockups, and left for the next pieces: "Find a file by name" in Files,
+"Carry out this plan", the mode menu, the cost window, "Start in a new, empty folder", a session's own
+address, the Library card. Two differences from the mockups, both because this stage only reads: the rules
+cards say the agent cannot change or run anything, and the plan card has no "Carry out this plan" button.
+
 ## For the next stages
 
 - **The screens (C1b, second half):** the session view and the Files tab, after the mockups are approved

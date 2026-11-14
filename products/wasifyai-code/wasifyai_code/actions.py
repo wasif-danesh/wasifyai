@@ -29,7 +29,6 @@ from wasifyai_code.runtime import KIND, NotAvailable, Refused, owner_of, session
 ENGINE = need_runtime("coding")
 SAMPLE_ID = "0b7c1f9e000040008000000000000000"
 ANSWER_CHARS = 8000  # of the agent's answer in an action's result; the session keeps all of it
-NO_SCREEN = "The coding screens are not built yet: their mockups wait for the owner's approval."
 ENDINGS = {
     places.FINISHED: "The agent finished.",
     places.STOPPED: "The turn was stopped.",
@@ -206,7 +205,7 @@ def actions() -> list[Action]:
             requires=(need_product(PRODUCT_ID), ENGINE),
             product=PRODUCT_ID,
             bind=CallBinding(_start),
-            ui_exempt=NO_SCREEN,
+            ui="code.projects",
             surfaces=("assistant",),
         ),
         Action(
@@ -232,7 +231,7 @@ def actions() -> list[Action]:
             long=True,
             product=PRODUCT_ID,
             bind=CallBinding(_send),
-            ui_exempt=NO_SCREEN,
+            ui="code.projects",
             surfaces=("assistant",),
         ),
         Action(
@@ -251,7 +250,7 @@ def actions() -> list[Action]:
             requires=(need_product(PRODUCT_ID), ENGINE),
             product=PRODUCT_ID,
             bind=CallBinding(_stop),
-            ui_exempt=NO_SCREEN,
+            ui="code.projects",
             surfaces=("assistant",),
         ),
     ]

@@ -17,6 +17,7 @@ export const ROUTES: Record<string, Route> = {
   creative: "creative",
   motion: "videobuilder",
   model3d: "model3d",
+  "code.projects": "code",
   "voice.speak": "speak",
   "voice.transcribe": "transcribe",
   "voice.lipsync": "lipsync",
@@ -34,6 +35,9 @@ export const ROUTES: Record<string, Route> = {
   train: "train",
 };
 
+/** Menu items the window has no screen for yet. */
+const NOT_BUILT: ReadonlySet<string> = new Set(["code.scheduled", "code.extensions"]);
+
 /** What the window's menu does for each item, given where the person is. */
 export function resolveItem(
   route: Route,
@@ -48,6 +52,8 @@ export function resolveItem(
   const { conversationId, notebook, cannot } = opts;
   return (id): ItemView | undefined => {
     if (cannot?.has(id)) return { hidden: true };
+    // not built yet (stages C6 and X2): left out of the window's menu until they are
+    if (NOT_BUILT.has(id)) return { hidden: true };
     if (id === "chat") {
       return {
         current: route === "home" && !conversationId,
@@ -84,6 +90,7 @@ const OTHER_TITLES: Partial<Record<Route, string>> = {
   creative: "Creative Studio",
   videobuilder: "Motion graphics",
   model3d: "3D model",
+  code: "Code",
   creations: "Library",
   library: "Library",
   videos: "Library",

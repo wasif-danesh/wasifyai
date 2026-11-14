@@ -86,6 +86,11 @@ export function resolveWebItem(
         };
       case "models": // the models of the workers are an admin's to manage; everyone else uses the pickers
         return served.isAdmin ? page("/admin/workers", "/admin/workers") : { hidden: true };
+      case "code.projects":
+      case "code.scheduled":
+      case "code.extensions":
+        // the coding agent works on the person's own computer: not on the web in v1 (ADR-0101)
+        return { hidden: true };
       default:
         return undefined;
     }

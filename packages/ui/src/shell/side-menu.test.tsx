@@ -16,6 +16,7 @@ describe("the menu definition", () => {
       "Video",
       "Voice",
       "Music",
+      "Code",
     ]);
     const items = (id: string) => MENU_GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
     expect(items("notebook")).toEqual(["Create", "View notebooks"]);
@@ -26,6 +27,8 @@ describe("the menu definition", () => {
     expect(items("images")).toEqual(["Create", "Edit", "Inpaint", "Reference"]);
     expect(items("voice")).toHaveLength(7);
     expect(items("voice")).not.toContain("Lip sync");
+    // the coding agent (ADR-0101): the tabs of a session are inside it, not in the menu
+    expect(items("code")).toEqual(["Projects", "Scheduled", "Extensions"]);
     const ids = MENU_GROUPS.flatMap((g) => g.items.map((i) => i.id));
     expect(new Set(ids).size).toBe(ids.length); // every id is unique
   });

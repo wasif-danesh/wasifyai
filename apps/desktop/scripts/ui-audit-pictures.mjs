@@ -25,6 +25,12 @@
 //   apps/desktop/scripts/ui-audit.sh light coding-setup         The coding engine (ADR-0102, C1a) set up from Settings,
 //                                                               Optional parts, with the real downloads; then
 //                                                               coding-repair and coding-remove the same way
+//   WASIFYAI_AUDIT_FOLDER=<a project> apps/desktop/scripts/ui-audit.sh light code-plan
+//                                                               Code (ADR-0101, C1b): the first screen, a folder
+//                                                               chosen, a question asked of a real model in Plan
+//                                                               and its answer; needs the coding engine set up and
+//                                                               a model that is ready (CODING_OLLAMA_URL for the
+//                                                               local one); use a throwaway DESKTOP_DATA_DIR
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -105,6 +111,7 @@ window.__TAURI_INTERNALS__ = {
       case "update_check": return { state: "not_configured" };
       case "component_status": return { state: "installed", version: "", accelerator: "mps" };
       case "plugin:event|listen": return 1;
+      case "plugin:dialog|open": return ${JSON.stringify(process.env.WASIFYAI_AUDIT_FOLDER ?? null)};
       default: return null;
     }
   },
@@ -1764,6 +1771,41 @@ for (const scheme of ["light", "dark"]) {
       console.log(`${name}: ${((Date.now() - began) / 1000).toFixed(1)} s`);
       console.log(`  the row says: ${(await row.innerText()).replace(/\s+/g, " ")}`);
       await shot(page, `${name}-after`, 1500);
+    });
+  }
+  // stage C1b of the coding agent: Code, from the first screen to an answer in Plan, with a real model
+  if (scheme === "light" && names.has("code-plan")) {
+    await attempt("code-plan", async () => {
+      await open(page, "/code");
+      await page.getByRole("button", { name: "Choose a folder" }).waitFor();
+      await page.waitForTimeout(500);
+      await shot(page, "code-start", 1200);
+      await page.getByRole("button", { name: "Choose a folder" }).click();
+      const box = page.getByRole("textbox", { name: "Ask about this project" });
+      await box.waitFor();
+      await shot(page, "code-session-new");
+      const began = Date.now();
+      await box.fill(
+        "What is this project, and which file would you change to add opening hours? Keep it short.",
+      );
+      await box.press("Enter");
+      await page.getByRole("button", { name: "Stop" }).waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(8000);
+      await shot(page, "code-session-working");
+      await page.getByText("Nothing was changed").waitFor({ timeout: 900_000 });
+      console.log(`code-plan: answered in ${((Date.now() - began) / 1000).toFixed(1)} s`);
+      await page.waitForTimeout(800);
+      await shot(page, "code-session-plan", 1400);
+      // the Files tab: a folder opened, a file read
+      const tree = page.getByRole("navigation", { name: /^Files in / });
+      await tree.getByRole("button", { name: "src" }).click();
+      await tree.getByRole("button", { name: "pages" }).click();
+      await tree.getByRole("button", { name: "home.html" }).click();
+      await page.getByText(/^Read only\. \d+ lines?\.$/).waitFor();
+      await shot(page, "code-session-files", 1400);
+      await page.getByRole("banner").getByRole("button", { name: "Projects", exact: true }).click();
+      await page.getByRole("heading", { name: "Projects" }).waitFor();
+      await shot(page, "code-projects");
     });
   }
   if (scheme === "light" && names.has("u11-make")) {

@@ -1,5 +1,6 @@
 ---
 action: code.session.stop
+screen: code.projects
 synonyms: [stop the coding agent, stop coding, cancel the agent, interrupt the agent, stop the session, stop reading my code]
 ---
 # Stop the coding agent
@@ -13,8 +14,10 @@ waiting for the model or reading files. The session stays, and you can send it a
 
 ## Steps in the app
 
-The coding screens are not built yet. Until they are, ask the assistant in the chat: "Stop the coding
-session".
+1. In **Code › Projects**, open the session that is working.
+2. Choose Stop, in the box you write in.
+
+You can also ask the assistant in the chat: "Stop the coding session".
 
 ## Fields
 

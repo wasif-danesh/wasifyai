@@ -491,8 +491,8 @@
       ],
       "long": true,
       "product": "wasifyai-code",
-      "ui": null,
-      "ui_exempt": "The coding screens are not built yet: their mockups wait for the owner's approval.",
+      "ui": "code.projects",
+      "ui_exempt": "",
       "surfaces": [
         "assistant"
       ],
@@ -605,8 +605,8 @@
       ],
       "long": false,
       "product": "wasifyai-code",
-      "ui": null,
-      "ui_exempt": "The coding screens are not built yet: their mockups wait for the owner's approval.",
+      "ui": "code.projects",
+      "ui_exempt": "",
       "surfaces": [
         "assistant"
       ],
@@ -677,8 +677,8 @@
       ],
       "long": false,
       "product": "wasifyai-code",
-      "ui": null,
-      "ui_exempt": "The coding screens are not built yet: their mockups wait for the owner's approval.",
+      "ui": "code.projects",
+      "ui_exempt": "",
       "surfaces": [
         "assistant"
       ],

@@ -222,6 +222,20 @@
     ]
   },
   {
+    "screen": "code.projects",
+    "where": "Code › Projects",
+    "actions": [
+      "code.session.send",
+      "code.session.start",
+      "code.session.stop"
+    ],
+    "does": [
+      "Ask the coding agent",
+      "Start a coding session",
+      "Stop the coding agent"
+    ]
+  },
+  {
     "screen": "creative",
     "where": "Creative Studio",
     "actions": [

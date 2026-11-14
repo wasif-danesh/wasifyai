@@ -921,6 +921,47 @@
         "title": "ChooseTake",
         "type": "object"
       },
+      "CodeMessageEvent": {
+        "description": "A message of the coding agent is complete. It replaces what the `token` events of that\nmessage built; those are not kept on a coding session's stream.",
+        "properties": {
+          "event": {
+            "const": "code_message",
+            "default": "code_message",
+            "title": "Event",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "uuid",
+            "title": "Thread Id",
+            "type": "string"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "thread_id",
+          "seq",
+          "text"
+        ],
+        "title": "CodeMessageEvent",
+        "type": "object"
+      },
       "CodeMessageIn": {
         "additionalProperties": false,
         "properties": {
@@ -935,6 +976,52 @@
           "text"
         ],
         "title": "CodeMessageIn",
+        "type": "object"
+      },
+      "CodeRefusalEvent": {
+        "description": "The model declined the request, in its own words. Not an error: the turn then ends with\n`code_state` `done`, `why: \"refused\"`.",
+        "properties": {
+          "category": {
+            "default": "",
+            "title": "Category",
+            "type": "string"
+          },
+          "event": {
+            "const": "code_refusal",
+            "default": "code_refusal",
+            "title": "Event",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "uuid",
+            "title": "Thread Id",
+            "type": "string"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "thread_id",
+          "seq",
+          "message"
+        ],
+        "title": "CodeRefusalEvent",
         "type": "object"
       },
       "CodeSessionIn": {
@@ -970,6 +1057,73 @@
           "folder"
         ],
         "title": "CodeSessionIn",
+        "type": "object"
+      },
+      "CodeStateEvent": {
+        "description": "A turn of a coding session changes state (ADR-0101, amendment of 2026-11-14). On a coding\nsession's stream `thread_id` is the session and `run_id` the turn; `state: \"done\"` is the\nturn's end, and the stream stays open for the next turn.",
+        "properties": {
+          "cost_usd": {
+            "default": 0.0,
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "event": {
+            "const": "code_state",
+            "default": "code_state",
+            "title": "Event",
+            "type": "string"
+          },
+          "result": {
+            "default": "",
+            "title": "Result",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "working",
+              "turn_ended",
+              "checking",
+              "done"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "uuid",
+            "title": "Thread Id",
+            "type": "string"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "why": {
+            "default": "",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "thread_id",
+          "seq",
+          "state"
+        ],
+        "title": "CodeStateEvent",
         "type": "object"
       },
       "ConfirmReader": {
@@ -4576,6 +4730,9 @@
       "SseEvent": {
         "discriminator": {
           "mapping": {
+            "code_message": "#/components/schemas/CodeMessageEvent",
+            "code_refusal": "#/components/schemas/CodeRefusalEvent",
+            "code_state": "#/components/schemas/CodeStateEvent",
             "done": "#/components/schemas/DoneEvent",
             "error": "#/components/schemas/ErrorEvent",
             "interrupt": "#/components/schemas/InterruptEvent",
@@ -4615,6 +4772,15 @@
           },
           {
             "$ref": "#/components/schemas/DoneEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodeStateEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodeMessageEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodeRefusalEvent"
           }
         ]
       },
@@ -8306,6 +8472,175 @@
           }
         },
         "summary": "Get Session",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/events": {
+      "get": {
+        "description": "The session's events as they happen. It stays open across turns; a turn's end is\n`code_state` with `state: \"done\"`.",
+        "operationId": "session_events_products_wasifyai_code_code_sessions__session_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Session Events",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/file": {
+      "get": {
+        "description": "One file of the session's project, to read.",
+        "operationId": "read_file_products_wasifyai_code_code_sessions__session_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 2000,
+              "minLength": 1,
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read File Products Wasifyai Code Code Sessions  Session Id  File Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read File",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/files": {
+      "get": {
+        "description": "One folder of the session's project (the Files tab). It is read by this engine for\nthe person; the coding engine is not asked.",
+        "operationId": "list_files_products_wasifyai_code_code_sessions__session_id__files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 2000,
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Files Products Wasifyai Code Code Sessions  Session Id  Files Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Files",
         "tags": [
           "wasifyai-code"
         ]

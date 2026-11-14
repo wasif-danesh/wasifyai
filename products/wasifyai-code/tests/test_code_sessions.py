@@ -201,23 +201,27 @@ async def test_the_relay_gives_states_steps_words_and_the_message_in_order(world
     async def listen():
         async for event in feed.follow():
             got.append(event)
-            if event["type"] == "code_state" and event["state"] == rows.DONE:
+            if event["event"] == "code_state" and event["state"] == rows.DONE:
                 return
 
     listening = asyncio.ensure_future(listen())
     await asyncio.sleep(0)
     await live.send(ME, made["id"], "What is this?")
     await asyncio.wait_for(listening, 5)
-    assert [(e["type"], e.get("state") or e.get("status")) for e in got] == [
-        ("code_state", rows.WORKING), ("code_step", "started"), ("code_piece", None),
-        ("code_piece", None), ("code_text", None), ("code_state", rows.TURN_ENDED),
+    assert [(e["event"], e.get("state")) for e in got] == [
+        ("code_state", rows.WORKING), ("tool_call", None), ("token", None),
+        ("token", None), ("code_message", None), ("code_state", rows.TURN_ENDED),
         ("code_state", rows.DONE),
     ]  # fmt: skip
-    assert got[1]["tool"] == "glob" and got[1]["given"] == {"pattern": "**/*"}
-    assert all(e["session_id"] == made["id"] for e in got)
+    assert got[1]["name"] == "glob" and got[1]["arguments"] == {"pattern": "**/*"}
+    assert got[2] | {"seq": 0, "ts": ""} == {
+        "event": "token", "run_id": got[0]["run_id"], "thread_id": made["id"], "seq": 0, "ts": "",
+        "node": "agent", "text": "It is ",
+    }  # fmt: skip
+    assert all(e["thread_id"] == made["id"] for e in got)
     assert got[-1]["why"] == places.FINISHED and got[-1]["cost_usd"] == 0.25
     assert [e["seq"] for e in got] == list(range(1, 8))
-    assert [e["type"] for e in feed.kept] == [e["type"] for e in got if e["type"] != "code_piece"]
+    assert [e["event"] for e in feed.kept] == [e["event"] for e in got if e["event"] != "token"]
 
 
 async def test_a_refusal_is_a_plain_message_and_an_error_is_written_on_the_turn(world):
@@ -239,7 +243,7 @@ async def test_a_refusal_is_a_plain_message_and_an_error_is_written_on_the_turn(
     await live.send(ME, made["id"], "Now break")
     failed = await live.wait(ME, made["id"])
     assert failed["why"] == places.ERROR and failed["notes"] == ["The model could not be reached."]
-    kinds = [e["type"] for e in live.feed(made["id"]).kept]
+    kinds = [e["event"] for e in live.feed(made["id"]).kept]
     assert kinds.count("code_refusal") == 1
 
 
@@ -375,6 +379,16 @@ async def test_a_session_is_given_to_search_by_its_title_project_and_first_reque
     await live.wait(ME, made["id"])
     assert index.items[made["id"]][4] == (
         "Opening hours. Coding session on bakery-site. Where are the opening hours shown?"
+    )
+    assert live.view(ME, made["id"])["title"] == "Opening hours"  # a name the person gave stays
+    plain = await live.start(ME, folder=str(world.project))
+    await live.send(
+        ME, plain["id"], "Where is the footer made, and who calls it when the page is drawn?"
+    )
+    await live.wait(ME, plain["id"])
+    assert (
+        live.view(ME, plain["id"])["title"]
+        == "Where is the footer made, and who calls it when the page is…"
     )
     await live.send(ME, made["id"], "And the prices?")  # only the first request names it
     await live.wait(ME, made["id"])

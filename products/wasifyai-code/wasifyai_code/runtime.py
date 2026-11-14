@@ -15,10 +15,10 @@ Every session of this stage is in **Plan mode**: the agent only reads, so nothin
 nothing is checked and the session's word stays what it was. No checkpoint is taken. The
 implement, check, fix loop (`loop.py`) takes over the turn when a mode that edits arrives (C2).
 
-**The relay stays inside the engine for now.** Each session has a `Feed`: the turn's states, the
-agent's steps, its words and a refusal, in order, for a listener in this process. The kinds are
-the ones proposed for the SSE contract in `docs/spikes/coding-c1b.md`; nothing is sent to the
-window until that proposal is agreed.
+**The relay.** Each session has a `Feed`: the turn's states, the agent's steps, its words and a
+refusal, in order, in the shape of the SSE contract's section "A coding session's stream"
+(`docs/contracts/sse-events.md`; ADR-0101, amendment of 2026-11-14). The route
+`GET /code/sessions/{id}/events` sends it to the window as it is.
 """
 
 import asyncio
@@ -44,7 +44,12 @@ log = logging.getLogger(__name__)
 KIND = "code_session"  # what a session is called in search (ADR-0041)
 STEP_LIMIT = 60  # tool steps in one turn of a session that reads
 STOP_GRACE_S = 3.0  # after Stop, how long the place's own "ended" is waited for
-PIECE = "code_piece"  # words as they are written: relayed, never kept
+# the stream's event kinds (the SSE contract, "A coding session's stream")
+STATE, MESSAGE, REFUSAL = "code_state", "code_message", "code_refusal"
+TOOL_CALL, TOOL_RESULT = "tool_call", "tool_result"
+TOKEN, REASONING = "token", "reasoning"  # words as they are written: relayed, never kept
+NOT_KEPT = (TOKEN, REASONING)
+NODE = "agent"
 APP_RESTARTED = (
     "The app was started again since this session's last message, so the agent begins from "
     "this message and does not know the earlier ones."
@@ -134,15 +139,18 @@ class Feed:
         self._seq = 0
         self._listeners: set[asyncio.Queue[dict[str, Any]]] = set()
 
-    def add(self, kind: str, **data: Any) -> dict[str, Any]:
+    def add(self, kind: str, session_id: str, turn_id: str, **data: Any) -> dict[str, Any]:
+        """One event in the contract's envelope: the session is the thread, the turn the run."""
         self._seq += 1
         event = {
+            "event": kind,
+            "run_id": turn_id,
+            "thread_id": session_id,
             "seq": self._seq,
             "ts": datetime.now(UTC).isoformat(timespec="milliseconds"),
-            "type": kind,
             **data,
         }
-        if kind != PIECE:
+        if kind not in NOT_KEPT:
             self.kept.append(event)
         for queue in self._listeners:
             queue.put_nowait(event)
@@ -257,7 +265,11 @@ class Sessions:
         first = not self.store.list_turns(owner, session_id)
         turn = self.store.add_turn(owner, session_id, text.strip())
         flight = self._turns[session_id] = _Turn(turn["id"])
-        if first:  # what was asked first is part of what search finds the session by
+        if first:
+            # a session nobody named is called by what was asked first
+            if session["title"] == workspace["name"]:
+                self.store.set_session_title(owner, session_id, _title_of(text))
+            # and what was asked first is part of what search finds it by
             await self._index(owner, session_id)
         flight.task = asyncio.ensure_future(self._turn(owner, session, workspace, turn, flight))
         return turn
@@ -464,27 +476,26 @@ class Sessions:
         self, feed: Feed, session: dict[str, Any], turn: dict[str, Any], flight: _Turn, event: Any
     ) -> None:
         """One event of the place, said to whoever follows the session."""
-        ids = {"session_id": session["id"], "turn_id": turn["id"]}
+        ids = (session["id"], turn["id"])
         data = event.data
         if event.kind == places.TEXT:
             flight.answer = str(data.get("text") or "")
-            feed.add("code_text", **ids, text=flight.answer)
+            feed.add(MESSAGE, *ids, text=flight.answer)
         elif event.kind == places.PIECE:
-            feed.add(
-                PIECE, **ids, text=str(data.get("text") or ""), thinking=bool(data.get("thinking"))
-            )
+            kind = REASONING if data.get("thinking") else TOKEN
+            feed.add(kind, *ids, node=NODE, text=str(data.get("text") or ""))
         elif event.kind == places.STEP:
             flight.steps += 1
             given = {k: v for k, v in data.items() if k not in ("tool", "id")}
             feed.add(
-                "code_step", **ids, step_id=str(data.get("id") or ""),
-                tool=str(data.get("tool") or ""), status="started", given=given,
+                TOOL_CALL, *ids, id=str(data.get("id") or ""), name=str(data.get("tool") or ""),
+                arguments=given,
             )  # fmt: skip
         elif event.kind == places.RESULT:
             feed.add(
-                "code_step", **ids, step_id=str(data.get("id") or ""),
-                tool=str(data.get("tool") or ""), status="ok" if data.get("ok") else "error",
-                text=str(data.get("text") or ""),
+                TOOL_RESULT, *ids, id=str(data.get("id") or ""), name=str(data.get("tool") or ""),
+                status="ok" if data.get("ok") else "error",
+                output={"text": str(data.get("text") or "")},
             )  # fmt: skip
         elif event.kind == places.CONFIRM:
             # a session that only reads has nothing to ask; whatever asks is told no
@@ -509,14 +520,13 @@ class Sessions:
     ) -> dict[str, Any]:
         """Write how the turn ended. A turn that only read changes no word: what stood, stands."""
         store = self.store
-        ids = {"session_id": session["id"], "turn_id": turn["id"]}
         try:
             store.set_turn(owner, turn["id"], state=rows.TURN_ENDED)
             self._tell(feed, session, turn, rows.TURN_ENDED, why=why)
             if why == places.REFUSED:
                 # the model's own words, as a plain message: not an error
                 flight.answer = detail or flight.answer
-                feed.add("code_refusal", **ids, message=flight.answer)
+                feed.add(REFUSAL, session["id"], turn["id"], message=flight.answer)
             elif why == places.ERROR and detail:
                 store.note_turn(owner, turn["id"], detail)
             store.set_turn_answer(owner, turn["id"], answer=flight.answer, steps=flight.steps)
@@ -533,10 +543,7 @@ class Sessions:
         cost = 0.0
         with contextlib.suppress(Exception):
             cost = float(self.state.coding_gateway.spent(session["id"])["usd"])
-        feed.add(
-            "code_state", session_id=session["id"], turn_id=turn["id"], state=state,
-            cost_usd=round(cost, 6), **more,
-        )  # fmt: skip
+        feed.add(STATE, session["id"], turn["id"], state=state, cost_usd=round(cost, 6), **more)
 
     # ---- cost and search -----------------------------------------------------------------------
 
@@ -575,3 +582,11 @@ class Sessions:
 def words_of(title: str, project: str, first_request: str) -> str:
     parts = [title, f"Coding session on {project}" if project else "", first_request]
     return ". ".join(p.strip() for p in parts if p and p.strip())
+
+
+def _title_of(request: str) -> str:
+    """A session's name from its first request: its first line, cut at a word."""
+    line = request.strip().splitlines()[0].strip() if request.strip() else ""
+    if len(line) <= 60:
+        return line
+    return line[:60].rsplit(" ", 1)[0] + "…"

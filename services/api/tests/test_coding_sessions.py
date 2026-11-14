@@ -393,26 +393,32 @@ async def test_the_events_are_relayed_inside_the_engine_in_order(box):
     async def listen():
         async for event in feed.follow():
             live.append(event)
-            if event["type"] == "code_state" and event["state"] == "done":
+            if event["event"] == "code_state" and event["state"] == "done":
                 return
 
     listening = asyncio.ensure_future(listen())
     await box.http.post(f"{BASE}/sessions/{made['id']}/messages", json={"text": "Analyse this."})
     await asyncio.wait_for(listening, 20)
-    kept = [e for e in live if e["type"] != "code_piece"]
-    assert [(e["type"], e.get("state") or e.get("status")) for e in kept] == [
+    kept = [e for e in live if e["event"] not in ("token", "reasoning")]
+    assert [(e["event"], e.get("state") or e.get("status")) for e in kept] == [
         ("code_state", "working"),
-        ("code_step", "started"), ("code_step", "ok"),
-        ("code_step", "started"), ("code_step", "ok"),
-        ("code_text", None),
+        ("tool_call", None), ("tool_result", "ok"),
+        ("tool_call", None), ("tool_result", "ok"),
+        ("code_message", None),
         ("code_state", "turn_ended"), ("code_state", "done"),
     ]  # fmt: skip
+    # every event is one the SSE contract knows
+    from pydantic import TypeAdapter
+    from wasifyai_contracts.events import SseEvent
+
+    for event in live:
+        TypeAdapter(SseEvent).validate_python(event)
     assert kept[5]["text"] == ANSWER
     assert [e["seq"] for e in live] == sorted(e["seq"] for e in live)
     step = kept[1]
-    assert step["tool"] == "glob" and step["given"]["pattern"] == "**/*.py"
-    assert kept[2]["step_id"] == step["step_id"] and "app.py" in kept[2]["text"]
-    assert kept[-1]["why"] == "finished" and kept[-1]["session_id"] == made["id"]
+    assert step["name"] == "glob" and step["arguments"]["pattern"] == "**/*.py"
+    assert kept[2]["id"] == step["id"] and "app.py" in kept[2]["output"]["text"]
+    assert kept[-1]["why"] == "finished" and kept[-1]["thread_id"] == made["id"]
     # a listener that comes later gets what was kept, and not the word pieces
     late = []
     async for event in feed.follow():
@@ -465,7 +471,7 @@ async def test_a_refusal_and_an_error_are_said_in_words_and_are_not_the_same(box
     seen = await ended(box, made["id"])
     assert seen["ended"] == "refused" and seen["answer"] == "The model declined this request. No."
     kept = sessions_for(box.services).feed(made["id"]).kept
-    assert [e["message"] for e in kept if e["type"] == "code_refusal"] == [seen["answer"]]
+    assert [e["message"] for e in kept if e["event"] == "code_refusal"] == [seen["answer"]]
 
 
 async def test_a_second_message_while_the_agent_works_is_refused_in_words(box):
@@ -487,7 +493,8 @@ async def test_folders_that_must_stay_closed_are_refused(box, tmp_path):
         (str(box.data), "private_folder"),  # the app's own data: its keys are there
         (str(box.data / "code"), "private_folder"),
         (str(tmp_path), "private_folder"),  # it holds the app's data folder
-        (str(home / "Library"), "private_folder"),
+        # the Mac's Library; on a computer that has none it is simply a folder that is not there
+        (str(home / "Library"), "private_folder" if (home / "Library").is_dir() else "no_folder"),
     ):
         r = await box.http.post(f"{BASE}/sessions", json={"folder": folder})
         assert r.status_code == 422 and r.json()["detail"]["code"] == code, folder
@@ -612,3 +619,111 @@ def test_the_desktop_engine_serves_the_coding_product_and_opens_its_store(data_d
         assert started.status_code == 422 and started.json()["detail"]["code"] == "private_folder"
     # closing the engine closes the store
     assert services.code_store is not None
+
+
+# ---- the stream to the window ----------------------------------------------------------------------
+
+
+async def test_the_stream_sends_the_kept_events_then_new_ones_and_comes_back_after_a_number(box):
+    from wasifyai_code.routes import _stream
+
+    made = await started(box)
+    url = f"{BASE}/sessions/{made['id']}"
+    await box.http.post(f"{url}/messages", json={"text": "Analyse this codebase."})
+    await ended(box, made["id"])
+    feed = sessions_for(box.services).feed(made["id"])
+
+    async def read(after: int, count: int) -> list[str]:
+        out = []
+        stream = _stream(feed.follow(after), 0.05)
+        async for chunk in stream:
+            out.append(chunk)
+            if len(out) == count:
+                break
+        await stream.aclose()
+        return out
+
+    kept = len(feed.kept)
+    chunks = await read(0, kept + 1)
+    assert chunks[-1] == ": ping\n\n"  # nothing new: a comment keeps the connection open
+    first = chunks[0].splitlines()
+    assert first[0] == "id: 1" and first[1] == "event: code_state"
+    body = json.loads(first[2].removeprefix("data: "))
+    assert body["state"] == "working" and body["thread_id"] == made["id"] and "event" not in body
+    assert [c.splitlines()[1] for c in chunks[:-1]][-1] == "event: code_state"
+    # coming back with the last number seen gives only what came after it
+    later = await read(kept - 2, 2)
+    assert [c.splitlines()[0] for c in later] == [f"id: {kept - 1}", f"id: {kept}"]
+
+
+async def test_the_stream_is_only_for_the_sessions_own_person(box):
+    made = await started(box)
+    other = FastAPI()
+    other.state.services = box.services
+    other.include_router(
+        build_routes(RouteDeps(box.services, lambda: Identity("t1", "someone-else"))),
+        prefix="/products/wasifyai-code",
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=other), base_url="http://engine.test"
+    ) as theirs:
+        assert (await theirs.get(f"{BASE}/sessions/{made['id']}/events")).status_code == 404
+
+
+# ---- the Files tab ---------------------------------------------------------------------------------
+
+
+async def test_the_projects_files_are_listed_a_folder_at_a_time_and_read_as_text(box, tmp_path):
+    (box.project / ".git").mkdir()
+    (box.project / ".git" / "HEAD").write_text("ref")
+    (box.project / "logo.bin").write_bytes(b"\x89PNG\x00\x00binary")
+    made = await started(box)
+    url = f"{BASE}/sessions/{made['id']}"
+    top = (await box.http.get(f"{url}/files")).json()
+    assert [(e["name"], e["kind"]) for e in top["entries"]] == [
+        ("shop", "folder"),
+        ("app.py", "file"),
+        ("logo.bin", "file"),
+    ]  # fmt: skip  (folders first; the project's own .git is left out)
+    inner = (await box.http.get(f"{url}/files", params={"path": "shop"})).json()
+    assert [e["path"] for e in inner["entries"]] == ["shop/prices.py"]
+    read = (await box.http.get(f"{url}/file", params={"path": "shop/prices.py"})).json()
+    assert read["text"] == "def total(xs):\n    return sum(xs)\n" and read["lines"] == 2
+    assert read["binary"] is False and read["cut"] is False
+    assert (await box.http.get(f"{url}/file", params={"path": "logo.bin"})).json()["binary"] is True
+    assert not box.server.running  # the coding engine is not asked
+
+
+async def test_nothing_outside_the_project_can_be_listed_or_read(box, tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("the app's keys")
+    (box.project / "link-out").symlink_to(tmp_path)
+    (box.project / "link-file").symlink_to(secret)
+    made = await started(box)
+    url = f"{BASE}/sessions/{made['id']}"
+    for path in (
+        "..",
+        "../secret.txt",
+        "/etc/passwd",
+        "shop/../../secret.txt",
+        "link-out",
+        "link-file",
+    ):
+        assert (await box.http.get(f"{url}/files", params={"path": path})).status_code == 404, path
+        assert (await box.http.get(f"{url}/file", params={"path": path})).status_code == 404, path
+    assert (
+        await box.http.get(f"{url}/file", params={"path": "link-out/secret.txt"})
+    ).status_code == 404
+    names = [e["name"] for e in (await box.http.get(f"{url}/files")).json()["entries"]]
+    assert "link-out" not in names and "link-file" not in names  # a link that leaves is not shown
+    assert (await box.http.get(f"{BASE}/sessions/nobody/files")).status_code == 404
+
+
+async def test_a_long_file_is_cut_at_a_whole_line_and_says_so(box):
+    (box.project / "big.txt").write_text("line of text\n" * 60_000)
+    made = await started(box)
+    read = (
+        await box.http.get(f"{BASE}/sessions/{made['id']}/file", params={"path": "big.txt"})
+    ).json()
+    assert read["cut"] is True and read["bytes"] == 780_000
+    assert len(read["text"]) <= 400_000 and read["text"].endswith("line of text")

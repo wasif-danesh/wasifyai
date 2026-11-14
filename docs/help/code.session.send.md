@@ -1,5 +1,6 @@
 ---
 action: code.session.send
+screen: code.projects
 synonyms: [ask the coding agent, analyse this codebase, explain my code, map of the project, where is this in the code, plan a change, code question, read my project, how does this code work]
 ---
 # Ask the coding agent
@@ -14,9 +15,14 @@ reads the files it needs. It changes nothing.
 
 ## Steps in the app
 
-The coding screens are not built yet. Until they are, ask the assistant in the chat, for example "Ask the
-coding session to analyse this codebase". The assistant shows a card first, because the agent reads your
-files and, with a cloud model, sends what it reads to that model's provider.
+1. Open **Code › Projects** and open a session, or choose a folder to start one.
+2. Write what you want to know in the box and press Enter. The box says "Plan": the agent reads files and
+   changes none.
+3. The agent's steps appear as quiet lines you can open; its answer follows. A card under it says that
+   nothing was changed.
+
+You can also ask the assistant in the chat; it shows a card first, because the agent reads your files and,
+with a cloud model, sends what it reads to that model's provider.
 
 ## Fields
 

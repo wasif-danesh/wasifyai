@@ -531,7 +531,8 @@ def card_fields(action: Action, params: dict[str, Any]) -> list[dict[str, Any]]:
             if isinstance(choices, list)
             else FIELD_KINDS.get(str(spec.get("type")), "text")
         )
-        if kind == "text" and (spec.get("maxLength") or 0) > LONG_TEXT:
+        structured = spec.get("type") in ("object", "array")
+        if structured or (kind == "text" and (spec.get("maxLength") or 0) > LONG_TEXT):
             kind = "long_text"
         row: dict[str, Any] = {
             "name": name,
@@ -548,6 +549,10 @@ def card_fields(action: Action, params: dict[str, Any]) -> list[dict[str, Any]]:
                 row[out] = spec[key]
         if name in params and isinstance(params[name], str | int | float | bool):
             row["value"] = params[name]
+        elif structured and isinstance(params.get(name), dict | list):
+            # an object (another app's tool arguments, such as the code it will run) is shown as
+            # JSON the person can read and edit; the action parses the edited text back
+            row["value"] = json.dumps(params[name], indent=2, ensure_ascii=False)
         fields.append(row)
     return fields
 

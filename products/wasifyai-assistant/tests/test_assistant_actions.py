@@ -139,6 +139,28 @@ def test_the_card_is_drawn_from_the_actions_own_schema():
     assert card_of(None, "x.y", "s", {"a": 1})["title"] == "x.y"
 
 
+def test_the_card_shows_an_object_field_as_json_the_person_can_read():
+    # external.call's `arguments` (for Blender, the code it will run) must be on the card
+    import json
+    from types import SimpleNamespace
+
+    from pydantic import BaseModel
+
+    class CallIn(BaseModel):
+        tool: str
+        arguments: dict = {}
+
+    code = {"code": "import bpy\nbpy.ops.mesh.primitive_uv_sphere_add()"}
+    fields = {
+        f["name"]: f
+        for f in card_fields(SimpleNamespace(input=CallIn), {"tool": "run", "arguments": code})  # type: ignore[arg-type]
+    }
+    assert fields["arguments"]["kind"] == "long_text"
+    assert json.loads(fields["arguments"]["value"]) == code
+    assert "primitive_uv_sphere_add" in fields["arguments"]["value"]
+    assert "value" not in card_fields(SimpleNamespace(input=CallIn), {"tool": "run"})[1]  # type: ignore[arg-type]
+
+
 async def test_a_proposal_leaves_an_audit_entry_and_a_usage_event(tmp_path, ctx):
     host = FakeHost()
     call = {

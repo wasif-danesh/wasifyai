@@ -161,6 +161,45 @@ describe("the confirm card", () => {
     expect(screen.getByRole("button", { name: "Make it" })).toBeEnabled();
   });
 
+  it("is drawn for a tool of another app's MCP server (call_external), not left blank", async () => {
+    const external: Conversation = {
+      ...waiting,
+      messages: waiting.messages.map((m) => {
+        if (m.id === "a")
+          return {
+            ...m,
+            parts: [
+              {
+                type: "tool_call",
+                id: "t1",
+                name: "call_external",
+                arguments: { connection: "blender", tool: "get_scene_info", arguments: {} },
+              },
+            ],
+          };
+        if (m.id === "t")
+          return {
+            ...m,
+            parts: [
+              {
+                ...(m.parts[0] as Extract<(typeof m.parts)[number], { type: "interrupt" }>),
+                title: "Use a tool from another app",
+                summary: "Use a tool from another app",
+                action_id: "external.call",
+                params: { connection: "blender", tool: "get_scene_info" },
+              },
+            ],
+          };
+        return m;
+      }),
+    };
+    const a = api();
+    a.get = vi.fn(async () => external);
+    render(<ChatScreen runs={runs()} assistant={a} images={images} conversationId="c1" />);
+    const card = await screen.findByRole("region", { name: "Use a tool from another app" });
+    expect(card).toHaveTextContent("blender");
+  });
+
   it("a click on Run answers the run and the turn goes on in the same message", async () => {
     const resumed: object[] = [];
     const user = userEvent.setup();

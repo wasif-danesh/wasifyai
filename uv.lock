@@ -11,6 +11,7 @@ members = [
     "wasifyai",
     "wasifyai-api",
     "wasifyai-assistant",
+    "wasifyai-code",
     "wasifyai-contracts",
     "wasifyai-creative",
     "wasifyai-engine-worker",
@@ -3345,6 +3346,17 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
 ]
+
+[[package]]
+name = "wasifyai-code"
+version = "0.0.0"
+source = { editable = "products/wasifyai-code" }
+dependencies = [
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" }]
 
 [[package]]
 name = "wasifyai-contracts"

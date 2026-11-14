@@ -14,7 +14,9 @@ What the place does with them:
 
     start     a conversation on a workspace, with the model pointed at the gateway. A session
               that only reads gets three tools: find files by name, search in files, and look at
-              a file. None of them can change a file or run a command
+              a file. None of them can change a file or run a command. A session that may
+              change files also gets the file editor and a terminal, and every use of either
+              waits for our rules' answer before it runs
     send      a message, and the agent starts on it
     stop      interrupt: the model call in flight is cancelled, so it takes effect at once
     follow    one live socket per listener. After a drop it connects again and asks for what
@@ -50,7 +52,7 @@ from wasifyai_code import place as places
 from wasifyai_code.agent_types import SendMessageRequest, StartConversationRequest
 from wasifyai_code.events import RUNNING, WAITING, Reader
 from wasifyai_code.place import Busy, NoSuchSession, PlaceError, PlaceEvent, SessionSpec
-from wasifyai_code.rules import path_in
+from wasifyai_code.rules import INSTALL, command_kind, path_in
 
 log = logging.getLogger(__name__)
 
@@ -58,16 +60,21 @@ log = logging.getLogger(__name__)
 READ_TOOLS = ("glob", "grep", "planning_file_editor")
 # its tools that write a file or run a command: never given to a session that only reads
 WRITE_TOOLS = ("terminal", "file_editor", "apply_patch", "task_tracker", "browser_tool_set")
-# the tools of a session that may change files (stage C2): it reads and edits, and runs nothing
-EDIT_TOOLS = ("glob", "grep", "file_editor")
+# the tools of a session that may change files: it reads, edits, and (stage C3) runs commands in
+# a terminal inside the sandbox
+EDIT_TOOLS = ("glob", "grep", "file_editor", "terminal")
 # our rules as the Agent Server loads them (`services/coding-engine/wasify_rules.py`): every use
 # of these tools that changes something waits, and `wasifyai_code/rules.py` gives the answer
 RULES_KIND = "WasifyRules"
-WAIT_TOOLS = ("file_editor",)
+WAIT_TOOLS = ("file_editor", "terminal")
 EDIT_NOTE = (
-    "You can read and change the files of this project with the file editor. You cannot run a "
-    "command, a test or a program in this session, and you cannot delete a file: do not try. "
-    "When something should be run, say in your final message what the person should run."
+    "You can read and change the files of this project and run commands in a terminal. The "
+    "terminal is inside a sandbox: it can write only inside this project, it cannot read the "
+    "person's other folders, and it reaches the network only to install packages from the usual "
+    "package indexes (PyPI, npm, crates.io, the Go proxy, RubyGems). Run the project's tests "
+    "yourself when you change code. When you finish, the app runs the project's check and "
+    "tells you if it fails. Do not start a program that never ends (a server, a watcher) in "
+    "the foreground: run it in the background and stop it when you are done."
 )
 READ_ONLY_NOTE = (
     "This session only reads. You have no tool that changes a file or runs a command, and the "
@@ -299,6 +306,7 @@ class ThisComputer:
         live = self._get(session)
         if allow and not live.spec.read_only:
             await asyncio.to_thread(self._make_folders, live)
+            self._installs(live)
         answer = await self._call(
             "POST",
             f"/api/conversations/{session}/events/respond_to_confirmation",
@@ -325,6 +333,33 @@ class ThisComputer:
                 continue
             with contextlib.suppress(OSError):
                 (workspace / inside).parent.mkdir(parents=True, exist_ok=True)
+
+    def _installs(self, live: _Live) -> None:
+        """An install that is let through opens the install proxy to the agent's commands for a
+        while. Any other command finds it closed (`wasifyai_api/coding_proxy.py`)."""
+        proxy = getattr(self.server, "proxy", None)
+        if proxy is None:
+            return
+        if any(
+            step.get("tool") == "terminal"
+            and command_kind(str(step.get("command") or "")) == INSTALL
+            for step in live.reader.waiting()
+        ):
+            proxy.open_for_agent()
+
+    async def sandbox(
+        self, workspace: Path | str, *, who: str = "agent"
+    ) -> tuple[list[str], dict[str, str]]:
+        """A sandbox of our own for one project, for a command we run ourselves (the check,
+        `who="agent"`) and for the person's terminal (`who="person"`): what to put in front of
+        the command, and its environment."""
+        try:
+            made = await self.server.sandbox_for(self._real(workspace), who=who)
+        except Exception as e:
+            if not hasattr(e, "message"):
+                raise
+            raise PlaceError(str(getattr(e, "message", e))) from None
+        return list(made["wrapper"]), dict(made["env"])
 
     async def end(self, session: str) -> None:
         """Forget a session: its token stops working. The conversation itself stays in the

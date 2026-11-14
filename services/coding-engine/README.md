@@ -56,3 +56,17 @@ The four lists (`{{WRITE}}`, `{{CLOSED}}`, `{{OPEN}}`, `{{WAY}}`) are filled in 
 `coding_server.py`. A later rule decides over an earlier one, so the order of the blocks matters. Change the
 profile only together with `services/api/tests/integration/test_coding_sandbox.py`, and run
 `make test-coding` after any change. Measurements are in `docs/spikes/coding-c1a.md`.
+
+Since stage C3 the same template is filled a second way, for one project at a time
+(`CodingServer.sandbox_for`): the project's check and the person's own terminal run in a sandbox of their own,
+with or without the server running. The network rule stays "this computer only"; a program inside reaches a
+package index through the install proxy on loopback (`wasifyai_api/coding_proxy.py`, the hosts in
+`coding_install_hosts.txt`), and nothing else.
+
+## `wasify_rules.py`
+
+Loaded into the Agent Server at start. It makes every use of the file editor and of the terminal wait for an
+answer from outside the sandbox, and it switches off the server's own `git init` at the start of a
+conversation (it replaces `EventService._ensure_workspace_is_git_repo`). When the pinned version moves, that
+name may move too: the server then refuses to start (an `assert`), and
+`test_a_command_waits_then_runs_inside_the_sandbox_and_the_agent_may_make_a_repository` says so.

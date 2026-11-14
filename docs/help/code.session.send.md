@@ -10,8 +10,11 @@ Action: `code.session.send`
 ## What it is for
 
 Send a message to a coding session and get the agent's answer. Use it to understand a project ("analyse
-this codebase", "where are the prices worked out?") or to get a plan for a change. The agent finds and
-reads the files it needs. It changes nothing.
+this codebase", "where are the prices worked out?"), to get a plan for a change, or, in a session in "Ask me"
+or "Work on its own", to have the change made. The agent finds and reads the files it needs. In Plan it
+changes nothing. In the other two modes it changes files and runs commands inside the project, and after a
+turn that changed files Wasify AI runs the project's check: when it fails, the agent is told and tries again,
+up to three rounds.
 
 ## Steps in the app
 
@@ -33,7 +36,11 @@ with a cloud model, sends what it reads to that model's provider.
 
 - One message at a time per session. A second message while the agent works is refused: stop the turn or
   wait for it.
-- A turn stops after 60 tool steps and says so.
+- A turn stops after 60 tool steps in Plan, and after 120 in the other modes, and says so.
+- When the check still fails after three rounds the turn stops and says "needs you". You can ask for three
+  more rounds, undo the turn, or say what to do differently.
+- A project with no check ends a turn that changed files as "not checked". Set one with
+  `code.session.check`, or from the check's word at the top of the session.
 - With a cloud model, the parts of files the agent reads leave this computer and go to the model's
   provider. The model's key never reaches the coding engine.
 - The session's cost is counted call by call. At the session's limit the turn stops and says so.

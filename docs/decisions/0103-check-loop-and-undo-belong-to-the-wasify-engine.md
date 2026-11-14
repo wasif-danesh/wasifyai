@@ -106,3 +106,28 @@ Also settled while building it:
    first.
 7. **The agent is told** with the person's next message that its last turn was undone.
 8. **When old checkpoints are dropped is not decided.** Nothing is dropped yet; the store grows with the project.
+
+## Amendment (2026-11-15): the loop is switched on (stage C3)
+
+1. **Every turn of a session is run by `Loop.run_turn`**, the one function of decision 10. The product's sessions
+   give it what it does not know (how a session is opened in the place, how a question is answered, what is said
+   on the stream) through `loop.Hooks`.
+2. **The check runs inside a sandbox of our own for the project** (ADR-0102, amendment of 2026-11-15, point 7),
+   with the same environment as the agent's commands. Where there is no sandbox there is no check.
+3. **The command is suggested, never set by us.** `checks.suggest` reads the project's files (`package.json`,
+   `Cargo.toml`, `go.mod`, `pyproject.toml`, a `Makefile`) and gives the commands that could be the check, the
+   likeliest first. The person sees the first in the check's dialog, can try it at once, and saves it. Until a
+   check is saved, a turn that changed files ends "not checked", and the card offers to set one.
+4. **The full output of a check is a file under `<app data>/code/check-output/`**, which the sandbox closes to
+   the agent. It is not yet written through the storage interface, and no usage event is written for a check:
+   a check costs no model call. Both stay open points.
+5. **A session that only reads has no check and no word of its own:** the word it had stands, however its turn
+   ended.
+6. **On the stream** a check is one `code_check` event, and `code_state` says the round, `needs_you` and, beside
+   `why`, the check's own reason in `check_why` (the owner's yes of 2026-11-15). `why` keeps its five endings, so
+   a screen that knew only those still reads a turn's end correctly.
+7. **"Try 3 more rounds"** is a new turn that tells the agent the check still fails; it has a new count.
+8. **Rounds are three**, as decided. The dialog shows the time limit of a check under "For experts" and not yet
+   the number of rounds.
+
+Measured in `docs/spikes/coding-c3.md`.

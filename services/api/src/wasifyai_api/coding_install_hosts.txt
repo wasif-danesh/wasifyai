@@ -1,0 +1,24 @@
+# The hosts a program inside the coding sandbox may reach through the install proxy
+# (coding_proxy.py), on port 443 only. Package indexes only: a host is added here when a
+# package manager needs it to install, never because a project asks for it.
+
+# Python (pip, uv)
+pypi.org
+files.pythonhosted.org
+
+# Node (npm, pnpm, yarn)
+registry.npmjs.org
+registry.yarnpkg.com
+
+# Rust (cargo)
+crates.io
+index.crates.io
+static.crates.io
+
+# Go
+proxy.golang.org
+sum.golang.org
+
+# Ruby
+rubygems.org
+index.rubygems.org

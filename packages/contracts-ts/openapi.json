@@ -954,6 +954,134 @@
         "title": "CodeAnswerIn",
         "type": "object"
       },
+      "CodeCheckEvent": {
+        "description": "One run of the project's check has ended (ADR-0103; stage C3). The check is run by the\napp after a turn that changed files; a failed one goes back to the agent.",
+        "properties": {
+          "changed_tests": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Tests",
+            "type": "array"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "event": {
+            "const": "code_check",
+            "default": "code_check",
+            "title": "Event",
+            "type": "string"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exit Code"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "result": {
+            "enum": [
+              "passed",
+              "failed",
+              "not_checked",
+              "could_not_check"
+            ],
+            "title": "Result",
+            "type": "string"
+          },
+          "round": {
+            "title": "Round",
+            "type": "integer"
+          },
+          "rounds": {
+            "title": "Rounds",
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seconds": {
+            "default": 0.0,
+            "title": "Seconds",
+            "type": "number"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "tail": {
+            "default": "",
+            "title": "Tail",
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "uuid",
+            "title": "Thread Id",
+            "type": "string"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "why": {
+            "default": "",
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "thread_id",
+          "seq",
+          "id",
+          "round",
+          "rounds",
+          "command",
+          "result"
+        ],
+        "title": "CodeCheckEvent",
+        "type": "object"
+      },
+      "CodeCheckIn": {
+        "additionalProperties": false,
+        "description": "The project's check: one command; empty means the project has none.",
+        "properties": {
+          "command": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Command",
+            "type": "string"
+          },
+          "limit_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit S"
+          }
+        },
+        "title": "CodeCheckIn",
+        "type": "object"
+      },
       "CodeMessageEvent": {
         "description": "A message of the coding agent is complete. It replaces what the `token` events of that\nmessage built; those are not kept on a coding session's stream.",
         "properties": {
@@ -1154,6 +1282,11 @@
             "default": null,
             "title": "Changed"
           },
+          "check_why": {
+            "default": "",
+            "title": "Check Why",
+            "type": "string"
+          },
           "cost_usd": {
             "default": 0.0,
             "title": "Cost Usd",
@@ -1170,10 +1303,34 @@
             "title": "Event",
             "type": "string"
           },
+          "needs_you": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Needs You"
+          },
           "result": {
             "default": "",
             "title": "Result",
             "type": "string"
+          },
+          "round": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Round"
           },
           "run_id": {
             "format": "uuid",
@@ -1216,6 +1373,43 @@
           "state"
         ],
         "title": "CodeStateEvent",
+        "type": "object"
+      },
+      "CodeTerminalIn": {
+        "additionalProperties": false,
+        "properties": {
+          "cols": {
+            "default": 80,
+            "maximum": 500.0,
+            "minimum": 2.0,
+            "title": "Cols",
+            "type": "integer"
+          },
+          "rows": {
+            "default": 24,
+            "maximum": 300.0,
+            "minimum": 2.0,
+            "title": "Rows",
+            "type": "integer"
+          }
+        },
+        "title": "CodeTerminalIn",
+        "type": "object"
+      },
+      "CodeTerminalInput": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "maxLength": 65536,
+            "minLength": 1,
+            "title": "Data",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "CodeTerminalInput",
         "type": "object"
       },
       "ConfirmReader": {
@@ -4822,6 +5016,7 @@
       "SseEvent": {
         "discriminator": {
           "mapping": {
+            "code_check": "#/components/schemas/CodeCheckEvent",
             "code_message": "#/components/schemas/CodeMessageEvent",
             "code_refusal": "#/components/schemas/CodeRefusalEvent",
             "code_state": "#/components/schemas/CodeStateEvent",
@@ -4867,6 +5062,9 @@
           },
           {
             "$ref": "#/components/schemas/CodeStateEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodeCheckEvent"
           },
           {
             "$ref": "#/components/schemas/CodeMessageEvent"
@@ -8796,6 +8994,248 @@
         ]
       }
     },
+    "/products/wasifyai-code/code/sessions/{session_id}/check": {
+      "get": {
+        "description": "The project's check: its command, what the project's files suggest, and the last\nchecks of this session.",
+        "operationId": "get_check_products_wasifyai_code_code_sessions__session_id__check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Check Products Wasifyai Code Code Sessions  Session Id  Check Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Check",
+        "tags": [
+          "wasifyai-code"
+        ]
+      },
+      "put": {
+        "description": "Set the project's check command. It is kept by the app, outside the project.",
+        "operationId": "put_check_products_wasifyai_code_code_sessions__session_id__check_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeCheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Put Check Products Wasifyai Code Code Sessions  Session Id  Check Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Check",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/check/again": {
+      "post": {
+        "description": "Three more rounds: a new turn that tells the agent the check still fails.",
+        "operationId": "try_again_products_wasifyai_code_code_sessions__session_id__check_again_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Try Again Products Wasifyai Code Code Sessions  Session Id  Check Again Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Try Again",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/check/run": {
+      "post": {
+        "description": "Run the check now, outside a turn. It answers when the check has ended; Stop ends\nit.",
+        "operationId": "run_check_products_wasifyai_code_code_sessions__session_id__check_run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Check Products Wasifyai Code Code Sessions  Session Id  Check Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Check",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/checks/{check_id}": {
+      "get": {
+        "description": "One check of this session with its whole output.",
+        "operationId": "check_output_products_wasifyai_code_code_sessions__session_id__checks__check_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "check_id",
+            "required": true,
+            "schema": {
+              "title": "Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Check Output Products Wasifyai Code Code Sessions  Session Id  Checks  Check Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Output",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
     "/products/wasifyai-code/code/sessions/{session_id}/events": {
       "get": {
         "description": "The session's events as they happen. It stays open across turns; a turn's end is\n`code_state` with `state: \"done\"`.",
@@ -9225,6 +9665,323 @@
           }
         },
         "summary": "Stop Session",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals": {
+      "get": {
+        "operationId": "list_terminals_products_wasifyai_code_code_sessions__session_id__terminals_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Terminals Products Wasifyai Code Code Sessions  Session Id  Terminals Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Terminals",
+        "tags": [
+          "wasifyai-code"
+        ]
+      },
+      "post": {
+        "description": "Open a terminal of the person's own in the project, inside the sandbox.",
+        "operationId": "open_terminal_products_wasifyai_code_code_sessions__session_id__terminals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeTerminalIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Open Terminal Products Wasifyai Code Code Sessions  Session Id  Terminals Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open Terminal",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals/{terminal_id}": {
+      "delete": {
+        "description": "Close a terminal: its shell and everything it started are ended.",
+        "operationId": "close_terminal_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "terminal_id",
+            "required": true,
+            "schema": {
+              "title": "Terminal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Close Terminal",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals/{terminal_id}/events": {
+      "get": {
+        "description": "What the terminal prints, as it comes (`terminal_output`, the bytes in base64), and\n`terminal_ended` when its shell has ended.",
+        "operationId": "terminal_events_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "terminal_id",
+            "required": true,
+            "schema": {
+              "title": "Terminal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Terminal Events",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals/{terminal_id}/input": {
+      "post": {
+        "description": "What the person typed.",
+        "operationId": "terminal_input_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__input_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "terminal_id",
+            "required": true,
+            "schema": {
+              "title": "Terminal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeTerminalInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Terminal Input",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals/{terminal_id}/size": {
+      "post": {
+        "operationId": "terminal_size_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__size_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "terminal_id",
+            "required": true,
+            "schema": {
+              "title": "Terminal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeTerminalIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Terminal Size",
         "tags": [
           "wasifyai-code"
         ]

@@ -25,12 +25,12 @@ export const MODES: Record<CodeMode, { label: string; icon: typeof Hand; says: s
   ask: {
     label: "Ask me",
     icon: Hand,
-    says: "Changes files in this folder. Asks you before it changes a file Undo cannot put back. You can allow that once for the whole project.",
+    says: "Changes files and runs commands in this folder. Asks you before it deletes files, installs packages or changes a file Undo cannot put back. You can allow each once for the whole project.",
   },
   own: {
     label: "Work on its own",
     icon: Zap,
-    says: "Does not ask before a change. It still cannot leave this folder or reach the internet, and every turn can be undone.",
+    says: "Does not ask before a change or a command. It still cannot leave this folder, reaches the internet only to install packages, and every turn can be undone.",
   },
 };
 
@@ -51,14 +51,14 @@ export const KINDS: Record<
     rule: "Ask before deleting files",
     allowed: "deleting files",
     covers: "the agent deletes files",
-    why: "Deleting is asked first.",
+    why: "This command deletes files or throws work away. Undo puts back a deleted file unless your project ignores it.",
   },
   install: {
     title: "The agent wants to install packages",
     rule: "Ask before installing packages",
     allowed: "installing packages",
     covers: "the agent installs packages",
-    why: "Installing fetches programs from the internet and is asked first.",
+    why: "Installing fetches programs from the internet. It can reach only the usual package indexes, and only after you say yes.",
   },
 };
 
@@ -77,6 +77,8 @@ export function AskCard({
   onOpenMay: () => void;
 }) {
   const kind = KINDS[ask.ask];
+  // a command waits, not a change to a file: the card says "run" and "was not run"
+  const command = ask.tool === "terminal";
   const [sent, setSent] = useState<CodeAnswer | null>(null);
   const say = (value: CodeAnswer) => {
     setSent(value);
@@ -91,7 +93,7 @@ export function AskCard({
         <Hand aria-hidden="true" className="size-4 shrink-0" /> {kind.title}
       </h3>
       <code className="block overflow-x-auto rounded-md bg-muted px-2 py-1.5 text-xs whitespace-pre">
-        {ask.path || ask.tool}
+        {command ? ask.command : ask.path || ask.tool}
       </code>
       {ask.says ? <p className="m-0">It says: “{ask.says}”</p> : null}
       <p className="m-0 text-muted-foreground">
@@ -103,7 +105,7 @@ export function AskCard({
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" onClick={() => say("yes")} disabled={sent !== null}>
-              Yes, change it
+              {command ? "Yes, run it" : "Yes, change it"}
             </Button>
             <Button
               size="sm"
@@ -119,8 +121,8 @@ export function AskCard({
             {sent !== null ? <Spinner className="size-3.5" /> : null}
           </div>
           <p className="m-0 text-xs text-muted-foreground">
-            “Allow for this project” changes it and stops asking before {kind.covers} in{" "}
-            {ask.project}. You can take it back in{" "}
+            “Allow for this project” {command ? "runs" : "changes"} it and stops asking before{" "}
+            {kind.covers} in {ask.project}. You can take it back in{" "}
             <button type="button" className="underline underline-offset-2" onClick={onOpenMay}>
               What this project may do
             </button>
@@ -143,12 +145,13 @@ export function AskCard({
         </p>
       ) : answer === "no" ? (
         <p className="m-0 flex items-center gap-2">
-          <X aria-hidden="true" className="size-4 shrink-0" /> You said no. The agent was told and
-          the file was not changed.
+          <X aria-hidden="true" className="size-4 shrink-0" /> You said no. The agent was told and{" "}
+          {command ? "the command was not run." : "the file was not changed."}
         </p>
       ) : (
         <p className="m-0 text-muted-foreground">
-          The turn ended before this was answered. The file was not changed.
+          The turn ended before this was answered.{" "}
+          {command ? "The command was not run." : "The file was not changed."}
         </p>
       )}
     </section>
@@ -309,9 +312,7 @@ export function MayDialog({
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {k.allowed ? "Allowed: the agent does not ask." : "Asks each time."}
-                    {k.asked_now
-                      ? ""
-                      : " It comes up once the agent can run commands, in a later version."}
+                    {k.asked_now ? "" : " It does not come up in this version."}
                   </span>
                 </span>
                 <Button

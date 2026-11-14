@@ -27,11 +27,13 @@ With `CODING_RECORD=1` the event streams of these scripted turns are written to
 """
 
 import asyncio
+import getpass
 import hashlib
 import http.server
 import importlib.util
 import json
 import os
+import platform
 import sys
 import threading
 import time
@@ -40,6 +42,7 @@ from typing import Any
 
 import pytest
 from wasifyai_api.coding_gateway import ANTHROPIC, CodingGateway, ModelRoute, serve_alone
+from wasifyai_api.coding_proxy import InstallProxy
 from wasifyai_api.coding_server import SANDBOX_EXEC, CodingServer, find_install
 from wasifyai_code import place as places
 from wasifyai_code.checkpoints import CheckpointStore
@@ -57,6 +60,7 @@ APP_DATA = Path(
 )
 KEY = "sk-ant-scripted-" + "k" * 40  # stands for the person's key: it must stay outside
 RECORD = os.environ.get("CODING_RECORD") == "1"
+CHECK_FAILED = "The project's check did not pass"
 
 pytestmark = [
     pytest.mark.skipif(
@@ -142,6 +146,10 @@ class Model:
             return say("No script was named.")
         done = text.count('"tool_result"')
         script = self.scripts[name]
+        if CHECK_FAILED in text and f"{name}:after-check" in self.scripts:
+            # the app sent a failed check back: the script for what the agent does then
+            done = text.rsplit(CHECK_FAILED, 1)[1].count('"tool_result"')
+            script = self.scripts[f"{name}:after-check"]
         return script[min(done, len(script) - 1)]
 
     @staticmethod
@@ -231,7 +239,8 @@ class Model:
 class Real:
     def __init__(self, data: Path, project: Path, model: Model):
         self.data, self.project, self.model = data, project, model
-        self.server = CodingServer(data, FILES)
+        self.proxy = InstallProxy()
+        self.server = CodingServer(data, FILES, proxy=self.proxy)
         self.secrets = InMemorySecretStore()
         self.usage = InMemoryUsageRecorder()
         self.address = ""
@@ -362,8 +371,15 @@ def record(
             (str(workspace or real.project), "{{WORKSPACE}}"),
             (str(real.server.plan_file), "{{PLAN}}"),
             (str(real.data), "{{DATA}}"),
+            # a command's result names the computer and the person: neither belongs in the repository
+            (str((workspace or real.project).parent), "{{TMP}}"),
+            (str(APP_DATA), "{{APP}}"),
+            (str(Path.home()), "{{HOME}}"),
+            (platform.node().split(".")[0], "this-computer"),
+            (getpass.getuser(), "someone"),
         ):
-            text = text.replace(path, mark)
+            if path:
+                text = text.replace(path, mark)
         kept.append({"event": json.loads(text)})
     version = (FILES / "VERSION").read_text().strip()
     FIXTURES.mkdir(parents=True, exist_ok=True)
@@ -656,9 +672,9 @@ async def test_a_session_that_edits_waits_before_each_change_and_a_yes_lets_it_r
 
     events = await real.turn(session, "Add the opening hours. #script:edit", on_confirm=yes)
     assert events[-1].data["why"] == places.FINISHED, events[-1].data
-    # the model was offered the three tools of a session that edits, and none that runs
+    # the model was offered the tools of a session that edits, the terminal among them
     offered = {t["name"] for r in real.model.requests for t in r.get("tools") or []}
-    assert set(EDIT_TOOLS) <= offered and "terminal" not in offered and "apply_patch" not in offered
+    assert set(EDIT_TOOLS) <= offered and "terminal" in offered and "apply_patch" not in offered
     # looking did not wait; each of the two changes did, and named its step
     assert [e.data["steps"][0]["command"] for e in asked] == ["str_replace", "create"]
     assert all(e.data["steps"][0]["tool"] == "file_editor" for e in asked)
@@ -758,3 +774,225 @@ async def test_a_session_that_edits_cannot_change_anything_outside_its_project(r
     code, _ = await real.sh(f"echo x > '{site}/by-the-engine.txt'; echo exit=$?")
     assert (site / "by-the-engine.txt").is_file()
     (site / "by-the-engine.txt").unlink()
+
+
+# ---- a session that runs commands (stage C3) -------------------------------------------------------
+
+
+def said_by(events: list[Any]) -> list[str]:
+    return [e.data["text"] for e in events if e.kind == places.RESULT]
+
+
+async def test_a_command_waits_then_runs_inside_the_sandbox_and_the_agent_may_make_a_repository(
+    real, site
+):
+    outside = site.parent / "outside-by-a-command.txt"
+    real.model.scripts["run"] = [
+        use("terminal", command="printf made > made.txt && cat made.txt"),
+        use("terminal", command="git init -q . && ls -d .git"),
+        use("terminal", command=f"echo x > '{outside}'; echo exit=$?"),
+        use("terminal", command=f"cat '{Path.home()}/.zshrc' '{real.data}/secrets.json'; echo exit=$?"),
+        use("terminal", command="curl -sS -m 5 -o /dev/null https://example.com; echo exit=$?"),
+        use("finish", message="Ran them."),
+    ]  # fmt: skip
+    session = await real.place.start(edit_spec(real, site, "s-run"))
+    # opening the project did not make it a repository
+    assert not (site / ".git").exists()
+    asked: list[Any] = []
+
+    async def yes(event: Any) -> None:
+        asked.append(event)
+        if len(asked) == 1:  # nothing has run while it waits
+            assert not (site / "made.txt").exists()
+        await real.place.answer(session, event.data["id"], True)
+
+    events = await real.turn(session, "Run a few things. #script:run", on_confirm=yes)
+    assert events[-1].data["why"] == places.FINISHED, events[-1].data
+    assert [e.data["steps"][0]["tool"] for e in asked] == ["terminal"] * 5
+    assert asked[0].data["steps"][0]["command"].startswith("printf made")
+    said = said_by(events)
+    assert "made" in said[0] and (site / "made.txt").read_text() == "made"
+    # the agent asked for a repository, and got one
+    assert ".git" in said[1] and (site / ".git").is_dir()
+    # outside the project nothing is written and nothing of the person's is read
+    assert "exit=0" not in said[2] and not outside.exists()
+    assert "exit=0" not in said[3]
+    # and no command reaches the network: it was not an install, so the proxy is closed to it
+    assert "exit=0" not in said[4]
+    record("run-commands", real, whole_turn(await real.raw_events(session)), "Run a few things.", site)  # fmt: skip
+    import shutil
+
+    shutil.rmtree(site / ".git")
+    (site / "made.txt").unlink()
+
+
+async def test_an_install_that_is_let_through_reaches_a_package_index_and_nothing_else(real, site):
+    """This one test uses the network: one small page of the Python package index."""
+    fetch = "curl -sS -m 20 -o /dev/null -w 'code=%{http_code}' "
+    real.model.scripts["install"] = [
+        use("terminal", command=f"{fetch}https://pypi.org/simple/six/; echo"),
+        use("terminal", command=f"pip install --help > /dev/null; {fetch}https://pypi.org/simple/six/; echo"),
+        use("terminal", command=f"{fetch}https://example.com/; echo"),
+        use("finish", message="Done."),
+    ]  # fmt: skip
+    real.proxy.close_for_agent()
+    session = await real.place.start(edit_spec(real, site, "s-install"))
+
+    async def yes(event: Any) -> None:
+        await real.place.answer(session, event.data["id"], True)
+
+    events = await real.turn(session, "Install. #script:install", on_confirm=yes)
+    assert events[-1].data["why"] == places.FINISHED, events[-1].data
+    said = said_by(events)
+    assert "code=200" not in said[0]  # not an install: the proxy is closed to the agent
+    assert "code=200" in said[1], said[1]  # an install was let through: the index answers
+    assert "code=200" not in said[2]  # a host that is not on the list, even now
+    hosts = [(seen["host"], seen["ok"]) for seen in real.proxy.seen]
+    assert ("pypi.org", True) in hosts and ("example.com", False) in hosts
+    real.proxy.close_for_agent()
+
+
+async def test_our_own_sandbox_for_a_project_holds_a_check_inside_it(real, site):
+    wrapper, env = await real.place.sandbox(site)
+    assert wrapper[0] == SANDBOX_EXEC and KEY not in json.dumps(env)
+    outside = site.parent / "outside-by-a-check.txt"
+
+    async def run(command: str) -> tuple[int, str]:
+        proc = await asyncio.create_subprocess_exec(
+            *wrapper, "/bin/sh", "-c", command, cwd=site, env=env,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )  # fmt: skip
+        out, _ = await proc.communicate()
+        return int(proc.returncode or 0), out.decode()
+
+    code, said = await run(
+        "echo inside > by-a-check.txt && cat by-a-check.txt && python3 -c 'print(6*7)'"
+    )
+    assert code == 0 and "inside" in said and "42" in said, said
+    (site / "by-a-check.txt").unlink()
+    code, _ = await run(f"echo x > '{outside}'")
+    assert code != 0 and not outside.exists()
+    code, _ = await run(f"ls '{Path.home()}'")
+    assert code != 0
+    code, _ = await run(f"ls '{real.data}/code'")
+    assert code != 0
+
+
+# ---- the loop and the person's terminal, for real (stage C3) ---------------------------------------
+
+
+async def test_the_reviews_case_from_the_sessions_with_the_check_run_in_the_sandbox(
+    real, tmp_path_factory
+):
+    """An old bug, a task that adds a function, a check that covers both: one refusal, one fix,
+    one pass, and the check file untouched. The agent is scripted; the engine, the sandbox, the
+    check and the store are real."""
+    from types import SimpleNamespace
+
+    from wasifyai_code.runtime import CHECK, Sessions
+    from wasifyai_code.store import CodeStore, Owner
+
+    shop = tmp_path_factory.mktemp("tax-shop")
+    (shop / "prices.py").write_text("def total(xs):\n    return sum(xs) if xs else None\n")
+    (shop / "check.py").write_text(
+        "import os, prices\n"
+        "assert prices.total([]) == 0, 'total of nothing must be 0'\n"
+        "assert prices.with_tax(100) == 120\n"
+        "print('checked in', os.getcwd())\n"
+        f"open('{shop.parent}/written-by-the-check.txt', 'w')\n"  # the sandbox must refuse this
+    )
+    was = (shop / "check.py").read_bytes()
+    real.model.scripts["loop"] = [
+        use("file_editor", command="insert", path=str(shop / "prices.py"), insert_line=2,
+            new_str="\n\ndef with_tax(x):\n    return x * 120 // 100\n"),
+        use("finish", message="Added with_tax."),
+    ]  # fmt: skip
+    real.model.scripts["loop:after-check"] = [
+        use("file_editor", command="str_replace", path=str(shop / "prices.py"),
+            old_str="sum(xs) if xs else None", new_str="sum(xs)"),
+        use("finish", message="Fixed total."),
+    ]  # fmt: skip
+    store = CodeStore.in_folder(real.data / "code-loop")
+    state = SimpleNamespace(
+        code_store=store, code_sessions=None, coding_server=real.server,
+        coding_gateway=real.gateway, creation_index=None, desktop_dir=real.data,
+    )  # fmt: skip
+    live = Sessions(state, place=real.place)
+    me = Owner("t1", "u1")
+    try:
+        made = await live.start(me, folder=str(shop), mode="own", model="scripted")
+        live.set_check(me, made["id"], "python3 -B check.py")
+        await live.send(me, made["id"], "Add with_tax. #script:loop")
+        closed = await asyncio.wait_for(live.wait(me, made["id"]), 120)
+        found = [e for e in live.feed(made["id"]).kept if e["event"] == CHECK]
+        assert [(c["round"], c["result"]) for c in found] == [(1, "failed"), (2, "failed")] or [
+            (c["round"], c["result"]) for c in found
+        ] == [(1, "failed"), (2, "passed")], found
+        # round 1 failed for the old bug; round 2 fails only at the write outside the project,
+        # which is the sandbox doing its work: the two asserts before it passed
+        assert "total of nothing must be 0" in found[0]["tail"]
+        assert "checked in" in found[1]["tail"] and "Operation not permitted" in found[1]["tail"]
+        assert not (shop.parent / "written-by-the-check.txt").exists()
+        assert (shop / "check.py").read_bytes() == was
+        assert "def with_tax" in (shop / "prices.py").read_text()
+        assert "if xs else None" not in (shop / "prices.py").read_text()
+        assert closed["rounds"] >= 2 and closed["changed"] == 1
+        # with the check kept inside the project it passes, by hand
+        (shop / "check.py").write_text((shop / "check.py").read_text().rsplit("open(", 1)[0])
+        row = await live.check_now(me, made["id"])
+        assert (row["result"], row["exit_code"]) == ("passed", 0)
+        assert live.view(me, made["id"])["result"] == "passed"
+    finally:
+        await live.stop_all()
+        await live.terminals.close_all()
+        store.close()
+
+
+async def test_the_persons_terminal_is_held_by_the_same_sandbox(real, site):
+    import base64
+
+    from wasifyai_code.terminal import Terminals
+
+    async def own(folder: Path):
+        return await real.place.sandbox(folder, who="person")
+
+    terminals = Terminals(own)
+    outside = site.parent / "outside-by-the-terminal.txt"
+    t = await terminals.open("s-term", site, 120, 30)
+
+    read_to = [0]  # the number of the last event read
+
+    async def type_and_read(line: str, until: str) -> str:
+        seen = ""
+        t.write(line + "\n")
+        async with asyncio.timeout(30):
+            async for event in t.follow(read_to[0]):
+                read_to[0] = event["seq"]
+                if "data" in event:
+                    seen += base64.b64decode(event["data"]).decode(errors="replace")
+                    if until in seen.split(line[-12:], 1)[-1]:
+                        return seen
+        return seen
+
+    try:
+        said = await type_and_read(
+            "echo typed > by-hand.txt; cat by-hand.txt; echo done-$((1+1))", "done-2"
+        )
+        assert (site / "by-hand.txt").read_text() == "typed\n"
+        said = await type_and_read(f"echo x > '{outside}'; echo out-$?-", "out-")
+        assert "out-0-" not in said and not outside.exists()
+        said = await type_and_read(f"ls '{Path.home()}' > /dev/null 2>&1; echo home-$?-", "home-")
+        assert "home-0-" not in said
+        said = await type_and_read("ps > /dev/null 2>&1; echo ps-$?-", "ps-")
+        assert "ps-0-" not in said  # as the Terminal tab's note says
+        # the person's terminal reaches a package index at any time, and nothing else
+        fetch = "curl -sS -m 20 -o /dev/null -w 'code=%{http_code}=' "
+        said = await type_and_read(
+            f"{fetch}https://pypi.org/simple/six/; echo index-done", "index-done"
+        )
+        assert "code=200=" in said, said
+        said = await type_and_read(f"{fetch}https://example.com/; echo other-done", "other-done")
+        assert "code=200=" not in said
+    finally:
+        await terminals.close_all()
+        (site / "by-hand.txt").unlink(missing_ok=True)

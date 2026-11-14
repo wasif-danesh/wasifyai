@@ -109,3 +109,46 @@ different permissions. [...] We need to make the agent flexible and not an unusa
    itself. The sandbox profile closes `<project>/.git` to writing when the project has none at the engine's start.
 
 Measured in `docs/spikes/coding-c2.md`.
+
+## Amendment (2026-11-15, owner): commands, installs through a proxy, and the agent's own `git init`
+
+Stage C3 gives the agent a terminal. The owner's answers of 2026-11-15: the terminal library may be downloaded;
+the install proxy is approved ("I approve it, no need to ask"); the agent may "create the files necessary for a
+project", a git repository included. What that comes to:
+
+1. **The agent's terminal is the Agent Server's own, inside the same sandbox as the server.** A session in "Ask
+   me" or "Work on its own" gets it beside the file editor. A session in Plan gets neither.
+2. **Every command waits before it runs**, like every change to a file: the module loaded into the Agent Server
+   marks every use of the terminal as one that waits, and the answer is given outside the sandbox
+   (`wasifyai_code/rules.py`), at once or after a card.
+3. **The kinds `delete` and `install` are now asked in "Ask me".** A command is judged by its words (`rm`,
+   `git clean`, `git reset --hard`; `pip install`, `npm install`, `cargo add` and the like). That is a help to the
+   person and not a wall: a script can delete a file without the word `rm`. The wall is the sandbox, which keeps
+   every command inside the project, and Undo, which puts a deleted file back unless the project ignores it.
+4. **Installs go through a proxy of our own** (`wasifyai_api/coding_proxy.py`). The sandbox still lets a program
+   reach this computer only. The programs inside are given a proxy on loopback, which opens a tunnel only to the
+   hosts in `coding_install_hosts.txt` (the package indexes of Python, Node, Rust, Go and Ruby; no code hosting
+   site), and only on port 443. Two names with a random password each, made at every start of the engine:
+   - **the agent's commands and the check** are let through only for ten minutes after an install step was let
+     through by the rules. A command that was not judged an install finds the proxy closed.
+   - **the person's own terminal** is always let through, to the same hosts.
+   The proxy keeps a count and the host of each request, never a path or a body.
+5. **What the proxy does not do.** It cannot see inside a tunnel, so it cannot tell a download from an upload.
+   The list therefore holds package indexes only; none takes an upload without a key of the person's, and no key
+   is inside the sandbox. A package's own install script runs inside the sandbox like any other command.
+6. **Decision 8 of the amendment of 2026-11-14 is replaced.** The profile no longer closes `<project>/.git`. The
+   Agent Server's own `git init` at the start of a conversation is switched off instead, in our rules module, so
+   a person's folder still does not become a repository because it was opened; the agent itself may run
+   `git init` when it is asked to. The name our module replaces is checked by a real test against the pinned
+   version, and by an `assert` when the server starts.
+7. **A sandbox of our own for each project** (`CodingServer.sandbox_for`): the same profile template, filled for
+   one project's folder. The check and the person's terminal run in it, so neither depends on the Agent Server
+   running, and neither can reach another project the server has open.
+8. **The person's terminal** is a shell on a pseudo-terminal started by the Wasify engine inside that sandbox, not
+   by the Tauri shell. `portable-pty`, named in the plan's table, is therefore not used; `xterm.js` draws it in
+   the window. Its home folder is the sandbox's own, so the person's start-up files are not read, and `ps`, `top`
+   and `sudo` do not work in it. The screen says so.
+9. **Not decided here:** what is asked in every mode (going on past the cost limit), a list of what runs in a
+   project with a way to stop each, and the same sandbox on Linux and Windows.
+
+Measured in `docs/spikes/coding-c3.md`.

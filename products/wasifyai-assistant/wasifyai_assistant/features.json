@@ -225,12 +225,14 @@
     "screen": "code.projects",
     "where": "Code › Projects",
     "actions": [
+      "code.session.check",
       "code.session.send",
       "code.session.start",
       "code.session.stop",
       "code.session.undo"
     ],
     "does": [
+      "Set or run a project's check",
       "Ask the coding agent",
       "Start a coding session",
       "Stop the coding agent",

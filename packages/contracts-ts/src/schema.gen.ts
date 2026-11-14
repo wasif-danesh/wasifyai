@@ -1180,6 +1180,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/sessions/{session_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Check
+         * @description The project's check: its command, what the project's files suggest, and the last
+         *     checks of this session.
+         */
+        get: operations["get_check_products_wasifyai_code_code_sessions__session_id__check_get"];
+        /**
+         * Put Check
+         * @description Set the project's check command. It is kept by the app, outside the project.
+         */
+        put: operations["put_check_products_wasifyai_code_code_sessions__session_id__check_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/check/again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try Again
+         * @description Three more rounds: a new turn that tells the agent the check still fails.
+         */
+        post: operations["try_again_products_wasifyai_code_code_sessions__session_id__check_again_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/check/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Check
+         * @description Run the check now, outside a turn. It answers when the check has ended; Stop ends
+         *     it.
+         */
+        post: operations["run_check_products_wasifyai_code_code_sessions__session_id__check_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/checks/{check_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Output
+         * @description One check of this session with its whole output.
+         */
+        get: operations["check_output_products_wasifyai_code_code_sessions__session_id__checks__check_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/sessions/{session_id}/events": {
         parameters: {
             query?: never;
@@ -1336,6 +1422,105 @@ export interface paths {
          * @description Stop the turn in flight. It answers when the turn is closed.
          */
         post: operations["stop_session_products_wasifyai_code_code_sessions__session_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Terminals */
+        get: operations["list_terminals_products_wasifyai_code_code_sessions__session_id__terminals_get"];
+        put?: never;
+        /**
+         * Open Terminal
+         * @description Open a terminal of the person's own in the project, inside the sandbox.
+         */
+        post: operations["open_terminal_products_wasifyai_code_code_sessions__session_id__terminals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals/{terminal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Close Terminal
+         * @description Close a terminal: its shell and everything it started are ended.
+         */
+        delete: operations["close_terminal_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals/{terminal_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Terminal Events
+         * @description What the terminal prints, as it comes (`terminal_output`, the bytes in base64), and
+         *     `terminal_ended` when its shell has ended.
+         */
+        get: operations["terminal_events_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals/{terminal_id}/input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Terminal Input
+         * @description What the person typed.
+         */
+        post: operations["terminal_input_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__input_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/terminals/{terminal_id}/size": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Terminal Size */
+        post: operations["terminal_size_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__size_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5027,6 +5212,80 @@ export interface components {
             answer: "yes" | "allow" | "no";
         };
         /**
+         * CodeCheckEvent
+         * @description One run of the project's check has ended (ADR-0103; stage C3). The check is run by the
+         *     app after a turn that changed files; a failed one goes back to the agent.
+         */
+        CodeCheckEvent: {
+            /** Changed Tests */
+            changed_tests?: string[];
+            /** Command */
+            command: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "code_check";
+            /**
+             * Exit Code
+             * @default null
+             */
+            exit_code: number | null;
+            /** Id */
+            id: string;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "passed" | "failed" | "not_checked" | "could_not_check";
+            /** Round */
+            round: number;
+            /** Rounds */
+            rounds: number;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Seconds
+             * @default 0
+             */
+            seconds: number;
+            /** Seq */
+            seq: number;
+            /**
+             * Tail
+             * @default
+             */
+            tail: string;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /** Ts */
+            ts?: string;
+            /**
+             * Why
+             * @default
+             */
+            why: string;
+        };
+        /**
+         * CodeCheckIn
+         * @description The project's check: one command; empty means the project has none.
+         */
+        CodeCheckIn: {
+            /**
+             * Command
+             * @default
+             */
+            command: string;
+            /** Limit S */
+            limit_s?: number | null;
+        };
+        /**
          * CodeMessageEvent
          * @description A message of the coding agent is complete. It replaces what the `token` events of that
          *     message built; those are not kept on a coding session's stream.
@@ -5141,6 +5400,11 @@ export interface components {
              */
             changed: number | null;
             /**
+             * Check Why
+             * @default
+             */
+            check_why: string;
+            /**
              * Cost Usd
              * @default 0
              */
@@ -5156,10 +5420,20 @@ export interface components {
              */
             event: "code_state";
             /**
+             * Needs You
+             * @default null
+             */
+            needs_you: boolean | null;
+            /**
              * Result
              * @default
              */
             result: string;
+            /**
+             * Round
+             * @default null
+             */
+            round: number | null;
             /**
              * Run Id
              * Format: uuid
@@ -5184,6 +5458,24 @@ export interface components {
              * @default
              */
             why: string;
+        };
+        /** CodeTerminalIn */
+        CodeTerminalIn: {
+            /**
+             * Cols
+             * @default 80
+             */
+            cols: number;
+            /**
+             * Rows
+             * @default 24
+             */
+            rows: number;
+        };
+        /** CodeTerminalInput */
+        CodeTerminalInput: {
+            /** Data */
+            data: string;
         };
         /** ConfirmReader */
         ConfirmReader: {
@@ -6546,7 +6838,7 @@ export interface components {
             /** Texts */
             texts: string[];
         };
-        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["ReasoningEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["CodeStateEvent"] | components["schemas"]["CodeMessageEvent"] | components["schemas"]["CodeRefusalEvent"];
+        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["ReasoningEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["CodeStateEvent"] | components["schemas"]["CodeCheckEvent"] | components["schemas"]["CodeMessageEvent"] | components["schemas"]["CodeRefusalEvent"];
         /** StartIn */
         StartIn: {
             /**
@@ -9141,6 +9433,176 @@ export interface operations {
             };
         };
     };
+    get_check_products_wasifyai_code_code_sessions__session_id__check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_check_products_wasifyai_code_code_sessions__session_id__check_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeCheckIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    try_again_products_wasifyai_code_code_sessions__session_id__check_again_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_check_products_wasifyai_code_code_sessions__session_id__check_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_output_products_wasifyai_code_code_sessions__session_id__checks__check_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                check_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     session_events_products_wasifyai_code_code_sessions__session_id__events_get: {
         parameters: {
             query?: never;
@@ -9408,6 +9870,208 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_terminals_products_wasifyai_code_code_sessions__session_id__terminals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_terminal_products_wasifyai_code_code_sessions__session_id__terminals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeTerminalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_terminal_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    terminal_events_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "last-event-id"?: string | null;
+            };
+            path: {
+                session_id: string;
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    terminal_input_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__input_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeTerminalInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    terminal_size_products_wasifyai_code_code_sessions__session_id__terminals__terminal_id__size_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeTerminalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

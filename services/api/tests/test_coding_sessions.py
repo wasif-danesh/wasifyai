@@ -171,17 +171,22 @@ async def test_the_server_is_given_the_gateways_address_and_a_token_never_a_key(
             assert KEY.encode() not in path.read_bytes(), path
 
 
-async def test_a_session_that_may_write_edits_files_runs_nothing_and_waits_before_a_change(box):
+async def test_a_session_that_may_write_gets_the_editor_and_the_terminal_and_both_wait(box):
     place = box.place()
     session = await place.start(box.spec(read_only=False))
     asked = await box.made_with(session)
     # it reads and edits; it has no terminal, no patch tool and no browser
-    assert [t["name"] for t in asked["agent_settings"]["tools"]] == ["glob", "grep", "file_editor"]
+    assert [t["name"] for t in asked["agent_settings"]["tools"]] == [
+        "glob", "grep", "file_editor", "terminal",
+    ]  # fmt: skip
     assert (
-        "cannot run a command" in asked["agent_settings"]["agent_context"]["system_message_suffix"]
+        "run commands in a terminal"
+        in asked["agent_settings"]["agent_context"]["system_message_suffix"]
     )
     # every use of the editor that changes something waits; our rules give the answer
-    assert asked["security_analyzer"] == {"kind": "WasifyRules", "wait_tools": ["file_editor"]}
+    assert asked["security_analyzer"] == {
+        "kind": "WasifyRules", "wait_tools": ["file_editor", "terminal"],
+    }  # fmt: skip
     assert asked["confirmation_policy"]["kind"] == "ConfirmRisky"
     assert asked["confirmation_policy"]["confirm_unknown"] is False
     assert box.server.workspaces == (real(box.project),)
@@ -899,3 +904,66 @@ async def test_a_no_and_a_stop_while_the_card_waits_through_the_routes(box):
     r = await box.http.patch(url, json={"mode": "plan"})
     assert r.status_code == 200 and r.json()["mode"] == "plan"
     assert (await box.http.patch(url, json={"mode": "everything"})).status_code == 422
+
+
+# ---- the check and the person's terminal (stage C3) ------------------------------------------------
+
+
+async def test_the_check_is_read_set_run_and_read_again_through_the_routes(box):
+    made = await started(box, mode="ask")
+    url = f"{BASE}/sessions/{made['id']}"
+    (box.project / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
+    seen = (await box.http.get(f"{url}/check")).json()
+    assert seen["command"] == "" and seen["rounds"] == 3 and seen["limit_s"] == 600
+    assert [s["command"] for s in seen["suggested"]] == ["python3 -m pytest"]
+    # nothing to run yet
+    assert (await box.http.post(f"{url}/check/run")).status_code == 409
+    put = await box.http.put(
+        f"{url}/check", json={"command": "echo checked; exit 4", "limit_s": 60}
+    )
+    assert put.status_code == 200 and put.json()["source"] == "person"
+    assert (
+        await box.http.put(f"{url}/check", json={"command": "x", "limit_s": 1})
+    ).status_code == 422
+    ran = (await box.http.post(f"{url}/check/run")).json()
+    assert (ran["check"]["result"], ran["check"]["exit_code"]) == ("failed", 4)
+    assert ran["session"]["result"] == "failed" and ran["session"]["check_command"].startswith(
+        "echo"
+    )
+    assert "output_file" not in ran["check"]
+    whole = (await box.http.get(f"{url}/checks/{ran['check']['id']}")).json()
+    assert whole["output"] == "checked\n" and whole["cut"] is False
+    assert (await box.http.get(f"{url}/checks/nothing")).status_code == 404
+    # another person's session is not found
+    other = RouteDeps(box.services, lambda: Identity("t1", "someone-else"))
+    app = FastAPI()
+    app.include_router(build_routes(other), prefix="/products/wasifyai-code")
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://engine.test"
+    ) as theirs:
+        assert (await theirs.get(f"{url}/check")).status_code == 404
+        assert (await theirs.post(f"{url}/terminals", json={})).status_code == 404
+    # the stream said it: checking, the check, done with the word
+    kept = [e for e in box.services.code_sessions.feed(made["id"]).kept]
+    assert [e["event"] for e in kept] == ["code_state", "code_check", "code_state"]
+    assert (
+        kept[1]["round"] == 0 and kept[1]["tail"] == "checked\n" and kept[2]["result"] == "failed"
+    )
+
+
+async def test_no_terminal_is_opened_where_there_is_no_sandbox(box):
+    """These tests run the supervisor without `sandbox-exec`. A shell of the person's is never
+    started outside a sandbox, so here it is refused; the real one is in the integration tests."""
+    made = await started(box, mode="ask")
+    url = f"{BASE}/sessions/{made['id']}"
+    assert (await box.http.get(f"{url}/terminals")).json() == {"items": []}
+    refused = await box.http.post(f"{url}/terminals", json={"cols": 80, "rows": 24})
+    assert refused.status_code == 422 and refused.json()["detail"]["code"] == "no_sandbox"
+    assert (await box.http.post(f"{url}/terminals", json={"cols": 1})).status_code == 422
+    for call in (
+        box.http.get(f"{url}/terminals/none/events"),
+        box.http.post(f"{url}/terminals/none/input", json={"data": "x"}),
+        box.http.post(f"{url}/terminals/none/size", json={"cols": 80, "rows": 24}),
+    ):
+        assert (await call).status_code == 404
+    assert (await box.http.delete(f"{url}/terminals/none")).status_code == 204

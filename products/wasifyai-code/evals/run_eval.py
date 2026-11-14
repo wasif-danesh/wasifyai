@@ -59,6 +59,7 @@ from wasifyai_code.place import Account, Place, SessionSpec
 TASKS = Path(__file__).with_name("tasks.json")
 ENGINE_FILES = Path(__file__).resolve().parents[3] / "services" / "coding-engine"
 CHECK_FILE, ANSWER_FILE = "_hidden_check.py", "_answer.txt"
+LET_THROUGH = (*rules.WRITE_TOOLS, *rules.RUN_TOOLS)
 CHECK_LIMIT_S = 90.0
 TASK_LIMIT_S = 420.0
 STEP_LIMIT = 40
@@ -190,6 +191,7 @@ async def run_task(
     limit_s: float = TASK_LIMIT_S,
     checkpoints: Path | None = None,
     account: Account | None = None,
+    spent: Callable[[str], float] | None = None,
     **check: Any,
 ) -> dict[str, Any]:
     """One task in a new session of the place: its files, the request, the agent's turn to its
@@ -220,10 +222,11 @@ async def run_task(
                 tools.add(str(event.data.get("tool", "")))
             elif event.kind == places.CONFIRM:
                 # nobody is there: steps of tools that wait are let through (a change to a file,
-                # and whatever the model asked for in the same breath: the answer is for all of
-                # them); a question that names no step is refused
+                # a command in the sandbox's terminal, and whatever the model asked for in the
+                # same breath: the answer is for all of them); a question that names no step
+                # is refused
                 waits = event.data.get("steps") or []
-                yes = any(s.get("tool") in rules.WRITE_TOOLS for s in waits)
+                yes = any(s.get("tool") in LET_THROUGH for s in waits)
                 await place.answer(
                     session, event.data["id"], yes, "" if yes else "an evaluation run"
                 )
@@ -231,11 +234,25 @@ async def run_task(
                 return str(event.data.get("why", places.ERROR)), str(event.data.get("detail", ""))
         return places.ERROR, "the place stopped sending events"
 
+    following = asyncio.ensure_future(follow())
     try:
-        status, detail = await asyncio.wait_for(follow(), limit_s)
+        status, detail = await asyncio.wait_for(asyncio.shield(following), limit_s)
     except TimeoutError:
         await place.stop(session)
         status, detail = "timeout", ""
+        # read on to the turn's own end, so that the place knows the session is at rest
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(following, 20)
+    finally:
+        following.cancel()
+        await asyncio.gather(following, return_exceptions=True)
+        # what the session cost is read before it is ended: the gateway forgets an ended session
+        cost = spent(account.session_id) if spent is not None and account is not None else None
+        # the task's session is over: a place that counts sessions in flight must not count it
+        end = getattr(place, "end", None)
+        if end is not None:
+            with contextlib.suppress(Exception):
+                await end(session)
     seconds = round(time.monotonic() - started, 1)
 
     answer = texts[-1] if texts else ""  # the agent's final message
@@ -258,6 +275,7 @@ async def run_task(
         "tools": sorted(tools),
         "changed": changed,
         "undo": undo,
+        **({} if cost is None else {"cost_usd": round(cost, 4)}),
     }
 
 
@@ -284,10 +302,13 @@ async def run_all(
             more["account"] = Account(
                 "-", "wasifyai-code", "-", f"eval-{task['id']}", limit_usd=left
             )
-        result = await run_task(place, task, folder, **more)
+        if spent is not None and "account" not in more:
+            more["account"] = Account("-", "wasifyai-code", "-", f"eval-{task['id']}")
+        result = await run_task(place, task, folder, spent=spent, **more)
         if spent is not None:
-            result["cost_usd"] = round(spent(f"eval-{task['id']}"), 4)
+            result.setdefault("cost_usd", 0.0)
             total += result["cost_usd"]
+            more.pop("account", None)
         results.append(result)
         if on_result is not None:
             on_result(result)

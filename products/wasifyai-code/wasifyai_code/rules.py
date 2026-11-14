@@ -12,14 +12,19 @@ kind for one project, and take that back. An allowance is for one project and on
 
     not_undoable   changing a file Undo cannot put back: one the project ignores (`.env`), or
                    one inside a `.git` folder. Asked from stage C2
-    delete         deleting files       } asked once the agent can run commands (stage C3);
-    install        installing packages  } listed now so that the screen and the store do not change
+    delete         a command that deletes files or throws work away (`rm`, `git clean`,
+                   `git reset --hard`). Asked from stage C3
+    install        a command that installs packages (`pip install`, `npm install`, `cargo add`).
+                   Asked from stage C3. Letting one through is also what opens the install
+                   proxy to the agent's commands for a while (`coding_proxy.py`)
 
-In "Work on its own" nothing of this list is asked. What is asked in every mode (deleting
-something of the person's outside the project, going on after the cost limit) arrives with the
-tools that can do it.
+In "Work on its own" nothing of this list is asked. A command is judged by its words, which is a
+help to the person and not a wall: a script can delete a file without the word `rm` in it. The
+wall is the sandbox, which keeps every command inside the project, and Undo, which puts a
+deleted file back unless the project ignores it.
 """
 
+import re
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -27,7 +32,7 @@ from typing import Any
 NOT_UNDOABLE, DELETE, INSTALL = "not_undoable", "delete", "install"
 KINDS = (NOT_UNDOABLE, DELETE, INSTALL)
 # kinds a real session can meet at this stage; the others are shown as "from a later version"
-ASKED_NOW = (NOT_UNDOABLE,)
+ASKED_NOW = (NOT_UNDOABLE, DELETE, INSTALL)
 
 YES, ALLOW, NO = "yes", "allow", "no"
 ANSWERS = (YES, ALLOW, NO)
@@ -36,6 +41,44 @@ ALLOWED = "allowed"  # how a step is marked that ran because its kind is allowed
 # the file editor's commands that change a file
 EDITS = ("create", "str_replace", "insert", "undo_edit")
 WRITE_TOOLS = ("file_editor",)
+RUN_TOOLS = ("terminal",)
+
+# A command is cut into its parts at `;`, `&&`, `||`, `|` and new lines; each part is judged by
+# its first words, after `sudo`, `env X=1`, `command` and the like.
+_PARTS = re.compile(r"\|\||&&|[;|\n&]|\$\(|`")
+_LEAD = re.compile(r"^(?:\s*(?:sudo|command|exec|nohup|time|env|xargs(?:\s+-\S+)*|\w+=\S*)\s+)*")
+_DELETE = re.compile(
+    r"^(?:rm|rmdir|unlink|shred|trash)\b"
+    r"|^git\s+(?:clean\b|rm\b|reset\s+.*--hard\b|checkout\s+(?:--\s|\.)|restore\b|stash\s+(?:drop|clear)\b)"
+    r"|^find\b.*\s-(?:delete|exec\s+rm)\b"
+)
+_INSTALL = re.compile(
+    r"^(?:pip3?|python3?\s+-m\s+pip|uv\s+pip)\s+(?:install|download|wheel)\b"
+    r"|^uv\s+(?:add|sync|lock|tool\s+install|venv\b.*--seed)\b"
+    r"|^(?:poetry|pdm|pipenv)\s+(?:add|install|update|lock|sync)\b"
+    r"|^(?:npm|pnpm|bun)\s+(?:i|install|add|ci|update|upgrade|create|dlx|exec|x)\b"
+    r"|^yarn(?:\s+(?:add|install|up|upgrade|create|dlx))?\s*$|^yarn\s+(?:add|install|up|upgrade|create|dlx)\b"
+    r"|^(?:npx|pnpx|bunx|uvx|pipx)\b"
+    r"|^cargo\s+(?:add|install|fetch|update)\b"
+    r"|^go\s+(?:get|install|mod\s+(?:download|tidy))\b"
+    r"|^(?:gem|bundle)\s+(?:install|add|update)\b"
+    r"|^(?:brew|apt|apt-get|port|conda|mamba)\s+(?:install|add|upgrade|update)\b"
+)
+
+
+def command_kind(command: str) -> str | None:
+    """Whether a shell command installs packages or deletes files, by its words; None for
+    neither. Deleting is looked for first: it is the one that loses something."""
+    found: str | None = None
+    for part in _PARTS.split(command):
+        words = _LEAD.sub("", part.strip())
+        if not words:
+            continue
+        if _DELETE.search(words):
+            return DELETE
+        if found is None and _INSTALL.search(words):
+            found = INSTALL
+    return found
 
 
 def path_in(workspace: Path, given: str) -> str | None:
@@ -58,6 +101,8 @@ def classify(
 ) -> str | None:
     """The kind of request one waiting step is, or None when no rule asks about it. `left_out`
     says whether a path is one a checkpoint does not hold."""
+    if step.get("tool") in RUN_TOOLS:
+        return command_kind(str(step.get("command") or ""))
     if step.get("tool") not in WRITE_TOOLS or step.get("command") not in EDITS:
         return None
     inside = path_in(workspace, str(step.get("path") or ""))

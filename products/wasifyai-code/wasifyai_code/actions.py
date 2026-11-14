@@ -95,6 +95,35 @@ class SendOut(BaseModel):
     steps: int
     cost_usd: float
     changed: int = 0
+    result: str = ""  # the project's check: passed, failed, not_checked, could_not_check, or none
+    rounds: int = 0  # how many times the check ran in this turn
+    needs_you: bool = False  # the check still fails or could not run: a person must decide
+
+
+class CheckIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    session_id: str = Field(min_length=1, max_length=64, description="The coding session.")
+    command: str | None = Field(
+        None,
+        max_length=2000,
+        description=(
+            "The project's check command, for example `npm test` or `python3 -m pytest`. "
+            "Leave it out to keep the one that is set. An empty text removes the check."
+        ),
+    )
+    run: bool = Field(True, description="Run the check now and wait for its result.")
+
+
+class CheckOut(BaseModel):
+    session_id: str
+    command: str
+    suggested: list[str]
+    ran: bool
+    result: str = ""
+    exit_code: int | None = None
+    seconds: float = 0.0
+    output: str = ""
 
 
 class UndoIn(BaseModel):
@@ -193,6 +222,9 @@ async def _send(p: SendIn, ctx: ActionContext) -> Outcome:
             "steps": turn["steps"],
             "cost_usd": seen["cost_usd"],
             "changed": int(turn["changed"]),
+            "result": turn["result"],
+            "rounds": int(turn["rounds"]),
+            "needs_you": bool(turn["needs_you"]),
         },
         f"{said} It took {turn['steps']} step{'s' if turn['steps'] != 1 else ''}; "
         + (
@@ -200,8 +232,68 @@ async def _send(p: SendIn, ctx: ActionContext) -> Outcome:
             "code.session.undo puts them back."
             if turn["changed"]
             else "nothing in the folder was changed."
-        ),
+        )
+        + _checked(turn),
     )
+
+
+CHECKED = {
+    "passed": " The project's check passed.",
+    "failed": " The project's check still fails; the person must decide what to do.",
+    "could_not_check": " The project's check could not run, which is not a pass.",
+}
+
+
+def _checked(turn: dict[str, Any]) -> str:
+    if not turn["changed"]:
+        return ""
+    if turn["result"] == "not_checked" and turn.get("check_why") == "no_command":
+        return " It was not checked: the project has no check. code.session.check sets one."
+    return CHECKED.get(turn["result"], " It was not checked.")
+
+
+async def _check(p: CheckIn, ctx: ActionContext) -> Outcome:
+    owner = owner_of(ctx.actor)
+    try:
+        sessions = _sessions(ctx)
+        seen = sessions.check(owner, p.session_id)
+        if p.command is not None:
+            seen = sessions.set_check(owner, p.session_id, p.command)
+        out: dict[str, Any] = {
+            "session_id": p.session_id,
+            "command": seen["command"],
+            "suggested": [s["command"] for s in seen["suggested"]],
+            "ran": False,
+        }
+        if not p.run or not seen["command"]:
+            said = (
+                f"The project's check is `{seen['command']}`."
+                if seen["command"]
+                else "The project has no check. "
+                + (
+                    f"Its files suggest `{out['suggested'][0]}`."
+                    if out["suggested"]
+                    else "Nothing in its files suggests one."
+                )
+            )
+            return Outcome.ok(out, said)
+        row = await sessions.check_now(owner, p.session_id)
+        whole = sessions.check_output(owner, p.session_id, row["id"])
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    out.update(
+        ran=True, result=row["result"], exit_code=row["exit_code"], seconds=row["seconds"],
+        output=whole["output"][-ANSWER_CHARS:],
+    )  # fmt: skip
+    words = {
+        "passed": "passed",
+        "failed": f"failed (exit code {row['exit_code']})",
+        "could_not_check": "could not run, which is not a pass",
+        "not_checked": "was stopped",
+    }
+    return Outcome.ok(out, f"The check `{row['command']}` {words[row['result']]}.")
 
 
 async def _undo(p: UndoIn, ctx: ActionContext) -> Outcome:
@@ -261,7 +353,8 @@ def actions() -> list[Action]:
                 "Start a coding session on one folder of this computer. By default the session "
                 "only reads (mode plan): the agent can find and read the files of that folder "
                 "and cannot change a file. With mode ask or own it can also change files of "
-                "that folder; it can never run a command, and every turn can be undone. "
+                "that folder and run commands there, inside a sandbox that keeps it to that "
+                "folder; every turn can be undone. "
                 "Nothing runs yet and nothing is read until a message is sent with "
                 "code.session.send. Give the folder's whole path. "
                 "The home folder, a whole disk and the app's own folders are refused. It "
@@ -288,9 +381,11 @@ def actions() -> list[Action]:
                 "for the change itself. The agent reads the files it needs; in a plan session "
                 "it changes nothing. It can take from seconds to several minutes. With a cloud "
                 "model, the parts of the files the agent reads are sent to that model's "
-                "provider, and the session's cost is counted and limited. It returns how the "
-                "turn ended (finished, stopped, step_limit, refused), the answer, the number "
-                "of steps, how many files were changed and the cost so far."
+                "provider, and the session's cost is counted and limited. After a turn that "
+                "changed files the app runs the project's check and sends a failure back to "
+                "the agent, up to three rounds. It returns how the turn ended (finished, "
+                "stopped, step_limit, refused), the answer, the number of steps, how many "
+                "files were changed, the check's result and the cost so far."
             ),
             input=SendIn,
             output=SendOut,
@@ -320,6 +415,33 @@ def actions() -> list[Action]:
             requires=(need_product(PRODUCT_ID), ENGINE),
             product=PRODUCT_ID,
             bind=CallBinding(_stop),
+            ui="code.projects",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.session.check",
+            title="Set or run a project's check",
+            summary="Set the command that checks a coding project, and run it.",
+            description=(
+                "A coding project's check is one command (for example `npm test`) that the app "
+                "runs after every turn that changed files; when it fails the agent is told and "
+                "fixes it, up to three rounds. This action reads the check, sets it with "
+                "command, and with run (the default) runs it now and gives the result and the "
+                "end of its output. The check runs inside the project's sandbox: it can write "
+                "only inside the project. Without command and with run false it only says "
+                "which check is set and what the project's files suggest."
+            ),
+            input=CheckIn,
+            output=CheckOut,
+            examples=(
+                {"session_id": SAMPLE_ID, "command": "npm test"},
+                {"session_id": SAMPLE_ID, "run": False},
+            ),
+            effect="change",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            long=True,
+            product=PRODUCT_ID,
+            bind=CallBinding(_check),
             ui="code.projects",
             surfaces=("assistant",),
         ),

@@ -1,6 +1,14 @@
 // A coding session's stream as what the screen draws: for each turn, the person's request, the agent's steps
 // as quiet lines, its words, and how the turn ended. Pure, so it is tested without a screen.
-import type { CodeAnswer, CodeAsk, CodeEnding, CodeEvent, CodeTurn } from "@wasifyai/client";
+import type {
+  CodeAnswer,
+  CodeAsk,
+  CodeCheck,
+  CodeEnding,
+  CodeEvent,
+  CodeSession,
+  CodeTurn,
+} from "@wasifyai/client";
 
 export type Step = {
   id: string;
@@ -20,7 +28,31 @@ export type Part =
   | { kind: "message"; text: string; writing: boolean }
   /** the approval card: open while the agent waits; then how it was answered ("": the turn ended first) */
   | { kind: "ask"; id: string; ask: CodeAsk; open: boolean; answer: CodeAnswer | "" }
-  | { kind: "refusal"; message: string };
+  | { kind: "refusal"; message: string }
+  /** one run of the project's check: running, or with its result */
+  | CheckPart
+  /** the agent goes on after a failed check: "Round 2 of 3" */
+  | { kind: "round"; round: number; of: number };
+
+export type CheckPart = {
+  kind: "check";
+  /** the check's id once it has ended; its whole output is read with it */
+  id: string;
+  /** 1, 2, 3; 0 for a check the person ran by hand */
+  round: number;
+  of: number;
+  command: string;
+  running: boolean;
+  result: CodeCheck["result"] | "";
+  why: string;
+  exitCode: number | null;
+  seconds: number;
+  /** the end of the output; empty for a check from before the app started (it is read when asked for) */
+  tail: string;
+  tests: string[];
+  /** it failed and the output went back to the agent, which went on */
+  sentBack: boolean;
+};
 
 export type TurnView = {
   id: string;
@@ -34,11 +66,19 @@ export type TurnView = {
   detail: string;
   /** how many files the turn changed */
   changed: number;
+  /** the check's word after this turn; empty when nothing was ever checked */
+  result: CodeSession["result"];
+  /** why the check has that word when the agent itself finished: no_change, no_command, rounds_used, ... */
+  checkWhy: string;
+  /** the turn stopped and a person must decide */
+  needsYou: boolean;
   /** the person undid the turn */
   undone: boolean;
   canUndo: boolean;
   canRedo: boolean;
 };
+
+const ROUNDS = 3;
 
 const EDITS = ["create", "str_replace", "insert", "undo_edit"];
 
@@ -66,7 +106,39 @@ export function stepLine(
     if (step.status === "error") return `Could not change ${path}`;
     return `Wants to ${made ? "write" : "change"} ${path}`;
   }
+  if (step.tool === "terminal") {
+    const command = typeof g.command === "string" ? g.command : "";
+    const short = command.length > 80 ? `${command.slice(0, 80)}…` : command;
+    if (g.is_input) return `Typed ${short || "a key"} into what runs`;
+    if (step.status === "ok") return `Ran ${short}`;
+    if (step.status === "refused") return `Did not run ${short}: you said no`;
+    if (step.status === "error") return `Could not run ${short}`;
+    return `Running ${short}`;
+  }
   return path ? `${step.tool}: ${path}` : step.tool;
+}
+
+/** Whether a step runs a command. */
+export function isCommand(step: Pick<Step, "tool">): boolean {
+  return step.tool === "terminal";
+}
+
+function checkPart(c: CodeCheck, of: number, tail = ""): CheckPart {
+  return {
+    kind: "check",
+    id: c.id,
+    round: c.round,
+    of,
+    command: c.command,
+    running: false,
+    result: c.result,
+    why: c.why,
+    exitCode: c.exit_code,
+    seconds: c.seconds,
+    tail,
+    tests: c.changed_tests ?? [],
+    sentBack: false,
+  };
 }
 
 function shortPath(path: string): string {
@@ -78,7 +150,8 @@ function fromEvents(turn: TurnView, events: CodeEvent[]): TurnView {
   const parts: Part[] = [];
   const steps = new Map<string, Step>();
   let writing = "";
-  let { working, ended, detail, changed } = turn;
+  let { working, ended, detail, changed, result, checkWhy, needsYou } = turn;
+  const checks: CheckPart[] = [];
   const asks: Extract<Part, { kind: "ask" }>[] = [];
   const flush = () => {
     writing = "";
@@ -138,31 +211,95 @@ function fromEvents(turn: TurnView, events: CodeEvent[]): TurnView {
       const last = parts[parts.length - 1];
       if (last?.kind === "message" && last.text === e.message) parts.pop();
       parts.push({ kind: "refusal", message: e.message });
+    } else if (e.event === "code_check") {
+      flush();
+      const open = checks.find((c) => c.running && c.round === e.round);
+      const done = checkPart(e, e.rounds || ROUNDS, e.tail);
+      if (open) Object.assign(open, done);
+      else {
+        checks.push(done);
+        parts.push(done);
+      }
     } else if (e.event === "code_state") {
       working = e.state !== "done";
       if (e.state === "turn_ended" || e.state === "done") {
         for (const ask of asks) ask.open = false; // a card nobody answered is closed with the turn
       }
+      if (e.state === "checking") {
+        flush();
+        const part: CheckPart = {
+          kind: "check",
+          id: "",
+          round: e.round ?? 0,
+          of: ROUNDS,
+          command: "",
+          running: true,
+          result: "",
+          why: "",
+          exitCode: null,
+          seconds: 0,
+          tail: "",
+          tests: [],
+          sentBack: false,
+        };
+        checks.push(part);
+        parts.push(part);
+      }
+      if (e.state === "working" && e.round) {
+        // the check failed and the agent goes on: its output went back, and a new round begins
+        const failed = checks.find((c) => c.round === e.round);
+        if (failed) failed.sentBack = true;
+        parts.push({ kind: "round", round: e.round + 1, of: failed?.of ?? ROUNDS });
+      }
       if (e.state === "done") {
         flush();
-        ended = e.why ?? "";
-        detail = e.detail ?? "";
+        // a check the person ran by hand ends with no word about the turn: what the turn said stands
+        if (e.why) ended = e.why;
+        if (e.why) detail = e.detail ?? "";
+        if (e.result !== undefined) result = e.result;
+        if (e.check_why !== undefined || e.why) checkWhy = e.check_why ?? "";
+        if (e.why) needsYou = Boolean(e.needs_you);
+        for (const c of checks) {
+          if (c.running) {
+            // it was stopped before it could say anything
+            c.running = false;
+            c.result = "not_checked";
+            c.why = "stopped";
+          }
+        }
         // the turn's row says it too, once it is read again; until then the event does
         if (typeof e.changed === "number" && !changed) changed = e.changed;
       }
     }
   }
   const count = [...steps.values()].length;
-  return { ...turn, parts, steps: count || turn.steps, working, ended, detail, changed };
+  return {
+    ...turn,
+    parts,
+    steps: count || turn.steps,
+    working,
+    ended,
+    detail,
+    changed,
+    result,
+    checkWhy,
+    needsYou,
+  };
 }
 
 /**
  * The session as turns to draw. A turn whose events are known (it ran since the app started) shows its steps;
  * an older one shows what was kept: the request, the answer and how many steps it took.
  */
-export function buildThread(turns: CodeTurn[], events: CodeEvent[]): TurnView[] {
+export function buildThread(
+  turns: CodeTurn[],
+  events: CodeEvent[],
+  checks: CodeCheck[] = [],
+): TurnView[] {
   const byTurn = new Map<string, CodeEvent[]>();
   for (const e of events) {
+    // a check the person ran by hand before anything was asked belongs to no turn: the dialog showed it
+    if (!e.run_id) continue;
     const list = byTurn.get(e.run_id);
     if (list) list.push(e);
     else byTurn.set(e.run_id, [e]);
@@ -181,12 +318,23 @@ export function buildThread(turns: CodeTurn[], events: CodeEvent[]): TurnView[] 
       ended: t.state === "done" ? t.why : "",
       detail: t.notes[t.notes.length - 1] ?? "",
       changed: t.changed ?? 0,
+      result: t.result ?? "",
+      checkWhy: t.check_why ?? "",
+      needsYou: Boolean(t.needs_you),
       undone: Boolean(t.undone),
       canUndo: Boolean(t.can_undo),
       canRedo: Boolean(t.can_redo),
     };
     const mine = byTurn.get(t.id);
-    return mine ? fromEvents({ ...view, parts: [] }, mine) : view;
+    if (mine) return fromEvents({ ...view, parts: [] }, mine);
+    // a turn from before the app started: its checks are known from their rows, the oldest first
+    const rows = checks.filter((c) => c.turn_id === t.id).sort((a, b) => a.round - b.round);
+    for (const [n, row] of rows.entries()) {
+      const part = checkPart(row, ROUNDS);
+      part.sentBack = n < rows.length - 1;
+      kept.push(part);
+    }
+    return view;
   });
   // a turn that has just begun and is not in the list yet
   for (const [id, mine] of byTurn) {
@@ -202,6 +350,9 @@ export function buildThread(turns: CodeTurn[], events: CodeEvent[]): TurnView[] 
           ended: "",
           detail: "",
           changed: 0,
+          result: "",
+          checkWhy: "",
+          needsYou: false,
           undone: false,
           canUndo: false,
           canRedo: false,

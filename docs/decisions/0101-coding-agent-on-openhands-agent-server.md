@@ -101,3 +101,21 @@ For stage C2 the owner chose again to reuse an existing kind (asked on 2026-11-1
 3. `code_state` with `state: "done"` gains the optional `changed`: how many files the turn changed.
 4. The coding API gains, as additions only: `mode` on a session, a turn's changes and one changed file before and
    after, undo and "bring it back", the answer to a card, and what a project may do.
+
+## Amendment (2026-11-15, owner): the check on the stream, and the routes of stage C3
+
+The owner agreed on 2026-11-15 to one new event and three new fields on a coding session's stream, and to new
+routes of the coding product. They are written in `docs/contracts/sse-events.md` and listed in
+`docs/desktop/coding.md`.
+
+1. **`code_check`**: one run of the project's check has ended: its round, command, result, exit code, seconds,
+   the end of its output and the tests the agent changed.
+2. **`code_state`** gains `round`, `needs_you` and `check_why`. Within one turn `working` and `turn_ended` now
+   come once for each round.
+3. **Routes:** the project's check (`GET`, `PUT .../check`, `POST .../check/run`, `GET .../checks/{id}`,
+   `POST .../check/again`) and the person's terminals (`GET`, `POST .../terminals`, and for one terminal its
+   events as a stream, `input`, `size` and `DELETE`). A terminal's output is a stream of its own, not part of the
+   session's stream: it is the person's, and the agent does not see it.
+4. **One new action:** `code.session.check` (read, set and run the check). The person's terminal is a tool of the
+   screen and has no action: an assistant that could type into it would be a second way to run commands, outside
+   the rules.

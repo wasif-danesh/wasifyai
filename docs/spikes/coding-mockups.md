@@ -21,7 +21,7 @@ of the start plan. **Nothing here is built.** No file under `packages/`, `apps/`
 
 ## The screens
 
-47 screens in the nine groups that were asked for. The name in the first column is the screen's address.
+48 screens in the nine groups that were asked for. The name in the first column is the screen's address.
 
 ### 1. Where coding lives, and the first screen
 
@@ -39,7 +39,7 @@ of the start plan. **Nothing here is built.** No file under `packages/`, `apps/`
 | `session` | The agent at work. Its steps are quiet single lines (read, changed, ran) that open for the detail; a command's output is shown under it. The bar holds the project, the model, the session's state and the cost so far. The box holds the mode and Stop. |
 | `session-done` | A turn that ended and was checked: one card in the chat, one word in the bar. The card lists the test file the agent changed. |
 | `session-plan` | Plan mode: the agent only read, its answer is a plan, a card says nothing was changed, and one button carries the plan out. This is the whole session view of stage C1b. |
-| `session-mode` | Choosing the mode: Plan, Ask me, Work on its own, each with one line that says what it means. |
+| `session-mode` | Choosing the mode: Plan, Ask me, Work on its own, each with one line that says what it means, and a last line that opens "What this project may do". |
 | `session-cost` | The cost so far, opened: what it is made of and the limit for one session. |
 
 ### 3. The check
@@ -56,9 +56,10 @@ of the start plan. **Nothing here is built.** No file under `packages/`, `apps/`
 
 | Screen | What it shows |
 |---|---|
-| `ask` | The approval card for a command a rule says must be asked: the command, the agent's reason, what it does, whether Undo covers it, the rule, then yes and no. While it waits the bar says "Waiting for you" and nothing else runs. |
-| `ask-elsewhere` | The same question when the person is on another screen: a card under the bar, and "Waiting for you" on the project's row. |
-| `ask-answered` | After a yes (the command ran) and after a no (the agent says so and goes on another way). The answered cards stay in the chat. |
+| `ask` | The approval card for a command a rule says must be asked: the command, the agent's reason, what it does, whether Undo covers it, the rule, then three answers: "Yes, run it", "Allow for this project" and "No". A line under them says what allowing covers and where to take it back. While it waits the bar says "Waiting for you" and nothing else runs. |
+| `ask-elsewhere` | The same question when the person is on another screen: a card under the bar with the same three answers, and "Waiting for you" on the project's row. |
+| `ask-answered` | After "Allow for this project" (the command ran; the next delete runs with no card and is a quiet line marked "allowed") and after a no to a kind that was not allowed (the agent says so and goes on another way). The answered cards stay in the chat, the allowed one with "Take it back". |
+| `project-may` | "What this project may do": the mode, each kind of request with "Remove" (allowed) or "Allow" (asks each time), and the short list that is asked in every mode. Opened from the mode pill and from "Take it back". |
 | `refusal` | The model declines a request: a plain message with the model's own words. The turn ends, nothing was changed or run, and it is not shown as an error. |
 
 ### 5. The tabs
@@ -148,11 +149,16 @@ Where the ADRs left something open I drew one answer. Each is a question, with w
 11. **What Undo says it does not put back.** The foot of Changes says: files the project ignores (such as `.env`)
     and empty folders. That follows what ADR-0103 proposes for the amendment of stage C2. The person's own git state
     is not mentioned. If C2 decides otherwise, that line changes.
-12. **No "don't ask again" on the approval card.** Every command a rule marks is asked each time. *Recommend: leave
-    it out in v1.*
-13. **The rules themselves have no screen.** The card names the rule ("Ask before deleting files"), but nowhere
-    lists or changes the rules. *Recommend: a fixed list in v1, shown read-only from the mode menu; changing them
-    later.* If you want a screen for them, it needs its own mockup.
+12. **Answered by the owner, 2026-11-14: the card has "Allow for this project".** I had drawn no such answer and
+    recommended leaving it out; the owner decided the other way: "Permissions should have an option to "accept all
+    for a project" or similar so users don't need to allow 20 different permissions. [...] We need to make the agent
+    flexible and not an unusable one." Drawn now: three answers on every approval card, and the mode "Work on its
+    own" as the one choice that stops the cards for commands and changes. What is left for you is in choices 24
+    to 27.
+13. **The rules have a screen now: "What this project may do"** (`project-may`). It lists each kind of request the
+    agent asks about, with "Remove" where you allowed it and "Allow" where it still asks, and the mode above them.
+    The kinds themselves stay a fixed list in v1 (drawn: deleting files, installing packages); a person cannot write
+    a rule of their own. *Recommend: as drawn.*
 14. **A question follows the person.** When the agent waits and the person is on another screen, the card appears
     under the bar, as connection approvals do today. *Recommend: yes.*
 15. **The Browser tab is the person's.** The agent does not browse (ADR-0102 leaves its own browser tool to stage
@@ -177,10 +183,27 @@ Where the ADRs left something open I drew one answer. Each is a question, with w
     "Coding engine", and named OpenHands on the set-up card where it says where the part comes from. *Recommend:
     plain "Coding engine" in the list.*
 
+24. **What one "Allow for this project" covers.** Drawn: the kind of request (deleting files in this project), not
+    the one command (`rm -rf dist/`). Allowing only the exact command would bring the twenty cards back.
+    *Recommend: the kind.*
+25. **What is asked in every mode, also in "Work on its own".** Drawn: deleting something of yours outside the
+    project (such as a picture in your Library, the floor of ADR-0068) and going on after the cost limit is
+    reached. It is the same list as decision 23 of the proposed ADR-0106, without the sign-in and signed-in sites,
+    which belong to website capture. *Recommend: this list, one rule for commands, changes, captures and Wasify's
+    tools.*
+26. **Where the list lives.** Drawn as a window opened from the mode pill, from "Take it back" on an answered card
+    and from a project's "More" on Projects. There is no project settings page in v1. *Recommend: as drawn.*
+27. **An allowance is for one project and one person, and a new project starts in "Ask me" with nothing allowed.**
+    There is no "allow in every project". *Recommend: as drawn.*
+
+**Owed, not written here:** ADR-0102 is Accepted and says a marked command is asked. "Allow for this project" needs
+an amendment section there (and one line in the start plan). That is the owner's to ask for; these mockups only draw
+it.
+
 ## What I could not draw, or left out
 
 - **The folder picker.** It is the system's own window (the Tauri dialog the app already has).
-- **A screen for the rules** (see choice 13), and the list of a project's sessions (the pencil in the bar starts a
+- **The "More" menu on a project's row** (it would hold "What this project may do"), an approval card for a change to a file (only a command is drawn; it is the same card), and the list of a project's sessions (the pencil in the bar starts a
   new one; older sessions are reached from Projects, the Library and search, none of which is drawn here).
 - **The Library card and the search result for a session, a schedule and an extension.** They must exist (every
   creation is searchable), but they belong to screens that exist already.
@@ -197,8 +220,8 @@ Where the ADRs left something open I drew one answer. Each is a question, with w
 ## How it was checked
 
 - Opened from the file system in the installed Chrome, headless, with no network use by the page.
-- 188 pictures: every one of the 47 screens in light and dark, at 1100 × 760 and at 720 × 520.
-- An automatic check on all 188: nothing outside the window, nothing cut off by its parent, no button whose words
+- 192 pictures: every one of the 48 screens in light and dark, at 1100 × 760 and at 720 × 520.
+- An automatic check on all 192: nothing outside the window, nothing cut off by its parent, no button whose words
   are cut, no page that scrolls sideways, no script error.
 - I looked at every screen at the smallest size in light and at most of them at the usual size in dark, and fixed
   what I found: names squeezed in the bar at 720 px, a dialog's buttons below the fold, a hint line too large, the

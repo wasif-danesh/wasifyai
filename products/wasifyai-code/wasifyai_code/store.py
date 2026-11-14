@@ -352,6 +352,12 @@ class CodeStore:
             (title[:200], now(), item, *_who(owner)),
         )
 
+    def set_session_limit(self, owner: Owner, item: str, limit_usd: float) -> None:
+        self.db.exec(
+            f"UPDATE sessions SET cost_limit_usd = ?, updated_at = ? WHERE id = ? AND {_MINE}",
+            (limit_usd, now(), item, *_who(owner)),
+        )
+
     def add_session_cost(
         self, item: str, *, usd: float, tokens_in: int, tokens_out: int, calls: int = 1
     ) -> None:

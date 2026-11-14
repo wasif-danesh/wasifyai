@@ -73,6 +73,7 @@ export function MyCreations({
     !recent.others?.models3d.length &&
     !recent.others?.compositions.length &&
     !recent.others?.creativeProjects.length &&
+    !recent.others?.codeSessions.length &&
     !recent.others?.notebooks.length &&
     !recent.others?.taught.length;
 

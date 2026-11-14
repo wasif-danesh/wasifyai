@@ -4,6 +4,7 @@ import {
   BookOpen,
   Box,
   Clapperboard,
+  CodeXml,
   GraduationCap,
   type LucideIcon,
   Mic,
@@ -83,6 +84,7 @@ const ICON: Partial<Record<Entry["kind"], LucideIcon>> = {
   model3d: Box,
   composition: Shapes,
   creative_project: Clapperboard,
+  code_session: CodeXml,
   notebook: BookOpen,
   taught: GraduationCap,
 };

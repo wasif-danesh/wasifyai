@@ -36,7 +36,9 @@ export type CodeSession = {
   answer: string;
   ended: CodeEnding;
   cost_usd: number;
+  /** the most this session may cost */
   cost_limit_usd: number;
+  model_calls: number;
   tokens_in: number;
   tokens_out: number;
   created_at: string;
@@ -161,6 +163,19 @@ export function createCodeApi(transport: Transport) {
         `${BASE}/sessions/${encodeURIComponent(id)}/files?${q}`,
       );
       return out.entries;
+    },
+    /** The project's files whose name holds `query`. */
+    async find(id: string, query: string): Promise<{ entries: CodeEntry[]; more: boolean }> {
+      const q = new URLSearchParams({ q: query });
+      return json(`${BASE}/sessions/${encodeURIComponent(id)}/files/find?${q}`);
+    },
+    /** Change the most this session may cost. */
+    setLimit(id: string, usd: number): Promise<CodeSession> {
+      return json<CodeSession>(`${BASE}/sessions/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ cost_limit_usd: usd }),
+      });
     },
     /** One file of the session's project, to read. */
     file(id: string, path: string): Promise<CodeFile> {

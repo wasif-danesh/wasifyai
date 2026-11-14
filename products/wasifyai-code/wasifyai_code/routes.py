@@ -30,6 +30,12 @@ class CodeSessionIn(BaseModel):
     cost_limit_usd: float = Field(0, ge=0, le=100)
 
 
+class CodeLimitIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cost_limit_usd: float = Field(gt=0, le=100)
+
+
 class CodeMessageIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -84,6 +90,16 @@ def build_routes(deps: RouteDeps) -> APIRouter:
     ) -> dict[str, Any]:
         try:
             return sessions().view(owner_of(identity), session_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.patch("/sessions/{session_id}")
+    async def change_session(
+        session_id: str, body: CodeLimitIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Change the most this session may cost. It holds from the next model call."""
+        try:
+            return sessions().set_limit(owner_of(identity), session_id, body.cost_limit_usd)
         except Refused as e:
             raise refuse(e) from None
 
@@ -159,6 +175,16 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             return await asyncio.to_thread(files.list_folder, Path(folder), path)
         except files.NotThere:
             raise HTTPException(404, "There is no such folder in this project.") from None
+
+    @router.get("/sessions/{session_id}/files/find")
+    async def find_files(
+        session_id: str,
+        q: str = Query(min_length=1, max_length=200),
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """The project's files whose name holds `q` ("Find a file by name")."""
+        folder = workspace_of(session_id, identity)
+        return await asyncio.to_thread(files.find_files, Path(folder), q)
 
     @router.get("/sessions/{session_id}/file")
     async def read_file(

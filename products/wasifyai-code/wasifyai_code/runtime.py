@@ -330,12 +330,26 @@ class Sessions:
             "answer": last["answer"] if last else "",
             "ended": last["why"] if last and last["state"] == rows.DONE else "",
             "cost_usd": round(float(session["cost_usd"]), 6),
-            "cost_limit_usd": float(session["cost_limit_usd"]),
+            # 0 in the row means "the usual limit": say the number that holds
+            "cost_limit_usd": float(session["cost_limit_usd"]) or self._usual_limit(),
+            "model_calls": int(session["model_calls"]),
             "tokens_in": int(session["tokens_in"]),
             "tokens_out": int(session["tokens_out"]),
             "created_at": session["created_at"],
             "updated_at": session["updated_at"],
         }
+
+    def _usual_limit(self) -> float:
+        return float(getattr(self.state.coding_gateway, "default_limit_usd", 0.0) or 0.0)
+
+    def set_limit(self, owner: Owner, session_id: str, limit_usd: float) -> dict[str, Any]:
+        """The most the session may cost, from its next model call on."""
+        self._session(owner, session_id)
+        self.store.set_session_limit(owner, session_id, limit_usd)
+        set_limit = getattr(self.state.coding_gateway, "set_limit", None)
+        if set_limit is not None:
+            set_limit(session_id, limit_usd)
+        return self.view(owner, session_id)
 
     def turns(self, owner: Owner, session_id: str) -> list[dict[str, Any]]:
         self._session(owner, session_id)

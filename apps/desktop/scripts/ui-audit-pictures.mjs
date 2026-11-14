@@ -1803,7 +1803,32 @@ for (const scheme of ["light", "dark"]) {
       await tree.getByRole("button", { name: "home.html" }).click();
       await page.getByText(/^Read only\. \d+ lines?\.$/).waitFor();
       await shot(page, "code-session-files", 1400);
-      await page.getByRole("banner").getByRole("button", { name: "Projects", exact: true }).click();
+      // the session has an address of its own: it is still open after the window is loaded again
+      if (!/#\/code\/[0-9a-f]{32}$/.test(page.url()))
+        throw new Error(`no session in ${page.url()}`);
+      await page.reload();
+      await page.getByText("Nothing was changed").waitFor({ timeout: 30_000 });
+      // a file found by part of its name
+      await page.getByRole("searchbox", { name: "Find a file by name" }).fill("site");
+      await page
+        .getByRole("navigation", { name: "Files found" })
+        .getByRole("button", { name: /site\.js/ })
+        .click();
+      await page.getByText(/^Read only\. \d+ lines?\.$/).waitFor();
+      // the cost, opened
+      await page.getByRole("button", { name: /^(No cost|\$\d)/ }).click();
+      await page.getByRole("dialog", { name: "This session so far" }).waitFor();
+      await shot(page, "code-session-find-cost", 1400);
+      await page.keyboard.press("Escape");
+      // the session in the Library, under its own filter
+      await open(page, "/creations");
+      await page.getByRole("button", { name: /Coding sessions/ }).click();
+      await page
+        .getByRole("link", { name: /What is this project/ })
+        .first()
+        .waitFor();
+      await shot(page, "code-library");
+      await open(page, "/code");
       await page.getByRole("heading", { name: "Projects" }).waitFor();
       await shot(page, "code-projects");
     });

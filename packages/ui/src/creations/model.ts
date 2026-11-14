@@ -1,5 +1,6 @@
 import type {
   BuilderProject,
+  CodeSession,
   CreativeProject,
   ImageSummary,
   LipSyncCard,
@@ -26,6 +27,7 @@ export type Entry =
   | { kind: "model3d"; id: string; createdAt: string; model3d: Model3d }
   | { kind: "composition"; id: string; createdAt: string; composition: BuilderProject }
   | { kind: "creative_project"; id: string; createdAt: string; project: CreativeProject }
+  | { kind: "code_session"; id: string; createdAt: string; session: CodeSession }
   | { kind: "notebook"; id: string; createdAt: string; notebook: NotebookSummary }
   | { kind: "taught"; id: string; createdAt: string; taught: TrainedModel };
 
@@ -40,6 +42,7 @@ export type Filter =
   | "models3d"
   | "compositions"
   | "creativeProjects"
+  | "codeSessions"
   | "notebooks"
   | "taught";
 
@@ -62,6 +65,7 @@ export function kindOf(filter: Filter): string | undefined {
     models3d: "model3d",
     compositions: "composition",
     creativeProjects: "creative_project",
+    codeSessions: "code_session",
     notebooks: "notebook",
     taught: "taught",
   } as const;
@@ -80,6 +84,7 @@ export const FILTER_KIND: Record<Filter, Entry["kind"] | null> = {
   models3d: "model3d",
   compositions: "composition",
   creativeProjects: "creative_project",
+  codeSessions: "code_session",
   notebooks: "notebook",
   taught: "taught",
 };
@@ -95,6 +100,7 @@ export const KIND_LABEL: Record<Entry["kind"], string> = {
   model3d: "3D model",
   composition: "Motion graphics",
   creative_project: "Creative Studio",
+  code_session: "Coding session",
   notebook: "Notebook",
   taught: "Taught model",
 };
@@ -192,6 +198,14 @@ export function toRow(entry: Entry): Row {
         title: entry.composition.title || "Motion graphics",
         detail: entry.composition.template,
         status: "done",
+      };
+    case "code_session":
+      return {
+        ...base,
+        kindLabel: KIND_LABEL.code_session,
+        title: entry.session.title || entry.session.project,
+        detail: entry.session.project,
+        status: entry.session.working ? "working" : "done",
       };
     case "creative_project":
       return {

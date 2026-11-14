@@ -40,6 +40,12 @@ export type CodeProps = {
   onOpenSetup: () => void;
   /** Where a key is saved (Settings, Your keys). */
   onOpenKeys: () => void;
+  /**
+   * The session the address names (null: the projects). With it the app owns which session is open, so a
+   * session has an address of its own and Back leaves it; without it the screen keeps that to itself.
+   */
+  openId?: string | null;
+  onOpenChange?: (id: string | null) => void;
 };
 
 const STARTERS = [
@@ -50,16 +56,40 @@ const STARTERS = [
 
 const dollars = (n: number) => `$${n.toFixed(2)}`;
 
-export function Code({ api, pickFolder, onOpenSetup, onOpenKeys }: CodeProps) {
+export function Code({
+  api,
+  pickFolder,
+  onOpenSetup,
+  onOpenKeys,
+  openId,
+  onOpenChange,
+}: CodeProps) {
   const code = useCode(api);
   const { state } = code;
+  const shownId = state.session?.id ?? null;
+  // the address says which session is open: follow it when it changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a change of the address opens or closes
+  useEffect(() => {
+    if (openId === undefined || openId === shownId) return;
+    if (openId) void code.open(openId);
+    else code.close();
+  }, [openId]);
+  const show = (id: string | null) => {
+    if (onOpenChange) onOpenChange(id);
+    else if (id) void code.open(id);
+    else code.close();
+  };
+  const begin = async (folder: string, model?: string) => {
+    const made = await code.start(folder, model);
+    if (made) onOpenChange?.(made.id);
+  };
   const [model, setModel] = useState<string>("");
   const ready = state.models.filter((m) => m.ready);
   const chosen = ready.find((m) => m.id === model) ?? ready.find((m) => m.default) ?? ready[0];
 
   const choose = async () => {
     const folder = await pickFolder();
-    if (folder) await code.start(folder, chosen?.id);
+    if (folder) await begin(folder, chosen?.id);
   };
 
   if (state.loading) {
@@ -81,7 +111,8 @@ export function Code({ api, pickFolder, onOpenSetup, onOpenKeys }: CodeProps) {
         onDismiss={code.dismiss}
         onSend={code.send}
         onStop={code.stop}
-        onBack={code.close}
+        onBack={() => show(null)}
+        onSetLimit={code.setLimit}
       />
     );
   }
@@ -156,8 +187,8 @@ export function Code({ api, pickFolder, onOpenSetup, onOpenKeys }: CodeProps) {
       ) : (
         <Projects
           sessions={state.sessions}
-          onOpen={code.open}
-          onNew={(folder) => code.start(folder, chosen?.id)}
+          onOpen={show}
+          onNew={(folder) => void begin(folder, chosen?.id)}
           onRemove={code.remove}
           canStart={Boolean(chosen)}
         />
@@ -361,6 +392,7 @@ function Session({
   onSend,
   onStop,
   onBack,
+  onSetLimit,
 }: {
   api: CodeApi;
   session: CodeSession;
@@ -372,6 +404,7 @@ function Session({
   onSend: (text: string) => void;
   onStop: () => void;
   onBack: () => void;
+  onSetLimit: (usd: number) => void;
 }) {
   const [text, setText] = useState("");
   // on a narrow window one pane shows at a time: the chat, or the files
@@ -415,9 +448,7 @@ function Session({
             {working ? <Spinner className="size-3" /> : null}
             {chipFor(session, thread, busy)}
           </output>
-          <span title={`The limit for this session is ${dollars(session.cost_limit_usd || 5)}`}>
-            {model?.where === "this-computer" ? "No cost" : dollars(session.cost_usd)}
-          </span>
+          <Cost session={session} model={model} onSetLimit={onSetLimit} />
         </div>
       </PageHeader>
       <div
@@ -540,6 +571,126 @@ function Session({
         </section>
       </div>
     </div>
+  );
+}
+
+/** The cost so far in the bar; it opens to what it is made of and the session's limit (mockup `session-cost`). */
+function Cost({
+  session,
+  model,
+  onSetLimit,
+}: {
+  session: CodeSession;
+  model: CodeModel | undefined;
+  onSetLimit: (usd: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [limit, setLimit] = useState("");
+  const box = useRef<HTMLSpanElement | null>(null);
+  // it closes on Escape and on a click anywhere else
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onDown = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [open]);
+  const free = model?.where === "this-computer";
+  const part = session.cost_limit_usd > 0 ? session.cost_usd / session.cost_limit_usd : 0;
+  const wanted = Number(limit);
+  return (
+    <span className="relative" ref={box}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((o) => !o)}
+        className="rounded-md px-1.5 py-0.5 tabular-nums outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {free ? "No cost" : dollars(session.cost_usd)}
+      </button>
+      {open ? (
+        <div
+          // biome-ignore lint/a11y/useSemanticElements: a small window under its button, not a modal
+          role="dialog"
+          aria-label="This session so far"
+          className="absolute end-0 top-full z-20 mt-1.5 grid w-72 gap-2.5 rounded-lg border bg-surface p-3.5 text-sm text-foreground shadow-card"
+        >
+          <strong>This session so far</strong>
+          <dl className="m-0 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
+            <dt className="text-muted-foreground">
+              {model?.title ?? session.model}, {session.model_calls} call
+              {session.model_calls === 1 ? "" : "s"}
+            </dt>
+            <dd className="m-0 tabular-nums">{free ? "No cost" : dollars(session.cost_usd)}</dd>
+            <dt className="text-muted-foreground">Asked</dt>
+            <dd className="m-0 tabular-nums">{session.turns}</dd>
+            {free ? null : (
+              <>
+                <dt className="text-muted-foreground">Limit for this session</dt>
+                <dd className="m-0 tabular-nums">{dollars(session.cost_limit_usd)}</dd>
+              </>
+            )}
+          </dl>
+          {free ? (
+            <p className="m-0 text-xs text-muted-foreground">
+              This model runs on this computer. Nothing is paid and nothing leaves it.
+            </p>
+          ) : (
+            <>
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                <div
+                  className="h-full bg-primary"
+                  style={{ width: `${Math.min(100, Math.round(part * 100))}%` }}
+                />
+              </div>
+              <p className="m-0 text-xs text-muted-foreground">
+                Paid with your own key. At the limit the agent stops and says so.
+              </p>
+              <form
+                className="flex items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (wanted > 0 && wanted <= 100) {
+                    onSetLimit(wanted);
+                    setLimit("");
+                  }
+                }}
+              >
+                <label className="flex items-center gap-1.5 text-xs">
+                  <span className="text-muted-foreground">New limit, in dollars</span>
+                  <input
+                    type="number"
+                    min="0.5"
+                    max="100"
+                    step="0.5"
+                    value={limit}
+                    onChange={(e) => setLimit(e.target.value)}
+                    className="h-7 w-16 rounded-md border border-input bg-transparent px-1.5 text-sm"
+                  />
+                </label>
+                <Button
+                  type="submit"
+                  size="xs"
+                  variant="outline"
+                  disabled={!(wanted > 0 && wanted <= 100)}
+                >
+                  Change
+                </Button>
+              </form>
+            </>
+          )}
+        </div>
+      ) : null}
+    </span>
   );
 }
 

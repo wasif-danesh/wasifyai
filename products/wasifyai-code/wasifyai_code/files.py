@@ -11,6 +11,10 @@ from typing import Any
 MAX_FILE_BYTES = 400_000  # of one file shown; a longer one is cut and says so
 MAX_ENTRIES = 2000  # of one folder
 HIDDEN = (".git",)  # the project's own git store: thousands of files nobody reads
+# folders a search by name does not go into: other programs' files, by the thousand
+NOT_SEARCHED = (".git", "node_modules", ".venv", "venv", "__pycache__", "target", ".next")
+MAX_FOUND = 50
+MAX_LOOKED_AT = 100_000  # entries one search looks at before it gives what it has
 
 
 class NotThere(Exception):
@@ -89,3 +93,33 @@ def read_file(workspace: Path, relative: str) -> dict[str, Any]:
         "lines": text.count("\n") + (1 if text and not text.endswith("\n") else 0),
         "cut": cut,
     }
+
+
+def find_files(workspace: Path, query: str) -> dict[str, Any]:
+    """Files whose name holds `query` (letters in any case), nearest the top first. Links are not
+    followed, so nothing outside the project is found."""
+    wanted = query.strip().lower()
+    root = Path(os.path.realpath(workspace))
+    found: list[dict[str, Any]] = []
+    looked = 0
+    if not wanted:
+        return {"query": query, "entries": [], "more": False}
+    for folder, folders, names in os.walk(root, followlinks=False):
+        folders[:] = sorted(f for f in folders if f not in NOT_SEARCHED)
+        for name in sorted(names):
+            looked += 1
+            if wanted not in name.lower():
+                continue
+            path = Path(folder) / name
+            if path.is_symlink():
+                continue
+            found.append(
+                {"name": name, "path": str(path.relative_to(root)), "kind": "file", "bytes": 0}
+            )
+            if len(found) > MAX_FOUND:
+                break
+        if len(found) > MAX_FOUND or looked > MAX_LOOKED_AT:
+            break
+    more = len(found) > MAX_FOUND or looked > MAX_LOOKED_AT
+    found.sort(key=lambda e: (e["path"].count("/"), e["path"].lower()))
+    return {"query": query, "entries": found[:MAX_FOUND], "more": more}

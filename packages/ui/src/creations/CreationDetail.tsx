@@ -5,6 +5,7 @@ import {
   BookOpen,
   Box,
   Clapperboard,
+  CodeXml,
   ExternalLink,
   Film,
   GraduationCap,
@@ -85,6 +86,7 @@ const ICON = {
   model3d: Box,
   composition: Shapes,
   creative_project: Clapperboard,
+  code_session: CodeXml,
   notebook: BookOpen,
   taught: GraduationCap,
 };

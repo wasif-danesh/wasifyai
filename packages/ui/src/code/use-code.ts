@@ -117,8 +117,10 @@ export function useCode(api: CodeApi) {
       try {
         const session = await api.start({ folder, model });
         patch({ session, turns: [], events: [], error: null, busy: null });
+        return session;
       } catch (e) {
         patch({ error: say(e, "That folder could not be opened.") });
+        return null;
       }
     },
     [api, patch],
@@ -165,5 +167,17 @@ export function useCode(api: CodeApi) {
 
   const dismiss = useCallback(() => patch({ error: null }), [patch]);
 
-  return { state, refresh, open, close, start, send, stop, remove, dismiss };
+  const setLimit = useCallback(
+    async (usd: number) => {
+      if (!openId) return;
+      try {
+        patch({ session: await api.setLimit(openId, usd), error: null });
+      } catch (e) {
+        patch({ error: say(e, "The limit could not be changed.") });
+      }
+    },
+    [api, openId, patch],
+  );
+
+  return { state, refresh, open, close, start, send, stop, remove, dismiss, setLimit };
 }

@@ -27,7 +27,8 @@ function session(over: Partial<CodeSession> = {}): CodeSession {
     answer: "",
     ended: "",
     cost_usd: 0,
-    cost_limit_usd: 0,
+    cost_limit_usd: 5,
+    model_calls: 0,
     tokens_in: 0,
     tokens_out: 0,
     created_at: "2026-11-14T10:00:00Z",
@@ -114,6 +115,11 @@ function api(over: Partial<CodeApi> = {}): CodeApi {
       lines: 2,
       cut: false,
     }),
+    find: async () => ({
+      entries: [{ name: "site.js", path: "src/site.js", kind: "file", bytes: 0 }],
+      more: false,
+    }),
+    setLimit: async (_id: string, usd: number) => session({ cost_limit_usd: usd }),
     events: () => feed().events(),
     ...over,
   } as CodeApi;
@@ -414,5 +420,64 @@ describe("the Files tab", () => {
     await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
     await userEvent.click(await screen.findByRole("button", { name: "README.md" }));
     expect(await screen.findByText("This file is not text")).toBeTruthy();
+  });
+});
+
+describe("finding a file, the cost, and a session's address", () => {
+  it("finds a file by part of its name and opens it", async () => {
+    const find = vi.fn(async () => ({
+      entries: [{ name: "site.js", path: "src/site.js", kind: "file" as const, bytes: 0 }],
+      more: false,
+    }));
+    render(<Code api={api({ sessions: async () => [session()], find })} {...props} />);
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    await userEvent.type(
+      await screen.findByRole("searchbox", { name: "Find a file by name" }),
+      "site",
+    );
+    const results = await screen.findByRole("navigation", { name: "Files found" });
+    expect(find).toHaveBeenCalledWith("s1", "site");
+    await userEvent.click(within(results).getByRole("button", { name: /site\.js/ }));
+    expect(await screen.findByText("Read only. 2 lines.")).toBeTruthy();
+  });
+
+  it("opens the cost to what it is made of, and changes the limit", async () => {
+    const setLimit = vi.fn(async (_id: string, usd: number) =>
+      session({ cost_usd: 0.21, model_calls: 14, turns: 3, cost_limit_usd: usd }),
+    );
+    const open = session({ cost_usd: 0.21, model_calls: 14, turns: 3 });
+    render(
+      <Code
+        api={api({ sessions: async () => [open], session: async () => open, setLimit })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "$0.21" }));
+    const pop = screen.getByRole("dialog", { name: "This session so far" });
+    expect(within(pop).getByText("Claude Sonnet 5.5, 14 calls")).toBeTruthy();
+    expect(within(pop).getByText("$5.00")).toBeTruthy();
+    await userEvent.type(within(pop).getByRole("spinbutton"), "8");
+    await userEvent.click(within(pop).getByRole("button", { name: "Change" }));
+    expect(setLimit).toHaveBeenCalledWith("s1", 8);
+    expect(await within(pop).findByText("$8.00")).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "This session so far" })).toBeNull();
+  });
+
+  it("follows the address: it opens the session it names and tells the app when another is chosen", async () => {
+    const onOpenChange = vi.fn();
+    const sessions = async () => [session()];
+    const { rerender } = render(
+      <Code api={api({ sessions })} {...props} openId={null} onOpenChange={onOpenChange} />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    expect(onOpenChange).toHaveBeenCalledWith("s1");
+    expect(screen.queryByRole("textbox", { name: "Ask about this project" })).toBeNull();
+    const same = api({ sessions });
+    rerender(<Code api={same} {...props} openId="s1" onOpenChange={onOpenChange} />);
+    expect(await screen.findByRole("textbox", { name: "Ask about this project" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Projects" }));
+    expect(onOpenChange).toHaveBeenLastCalledWith(null);
   });
 });

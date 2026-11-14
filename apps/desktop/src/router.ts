@@ -86,6 +86,17 @@ export function notebookPath(id: string | null): string {
   return id ? `/notebooks/${id}` : "/notebooks";
 }
 
+/** The coding session a hash opens (`#/code/<id>`), or null: the projects. */
+export function parseCodeSession(hash: string): string | null {
+  const path = hash.replace(/^#/, "").split("?")[0] ?? "";
+  const m = /^\/code\/([A-Za-z0-9-]{1,64})$/.exec(path);
+  return m?.[1] ?? null;
+}
+
+export function codePath(id: string | null): string {
+  return id ? `/code/${id}` : "/code";
+}
+
 export function routePath(route: Route): string {
   return PATHS[route];
 }
@@ -107,6 +118,7 @@ export function parseHash(hash: string): Route {
   const path = hash.replace(/^#/, "").split("?")[0] || "/";
   if (parseConversation(hash)) return "home";
   if (parseNotebook(hash)) return "notebook";
+  if (parseCodeSession(hash)) return "code";
   const found = (Object.keys(PATHS) as Route[]).find((r) => PATHS[r] === path);
   return found ?? "home";
 }

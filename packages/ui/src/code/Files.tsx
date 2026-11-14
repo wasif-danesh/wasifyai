@@ -2,7 +2,7 @@
 // The Files tab of a coding session (mockup `files`): the project's folders as a tree, opened a folder at a
 // time, and one file to read. Reading only: a change goes through the chat.
 import type { CodeApi, CodeEntry, CodeFile } from "@wasifyai/client";
-import { ChevronRight, Eye, File, FileText, Folder, FolderOpen } from "lucide-react";
+import { ChevronRight, Eye, File, FileText, Folder, FolderOpen, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "../cn";
 import { EmptyState } from "../components/empty-state";
@@ -23,6 +23,32 @@ export function Files({
   const [file, setFile] = useState<CodeFile | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<{ entries: CodeEntry[]; more: boolean } | null>(null);
+
+  // find by name, a moment after the person stops typing
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setFound(null);
+      return;
+    }
+    let gone = false;
+    const timer = setTimeout(() => {
+      api
+        .find(sessionId, q)
+        .then((out) => {
+          if (!gone) setFound(out);
+        })
+        .catch(() => {
+          if (!gone) setFound({ entries: [], more: false });
+        });
+    }, 200);
+    return () => {
+      gone = true;
+      clearTimeout(timer);
+    };
+  }, [api, sessionId, query]);
 
   const load = useCallback(
     async (path: string) => {
@@ -129,9 +155,54 @@ export function Files({
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(9rem,15rem)_minmax(0,1fr)]">
-      <nav aria-label={`Files in ${project}`} className="min-h-0 overflow-auto border-e p-1.5">
-        <ul className="m-0 list-none p-0">{rows("", 0)}</ul>
-      </nav>
+      <div className="flex min-h-0 flex-col border-e">
+        <label className="flex items-center gap-1.5 border-b px-2 py-1.5 text-muted-foreground">
+          <Search aria-hidden="true" className="size-3.5 shrink-0" />
+          <input
+            type="search"
+            aria-label="Find a file by name"
+            placeholder="Find a file by name"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full min-w-0 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          />
+        </label>
+        {found ? (
+          <nav aria-label="Files found" className="min-h-0 flex-1 overflow-auto p-1.5">
+            {found.entries.length === 0 ? (
+              <p className="m-0 px-2 py-1 text-xs text-muted-foreground">
+                No file has that in its name.
+              </p>
+            ) : (
+              <ul className="m-0 list-none p-0">
+                {found.entries.map((entry) => (
+                  <li key={entry.path}>
+                    <button
+                      type="button"
+                      aria-current={chosen === entry.path ? "true" : undefined}
+                      onClick={() => void read(entry.path)}
+                      title={entry.path}
+                      className="grid w-full rounded-md px-2 py-1 text-start text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring aria-[current=true]:bg-accent"
+                    >
+                      <span className="truncate">{entry.name}</span>
+                      <span className="truncate text-xs text-muted-foreground">{entry.path}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {found.more ? (
+              <p className="m-0 px-2 py-1 text-xs text-muted-foreground">
+                There are more. Type more of the name.
+              </p>
+            ) : null}
+          </nav>
+        ) : (
+          <nav aria-label={`Files in ${project}`} className="min-h-0 flex-1 overflow-auto p-1.5">
+            <ul className="m-0 list-none p-0">{rows("", 0)}</ul>
+          </nav>
+        )}
+      </div>
       <div className="flex min-h-0 min-w-0 flex-col">
         {file && !problem ? (
           <>

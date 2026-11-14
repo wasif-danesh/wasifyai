@@ -34,6 +34,7 @@ async function cards(
       model3d: ids("model3d"),
       composition: ids("composition"),
       creative_project: ids("creative_project"),
+      code_session: ids("code_session"),
       notebook: ids("notebook"),
       taught: response.results.filter((r) => taught.has(r.kind)).map((r) => r.id),
     },
@@ -91,6 +92,13 @@ async function cards(
       id: composition.id,
       createdAt: composition.updated_at || composition.created_at,
       composition,
+    });
+  for (const session of found.others.codeSessions)
+    byKey.set(`code_session:${session.id}`, {
+      kind: "code_session",
+      id: session.id,
+      createdAt: session.updated_at || session.created_at,
+      session,
     });
   for (const project of creativeProjects)
     byKey.set(`creative_project:${project.id}`, {

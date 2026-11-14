@@ -493,7 +493,8 @@ async def test_folders_that_must_stay_closed_are_refused(box, tmp_path):
         (str(box.data), "private_folder"),  # the app's own data: its keys are there
         (str(box.data / "code"), "private_folder"),
         (str(tmp_path), "private_folder"),  # it holds the app's data folder
-        (str(home / "Library"), "private_folder"),
+        # the Mac's Library; on a computer that has none it is simply a folder that is not there
+        (str(home / "Library"), "private_folder" if (home / "Library").is_dir() else "no_folder"),
     ):
         r = await box.http.post(f"{BASE}/sessions", json={"folder": folder})
         assert r.status_code == 422 and r.json()["detail"]["code"] == code, folder
@@ -726,3 +727,37 @@ async def test_a_long_file_is_cut_at_a_whole_line_and_says_so(box):
     ).json()
     assert read["cut"] is True and read["bytes"] == 780_000
     assert len(read["text"]) <= 400_000 and read["text"].endswith("line of text")
+
+
+async def test_a_file_is_found_by_part_of_its_name_without_leaving_the_project(box, tmp_path):
+    (box.project / "node_modules" / "left-pad").mkdir(parents=True)
+    (box.project / "node_modules" / "left-pad" / "prices.js").write_text("x")
+    (box.project / "PRICES.md").write_text("# prices")
+    (tmp_path / "outside-prices.txt").write_text("x")
+    (box.project / "out").symlink_to(tmp_path)
+    made = await started(box)
+    url = f"{BASE}/sessions/{made['id']}/files/find"
+    found = (await box.http.get(url, params={"q": "price"})).json()
+    assert [e["path"] for e in found["entries"]] == ["PRICES.md", "shop/prices.py"]
+    assert found["more"] is False
+    assert (await box.http.get(url, params={"q": "nothing-like-this"})).json()["entries"] == []
+    assert (await box.http.get(url, params={"q": ""})).status_code == 422
+
+
+async def test_the_limit_of_a_session_can_be_changed_and_holds_at_the_gateway(box):
+    made = await started(box)
+    assert made["cost_limit_usd"] == 5.0 and made["model_calls"] == 0  # the usual limit, said
+    url = f"{BASE}/sessions/{made['id']}"
+    changed = await box.http.patch(url, json={"cost_limit_usd": 8})
+    assert changed.status_code == 200 and changed.json()["cost_limit_usd"] == 8.0
+    assert box.store.get_session(_owner(), made["id"])["cost_limit_usd"] == 8.0
+    await box.http.post(f"{url}/messages", json={"text": "Analyse this codebase."})
+    await ended(box, made["id"])
+    assert box.gateway.spent(made["id"])["limit_usd"] == 8.0  # the session was opened with it
+    await box.http.patch(url, json={"cost_limit_usd": 12.5})
+    assert box.gateway.spent(made["id"])["limit_usd"] == 12.5  # and a later change reaches it
+    for bad in ({"cost_limit_usd": 0}, {"cost_limit_usd": 1000}, {"title": "x"}):
+        assert (await box.http.patch(url, json=bad)).status_code == 422
+    assert (
+        await box.http.patch(f"{BASE}/sessions/nobody", json={"cost_limit_usd": 3})
+    ).status_code == 404

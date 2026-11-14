@@ -150,6 +150,13 @@ action or route -> wasifyai_code.runtime.Sessions -> wasifyai_code.client.ThisCo
 | `packages/client/src/code.ts` | The window's calls: the routes above and the stream |
 | `apps/desktop/src/pages/Code.tsx` | The page in the window, with the computer's own folder window (Tauri's dialog plugin, which the app already had; the window is now allowed to open it) |
 
+A session has an address of its own in the window (`#/code/<id>`): it is still open after a reload, and Back
+leaves it. "Find a file by name" in the Files tab looks through the project's file names (not into
+`node_modules`, `.git` and the like, and never through a link). The cost in the bar opens to what it is made
+of (the model, its calls, what was asked) and the session's limit, which can be changed there
+(`PATCH /sessions/{id}`; it holds from the next model call). A session is a card in the Library under its own
+filter, "Coding sessions", and a search result opens it at its address.
+
 A session that nobody named is called by what was asked first. Walk it for real with
 `WASIFYAI_AUDIT_FOLDER=<a project> apps/desktop/scripts/ui-audit.sh light code-plan` on a throwaway
 `DESKTOP_DATA_DIR` that has the coding engine (pictures `docs/ui-audit/desktop/code-*.png`).
@@ -189,6 +196,8 @@ folder would be handed that folder's content. Help is in `docs/help/code.session
 | `POST /sessions/{id}/messages` | Begin a turn (202); the agent works on in the engine |
 | `POST /sessions/{id}/stop` | Stop the turn; answers when it is closed |
 | `GET /sessions/{id}/files?path=`, `GET /sessions/{id}/file?path=` | One folder of the project, and one file to read (`wasifyai_code/files.py`). The Wasify engine reads them for the person; the coding engine is not asked. A path is always inside the project, also through a link; the project's `.git` is left out; a file over 400 kB is cut at a line and says so; a file that is not text says so |
+| `GET /sessions/{id}/files/find?q=` | The project's files whose name holds `q`, at most 50 |
+| `PATCH /sessions/{id}` | Change the most the session may cost (`cost_limit_usd`) |
 | `GET /sessions/{id}/events` | The session's stream, open across turns; `Last-Event-ID` comes back after a number |
 
 A session is found by search (ADR-0041) by its title, its project's name and what was asked first (kind
@@ -223,10 +232,8 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 
 ## Not built
 
-- "Find a file by name" in the Files tab, the dot for files changed in a session (nothing changes yet), and
-  the other tabs beside the chat; "Carry out this plan" (it needs a mode that edits, C2);
-  the mode menu, the cost window and "Start in a new, empty folder" of the mockups; a session's own address
-  (an open session is not kept across a reload of the window); the Library card for a session.
+- The dot for files changed in a session (nothing changes yet) and the other tabs beside the chat; "Carry
+  out this plan" and the mode menu (they need a mode that edits, C2); "Start in a new, empty folder".
 - Edits with undo, commands, the check loop switched on, the scheduler: stages C2 onwards.
 - A session going on after the app was closed and opened again: the session's token is gone, so its next
   message starts a new conversation with the agent, and the turn says so.

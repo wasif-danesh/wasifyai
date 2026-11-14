@@ -289,7 +289,8 @@ pub fn self_test(app: AppHandle) {
     });
 }
 
-#[cfg(test)]
+// the launch agent is a Mac's: its paths are tested where paths look like a Mac's
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 

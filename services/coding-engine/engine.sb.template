@@ -1,0 +1,36 @@
+(version 1)
+; The sandbox the coding engine runs in: OpenHands' Agent Server and every program it starts
+; (ADR-0102, decision 3). wasifyai_api/coding_server.py fills in the four lists at every start
+; and runs the server with `sandbox-exec -f <the filled profile>`. Where two rules match, the
+; later one decides.
+(allow default)
+
+; Writes: its own state, the workspaces and its terminal folder. Nothing else.
+(deny file-write*)
+(allow file-write*
+{{WRITE}}
+  (literal "/dev/null") (literal "/dev/zero") (literal "/dev/tty") (literal "/dev/ptmx")
+  (literal "/dev/dtracehelper") (regex #"^/dev/ttys[0-9]+$") (regex #"^/dev/fd/"))
+
+; Reads: the system and the tools stay open. Every person's folders, other disks, temp folders
+; and the app's own data are closed ...
+(deny file-read*
+{{CLOSED}})
+; ... except the engine's own files, its state and the workspaces ...
+(allow file-read*
+{{OPEN}})
+; ... and the names, not the contents, of the folders on the way to them.
+(allow file-read-metadata
+{{WAY}})
+
+; Network: this computer only.
+(deny network-outbound)
+(allow network-outbound (remote ip "localhost:*") (remote unix-socket))
+
+; Other programs: no signal to a process outside this sandbox, no app opened, no message to
+; another app, no job handed to the system. Each of these would run code outside the sandbox.
+(deny signal)
+(allow signal (target same-sandbox))
+(deny lsopen)
+(deny appleevent-send)
+(deny job-creation)

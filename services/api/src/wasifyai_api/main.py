@@ -30,6 +30,7 @@ from wasifyai_api.creations import router as creations_router
 from wasifyai_api.decision_setup import router as decision_setup_router
 from wasifyai_api.desktop import files_router
 from wasifyai_api.desktop_audio import router as desktop_audio_router
+from wasifyai_api.desktop_coding import router as desktop_coding_router
 from wasifyai_api.desktop_discovery import router as desktop_discovery_router
 from wasifyai_api.desktop_events import router as desktop_events_router
 from wasifyai_api.desktop_hub import router as desktop_hub_router
@@ -170,6 +171,7 @@ def create_app(given: Injected | None = None) -> FastAPI:
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_styles_router)
         app.include_router(desktop_llm_router)
+        app.include_router(desktop_coding_router)
         app.include_router(desktop_hub_router)
         app.include_router(own_keys_router)
         app.include_router(components_router)

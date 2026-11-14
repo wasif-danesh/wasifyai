@@ -1,0 +1,16 @@
+# Packages the four OpenHands packages pull in that nothing we use imports. scripts/lock-coding-engine.sh
+# takes them out of the lock, and the lock is installed with --no-deps, so they are never fetched.
+# One name per line, as PyPI spells it. A name may be added only after the server and a real session
+# were shown to work without it (docs/spikes/coding-c0.md, spike 1; docs/spikes/coding-c1a.md).
+
+# Wanted by browser-use, the agent's own browser tool, which is switched off (OH_ENABLE_BROWSER=false).
+google-api-python-client   # 110 MB
+reportlab                  # 6 MB
+posthog                    # 6 MB; telemetry, which is off
+screeninfo                 # asks for the three below on a Mac
+cython                     # 12 MB
+pyobjc-core                # 27 MB, of which 16 MB are its own tests (PyObjCTest)
+pyobjc-framework-cocoa     # 5 MB
+
+# Wanted by the tracing exporters (lmnr, opentelemetry-exporter-otlp-proto-grpc), which send nothing here.
+grpcio                     # 40 MB

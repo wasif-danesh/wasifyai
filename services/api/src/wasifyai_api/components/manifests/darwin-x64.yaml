@@ -16,6 +16,14 @@ components:
       sha256: c3924eacb8580ea8843e48ee6179302b22e6a1602e85c2fd5253e8b1e3357316
       kind: tar.gz
       strip: 1
+  coding:
+    # OpenHands' Agent Server (ADR-0101, ADR-0102). Named here so the app can say it is not available on
+    # this computer yet: how it is held on Windows and Linux is a later decision (ADR-0102, decision 10),
+    # and an Intel Mac has no measured lock. No lock and no archive means "not offered".
+    title: Coding engine (OpenHands)
+    version: 1.62.0
+    source: pypi.org/project/openhands-agent-server
+    min_free_bytes: 0
 # What the parts the engine's services set up fetch (stage F2; these were the *_pins.json files).
 # Paths in them are relative to the wasifyai_api package. Every platform carries every part, so
 # an engine anywhere can say what a part needs and that it is not available on this computer.

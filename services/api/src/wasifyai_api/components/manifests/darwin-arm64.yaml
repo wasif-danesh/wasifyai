@@ -28,6 +28,28 @@ components:
       sha256: 99474c884b31800b4736f01f897b0261658b347539b6e040ed493b7a46435c33
       kind: tar.gz
       strip: 1
+  coding:
+    # OpenHands' Agent Server in an environment of its own, held in the macOS sandbox (ADR-0101, ADR-0102).
+    # The one version is services/coding-engine/VERSION; the lock (scripts/lock-coding-engine.sh) lists only
+    # what is imported. The archive is the pinned extensions catalogue (ADR-0104), read through EXTENSIONS_PATH.
+    title: Coding engine (OpenHands)
+    version: 1.62.0
+    source: pypi.org/project/openhands-agent-server
+    min_free_bytes: 1073741824
+    install_bytes: 375000000  # what the person is shown: measured on disk, 373 MB (docs/spikes/coding-c1a.md)
+    download_bytes: 118400000  # 114.4 MB of packages, 1.2 MB for the build tool, 2.8 MB for the catalogue
+    lock: requirements-aarch64-apple-darwin.lock  # in services/coding-engine, and in the engine bundle
+    lock_sha256: 87caf6bcc1350b9231bd1323cccac150f2786abf1358864a2ae89427fee73da3
+    build_constraints: build-constraints.txt  # the one build tool the lock's one source-only package needs
+    build_constraints_sha256: adc257279dd00785ea3313c659ac490149371c9463f68c830a3de7cb5e513a24
+    extensions:
+      version: 0.42.0
+    archive:
+      url: https://registry.npmjs.org/@openhands/extensions/-/extensions-0.42.0.tgz
+      size: 2808448
+      sha256: 29dc7e492abbe175d50af328388954c88aec0b9d42d54c549f66e2b6d733c711
+      kind: tar.gz
+      strip: 1
 # What the parts the engine's services set up fetch (stage F2; these were the *_pins.json files).
 # Paths in them are relative to the wasifyai_api package. Every platform carries every part, so
 # an engine anywhere can say what a part needs and that it is not available on this computer.

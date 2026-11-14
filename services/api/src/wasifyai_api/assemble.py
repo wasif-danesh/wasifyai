@@ -68,6 +68,7 @@ from wasifyai_api.actions_engine import build_executor
 from wasifyai_api.admin import AdminStore, PostgresAdminStore
 from wasifyai_api.admin_providers import AdminProviders, CloudPlanSink
 from wasifyai_api.auth import Claims
+from wasifyai_api.components.coding import CodingComponent, coding_files
 from wasifyai_api.components.comfyui import ComfyUiComponent
 from wasifyai_api.components.desktop import service_components
 from wasifyai_api.components.llamacpp import LlamaCppComponent
@@ -938,6 +939,7 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     if desktop.styles is not None:  # what Train taught in each run: only a look gets the warning
         desktop.styles.taught = lambda run: _taught_in(s, run)
     s.llama_server = desktop.llama
+    s.coding_server = desktop.coding  # the coding engine (ADR-0102); no product uses it yet
     s.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
     s.video_builder = desktop.video_builder  # the render engine (ADR-0077)
     s.model3d = desktop.model3d  # the 3D engine (ADR-0080)
@@ -1002,6 +1004,11 @@ def _desktop_components(s: ApiServices, desktop: Desktop) -> Registry:
     uv = os.environ.get("WASIFYAI_UV") or shutil.which("uv")
     comfy = ComfyUiComponent(data_dir, manifest, engine_bundle(s.products_dir), uv)
     registry.add(comfy, comfy.installer)
+    if desktop.coding is not None:
+        coding = CodingComponent(
+            data_dir, manifest, coding_files(s.products_dir), uv, desktop.coding
+        )
+        registry.add(coding, coding.installer)
     for part in service_components(s, desktop):
         registry.add(part)
     events = s.events

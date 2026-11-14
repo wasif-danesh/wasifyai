@@ -154,6 +154,9 @@ pub struct Bundle {
     pub product_files: Vec<FileEntry>,
     #[serde(default)]
     pub comfyui: Option<ComfyBundle>,
+    /// The optional coding engine's files (its hashed lock, its sandbox profile; ADR-0102)
+    #[serde(default)]
+    pub coding_engine: Vec<FileEntry>,
 }
 
 /// Read `bundle.json`; returns it with the checksum of the file itself (the version of the bundle).
@@ -188,7 +191,8 @@ pub fn verify_bundle(dir: &Path, bundle: &Bundle) -> Result<(), String> {
     let files = std::iter::once(&bundle.requirements)
         .chain(bundle.wheels.iter())
         .chain(bundle.product_files.iter())
-        .chain(bundle.comfyui.iter().flat_map(|c| c.locks.values()));
+        .chain(bundle.comfyui.iter().flat_map(|c| c.locks.values()))
+        .chain(bundle.coding_engine.iter());
     for entry in files {
         let path = inside(dir, &entry.file)?;
         let wrong_size = entry.size != 0
@@ -792,6 +796,34 @@ exit 0
         std::fs::remove_file(dir.join("wheels/wasifyai_image-0.0.0-py3-none-any.whl")).unwrap();
         // the first problem found is reported; both would fail
         assert!(verify_bundle(&dir, &bundle).is_err());
+    }
+
+    #[test]
+    fn the_coding_engines_files_are_checked_with_the_bundle() {
+        let dir = temp("bundle-coding");
+        write_bundle(&dir);
+        std::fs::create_dir_all(dir.join("coding-engine")).unwrap();
+        let profile = dir.join("coding-engine/engine.sb.template");
+        std::fs::write(&profile, "(version 1)\n(deny file-write*)\n").unwrap();
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.join("bundle.json")).unwrap()).unwrap();
+        raw["coding_engine"] = serde_json::json!([{
+            "file": "coding-engine/engine.sb.template",
+            "sha256": download::sha256_file(&profile).unwrap(),
+            "size": std::fs::metadata(&profile).unwrap().len(),
+        }]);
+        std::fs::write(dir.join("bundle.json"), serde_json::to_vec(&raw).unwrap()).unwrap();
+        let (bundle, _) = load_bundle(&dir).unwrap();
+        assert_eq!(bundle.coding_engine.len(), 1);
+        verify_bundle(&dir, &bundle).unwrap();
+
+        // a profile that was changed after the bundle was made is not one the engine may use
+        std::fs::write(&profile, "(version 1)\n(allow default)\n\n").unwrap();
+        let err = verify_bundle(&dir, &bundle).unwrap_err();
+        assert!(
+            err.contains("engine.sb.template") && err.contains("damaged"),
+            "{err}"
+        );
     }
 
     #[test]

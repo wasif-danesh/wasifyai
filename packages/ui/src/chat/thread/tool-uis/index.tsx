@@ -95,6 +95,8 @@ function OpenScreen(p: ToolCallMessagePartProps) {
 
 export const toolUIs = {
   propose_action: Propose,
+  // a tool of another app's MCP server (ADR-0070 decision 8): the same card while the person decides, then its result
+  call_external: Propose,
   how_to: HowTo,
   open_screen: OpenScreen,
   search_creations: adapt(LibrarySearchCard),

@@ -77,6 +77,12 @@ old digest is accepted while the pins are unchanged). Settings › Models › **
 Set up, Stop, Repair and Remove where the part supports it. An engine worker sets parts up with the same code
 (`install_and_wait`, its `admin.fetch_engine`).
 
+The coding engine (OpenHands' Agent Server, ADR-0102) is one more part on the installer, on Apple-silicon Macs
+only: its own environment from the hashed lock in `services/coding-engine/`, the pinned extensions catalogue,
+and a last step that starts it inside its sandbox. The engine bundle carries a copy of that folder
+(`coding-engine/`, listed in `bundle.json` as `coding_engine`, checked by the shell like every other file).
+[The coding engine](coding.md) has the steps and how it is run.
+
 ### Using it (stage A2)
 
 `DESKTOP_IMAGE_ENGINE` chooses the runner: `stub` (placeholder pictures), `comfyui` (the real engine; a job fails

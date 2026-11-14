@@ -10,7 +10,7 @@ dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.8", "pyright>=1.1.380", "ht
 
 [tool.uv.workspace]
 members = ["services/*", "packages/contracts", "packages/platform-sdk", "products/*"]
-exclude = ["products/hello", "products/media-demo", "services/comfyui"]   # config-only samples; a container-only service
+exclude = ["products/hello", "products/media-demo", "services/comfyui", "services/coding-engine"]   # config-only samples; a container-only service; the coding engine's pins (no package of ours)
 
 [tool.uv.sources]
 wasifyai-api = { workspace = true }

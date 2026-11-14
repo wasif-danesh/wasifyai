@@ -81,6 +81,8 @@ class EngineServices:
     desktop_discovery: Any = None
     desktop_styles: Any = None  # the image screens' styles (ADR-0091)
     llama_server: Any = None
+    # OpenHands' Agent Server in its sandbox, for the coding product (ADR-0101, ADR-0102)
+    coding_server: Any = None
     desktop_language: Any = None  # the local language model
     desktop_vision: Any = None
     desktop_hub: Any = None

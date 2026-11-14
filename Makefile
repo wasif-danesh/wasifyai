@@ -1,7 +1,7 @@
 CONTAINER_ENGINE ?= podman
 export CONTAINER_ENGINE
 
-.PHONY: worker engine-bundle reader-locks test-comfyui test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta langfuse-up urls
+.PHONY: worker engine-bundle reader-locks test-comfyui test-coding test-integration setup setup-k8s preflight dev down logs migrate test lint format contracts helm-lint kind-up kind-test kind-e2e kind-down monitoring-up monitoring-drill monitoring-drill-meta langfuse-up urls
 setup:
 	./scripts/setup.sh
 setup-k8s:
@@ -31,6 +31,11 @@ test-integration:
 # cover workflows (ACE-Step 1.5 and FLUX.2 klein). Slow on first use: models load into memory.
 test-comfyui:
 	COMFYUI_E2E=1 uv run pytest services/api/tests/integration/test_media_e2e.py services/api/tests/integration/test_real_models.py -v
+# The real coding engine (OpenHands' Agent Server) inside its sandbox: writes and reads outside the
+# workspace, the internet and other programs must all be refused. Needs the part set up by the app
+# on a Mac (Settings, Optional parts); CODING_E2E_DATA names another data folder that has it.
+test-coding:
+	CODING_E2E=1 uv run pytest services/api/tests/integration/test_coding_sandbox.py -v
 lint:
 	uv run ruff check . && uv run ruff format --check . && uv run pyright
 	pnpm lint && pnpm typecheck

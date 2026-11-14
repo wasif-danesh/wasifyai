@@ -7,6 +7,7 @@
 #     wheels/             our own packages as wheels
 #     products/           product config (product.yaml, workflows) for the products the desktop serves
 #     comfyui/            a hashed requirements lock per platform for the optional ComfyUI component
+#     coding-engine/      the optional coding engine's version, hashed lock and sandbox profile (ADR-0102)
 #
 # The app's provisioner checks each file against bundle.json and installs with `--require-hashes`.
 # Usage: scripts/build-engine-bundle.sh [output-dir]    (default: apps/desktop/engine-bundle)
@@ -113,6 +114,18 @@ if [ ! -f "$TRAINER_SRC/video-requirements-aarch64-apple-darwin.lock" ]; then
 fi
 cp "$TRAINER_SRC"/video-requirements-*.lock "$OUT/products/wasifyai-training/trainer/"
 
+# The coding engine (ADR-0102): OpenHands' Agent Server in an environment of its own, set up on request from
+# the hashed lock committed in services/coding-engine (scripts/lock-coding-engine.sh writes it) and started
+# inside the sandbox profile kept beside it. The engine reads both from this copy.
+CODING_SRC="services/coding-engine"
+if ! ls "$CODING_SRC"/requirements-*.lock >/dev/null 2>&1; then
+  echo "no coding engine lock file in $CODING_SRC: run scripts/lock-coding-engine.sh first" >&2
+  exit 1
+fi
+mkdir -p "$OUT/coding-engine"
+cp "$CODING_SRC/VERSION" "$CODING_SRC/engine.sb.template" "$CODING_SRC/build-constraints.txt" \
+  "$CODING_SRC"/requirements-*.lock "$OUT/coding-engine/"
+
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"
   cp "products/$p/product.yaml" "$OUT/products/$p/"
@@ -155,6 +168,7 @@ bundle = {
             for f in sorted((out / "comfyui").glob("requirements-*.lock"))
         },
     },
+    "coding_engine": [entry(f) for f in sorted((out / "coding-engine").iterdir()) if f.is_file()],
 }
 (out / "bundle.json").write_text(json.dumps(bundle, indent=2) + "\n")
 print(f"{len(bundle['wheels'])} wheels, {len(bundle['product_files'])} product files")

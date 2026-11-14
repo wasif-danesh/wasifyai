@@ -22,6 +22,9 @@
 //                                                                edit made, then "Made from" and "Made from this"
 //   apps/desktop/scripts/ui-audit.sh light a11y                 every screen of the window against the accessibility
 //                                                                rules (axe, WCAG 2.2 A and AA); prints what fails
+//   apps/desktop/scripts/ui-audit.sh light coding-setup         The coding engine (ADR-0102, C1a) set up from Settings,
+//                                                               Optional parts, with the real downloads; then
+//                                                               coding-repair and coding-remove the same way
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -1723,6 +1726,44 @@ for (const scheme of ["light", "dark"]) {
       if (shown !== listed) throw new Error(`${shown} parts shown, ${listed} listed by the engine`);
       await page.waitForTimeout(500);
       await shot(page, "f2-parts", 1300);
+    });
+  }
+  // stage C1a of the coding agent: the coding engine set up, repaired and removed from Settings, Optional
+  // parts, with the real downloads (about 0.4 GB each time). Run each on a throwaway DESKTOP_DATA_DIR.
+  for (const [name, button, after] of [
+    ["coding-setup", "Set up", "Repair"],
+    ["coding-repair", "Repair", "Repair"],
+    ["coding-remove", "Remove", "Set up"],
+  ]) {
+    if (scheme !== "light" || !names.has(name)) continue;
+    await attempt(name, async () => {
+      await open(page, "/settings");
+      await page.getByRole("searchbox", { name: "Search settings" }).fill("parts");
+      const row = page
+        .getByRole("list", { name: "Optional parts" })
+        .getByRole("listitem")
+        .filter({ hasText: "Coding engine" });
+      await row.waitFor();
+      await shot(page, `${name}-before`, 1500);
+      const began = Date.now();
+      await row.getByRole("button", { name: button }).click();
+      if (name === "coding-remove") {
+        await page.getByRole("dialog").getByRole("button", { name: "Remove" }).click();
+      } else {
+        await row.getByText("Setting up").waitFor({ timeout: 15_000 });
+        await page.waitForTimeout(4000);
+        await shot(page, `${name}-during`, 1500);
+      }
+      const failed = row.getByRole("button", { name: "Try again" });
+      await Promise.race([
+        row.getByRole("button", { name: after }).waitFor({ timeout: 1_200_000 }),
+        failed.waitFor({ timeout: 1_200_000 }).then(async () => {
+          throw new Error(`it failed: ${(await row.innerText()).replace(/\s+/g, " ")}`);
+        }),
+      ]);
+      console.log(`${name}: ${((Date.now() - began) / 1000).toFixed(1)} s`);
+      console.log(`  the row says: ${(await row.innerText()).replace(/\s+/g, " ")}`);
+      await shot(page, `${name}-after`, 1500);
     });
   }
   if (scheme === "light" && names.has("u11-make")) {

@@ -21,6 +21,7 @@ const NONE = {
   creativeProjects: [],
   codeSessions: [],
   codeExtensions: [],
+  codeSchedules: [],
   notebooks: [],
   taught: [],
 };
@@ -331,6 +332,37 @@ describe("the Library", () => {
     await user.click(screen.getByRole("button", { name: /Coding skills/ }));
     expect(screen.queryByRole("link", { name: /Rainy day/ })).toBeNull();
     expect(screen.getByRole("link", { name: /House style/ })).toBeInTheDocument();
+  });
+
+  it("lists a schedule of the coding agent, with a filter of its own", async () => {
+    const user = userEvent.setup();
+    const others = {
+      ...NONE,
+      codeSchedules: [
+        {
+          id: "sc1",
+          title: "Check it every night",
+          request: "Run the project's check.",
+          workspace_id: "w1",
+          project: "bakery-site",
+          rule: { kind: "daily" as const, time: "02:00" },
+          rule_words: "Every day at 02:00",
+          time_zone: "Europe/London",
+          enabled: true,
+          run_when_missed: true,
+          model: "",
+          next_due: null,
+          running: false,
+          last: null,
+          created_at: when,
+        },
+      ],
+    };
+    render(<MyCreations api={api(Promise.resolve(recent({ others })))} nav={nav()} />);
+    expect(await screen.findByRole("link", { name: /Check it every night/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Coding schedules/ }));
+    expect(screen.queryByRole("link", { name: /Rainy day/ })).toBeNull();
+    expect(screen.getByText(/bakery-site · Every day at 02:00/)).toBeInTheDocument();
   });
 
   it("lists the tools' own kinds with a filter once there is one", async () => {

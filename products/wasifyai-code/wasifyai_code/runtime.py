@@ -63,6 +63,7 @@ from wasifyai_code.terminal import Terminal, TerminalError, Terminals
 log = logging.getLogger(__name__)
 
 KIND = "code_session"  # what a session is called in search (ADR-0041)
+SCHEDULE_KIND = "code_schedule"  # ... and a schedule the person made (ADR-0105)
 EXTENSION_KIND = "code_extension"  # ... and an extension the person added (ADR-0104)
 EXTENSIONS_DIR = "extensions"  # under <app data>/code: our copies of what a person added
 SKILLS_USED = "code_skills"  # the stream's event: the person's message switched skills on
@@ -134,6 +135,16 @@ def store_for(state: Any) -> CodeStore:
     if store is None:
         raise NotAvailable("Coding is not available in this deployment.")
     return store
+
+
+def scheduled_for(state: Any) -> Any:
+    """The schedules of this engine and their timer (`scheduled.Scheduled`), made once."""
+    sessions = sessions_for(state)
+    if sessions.scheduled is None:
+        from wasifyai_code.scheduled import Scheduled
+
+        sessions.scheduled = Scheduled(sessions)
+    return sessions.scheduled
 
 
 def sessions_for(state: Any) -> "Sessions":
@@ -252,10 +263,15 @@ class _Turn:
     asks: "dict[str, asyncio.Future[str]]" = field(default_factory=dict)
     marks: dict[str, str] = field(default_factory=dict)  # a step's id -> how it was answered
     told: bool = False  # the turn's last state was said on the feed
+    unattended: bool = False  # nobody is there to answer (a scheduled run)
 
 
 class _Hooks(Hooks):
     """What the loop asks of the product's sessions."""
+
+    # an unattended turn's steps wait like any other: the rules answer them, and what would ask
+    # a person is refused and written down (`Sessions._confirm`)
+    answers_unattended = True
 
     def __init__(self, sessions: "Sessions"):
         self.s = sessions
@@ -271,6 +287,7 @@ class _Hooks(Hooks):
             unattended=unattended,
             read_only=reads,
             skills=tuple(self.s.skills_for(owner, workspace["id"])),
+            hooks=self.s.hooks_for(owner, workspace["id"]),
             account=Account(
                 owner.tenant_id, owner.product_id, owner.user_id, session["id"],
                 spent_usd=float(session["cost_usd"]), limit_usd=float(session["cost_limit_usd"]),
@@ -349,6 +366,7 @@ class Sessions:
         self._turns: dict[str, _Turn] = {}
         self._feeds: dict[str, Feed] = {}
         self._checking: set[str] = set()  # sessions whose check the person is running by hand
+        self.scheduled: Any = None  # `scheduled.Scheduled`, once something asks for it
         data = state.desktop_dir
         outputs = (
             Path(data) / "code" / CHECK_OUTPUTS
@@ -425,9 +443,11 @@ class Sessions:
         await self._index(owner, session["id"])
         return self.view(owner, session["id"])
 
-    async def send(self, owner: Owner, session_id: str, text: str) -> dict[str, Any]:
+    async def send(
+        self, owner: Owner, session_id: str, text: str, *, unattended: bool = False
+    ) -> dict[str, Any]:
         """Begin a turn and give its row. The turn goes on in the background: follow the feed,
-        or `wait` for its end."""
+        or `wait` for its end. `unattended`: nobody is there to answer (a scheduled run)."""
         if not text.strip():
             raise Refused("nothing_to_do", "Say what the agent should look at.")
         session = self._session(owner, session_id)
@@ -438,7 +458,7 @@ class Sessions:
         workspace = self.store.get_workspace(owner, session["workspace_id"])
         first = not self.store.list_turns(owner, session_id)
         turn = self.store.add_turn(owner, session_id, text.strip())
-        flight = self._turns[session_id] = _Turn(turn["id"])
+        flight = self._turns[session_id] = _Turn(turn["id"], unattended=unattended)
         if first:
             # a session nobody named is called by what was asked first
             if session["title"] == workspace["name"]:
@@ -644,24 +664,51 @@ class Sessions:
         known = {s.name: s.title for s in extensions.offered(self._catalogue(), [])}
         return [known.get(n, n.replace("-", " ").capitalize()) for n in names]
 
+    def _on_for(
+        self, owner: Owner, workspace_id: str
+    ) -> tuple[list[extensions.Skill], dict[str, Path]]:
+        """The extensions that are on for a project, and where the sandbox reads each."""
+        switches = self.store.switches(owner, workspace_id)
+        on = [s for s in self._offered(owner) if extensions.is_on(s, switches)]
+        data = self.state.desktop_dir
+        shown = extensions.show_to_sandbox(on, Path(data) / "coding-fixed") if data else {}
+        return on, shown
+
     def skills_for(self, owner: Owner, workspace_id: str) -> list[dict[str, Any]]:
         """The skills that are on for a project, as the place takes them. Their folders are put
         where the sandbox can read them. Whatever fails here, a session still starts: with no
         skills, never with others."""
         try:
-            switches = self.store.switches(owner, workspace_id)
-            on = [s for s in self._offered(owner) if extensions.is_on(s, switches)]
-            data = self.state.desktop_dir
-            shown = extensions.show_to_sandbox(on, Path(data) / "coding-fixed") if data else {}
-            return extensions.for_engine(on, shown)
+            return extensions.for_engine(*self._on_for(owner, workspace_id))
         except (OSError, ValueError) as e:
             log.warning("the project's skills could not be read: %s", e)
             return []
 
+    def hooks_for(self, owner: Owner, workspace_id: str) -> dict[str, Any] | None:
+        """The hooks of the approved plugins that are on for a project; None when there are
+        none, and when anything fails: never a hook nobody approved."""
+        try:
+            return extensions.hooks_for_engine(*self._on_for(owner, workspace_id))
+        except (OSError, ValueError) as e:
+            log.warning("the project's plugins could not be read: %s", e)
+            return None
+
     def workspaces(self, owner: Owner) -> list[dict[str, Any]]:
         """The person's projects, the newest first: what an extension is switched on for."""
         found = self.store.list_workspaces(owner)
-        return [{"id": w["id"], "name": w["name"], "folder": w["path"]} for w in reversed(found)]
+        return [
+            {"id": w["id"], "name": w["name"], "folder": w["path"]}
+            for w in reversed(found)
+            if not w.get("copy_of")  # a scheduled run's copy is not a project of the person's
+        ]
+
+    def running_in(self, owner: Owner, workspace_id: str) -> bool:
+        """Whether a turn is in flight in one of the project's sessions."""
+        return any(
+            s["id"] in self._turns
+            for s in self.store.list_sessions(owner)
+            if s["workspace_id"] == workspace_id
+        )
 
     def list_extensions(self, owner: Owner, workspace_id: str = "") -> list[dict[str, Any]]:
         """What is offered, each with whether it is on for the project (when one is named)."""
@@ -708,9 +755,23 @@ class Sessions:
         when it starts, so the project's sessions begin a new one with their next message."""
         skill = self._extension(owner, extension_id)
         self._switches(owner, workspace_id)
+        if on and skill.needs_approval:
+            raise Refused(
+                "needs_approval",
+                "This plugin brings more than text. Look at what it brings and approve it first.",
+            )
         self.store.set_switch(owner, workspace_id, skill.id, on)
         await self._begin_again(owner, workspace_id)
         return {**skill.view(), "on": on}
+
+    def approve_extension(self, owner: Owner, extension_id: str) -> dict[str, Any]:
+        """The person has seen what a plugin brings and says yes. Once; it is switched on for a
+        project as a separate step."""
+        skill = self._extension(owner, extension_id)
+        if skill.kind != extensions.PLUGIN:
+            raise Refused("not_a_plugin", "A skill brings text only: there is nothing to approve.")
+        self.store.approve_extension(owner, extension_id.partition(":")[2])
+        return self._extension(owner, extension_id).view(with_text=True)
 
     async def _begin_again(self, owner: Owner, workspace_id: str) -> None:
         """Let go of the conversations of a project's sessions that are at rest. One that is
@@ -737,7 +798,9 @@ class Sessions:
     async def add_extension(
         self, owner: Owner, folder: str, workspace_id: str = ""
     ) -> dict[str, Any]:
-        """Copy a skill's folder in and offer it. With a project it is switched on for it."""
+        """Copy a skill's or a plugin's folder in and offer it. With a project a skill is
+        switched on for it; a plugin that brings a hook or a tool connection is not: it waits
+        for the person's approval."""
         data = self.state.desktop_dir
         if data is None:
             raise Refused("unavailable", "Extensions cannot be added here.")
@@ -748,7 +811,7 @@ class Sessions:
             seen = await asyncio.to_thread(extensions.look, source)
             if any(s.name == seen["name"] for s in self._offered(owner)):
                 raise Refused(
-                    "taken", f"A skill called {seen['name']} is already here. Remove it first."
+                    "taken", f"One called {seen['name']} is already here. Remove it first."
                 )
             kept = await asyncio.to_thread(
                 extensions.copy_in, source, Path(data) / "code" / EXTENSIONS_DIR, item
@@ -757,14 +820,15 @@ class Sessions:
             raise Refused(e.code, e.message) from None
         self.store.add_extension(
             owner, item, name=seen["name"], title=seen["title"], path=str(kept),
-            added_from=str(source),
+            added_from=str(source), kind=seen["kind"],
         )  # fmt: skip
         skill = self._extension(owner, f"{extensions.ADDED}:{item}")
-        if workspace_id:
+        on = bool(workspace_id) and not skill.needs_approval
+        if on:
             self.store.set_switch(owner, workspace_id, skill.id, True)
             await self._begin_again(owner, workspace_id)
         await self._index_extension(owner, item, skill)
-        return {**skill.view(with_text=True), "on": bool(workspace_id)}
+        return {**skill.view(with_text=True), "on": on}
 
     async def remove_extension(self, owner: Owner, extension_id: str) -> bool:
         """Forget an extension the person added. Our copy is removed; their folder was never
@@ -1103,6 +1167,8 @@ class Sessions:
             or bool(last and last["state"] == rows.CHECKING and session_id in self._turns),
             "needs_you": bool(last and last["needs_you"]) and not self.running(session_id),
             "check_command": workspace["check_command"],
+            # the session is a scheduled run's, on a copy of the project
+            "scheduled_run": bool(workspace.get("copy_of")),
             "preview_command": workspace["preview_command"],
             "previewing": bool(
                 (shown := self.previews.get(session_id)) and shown.state != previews.ENDED
@@ -1167,6 +1233,8 @@ class Sessions:
 
     async def close(self) -> None:
         """The engine is closing: every turn in flight is stopped, every terminal closed."""
+        if self.scheduled is not None:
+            await self.scheduled.close()  # the timer first: nothing new comes due
         await self.stop_all()
         await self.terminals.close_all()
         await self.previews.close_all()
@@ -1193,8 +1261,11 @@ class Sessions:
         """One turn from the message to its closed row, run by the loop. It never raises."""
         sid = session["id"]
         run = asyncio.ensure_future(
-            self.loop.run_turn(owner, sid, turn["request"], turn=turn, stop=flight.stop)
-        )
+            self.loop.run_turn(
+                owner, sid, turn["request"], turn=turn, stop=flight.stop,
+                unattended=flight.unattended,
+            )
+        )  # fmt: skip
         stopping = asyncio.ensure_future(flight.stop.wait())
         try:
             done, _ = await asyncio.wait({run, stopping}, return_when=asyncio.FIRST_COMPLETED)
@@ -1364,9 +1435,21 @@ class Sessions:
         )
         mode = self.store.get_session(owner, session["id"])["mode"]  # it may have changed
         allowed = self.store.get_workspace(owner, workspace["id"])["allowed"]
+        if flight.unattended:
+            # a scheduled run needs no approval for ordinary work, and nobody is there for the
+            # rest: whatever a chat in "Ask before changes" would ask about (a delete, an
+            # install, a file Undo cannot put back, a picture) is judged as there, and refused
+            # unless the person allowed that kind for the project
+            mode = rows.ASK
         verdict, kind = rules.decide(mode, allowed, kinds)
         mark = rules.ALLOWED if verdict == rules.ALLOWED else ""
-        if verdict == "ask":
+        if verdict == "ask" and flight.unattended:
+            # nobody is there to ask (ADR-0105, decision 11): it is refused and written down
+            step = steps[kinds.index(kind)]
+            what = str(step.get("command") or step.get("path") or step.get("tool") or "")[:300]
+            self.store.note_turn(owner, turn["id"], f"Refused, nobody to ask: {what}")
+            mark = rules.NO
+        elif verdict == "ask":
             step = steps[kinds.index(kind)]
             waiting: asyncio.Future[str] = asyncio.get_running_loop().create_future()
             flight.asks[ask_id] = waiting
@@ -1402,8 +1485,11 @@ class Sessions:
             # a no is for this one step: said too strongly, a model went on to refuse the
             # person's later requests for the same file by itself (docs/spikes/coding-c2.md)
             no = (
-                "The person was asked and said no to this one step, so it was not done. Do not "
-                "repeat this same step now: go on without it, or say what you could not do. "
+                "This is a scheduled run and nobody is here to answer, so this one step was not "
+                "done. Go on without it, and say in your final message what you could not do."
+                if flight.unattended
+                else "The person was asked and said no to this one step, so it was not done. Do "
+                "not repeat this same step now: go on without it, or say what you could not do. "
                 "If the person asks for it again later, try it again as usual."
             )
             with contextlib.suppress(PlaceError):

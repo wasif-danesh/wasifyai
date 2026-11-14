@@ -14,13 +14,16 @@ import type {
   CodePreview,
   CodePreviewRun,
   CodeProject,
+  CodeSchedule,
+  CodeScheduleRun,
   CodeSession,
   CodeTurn,
 } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { whyNot } from "./Checks";
 import { CARRY_OUT, Code } from "./Code";
-import { Extensions } from "./Extensions";
+import { Extensions, bringsWords } from "./Extensions";
+import { Scheduled, moreOf, outcomeOf, ruleOf } from "./Scheduled";
 import { buildThread, stepLine } from "./thread";
 import { XTERM_CSS } from "./xterm-css";
 
@@ -1856,7 +1859,7 @@ describe("Extensions", () => {
     shown({
       extensions: async () => [...EXTENSIONS, ADDED],
       lookAtFolder: async () => {
-        throw new Error("That folder is a plugin. Plugins cannot be added yet.");
+        throw new Error("The plugin has a hook that asks a model.");
       },
       removeExtension,
       extension: async () => ({
@@ -1869,7 +1872,7 @@ describe("Extensions", () => {
       }),
     });
     await userEvent.click(await screen.findByRole("button", { name: "Add from a folder" }));
-    expect(await screen.findByText(/Plugins cannot be added yet/)).toBeTruthy();
+    expect(await screen.findByText(/a hook that asks a model/)).toBeTruthy();
     expect(screen.getByText("Your folder")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Details of House style" }));
     const dialog = await screen.findByRole("dialog", { name: "House style" });
@@ -1902,5 +1905,299 @@ describe("Extensions", () => {
       ],
     );
     expect(view?.parts).toEqual([{ kind: "skills", titles: ["Explain in plain words"] }]);
+  });
+});
+
+describe("A plugin (stage X3)", () => {
+  const brings = {
+    skills: [{ name: "log-style", description: "How the log is worded." }],
+    hooks: [{ when: "after each step", on: "terminal", command: "sh ${PLUGIN_ROOT}/log.sh" }],
+    connections: [{ name: "tracker", to: "npx" }],
+  };
+  const PLUGIN = {
+    id: "added:p1",
+    kind: "plugin" as const,
+    source: "added" as const,
+    name: "work-log",
+    title: "Work log",
+    description: "Keeps a log of the work.",
+    triggers: [],
+    needs: "",
+    default_on: false,
+    on: false,
+    brings,
+    approved: false,
+    needs_approval: true,
+  };
+
+  it("says what it brings in words", () => {
+    expect(bringsWords(brings)).toBe("1 skill, 1 hook and 1 tool connection");
+    expect(bringsWords({ ...brings, hooks: [], connections: [] })).toBe("1 skill");
+  });
+
+  it("has no switch until the person has read what it brings and approved it", async () => {
+    let approved = false;
+    const detail = () => ({
+      ...PLUGIN,
+      approved,
+      needs_approval: !approved,
+      text: '{"name": "work-log"}',
+      lines: 1,
+      licence: "",
+      files: 3,
+      where: [{ id: "w1", name: "bakery-site", folder: "/p", on: false }],
+    });
+    const approveExtension = vi.fn(async () => {
+      approved = true;
+      return detail();
+    });
+    const switchExtension = vi.fn(async () => ({ ...PLUGIN, on: true }));
+    render(
+      <Extensions
+        api={api({
+          extensions: async () => [{ ...PLUGIN, approved, needs_approval: !approved }],
+          extension: async () => detail(),
+          approveExtension,
+          switchExtension,
+        } as Partial<CodeApi>)}
+        pickFolder={async () => null}
+        onOpenProjects={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText(/Brings 1 skill, 1 hook and 1 tool connection/)).toBeTruthy();
+    expect(screen.queryByRole("switch", { name: /Work log/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Look and switch on" }));
+    const dialog = await screen.findByRole("dialog", { name: "Work log" });
+    expect(await within(dialog).findByText("A hook, after each step")).toBeTruthy();
+    expect(within(dialog).getByText("sh ${PLUGIN_ROOT}/log.sh")).toBeTruthy();
+    expect(within(dialog).getByText(/does not connect it in this version/)).toBeTruthy();
+    const off = within(dialog).getByRole("switch", { name: "Work log: off for bakery-site" });
+    expect((off as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Approve what it brings" }));
+    expect(approveExtension).toHaveBeenCalledWith("added:p1");
+    expect(await within(dialog).findByText("You approved what it brings.")).toBeTruthy();
+    const now = within(dialog).getByRole("switch", { name: "Work log: off for bakery-site" });
+    expect((now as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.click(now);
+    expect(switchExtension).toHaveBeenCalledWith("added:p1", "w1", true);
+  });
+});
+
+describe("Scheduled", () => {
+  const run = (over: Partial<CodeScheduleRun> = {}): CodeScheduleRun => ({
+    id: "r1",
+    schedule_id: "sc1",
+    due_at: "2027-03-15T02:00:00+00:00",
+    state: "done",
+    result: "passed",
+    note: "",
+    stands_for: 1,
+    session_id: "s7",
+    changed: 2,
+    open: true,
+    applied_at: null,
+    discarded_at: null,
+    started_at: "2027-03-15T02:00:01+00:00",
+    finished_at: "2027-03-15T02:04:00+00:00",
+    ...over,
+  });
+  const schedule = (over: Partial<CodeSchedule> = {}): CodeSchedule => ({
+    id: "sc1",
+    title: "Check it every night",
+    request: "Run the project's check.",
+    workspace_id: "w1",
+    project: "bakery-site",
+    rule: { kind: "daily", time: "02:00" },
+    rule_words: "Every day at 02:00",
+    time_zone: "Europe/London",
+    enabled: true,
+    run_when_missed: true,
+    model: "",
+    next_due: "2027-03-16T02:00:00+00:00",
+    running: false,
+    last: run(),
+    created_at: "2027-03-01T10:00:00+00:00",
+    ...over,
+  });
+  const TEMPLATE = {
+    id: "nightly-check",
+    title: "Check it every night",
+    description: "Runs the check each night.",
+    request: "Run the project's check.",
+    rule: { kind: "daily" as const, time: "02:00" },
+    rule_words: "Every day at 02:00",
+  };
+  const shown = (given: Record<string, unknown>, more: Record<string, unknown> = {}) =>
+    render(
+      <Scheduled
+        api={api(given as Partial<CodeApi>)}
+        onOpenProjects={vi.fn()}
+        onOpenSession={vi.fn()}
+        {...more}
+      />,
+    );
+
+  it("says each outcome in one word, and what a run left", () => {
+    expect(outcomeOf(run()).word).toBe("Passed");
+    expect(outcomeOf(run({ result: "failed" })).word).toBe("Check failed");
+    expect(outcomeOf(run({ result: "could_not_check" })).word).toBe("Could not check");
+    expect(outcomeOf(run({ result: "not_checked" })).word).toBe("Not checked");
+    expect(outcomeOf(run({ state: "missed" })).word).toBe("Missed");
+    expect(outcomeOf(run({ state: "skipped" })).word).toBe("Skipped: still running");
+    expect(outcomeOf(run({ state: "running" })).word).toBe("Running now");
+    expect(outcomeOf(run({ state: "failed" })).word).toBe("Could not run");
+    expect(outcomeOf(run({ note: "It was stopped.", result: "not_checked" })).word).toBe("Stopped");
+    expect(moreOf(run())).toBe("2 files changed, waiting for you");
+    expect(moreOf(run({ open: false, applied_at: "x", changed: 1 }))).toBe(
+      "1 file changed, applied by you",
+    );
+    expect(moreOf(run({ changed: 0 }))).toBe("Nothing needed changing");
+    expect(moreOf(run({ state: "missed", note: "the app was not open", stands_for: 3 }))).toBe(
+      "the app was not open. stands for 3 missed times",
+    );
+  });
+
+  it("an empty list says what goes there, and that the app must be open", async () => {
+    shown({ schedules: async () => ({ items: [], time_zone: "Europe/London" }) });
+    expect(await screen.findByText("No schedules yet")).toBeTruthy();
+    expect(
+      screen.getByText("Schedules run only while Wasify AI is open and this computer is awake"),
+    ).toBeTruthy();
+  });
+
+  it("lists a schedule with its rule, next time and last run, and runs or pauses it", async () => {
+    const runSchedule = vi.fn(async () => run({ state: "waiting" }));
+    const changeSchedule = vi.fn(async () => schedule({ enabled: false }));
+    shown({
+      schedules: async () => ({ items: [schedule()], time_zone: "Europe/London" }),
+      runSchedule,
+      changeSchedule,
+    });
+    expect(await screen.findByText("Check it every night")).toBeTruthy();
+    expect(screen.getByText("Every day at 02:00, Europe/London")).toBeTruthy();
+    expect(screen.getByText("Passed")).toBeTruthy();
+    expect(screen.getByText(/2 files changed, waiting for you/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Run Check it every night now" }));
+    expect(runSchedule).toHaveBeenCalledWith("sc1");
+    await userEvent.click(screen.getByRole("switch", { name: "Check it every night: on" }));
+    expect(changeSchedule).toHaveBeenCalledWith("sc1", { enabled: false });
+  });
+
+  it("makes a schedule from a template, with a plain rule", async () => {
+    const addSchedule = vi.fn(async () => schedule());
+    shown({
+      schedules: async () => ({ items: [], time_zone: "Europe/London" }),
+      scheduleTemplates: async () => [TEMPLATE],
+      addSchedule,
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "New schedule" }));
+    const save = await screen.findByRole("button", { name: "Save the schedule" });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(await screen.findByRole("button", { name: "Check it every night" }));
+    expect((screen.getByLabelText("What should be done") as HTMLTextAreaElement).value).toBe(
+      "Run the project's check.",
+    );
+    expect((screen.getByLabelText("At") as HTMLInputElement).value).toBe("02:00");
+    await userEvent.click(save);
+    expect(addSchedule).toHaveBeenCalledWith({
+      workspace_id: "w1",
+      request: "Run the project's check.",
+      rule: { kind: "daily", time: "02:00" },
+      title: "Check it every night",
+      run_when_missed: true,
+    });
+  });
+
+  it("changes a schedule's words and time from its history page", async () => {
+    const changeSchedule = vi.fn(async () => schedule());
+    shown({
+      schedules: async () => ({ items: [schedule()], time_zone: "Europe/London" }),
+      schedule: async () => schedule({ runs: [] }),
+      scheduleTemplates: async () => [],
+      changeSchedule,
+    });
+    await userEvent.click(
+      await screen.findByRole("button", { name: "History of Check it every night" }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    expect(await screen.findByRole("heading", { name: "Change the schedule" })).toBeTruthy();
+    const box = screen.getByLabelText("What should be done") as HTMLTextAreaElement;
+    expect(box.value).toBe("Run the project's check.");
+    await userEvent.type(box, " Twice.");
+    await userEvent.click(screen.getByRole("button", { name: "Save the schedule" }));
+    expect(changeSchedule).toHaveBeenCalledWith("sc1", {
+      request: "Run the project's check. Twice.",
+      rule: { kind: "daily", time: "02:00" },
+      title: "Check it every night",
+      run_when_missed: true,
+    });
+  });
+
+  it("turns what the form holds into a plain rule", () => {
+    expect(
+      ruleOf({
+        kind: "weekdays",
+        time: "09:00",
+        days: [4, 0],
+        day: 1,
+        n: 2,
+        unit: "hours",
+        date: "",
+      }),
+    ).toEqual({ kind: "weekdays", days: [0, 4], time: "09:00" });
+    expect(
+      ruleOf({ kind: "every", time: "", days: [], day: 1, n: 30, unit: "minutes", date: "" }),
+    ).toEqual({ kind: "every", minutes: 30 });
+  });
+
+  it("shows a run's changes and applies them, naming a file the person changed meanwhile", async () => {
+    const applyRun = vi.fn(async () => ({
+      applied: ["src/home.html"],
+      left: ["notes.txt"],
+      run: run({ open: false, applied_at: "2027-03-15T08:00:00+00:00" }),
+    }));
+    const onOpenSession = vi.fn();
+    shown(
+      {
+        schedules: async () => ({ items: [schedule()], time_zone: "Europe/London" }),
+        schedule: async () =>
+          schedule({
+            runs: [
+              run(),
+              run({
+                id: "r0",
+                state: "missed",
+                open: false,
+                changed: 0,
+                note: "the app was not open",
+              }),
+            ],
+          }),
+        runChanges: async () => ({
+          run: "r1",
+          project: "bakery-site",
+          files: [
+            { path: "src/home.html", what: "changed", conflict: false },
+            { path: "notes.txt", what: "changed", conflict: true },
+          ],
+        }),
+        applyRun,
+      },
+      { onOpenSession },
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "History of Check it every night" }),
+    );
+    expect(await screen.findByText("Missed")).toBeTruthy();
+    expect(screen.getByText(/Your project has not been touched/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Read what the agent did" }));
+    expect(onOpenSession).toHaveBeenCalledWith("s7");
+    await userEvent.click(screen.getByRole("button", { name: "Look at the changes" }));
+    const dialog = await screen.findByRole("dialog", { name: "What the run changed" });
+    expect(within(dialog).getByText(/you changed it meanwhile: it will be left/)).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Apply to the project" }));
+    expect(applyRun).toHaveBeenCalledWith("r1");
+    expect(await screen.findByText(/1 file was written into the project/)).toBeTruthy();
+    expect(screen.getByText(/because you changed it meanwhile: notes.txt/)).toBeTruthy();
   });
 });

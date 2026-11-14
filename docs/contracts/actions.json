@@ -398,7 +398,7 @@
       "id": "code.extension.add",
       "title": "Add an extension from a folder",
       "summary": "Copy a skill from a folder of this computer into Wasify AI.",
-      "description": "Add a skill the person has in a folder: a folder with a SKILL.md that names the skill, says what it is for, and holds the text for the agent. The folder is copied into Wasify AI; the person's folder is not changed and nothing comes from the internet. With session_id it is switched on for that session's project. A plugin (a folder with .plugin/plugin.json) is refused.",
+      "description": "Add a skill the person has in a folder: a folder with a SKILL.md that names the skill, says what it is for, and holds the text for the agent. The folder is copied into Wasify AI; the person's folder is not changed and nothing comes from the internet. With session_id it is switched on for that session's project. A plugin (a folder with .plugin/plugin.json) can be added too; one that brings a hook or a tool connection stays off until the person has approved it in Code › Extensions.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -802,6 +802,535 @@
       ],
       "consent": "",
       "help": "docs/help/code.project.new.md"
+    },
+    {
+      "id": "code.schedule.add",
+      "title": "Schedule a coding run",
+      "summary": "Have the coding agent do something in a project at set times.",
+      "description": "Make a schedule: a request the coding agent is given in a project at set times (every day at a time, on chosen weekdays, every month on a day, every few hours, or once). Each run works alone on a copy of the project and never touches the project; what it changed waits until the person applies it or lets it go in Code › Scheduled. Nobody is there to answer during a run, so a step that would have to be asked is refused. Runs happen while Wasify AI is open. Start from a template or give the request and the rule.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "description": "A coding session of the project it runs in.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "template": {
+            "default": "",
+            "description": "A template's id, from code.schedule.list: its request and rule are the start, and request and rule given here replace them.",
+            "maxLength": 64,
+            "title": "Template",
+            "type": "string"
+          },
+          "request": {
+            "default": "",
+            "description": "What the agent is asked to do at each run.",
+            "maxLength": 20000,
+            "title": "Request",
+            "type": "string"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "When it runs, as a plain rule: {\"kind\": \"daily\", \"time\": \"09:00\"}, {\"kind\": \"weekdays\", \"days\": [0, 2, 4], \"time\": \"09:00\"} (0 is Monday), {\"kind\": \"monthly\", \"day\": 1, \"time\": \"09:00\"}, {\"kind\": \"every\", \"hours\": 2}, {\"kind\": \"every\", \"minutes\": 30} (five at least), or {\"kind\": \"once\", \"date\": \"2027-03-14\", \"time\": \"09:00\"}.",
+            "title": "Rule"
+          },
+          "title": {
+            "default": "",
+            "description": "A short name for it.",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "SchedAddIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "schedule_id": {
+            "title": "Schedule Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "when": {
+            "title": "When",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "next_due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Next Due"
+          }
+        },
+        "required": [
+          "schedule_id",
+          "title",
+          "project",
+          "when",
+          "enabled"
+        ],
+        "title": "SchedOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "session_id": "0b7c1f9e000040008000000000000000",
+          "template": "nightly-check"
+        },
+        {
+          "session_id": "0b7c1f9e000040008000000000000000",
+          "request": "Update the README to match the code.",
+          "rule": {
+            "kind": "weekdays",
+            "days": [
+              0
+            ],
+            "time": "08:00"
+          }
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": "code.scheduled",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.schedule.add.md"
+    },
+    {
+      "id": "code.schedule.change",
+      "title": "Change or pause a scheduled coding run",
+      "summary": "Pause a coding schedule, start it again, or change what it asks or when.",
+      "description": "Change a schedule of the coding agent: pause it (enabled false), start it again, or change its request, its rule or its name. Its next time is worked out again from now; nothing that passed while it was paused is run.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "schedule_id": {
+            "description": "From code.schedule.list.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Schedule Id",
+            "type": "string"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "False pauses it, true starts it again.",
+            "title": "Enabled"
+          },
+          "request": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Request"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "As in code.schedule.add.",
+            "title": "Rule"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Title"
+          }
+        },
+        "required": [
+          "schedule_id"
+        ],
+        "title": "SchedChangeIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "schedule_id": {
+            "title": "Schedule Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "when": {
+            "title": "When",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "next_due": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Next Due"
+          }
+        },
+        "required": [
+          "schedule_id",
+          "title",
+          "project",
+          "when",
+          "enabled"
+        ],
+        "title": "SchedOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "schedule_id": "0b7c1f9e000040008000000000000000",
+          "enabled": false
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": "code.scheduled",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.schedule.change.md"
+    },
+    {
+      "id": "code.schedule.list",
+      "title": "List the scheduled coding runs",
+      "summary": "Say which coding schedules there are and when each runs next.",
+      "description": "List the person's schedules for the coding agent: what each asks, in which project, when it runs next and how its last run ended. With schedule_id the runs of that schedule are returned too. It also returns the short list of templates a new schedule can start from.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "schedule_id": {
+            "default": "",
+            "description": "A schedule: its runs are returned too, the newest first.",
+            "maxLength": 64,
+            "title": "Schedule Id",
+            "type": "string"
+          }
+        },
+        "title": "SchedListIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "SchedRow": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "project": {
+                "title": "Project",
+                "type": "string"
+              },
+              "when": {
+                "title": "When",
+                "type": "string"
+              },
+              "enabled": {
+                "title": "Enabled",
+                "type": "boolean"
+              },
+              "next_due": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Next Due"
+              },
+              "last_result": {
+                "default": "",
+                "title": "Last Result",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "project",
+              "when",
+              "enabled"
+            ],
+            "title": "SchedRow",
+            "type": "object"
+          },
+          "SchedRunRow": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "due_at": {
+                "title": "Due At",
+                "type": "string"
+              },
+              "state": {
+                "title": "State",
+                "type": "string"
+              },
+              "result": {
+                "default": "",
+                "title": "Result",
+                "type": "string"
+              },
+              "note": {
+                "default": "",
+                "title": "Note",
+                "type": "string"
+              },
+              "changed": {
+                "default": 0,
+                "title": "Changed",
+                "type": "integer"
+              },
+              "open": {
+                "default": false,
+                "title": "Open",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "due_at",
+              "state"
+            ],
+            "title": "SchedRunRow",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/SchedRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "runs": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/SchedRunRow"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "templates": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Templates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "SchedListOut",
+        "type": "object"
+      },
+      "examples": [
+        {}
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": "code.scheduled",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.schedule.list.md"
+    },
+    {
+      "id": "code.schedule.run",
+      "title": "Run a coding schedule now",
+      "summary": "Start a scheduled coding run at once, as it would run at its time.",
+      "description": "Run a schedule now: the same run as at its time, on a copy of the project. It is refused while the schedule's earlier run is still going. The result and the changes are in Code › Scheduled.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "schedule_id": {
+            "description": "From code.schedule.list.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Schedule Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schedule_id"
+        ],
+        "title": "SchedRunIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "state"
+        ],
+        "title": "SchedRunOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "schedule_id": "0b7c1f9e000040008000000000000000"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": "code.scheduled",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.schedule.run.md"
     },
     {
       "id": "code.session.check",

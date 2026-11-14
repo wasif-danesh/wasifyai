@@ -95,6 +95,10 @@ class Hooks:
     """What the loop asks of whoever runs it. The defaults are what a plain run needs (a
     scheduled run, a test); the product's sessions give their own (`runtime.Sessions`)."""
 
+    # True: `event` is given the questions of an unattended turn too, and answers them itself
+    # by rules (nobody is asked). False: the loop refuses every question of an unattended turn.
+    answers_unattended = False
+
     def spec(
         self, owner: Owner, session: dict[str, Any], workspace: dict[str, Any], unattended: bool
     ) -> SessionSpec:
@@ -394,7 +398,11 @@ class Loop:
                             str(event.data.get("why") or places.ERROR),
                             str(event.data.get("detail") or ""),
                         )
-                    if event.kind == places.CONFIRM and unattended:
+                    if (
+                        event.kind == places.CONFIRM
+                        and unattended
+                        and not self.hooks.answers_unattended
+                    ):
                         await self.place.answer(where, event.data["id"], False, NOBODY_TO_ASK)
                         what = str(event.data.get("what", ""))[:500]
                         self.store.note_turn(owner, turn["id"], f"Refused, nobody to ask: {what}")

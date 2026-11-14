@@ -19,6 +19,7 @@ export const ROUTES: Record<string, Route> = {
   model3d: "model3d",
   "code.projects": "code",
   "code.extensions": "extensions",
+  "code.scheduled": "scheduled",
   "voice.speak": "speak",
   "voice.transcribe": "transcribe",
   "voice.lipsync": "lipsync",
@@ -37,7 +38,7 @@ export const ROUTES: Record<string, Route> = {
 };
 
 /** Menu items the window has no screen for yet. */
-const NOT_BUILT: ReadonlySet<string> = new Set(["code.scheduled"]);
+const NOT_BUILT: ReadonlySet<string> = new Set([]);
 
 /** What the window's menu does for each item, given where the person is. */
 export function resolveItem(

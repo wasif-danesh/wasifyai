@@ -18,7 +18,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk import Identity, RouteDeps, parse_ids
 
 from wasifyai_code import PRODUCT_ID, files, starters
-from wasifyai_code.runtime import NotAvailable, Refused, Sessions, owner_of, sessions_for, store_for
+from wasifyai_code import scheduled as runs
+from wasifyai_code.runtime import (
+    NotAvailable,
+    Refused,
+    Sessions,
+    owner_of,
+    scheduled_for,
+    sessions_for,
+    store_for,
+)
+from wasifyai_code.scheduled import ScheduleRefused
 from wasifyai_code.terminal import TerminalError
 
 
@@ -89,6 +99,32 @@ class CodeSwitchIn(BaseModel):
     on: bool
 
 
+class CodeScheduleIn(BaseModel):
+    """A schedule: what the agent is asked at each run, in which project, and when."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    workspace_id: str = Field(min_length=1, max_length=64)
+    request: str = Field(min_length=1, max_length=20_000)
+    rule: dict[str, Any]
+    time_zone: str = Field("", max_length=64)  # empty: this computer's own
+    title: str = Field("", max_length=200)
+    model: str = Field("", max_length=64)
+    run_when_missed: bool = True
+
+
+class CodeSchedulePatch(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    request: str | None = Field(None, min_length=1, max_length=20_000)
+    rule: dict[str, Any] | None = None
+    time_zone: str | None = Field(None, min_length=1, max_length=64)
+    title: str | None = Field(None, max_length=200)
+    model: str | None = Field(None, max_length=64)
+    run_when_missed: bool | None = None
+    enabled: bool | None = None
+
+
 class CodeFolderIn(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -136,6 +172,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "not_empty": 409,
             "not_yours": 403,
             "taken": 409,
+            "needs_approval": 409,
+            "no_copy": 409,
         }.get(  # fmt: skip
             e.code, 422
         )
@@ -473,6 +511,150 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         if gone:
             await deps.unindex(identity, PRODUCT_ID, extension_id.partition(":")[2])
         return Response(status_code=204)
+
+    @router.post("/extensions/{extension_id}/approve")
+    async def approve_extension(
+        extension_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """The person has seen what a plugin brings (its hooks, its tool connections) and says
+        yes. It is not an action: only a person at the window approves."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            return await asyncio.to_thread(live.approve_extension, owner, extension_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    # ---- scheduled runs (ADR-0105) ---------------------------------------------------------------
+
+    def scheduled() -> runs.Scheduled:
+        try:
+            return scheduled_for(deps.state)
+        except NotAvailable as e:
+            raise HTTPException(404, str(e)) from None
+
+    def refused(e: ScheduleRefused) -> HTTPException:
+        return refuse(Refused(e.code, e.message))
+
+    @router.get("/schedules/templates")
+    async def list_templates(_: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """Our short list of starting points for a schedule."""
+        scheduled()
+        return {"items": await asyncio.to_thread(runs.templates)}
+
+    @router.get("/schedules")
+    async def list_schedules(
+        ids: str | None = Query(None, max_length=4000),
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """The person's schedules, the newest first, each with its next time and last run.
+        `ids` (for search) keeps only those."""
+        live = scheduled()
+        return {
+            "items": await asyncio.to_thread(live.list, owner_of(identity), parse_ids(ids)),
+            "time_zone": runs.time_zone_of_this_computer(),
+        }
+
+    @router.post("/schedules", status_code=201)
+    async def add_schedule(
+        body: CodeScheduleIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        live = scheduled()
+        try:
+            made = await asyncio.to_thread(
+                lambda: live.add(
+                    owner_of(identity), workspace_id=body.workspace_id, request=body.request,
+                    rule=body.rule, time_zone=body.time_zone or runs.time_zone_of_this_computer(),
+                    title=body.title, model=body.model, run_when_missed=body.run_when_missed,
+                )
+            )  # fmt: skip
+        except ScheduleRefused as e:
+            raise refused(e) from None
+        live.start()
+        await live.index(owner_of(identity), made)
+        return made
+
+    @router.get("/schedules/{schedule_id}")
+    async def get_schedule(
+        schedule_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """One schedule with its runs, the newest first."""
+        try:
+            return await asyncio.to_thread(scheduled().get, owner_of(identity), schedule_id)
+        except ScheduleRefused as e:
+            raise refused(e) from None
+
+    @router.patch("/schedules/{schedule_id}")
+    async def change_schedule(
+        schedule_id: str, body: CodeSchedulePatch, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Change what it asks or when it runs, or pause it (`enabled`)."""
+        live, given = scheduled(), body.model_dump(exclude_none=True)
+        try:
+            made = await asyncio.to_thread(
+                lambda: live.change(owner_of(identity), schedule_id, **given)
+            )
+        except ScheduleRefused as e:
+            raise refused(e) from None
+        await live.index(owner_of(identity), made)
+        return made
+
+    @router.delete("/schedules/{schedule_id}", status_code=204)
+    async def remove_schedule(
+        schedule_id: str, identity: Identity = Depends(deps.identity)
+    ) -> Response:
+        """Forget a schedule, its history and the copies of its runs. Never the project."""
+        try:
+            await scheduled().remove(owner_of(identity), schedule_id)
+        except ScheduleRefused as e:
+            raise refused(e) from None
+        await deps.unindex(identity, PRODUCT_ID, schedule_id)
+        return Response(status_code=204)
+
+    @router.post("/schedules/{schedule_id}/run", status_code=202)
+    async def run_schedule_now(
+        schedule_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """ "Run now": the same run as at its time."""
+        try:
+            return scheduled().run_now(owner_of(identity), schedule_id)
+        except ScheduleRefused as e:
+            raise refused(e) from None
+
+    @router.get("/schedules/runs/{run_id}/changes")
+    async def run_changes(
+        run_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """What a run changed in its copy, and for each file whether the project's own file was
+        changed meanwhile."""
+        try:
+            return await scheduled().changes(owner_of(identity), run_id)
+        except ScheduleRefused as e:
+            raise refused(e) from None
+
+    @router.post("/schedules/runs/{run_id}/apply")
+    async def apply_run(run_id: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """Write a run's changes into the project; a file changed meanwhile is left and named."""
+        try:
+            return await scheduled().apply(owner_of(identity), run_id)
+        except ScheduleRefused as e:
+            raise refused(e) from None
+
+    @router.post("/schedules/runs/{run_id}/discard")
+    async def discard_run(
+        run_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Let a run's changes go. The project is as it was."""
+        try:
+            return await scheduled().discard(owner_of(identity), run_id)
+        except ScheduleRefused as e:
+            raise refused(e) from None
+
+    @router.post("/schedules/runs/{run_id}/stop")
+    async def stop_run(run_id: str, identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        try:
+            return {"stopped": await scheduled().stop(owner_of(identity), run_id)}
+        except ScheduleRefused as e:
+            raise refused(e) from None
 
     # ---- the preview and the starters ------------------------------------------------------------
 

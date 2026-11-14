@@ -1213,3 +1213,229 @@ async def test_a_skill_that_is_on_is_given_to_the_model_and_fires_and_one_that_i
     finally:
         await live.stop_all()
         store.close()
+
+
+# ---- plugins (stage X3) and scheduled runs (stage C6) ----------------------------------------------
+
+
+async def test_a_plugins_hook_runs_only_after_approval_inside_the_sandbox_and_for_a_second(
+    real, tmp_path_factory
+):
+    """The X3 gate: a plugin with a hook is refused until approved. Then its hooks are run by
+    the real server: inside the sandbox (a write outside the project fails), told where the
+    plugin's own files are, and stopped after one second."""
+    from types import SimpleNamespace
+
+    from wasifyai_code.runtime import Refused, Sessions
+    from wasifyai_code.store import CodeStore, Owner
+
+    shop = tmp_path_factory.mktemp("hook-shop")
+    (shop / "index.html").write_text("<h1>Bread</h1>\n")
+    outside = shop.parent / "written-by-a-hook.txt"
+    plugin = tmp_path_factory.mktemp("plugins") / "work-log"
+    (plugin / ".plugin").mkdir(parents=True)
+    (plugin / ".plugin" / "plugin.json").write_text(
+        json.dumps({"name": "work-log", "description": "Keeps a log of the work."})
+    )
+    (plugin / "words.txt").write_text("from the plugin's own folder\n")
+    (plugin / "hooks").mkdir()
+    hooks = {
+        "UserPromptSubmit": [
+            {"hooks": [{"type": "command", "command": f"echo asked >> hook-log.txt; echo x > '{outside}'; true"}]}
+        ],
+        "PostToolUse": [
+            {"matcher": "*", "hooks": [
+                {"type": "command", "command": 'cat "$PLUGIN_ROOT/words.txt" >> hook-log.txt', "timeout": 60},
+                {"type": "command", "command": "sleep 4; echo slow >> hook-log.txt", "timeout": 60},
+            ]}
+        ],
+    }  # fmt: skip
+    (plugin / "hooks" / "hooks.json").write_text(json.dumps({"hooks": hooks}))
+    real.model.scripts["hooks"] = [
+        use("terminal", command="echo working"),
+        use("finish", message="Done."),
+    ]
+    store = CodeStore.in_folder(real.data / "code-hooks")
+    state = SimpleNamespace(
+        code_store=store, code_sessions=None, coding_server=real.server,
+        coding_gateway=real.gateway, creation_index=None, desktop_dir=real.data,
+    )  # fmt: skip
+    live = Sessions(state, place=real.place)
+    me = Owner("t1", "u1")
+    log = shop / "hook-log.txt"
+    try:
+        made = await live.start(me, folder=str(shop), mode="own", model="scripted")
+        (project,) = live.workspaces(me)
+        added = await live.add_extension(me, str(plugin), project["id"])
+        assert added["needs_approval"] is True and added["on"] is False
+        with pytest.raises(Refused) as no:
+            await live.switch_extension(me, added["id"], project["id"], True)
+        assert no.value.code == "needs_approval"
+        # 1. not approved: the turn runs, and no hook does
+        await live.send(me, made["id"], "Say hello. #script:hooks")
+        await asyncio.wait_for(live.wait(me, made["id"]), 120)
+        assert not log.exists()
+        # 2. approved and switched on: the next conversation has its hooks
+        live.approve_extension(me, added["id"])
+        await live.switch_extension(me, added["id"], project["id"], True)
+        started = time.monotonic()
+        await live.send(me, made["id"], "Say hello again. #script:hooks")
+        closed = await asyncio.wait_for(live.wait(me, made["id"]), 120)
+        took = time.monotonic() - started
+        assert closed["why"] == "finished", closed
+        said = log.read_text()
+        assert "asked" in said and "from the plugin's own folder" in said, said
+        # the sandbox held the hook: nothing was written outside the project
+        assert not outside.exists()
+        # one second and no more: the slow hook was stopped before it wrote
+        await asyncio.sleep(4.5)
+        assert "slow" not in log.read_text(), (log.read_text(), took)
+    finally:
+        await live.stop_all()
+        store.close()
+
+
+async def test_a_scheduled_run_works_alone_on_a_copy_and_the_project_is_touched_only_by_apply(
+    real, tmp_path_factory
+):
+    """One run of a schedule on the real engine, in its sandbox, with a scripted model: the
+    copy is inside the engine's own folder, a step that would have to be asked is refused, the
+    project's check runs in the copy, and the project changes only when the run is applied."""
+    from types import SimpleNamespace
+
+    from wasifyai_code.runtime import Sessions
+    from wasifyai_code.scheduled import Scheduled
+    from wasifyai_code.store import CodeStore, Owner
+
+    shop = tmp_path_factory.mktemp("night-shop")
+    (shop / "prices.py").write_text("def total(xs):\n    return sum(xs) if xs else None\n")
+    (shop / "check.py").write_text("import prices\nassert prices.total([]) == 0\nprint('ok')\n")
+    (shop / "old").mkdir()
+    (shop / "old" / "draft.txt").write_text("keep me\n")
+    before = tree(shop)
+    real.model.scripts["nightly"] = [
+        use("terminal", command="rm -rf old"),  # only a person may allow this: refused
+        # the copy's place is not known beforehand, so the change is made from where the agent is
+        use("terminal", command="sed -i '' 's/ if xs else None//' prices.py"),
+        use("finish", message="Fixed total."),
+    ]
+    store = CodeStore.in_folder(real.data / "code-nightly")
+    state = SimpleNamespace(
+        code_store=store, code_sessions=None, coding_server=real.server,
+        coding_gateway=real.gateway, creation_index=None, desktop_dir=real.data,
+    )  # fmt: skip
+    live = Sessions(state, place=real.place)
+    runs = Scheduled(live)
+    live.scheduled = runs
+    me = Owner("t1", "u1")
+    try:
+        made = await live.start(me, folder=str(shop), mode="ask", model="scripted")
+        live.set_check(me, made["id"], "python3 -B check.py")
+        (project,) = live.workspaces(me)
+        schedule = runs.add(
+            me, workspace_id=project["id"], request="Fix what the check finds. #script:nightly",
+            rule={"kind": "daily", "time": "02:00"}, time_zone="Europe/London", model="scripted",
+        )  # fmt: skip
+        assert runs.run_now(me, schedule["id"])["state"] == "waiting"
+        run: dict[str, Any] = {}
+        for _ in range(1200):
+            (run,) = runs.get(me, schedule["id"])["runs"]
+            if run["state"] not in ("waiting", "running"):
+                break
+            await asyncio.sleep(0.1)
+        seen = await runs.changes(me, run["id"]) if run["state"] == "done" else {}
+        assert (run["state"], run["result"], run["changed"]) == ("done", "passed", 1), (run, seen)
+        assert "refused: nobody was there to ask" in run["note"], run
+        # the project is exactly as it was; the copy is inside the coding engine's own folder
+        assert tree(shop) == before
+        copy = Path(store.get_workspace(me, store.get_run(me, run["id"])["copy_workspace"])["path"])
+        assert Path(real.server.run_dir) / "copies" in copy.parents
+        assert "if xs else None" not in (copy / "prices.py").read_text()
+        assert (copy / "old" / "draft.txt").is_file()  # the refused step did not happen
+        # the person changed nothing meanwhile: applying writes the one file
+        found = await runs.changes(me, run["id"])
+        assert found["files"] == [{"path": "prices.py", "what": "changed", "conflict": False}]
+        done = await runs.apply(me, run["id"])
+        assert done["applied"] == ["prices.py"] and done["left"] == []
+        assert "if xs else None" not in (shop / "prices.py").read_text()
+        assert not copy.exists()  # noqa: ASYNC240
+        assert [w["id"] for w in live.workspaces(me)] == [project["id"]]
+    finally:
+        await runs.close()
+        await live.stop_all()
+        store.close()
+
+
+@pytest.mark.skipif(os.environ.get("CODING_WEEK") != "1", reason="35 minutes: CODING_WEEK=1")
+async def test_a_week_of_nights_five_minutes_apart_none_missed_none_doubled_nothing_outside(
+    real, tmp_path_factory
+):
+    """The C6 gate in a compressed form: seven due times on the real clock, five minutes apart
+    (the least a rule allows), each a real run on the real engine with a scripted model. No
+    time is missed or run twice, and the project is byte for byte what it was."""
+    from types import SimpleNamespace
+
+    from wasifyai_code.runtime import Sessions
+    from wasifyai_code.scheduled import KEPT_COPIES, Scheduled
+    from wasifyai_code.store import CodeStore, Owner, from_text
+
+    shop = tmp_path_factory.mktemp("week-shop")
+    (shop / "log.txt").write_text("start\n")
+    (shop / "check.sh").write_text("test -f log.txt\n")
+    before = tree(shop)
+    real.model.scripts["week"] = [
+        use("terminal", command="date >> log.txt"),
+        use("finish", message="Logged."),
+    ]
+    store = CodeStore.in_folder(real.data / "code-week")
+    state = SimpleNamespace(
+        code_store=store, code_sessions=None, coding_server=real.server,
+        coding_gateway=real.gateway, creation_index=None, desktop_dir=real.data,
+    )  # fmt: skip
+    live = Sessions(state, place=real.place)
+    runs = Scheduled(live)
+    live.scheduled = runs
+    me = Owner("t1", "u1")
+    try:
+        made = await live.start(me, folder=str(shop), mode="ask", model="scripted")
+        live.set_check(me, made["id"], "sh check.sh")
+        (project,) = live.workspaces(me)
+        schedule = runs.add(
+            me, workspace_id=project["id"], request="Write the time down. #script:week",
+            rule={"kind": "every", "minutes": 5}, time_zone="UTC", model="scripted",
+        )  # fmt: skip
+        runs.start()
+        deadline = time.monotonic() + 7 * 300 + 120
+        while time.monotonic() < deadline:
+            found = runs.get(me, schedule["id"])["runs"]
+            if len([r for r in found if r["state"] == "done"]) >= 7:
+                break
+            await asyncio.sleep(5)
+        found = list(reversed(runs.get(me, schedule["id"])["runs"]))[:7]
+        print(
+            "\nWEEK",
+            json.dumps(
+                [
+                    (r["due_at"], r["state"], r["result"], r["changed"], r["started_at"])
+                    for r in found
+                ]
+            ),
+        )
+        assert [(r["state"], r["result"], r["changed"]) for r in found] == [
+            ("done", "passed", 1)
+        ] * 7
+        due = [from_text(r["due_at"]) for r in found]
+        assert [(b - a).total_seconds() for a, b in zip(due, due[1:], strict=False)] == [300.0] * 6
+        late = [
+            (from_text(r["started_at"]) - d).total_seconds()
+            for r, d in zip(found, due, strict=True)
+        ]
+        print("WEEK late by (s)", late)
+        assert max(late) < 90
+        assert tree(shop) == before  # nothing outside the copies: the project is as it was
+        copies = [p for p in (Path(real.server.run_dir) / "copies").iterdir() if p.is_dir()]
+        assert len(copies) == KEPT_COPIES
+    finally:
+        await runs.close()
+        await live.stop_all()
+        store.close()

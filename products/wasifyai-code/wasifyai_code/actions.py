@@ -26,7 +26,16 @@ from wasifyai_platform_sdk.actions.helpers import need_deps
 
 from wasifyai_code import PRODUCT_ID
 from wasifyai_code import place as places
-from wasifyai_code.runtime import KIND, NotAvailable, Refused, owner_of, sessions_for
+from wasifyai_code.runtime import (
+    KIND,
+    NotAvailable,
+    Refused,
+    owner_of,
+    scheduled_for,
+    sessions_for,
+)
+from wasifyai_code.scheduled import ScheduleRefused, time_zone_of_this_computer
+from wasifyai_code.scheduled import templates as schedule_templates
 
 ENGINE = need_runtime("coding")
 SAMPLE_ID = "0b7c1f9e000040008000000000000000"
@@ -276,8 +285,201 @@ class ExtAddOut(BaseModel):
     on: bool
 
 
+class SchedListIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    schedule_id: str = Field(
+        "", max_length=64, description="A schedule: its runs are returned too, the newest first."
+    )
+
+
+class SchedRow(BaseModel):
+    id: str
+    title: str
+    project: str
+    when: str
+    enabled: bool
+    next_due: str | None = None
+    last_result: str = ""
+
+
+class SchedRunRow(BaseModel):
+    id: str
+    due_at: str
+    state: str
+    result: str = ""
+    note: str = ""
+    changed: int = 0
+    open: bool = False
+
+
+class SchedListOut(BaseModel):
+    items: list[SchedRow]
+    runs: list[SchedRunRow] = []
+    templates: list[dict[str, Any]] = []
+
+
+class SchedAddIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    session_id: str = Field(
+        min_length=1, max_length=64, description="A coding session of the project it runs in."
+    )
+    template: str = Field(
+        "", max_length=64,
+        description="A template's id, from code.schedule.list: its request and rule are the "
+        "start, and request and rule given here replace them.",
+    )  # fmt: skip
+    request: str = Field(
+        "", max_length=20_000, description="What the agent is asked to do at each run."
+    )
+    rule: dict[str, Any] | None = Field(
+        None,
+        description='When it runs, as a plain rule: {"kind": "daily", "time": "09:00"}, '
+        '{"kind": "weekdays", "days": [0, 2, 4], "time": "09:00"} (0 is Monday), '
+        '{"kind": "monthly", "day": 1, "time": "09:00"}, {"kind": "every", "hours": 2}, '
+        '{"kind": "every", "minutes": 30} (five at least), or '
+        '{"kind": "once", "date": "2027-03-14", "time": "09:00"}.',
+    )
+    title: str = Field("", max_length=200, description="A short name for it.")
+
+
+class SchedOut(BaseModel):
+    schedule_id: str
+    title: str
+    project: str
+    when: str
+    enabled: bool
+    next_due: str | None = None
+
+
+class SchedChangeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    schedule_id: str = Field(min_length=1, max_length=64, description="From code.schedule.list.")
+    enabled: bool | None = Field(None, description="False pauses it, true starts it again.")
+    request: str | None = Field(None, min_length=1, max_length=20_000)
+    rule: dict[str, Any] | None = Field(None, description="As in code.schedule.add.")
+    title: str | None = Field(None, max_length=200)
+
+
+class SchedRunIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    schedule_id: str = Field(min_length=1, max_length=64, description="From code.schedule.list.")
+
+
+class SchedRunOut(BaseModel):
+    run_id: str
+    state: str
+
+
 def _sessions(ctx: ActionContext) -> Any:
     return sessions_for(need_deps(ctx).state)
+
+
+def _sched_out(view: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schedule_id": view["id"], "title": view["title"], "project": view["project"],
+        "when": view["rule_words"], "enabled": view["enabled"], "next_due": view["next_due"],
+    }  # fmt: skip
+
+
+async def _sched_list(p: SchedListIn, ctx: ActionContext) -> Outcome:
+    owner = owner_of(ctx.actor)
+    try:
+        live = scheduled_for(need_deps(ctx).state)
+        items = live.list(owner)
+        runs = live.get(owner, p.schedule_id)["runs"] if p.schedule_id else []
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except ScheduleRefused as e:
+        return Outcome.refused(e.message, e.code)
+    rows = [
+        {
+            "id": i["id"], "title": i["title"], "project": i["project"], "when": i["rule_words"],
+            "enabled": i["enabled"], "next_due": i["next_due"],
+            "last_result": (i["last"] or {}).get("result") or "",
+        }
+        for i in items
+    ]  # fmt: skip
+    short = [
+        {"id": t["id"], "title": t["title"], "about": t["description"], "when": t["rule_words"]}
+        for t in schedule_templates()
+    ]
+    return Outcome.ok(
+        {
+            "items": rows,
+            "runs": [{k: r[k] for k in SchedRunRow.model_fields} for r in runs[:20]],
+            "templates": short,
+        },
+        f"{len(rows)} schedule{'s' if len(rows) != 1 else ''}.",
+    )
+
+
+async def _sched_add(p: SchedAddIn, ctx: ActionContext) -> Outcome:
+    owner = owner_of(ctx.actor)
+    start = next((t for t in schedule_templates() if t["id"] == p.template), None)
+    if p.template and start is None:
+        return Outcome.refused("There is no such template.", "not_found")
+    request = p.request or (start["request"] if start else "")
+    rule = p.rule or (start["rule"] if start else None)
+    if not request or rule is None:
+        return Outcome.refused("Say what the agent should do, and when.", "nothing_to_do")
+    try:
+        state = need_deps(ctx).state
+        workspace, _project = _workspace_of(_sessions(ctx), owner, p.session_id)
+        live = scheduled_for(state)
+        made = live.add(
+            owner, workspace_id=workspace, request=request, rule=rule,
+            time_zone=time_zone_of_this_computer(),
+            title=p.title or (start["title"] if start else ""),
+        )  # fmt: skip
+        live.start()
+        await live.index(owner, made)
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except (Refused, ScheduleRefused) as e:
+        return Outcome.refused(e.message, e.code)
+    return Outcome.ok(
+        _sched_out(made),
+        f'"{made["title"]}" will run in {made["project"]}: {made["rule_words"].lower()}. Each '
+        "run works on a copy of the project; its changes wait in Code › Scheduled until they "
+        "are applied.",
+    )
+
+
+async def _sched_change(p: SchedChangeIn, ctx: ActionContext) -> Outcome:
+    owner = owner_of(ctx.actor)
+    given = p.model_dump(exclude_none=True, exclude={"schedule_id"})
+    if not given:
+        return Outcome.refused("Say what to change.", "nothing_to_do")
+    try:
+        live = scheduled_for(need_deps(ctx).state)
+        made = live.change(owner, p.schedule_id, **given)
+        await live.index(owner, made)
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except ScheduleRefused as e:
+        return Outcome.refused(e.message, e.code)
+    state = "is on" if made["enabled"] else "is paused"
+    return Outcome.ok(_sched_out(made), f'"{made["title"]}" {state}: {made["rule_words"].lower()}.')
+
+
+async def _sched_run(p: SchedRunIn, ctx: ActionContext) -> Outcome:
+    owner = owner_of(ctx.actor)
+    try:
+        run = scheduled_for(need_deps(ctx).state).run_now(owner, p.schedule_id)
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except ScheduleRefused as e:
+        return Outcome.refused(e.message, e.code)
+    if run["state"] == "skipped":
+        return Outcome.refused("Its earlier run is still going.", "busy")
+    return Outcome.ok(
+        {"run_id": run["id"], "state": run["state"]},
+        "The run has started on a copy of the project. Its result is in Code › Scheduled.",
+    )
 
 
 async def _start(p: StartIn, ctx: ActionContext) -> Outcome:
@@ -377,7 +579,7 @@ async def _ext_add(p: ExtAddIn, ctx: ActionContext) -> Outcome:
             "extension_id": made["id"], "title": made["title"],
             "description": made["description"][:300], "on": bool(made["on"]),
         },
-        f'The skill "{made["title"]}" was copied into Wasify AI'
+        f'"{made["title"]}" was copied into Wasify AI'
         + (" and switched on for the project." if made["on"] else "; it is off until switched on."),
     )  # fmt: skip
 
@@ -776,7 +978,9 @@ def actions() -> list[Action]:
                 "the skill, says what it is for, and holds the text for the agent. The folder "
                 "is copied into Wasify AI; the person's folder is not changed and nothing "
                 "comes from the internet. With session_id it is switched on for that "
-                "session's project. A plugin (a folder with .plugin/plugin.json) is refused."
+                "session's project. A plugin (a folder with .plugin/plugin.json) can be added "
+                "too; one that brings a hook or a tool connection stays off until the person "
+                "has approved it in Code › Extensions."
             ),
             input=ExtAddIn,
             output=ExtAddOut,
@@ -786,6 +990,94 @@ def actions() -> list[Action]:
             product=PRODUCT_ID,
             bind=CallBinding(_ext_add),
             ui="code.extensions",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.schedule.list",
+            title="List the scheduled coding runs",
+            summary="Say which coding schedules there are and when each runs next.",
+            description=(
+                "List the person's schedules for the coding agent: what each asks, in which "
+                "project, when it runs next and how its last run ended. With schedule_id the "
+                "runs of that schedule are returned too. It also returns the short list of "
+                "templates a new schedule can start from."
+            ),
+            input=SchedListIn,
+            output=SchedListOut,
+            examples=({},),
+            effect="read",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            product=PRODUCT_ID,
+            bind=CallBinding(_sched_list),
+            ui="code.scheduled",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.schedule.add",
+            title="Schedule a coding run",
+            summary="Have the coding agent do something in a project at set times.",
+            description=(
+                "Make a schedule: a request the coding agent is given in a project at set "
+                "times (every day at a time, on chosen weekdays, every month on a day, every "
+                "few hours, or once). Each run works alone on a copy of the project and never "
+                "touches the project; what it changed waits until the person applies it or "
+                "lets it go in Code › Scheduled. Nobody is there to answer during a run, so a "
+                "step that would have to be asked is refused. Runs happen while Wasify AI is "
+                "open. Start from a template or give the request and the rule."
+            ),
+            input=SchedAddIn,
+            output=SchedOut,
+            examples=(
+                {"session_id": SAMPLE_ID, "template": "nightly-check"},
+                {
+                    "session_id": SAMPLE_ID,
+                    "request": "Update the README to match the code.",
+                    "rule": {"kind": "weekdays", "days": [0], "time": "08:00"},
+                },
+            ),
+            effect="make",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            product=PRODUCT_ID,
+            bind=CallBinding(_sched_add),
+            ui="code.scheduled",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.schedule.change",
+            title="Change or pause a scheduled coding run",
+            summary="Pause a coding schedule, start it again, or change what it asks or when.",
+            description=(
+                "Change a schedule of the coding agent: pause it (enabled false), start it "
+                "again, or change its request, its rule or its name. Its next time is worked "
+                "out again from now; nothing that passed while it was paused is run."
+            ),
+            input=SchedChangeIn,
+            output=SchedOut,
+            examples=({"schedule_id": SAMPLE_ID, "enabled": False},),
+            effect="change",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            product=PRODUCT_ID,
+            bind=CallBinding(_sched_change),
+            ui="code.scheduled",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.schedule.run",
+            title="Run a coding schedule now",
+            summary="Start a scheduled coding run at once, as it would run at its time.",
+            description=(
+                "Run a schedule now: the same run as at its time, on a copy of the project. "
+                "It is refused while the schedule's earlier run is still going. The result "
+                "and the changes are in Code › Scheduled."
+            ),
+            input=SchedRunIn,
+            output=SchedRunOut,
+            examples=({"schedule_id": SAMPLE_ID},),
+            effect="make",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            product=PRODUCT_ID,
+            bind=CallBinding(_sched_run),
+            ui="code.scheduled",
             surfaces=("assistant",),
         ),
         Action(

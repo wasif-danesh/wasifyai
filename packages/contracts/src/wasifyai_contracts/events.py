@@ -133,6 +133,15 @@ class CodeCheckEvent(_Envelope):
     tail: str = ""  # the end of the output, cut to 4,000 characters
 
 
+class CodeSkillsEvent(_Envelope):
+    """The person's message switched skills on (ADR-0104; stage X2): the engine put their text
+    into the message because one of their words was in it."""
+
+    event: Literal["code_skills"] = "code_skills"
+    names: list[str]  # the skills' own names
+    titles: list[str] = Field(default_factory=list)  # what a person calls them, in the same order
+
+
 class CodeMessageEvent(_Envelope):
     """A message of the coding agent is complete. It replaces what the `token` events of that
     message built; those are not kept on a coding session's stream."""
@@ -162,6 +171,7 @@ SseEvent = Annotated[
     | DoneEvent
     | CodeStateEvent
     | CodeCheckEvent
+    | CodeSkillsEvent
     | CodeMessageEvent
     | CodeRefusalEvent,
     Field(discriminator="event"),

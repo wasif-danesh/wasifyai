@@ -56,6 +56,8 @@ export function navFor(go: (r: Route) => void, handOff?: HandOff): CreationsNav 
         go("notebook");
       } else if (entry.kind === "code_session") {
         window.location.hash = codePath(entry.id); // the session itself, at its own address
+      } else if (entry.kind === "code_extension") {
+        go("extensions"); // where a skill is read, switched on and removed
       } else go(screen[entry.kind]);
     },
     make: (to) => go(make[to]),

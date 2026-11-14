@@ -1141,3 +1141,75 @@ async def test_wasify_make_is_asked_first_and_the_command_in_the_sandbox_only_re
     finally:
         await live.stop_all()
         store.close()
+
+
+# ---- extensions: the skills a session is taught (stage X2) -----------------------------------------
+
+
+async def test_a_skill_that_is_on_is_given_to_the_model_and_fires_and_one_that_is_off_is_not(
+    real, tmp_path_factory
+):
+    """One of ours and one of the pinned catalogue. The model is scripted, so "fires" is what
+    the engine itself does with a skill: it lists it for the model, and when the person's
+    message has one of its words it puts the skill's text into that message."""
+    from types import SimpleNamespace
+
+    from wasifyai_code.runtime import SKILLS_USED, Sessions
+    from wasifyai_code.store import CodeStore, Owner
+
+    shop = tmp_path_factory.mktemp("skill-shop")
+    (shop / "index.html").write_text("<h1>Bread</h1>\n")
+    real.model.scripts["skills"] = [say("Here it is.")]
+    store = CodeStore.in_folder(real.data / "code-skills")
+    state = SimpleNamespace(
+        code_store=store, code_sessions=None, coding_server=real.server,
+        coding_gateway=real.gateway, creation_index=None, desktop_dir=real.data,
+    )  # fmt: skip
+    live = Sessions(state, place=real.place)
+    me = Owner("t1", "u1")
+
+    def sent_to_the_model() -> str:
+        # the agent's own call, not the engine's call for a title (it has no tools)
+        return json.dumps(next(r for r in reversed(real.model.requests) if r.get("tools")))
+
+    try:
+        made = await live.start(me, folder=str(shop), mode="plan", model="scripted")
+        (project,) = live.workspaces(me)
+        offered = {e["id"]: e for e in live.list_extensions(me, project["id"])}
+        # ours and the catalogue's are both offered, from what is on this computer
+        assert offered["own:explain-in-plain-words"]["on"] is True
+        assert offered["catalogue:security"]["on"] is False
+        # 1. ours is on by the short list: it is listed for the model, and its words fire it
+        await live.send(me, made["id"], "Explain this project in plain words. #script:skills")
+        await asyncio.wait_for(live.wait(me, made["id"]), 60)
+        sent = sent_to_the_model()
+        assert "explain-in-plain-words" in sent
+        assert "The person you are answering is not a developer" in sent  # its text, injected
+        assert "security best practices" not in sent.lower()  # the one that is off is not there
+        used = [e for e in live.feed(made["id"]).kept if e["event"] == SKILLS_USED]
+        assert used and used[-1]["names"] == ["explain-in-plain-words"]
+        assert used[-1]["titles"] == ["Explain in plain words"]
+        # the agent can read the skill's own folder, and cannot write it
+        shown = next(
+            s["source"] for s in live.skills_for(me, project["id"])
+            if s["name"] == "explain-in-plain-words"
+        )  # fmt: skip
+        code, said = await real.sh(f"head -3 '{shown}' && echo x >> '{shown}'; echo exit=$?")
+        assert "name: explain-in-plain-words" in said and "exit=0" not in said
+        # 2. a public one of the catalogue is switched on, ours off
+        await live.switch_extension(me, "catalogue:security", project["id"], True)
+        await live.switch_extension(me, "own:explain-in-plain-words", project["id"], False)
+        await live.send(
+            me, made["id"], "Is the authentication safe? In plain words. #script:skills"
+        )
+        await asyncio.wait_for(live.wait(me, made["id"]), 60)
+        sent = sent_to_the_model()
+        assert "security best practices" in sent.lower()
+        # switching ours off stopped it: neither listed nor injected, though its words were said
+        assert "explain-in-plain-words" not in sent
+        assert "The person you are answering is not a developer" not in sent
+        used = [e for e in live.feed(made["id"]).kept if e["event"] == SKILLS_USED]
+        assert used[-1]["names"] == ["security"]
+    finally:
+        await live.stop_all()
+        store.close()

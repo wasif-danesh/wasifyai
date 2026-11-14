@@ -485,7 +485,10 @@ export {
   type CodeEngine,
   type CodeEntry,
   type CodeEvent,
+  type CodeExtension,
+  type CodeExtensionDetail,
   type CodeFile,
+  type CodeFolderLook,
   type CodeMode,
   type CodeModel,
   type CodePreview,
@@ -497,6 +500,7 @@ export {
   type CodeTerminalEvent,
   type CodeTurn,
   type CodeUndone,
+  type CodeWorkspace,
   CODE_PRODUCT_ID,
   createCodeApi,
 } from "./code";

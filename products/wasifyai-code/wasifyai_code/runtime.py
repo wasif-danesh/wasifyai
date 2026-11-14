@@ -49,7 +49,7 @@ from typing import Any
 
 from wasifyai_platform_sdk import Identity, search_text
 
-from wasifyai_code import PRODUCT_ID, assets, checks, rules, starters
+from wasifyai_code import PRODUCT_ID, assets, checks, extensions, rules, starters
 from wasifyai_code import place as places
 from wasifyai_code import preview as previews
 from wasifyai_code import store as rows
@@ -63,6 +63,9 @@ from wasifyai_code.terminal import Terminal, TerminalError, Terminals
 log = logging.getLogger(__name__)
 
 KIND = "code_session"  # what a session is called in search (ADR-0041)
+EXTENSION_KIND = "code_extension"  # ... and an extension the person added (ADR-0104)
+EXTENSIONS_DIR = "extensions"  # under <app data>/code: our copies of what a person added
+SKILLS_USED = "code_skills"  # the stream's event: the person's message switched skills on
 STEP_LIMIT = 60  # tool steps in one turn of a session that reads
 RUN_STEP_LIMIT = 120  # ... and of one that changes files and runs commands
 STOP_GRACE_S = 3.0  # after Stop, how long the place's own "ended" is waited for
@@ -79,8 +82,8 @@ TOKEN, REASONING = "token", "reasoning"  # words as they are written: relayed, n
 NOT_KEPT = (TOKEN, REASONING)
 NODE = "agent"
 MODE_CHANGED = (
-    "The session changed between a mode that only reads and one that changes files, so the "
-    "agent begins again from this message. It was given the last answer to go on from."
+    "The session's mode or its project's extensions changed, so the agent begins again from "
+    "this message. It was given the last answer to go on from."
 )
 UNDONE_NOTE = (
     "(Since your last turn the person undid its changes: the project's files are back to how "
@@ -267,6 +270,7 @@ class _Hooks(Hooks):
             step_limit=STEP_LIMIT if reads else RUN_STEP_LIMIT,
             unattended=unattended,
             read_only=reads,
+            skills=tuple(self.s.skills_for(owner, workspace["id"])),
             account=Account(
                 owner.tenant_id, owner.product_id, owner.user_id, session["id"],
                 spent_usd=float(session["cost_usd"]), limit_usd=float(session["cost_limit_usd"]),
@@ -623,6 +627,181 @@ class Sessions:
     async def try_again(self, owner: Owner, session_id: str) -> dict[str, Any]:
         """Three more rounds: a new turn that tells the agent the check still fails."""
         return await self.send(owner, session_id, TRY_AGAIN)
+
+    # ---- extensions (ADR-0104) -------------------------------------------------------------------
+
+    def _catalogue(self) -> Path | None:
+        """The pinned catalogue installed with the coding engine; None when it is not there."""
+        found = getattr(self.state.coding_server, "install", None)
+        folder = getattr(found, "extensions", None)
+        return Path(folder) if folder is not None and Path(folder).is_dir() else None
+
+    def _offered(self, owner: Owner) -> list[extensions.Skill]:
+        return extensions.offered(self._catalogue(), self.store.list_extensions(owner))
+
+    def _skill_titles(self, names: list[str]) -> list[str]:
+        """The names a person knows the skills by; a name of the engine's own stays as it is."""
+        known = {s.name: s.title for s in extensions.offered(self._catalogue(), [])}
+        return [known.get(n, n.replace("-", " ").capitalize()) for n in names]
+
+    def skills_for(self, owner: Owner, workspace_id: str) -> list[dict[str, Any]]:
+        """The skills that are on for a project, as the place takes them. Their folders are put
+        where the sandbox can read them. Whatever fails here, a session still starts: with no
+        skills, never with others."""
+        try:
+            switches = self.store.switches(owner, workspace_id)
+            on = [s for s in self._offered(owner) if extensions.is_on(s, switches)]
+            data = self.state.desktop_dir
+            shown = extensions.show_to_sandbox(on, Path(data) / "coding-fixed") if data else {}
+            return extensions.for_engine(on, shown)
+        except (OSError, ValueError) as e:
+            log.warning("the project's skills could not be read: %s", e)
+            return []
+
+    def workspaces(self, owner: Owner) -> list[dict[str, Any]]:
+        """The person's projects, the newest first: what an extension is switched on for."""
+        found = self.store.list_workspaces(owner)
+        return [{"id": w["id"], "name": w["name"], "folder": w["path"]} for w in reversed(found)]
+
+    def list_extensions(self, owner: Owner, workspace_id: str = "") -> list[dict[str, Any]]:
+        """What is offered, each with whether it is on for the project (when one is named)."""
+        switches = self._switches(owner, workspace_id)
+        added = {f"{extensions.ADDED}:{r['id']}": r for r in self.store.list_extensions(owner)}
+        return [
+            {
+                **s.view(),
+                "on": extensions.is_on(s, switches) if workspace_id else None,
+                # when the person added it; empty for one of the short list
+                "added_at": added[s.id]["created_at"] if s.id in added else "",
+            }
+            for s in self._offered(owner)
+        ]
+
+    def _switches(self, owner: Owner, workspace_id: str) -> dict[str, bool]:
+        if not workspace_id:
+            return {}
+        try:
+            self.store.get_workspace(owner, workspace_id)
+        except rows.NotFound:
+            raise Refused("not_found", "There is no such project.") from None
+        return self.store.switches(owner, workspace_id)
+
+    def _extension(self, owner: Owner, extension_id: str) -> extensions.Skill:
+        found = next((s for s in self._offered(owner) if s.id == extension_id), None)
+        if found is None:
+            raise Refused("not_found", "There is no such extension.")
+        return found
+
+    def extension(self, owner: Owner, extension_id: str) -> dict[str, Any]:
+        """One extension with its whole text, and for each project whether it is on."""
+        skill = self._extension(owner, extension_id)
+        where = []
+        for w in self.workspaces(owner):
+            on = extensions.is_on(skill, self.store.switches(owner, w["id"]))
+            where.append({**w, "on": on})
+        return {**skill.view(with_text=True), "where": where}
+
+    async def switch_extension(
+        self, owner: Owner, extension_id: str, workspace_id: str, on: bool
+    ) -> dict[str, Any]:
+        """Switch an extension on or off for one project. A conversation's skills are fixed
+        when it starts, so the project's sessions begin a new one with their next message."""
+        skill = self._extension(owner, extension_id)
+        self._switches(owner, workspace_id)
+        self.store.set_switch(owner, workspace_id, skill.id, on)
+        await self._begin_again(owner, workspace_id)
+        return {**skill.view(), "on": on}
+
+    async def _begin_again(self, owner: Owner, workspace_id: str) -> None:
+        """Let go of the conversations of a project's sessions that are at rest. One that is
+        in the middle of a turn keeps its skills until that turn has ended."""
+        end = getattr(self.place, "end", None)
+        for session in self.store.list_sessions(owner):
+            if session["workspace_id"] != workspace_id or not session["place_session"]:
+                continue
+            if session["id"] in self._turns:
+                continue
+            if end is not None:
+                with contextlib.suppress(PlaceError):
+                    await end(session["place_session"])
+            self.store.set_place_session(owner, session["id"], None)
+            self.store.set_cursor(owner, session["id"], None)
+
+    def look_at_folder(self, folder: str) -> dict[str, Any]:
+        """What a folder the person chose holds, before anything is copied."""
+        try:
+            return extensions.look(_real(folder))
+        except extensions.ExtensionError as e:
+            raise Refused(e.code, e.message) from None
+
+    async def add_extension(
+        self, owner: Owner, folder: str, workspace_id: str = ""
+    ) -> dict[str, Any]:
+        """Copy a skill's folder in and offer it. With a project it is switched on for it."""
+        data = self.state.desktop_dir
+        if data is None:
+            raise Refused("unavailable", "Extensions cannot be added here.")
+        self._switches(owner, workspace_id)
+        source = await asyncio.to_thread(_real, folder)
+        item = rows.new_id()
+        try:
+            seen = await asyncio.to_thread(extensions.look, source)
+            if any(s.name == seen["name"] for s in self._offered(owner)):
+                raise Refused(
+                    "taken", f"A skill called {seen['name']} is already here. Remove it first."
+                )
+            kept = await asyncio.to_thread(
+                extensions.copy_in, source, Path(data) / "code" / EXTENSIONS_DIR, item
+            )
+        except extensions.ExtensionError as e:
+            raise Refused(e.code, e.message) from None
+        self.store.add_extension(
+            owner, item, name=seen["name"], title=seen["title"], path=str(kept),
+            added_from=str(source),
+        )  # fmt: skip
+        skill = self._extension(owner, f"{extensions.ADDED}:{item}")
+        if workspace_id:
+            self.store.set_switch(owner, workspace_id, skill.id, True)
+            await self._begin_again(owner, workspace_id)
+        await self._index_extension(owner, item, skill)
+        return {**skill.view(with_text=True), "on": bool(workspace_id)}
+
+    async def remove_extension(self, owner: Owner, extension_id: str) -> bool:
+        """Forget an extension the person added. Our copy is removed; their folder was never
+        touched. One of the short list cannot be removed, only switched off."""
+        source, _, item = extension_id.partition(":")
+        if source != extensions.ADDED:
+            raise Refused("not_yours", "Only an extension you added can be removed.")
+        try:
+            row = self.store.get_extension(owner, item)
+        except rows.NotFound:
+            return False
+        was_on = [
+            w["id"]
+            for w in self.workspaces(owner)
+            if self.store.switches(owner, w["id"]).get(extension_id)
+        ]
+        self.store.delete_extension(owner, item)
+        data = self.state.desktop_dir
+        kept = Path(row["path"])
+        if data is not None and Path(data) / "code" / EXTENSIONS_DIR in kept.parents:
+            await asyncio.to_thread(shutil.rmtree, kept, True)
+        for workspace_id in was_on:
+            await self._begin_again(owner, workspace_id)
+        return True
+
+    async def _index_extension(self, owner: Owner, item: str, skill: extensions.Skill) -> None:
+        """Make an added extension findable (ADR-0041): best effort, never fails the request."""
+        index = self.state.creation_index
+        if index is None:
+            return
+        try:
+            await index.index(
+                owner.tenant_id, PRODUCT_ID, owner.user_id, EXTENSION_KIND, item,
+                search_text(extensions.words_of(skill)),
+            )  # fmt: skip
+        except Exception:
+            log.warning("the extension could not be added to search", exc_info=True)
 
     # ---- the preview ----------------------------------------------------------------------------
 
@@ -1269,6 +1448,10 @@ class Sessions:
                 TOOL_RESULT, *ids, id=call, name=str(data.get("tool") or ""), status=status,
                 output=output,
             )  # fmt: skip
+        elif event.kind == places.SKILLS:
+            names = [str(n) for n in data.get("names") or []]
+            if names:
+                feed.add(SKILLS_USED, *ids, names=names, titles=self._skill_titles(names))
         elif event.kind == places.CONFIRM:
             # a session that only reads has nothing to ask; whatever asks is told no
             asyncio.ensure_future(self._say_no(flight, str(data.get("id") or "")))
@@ -1312,6 +1495,11 @@ class Sessions:
             )  # fmt: skip
         except Exception:
             log.warning("the coding session could not be added to search", exc_info=True)
+
+
+def _real(folder: str) -> Path:
+    """A folder the person named, as its real path."""
+    return Path(os.path.realpath(os.path.expanduser(folder.strip())))
 
 
 def _reason(step: dict[str, Any]) -> str:

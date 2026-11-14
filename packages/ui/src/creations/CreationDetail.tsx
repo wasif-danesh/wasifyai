@@ -11,6 +11,7 @@ import {
   GraduationCap,
   Maximize2,
   Pencil,
+  Puzzle,
   RefreshCw,
   Save,
   Scissors,
@@ -87,6 +88,7 @@ const ICON = {
   composition: Shapes,
   creative_project: Clapperboard,
   code_session: CodeXml,
+  code_extension: Puzzle,
   notebook: BookOpen,
   taught: GraduationCap,
 };

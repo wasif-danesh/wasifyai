@@ -8,6 +8,7 @@ import {
   GraduationCap,
   type LucideIcon,
   Mic,
+  Puzzle,
   Shapes,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -85,6 +86,7 @@ const ICON: Partial<Record<Entry["kind"], LucideIcon>> = {
   composition: Shapes,
   creative_project: Clapperboard,
   code_session: CodeXml,
+  code_extension: Puzzle,
   notebook: BookOpen,
   taught: GraduationCap,
 };

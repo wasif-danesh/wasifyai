@@ -187,6 +187,16 @@ CREATE TABLE IF NOT EXISTS schedule_runs(
   note TEXT NOT NULL DEFAULT '', stands_for INTEGER NOT NULL DEFAULT 1, session_id TEXT,
   created_at TEXT NOT NULL, started_at TEXT, finished_at TEXT,
   UNIQUE (schedule_id, due_at));
+CREATE TABLE IF NOT EXISTS extensions(
+  {_OWNED},
+  kind TEXT NOT NULL DEFAULT 'skill', name TEXT NOT NULL, title TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL, added_from TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS extension_switches(
+  tenant_id TEXT NOT NULL, product_id TEXT NOT NULL, user_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL, extension_id TEXT NOT NULL, is_on INTEGER NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, product_id, user_id, workspace_id, extension_id));
+CREATE INDEX IF NOT EXISTS extensions_owner ON extensions(tenant_id, product_id, user_id, created_at);
 CREATE INDEX IF NOT EXISTS workspaces_owner ON workspaces(tenant_id, product_id, user_id, created_at);
 CREATE INDEX IF NOT EXISTS sessions_owner ON sessions(tenant_id, product_id, user_id, updated_at);
 CREATE INDEX IF NOT EXISTS turns_session ON turns(session_id, position);
@@ -351,7 +361,78 @@ class CodeStore:
             )
             for table in ("schedules", "checkpoints", "checks", "turns", "sessions"):
                 db.execute(f"DELETE FROM {table} WHERE workspace_id = ? AND {_MINE}", (item, *who))
+            db.execute(
+                f"DELETE FROM extension_switches WHERE workspace_id = ? AND {_MINE}", (item, *who)
+            )
         return True
+
+    # ---- extensions (ADR-0104): what the person added, and what is on for a project -----------
+
+    def add_extension(
+        self, owner: Owner, item: str, *, name: str, title: str, path: str, added_from: str = ""
+    ) -> dict[str, Any]:
+        """A skill the person added from a folder; `path` is our own copy of it."""
+        self.db.exec(
+            "INSERT INTO extensions(id, tenant_id, product_id, user_id, kind, name, title, path, added_from, created_at) "
+            "VALUES (?, ?, ?, ?, 'skill', ?, ?, ?, ?, ?)",
+            (item, *_who(owner), name, title[:200], path, added_from[:1024], now()),
+        )
+        return self._get("extensions", owner, item)
+
+    def get_extension(self, owner: Owner, item: str) -> dict[str, Any]:
+        return self._get("extensions", owner, item)
+
+    def list_extensions(self, owner: Owner) -> list[dict[str, Any]]:
+        """What the person added, the newest first."""
+        return list(reversed(self._list("extensions", owner)))
+
+    def delete_extension(self, owner: Owner, item: str) -> bool:
+        who = _who(owner)
+        with self.db.transaction() as db:
+            n = db.execute(
+                f"DELETE FROM extensions WHERE id = ? AND {_MINE}", (item, *who)
+            ).rowcount
+            db.execute(
+                f"DELETE FROM extension_switches WHERE extension_id = ? AND {_MINE}",
+                (f"added:{item}", *who),
+            )
+        return n > 0
+
+    def extensions_page(self, after: str | None, limit: int) -> list[dict[str, Any]]:
+        """Every person's added extensions in id order, for the search index's sweep."""
+        rows = self.db.all(
+            "SELECT * FROM extensions WHERE id > ? ORDER BY id LIMIT ?", (after or "", limit)
+        )
+        return [dict(r) for r in rows]
+
+    def extensions_present(self, ids: Sequence[str]) -> set[str]:
+        if not ids:
+            return set()
+        marks = ",".join("?" for _ in ids)
+        rows = self.db.all(f"SELECT id FROM extensions WHERE id IN ({marks})", tuple(ids))
+        return {str(dict(r)["id"]) for r in rows}
+
+    def switches(self, owner: Owner, workspace_id: str) -> dict[str, bool]:
+        """The person's own switches for one project: extension id -> on."""
+        rows = self.db.all(
+            f"SELECT extension_id, is_on FROM extension_switches WHERE workspace_id = ? AND {_MINE}",
+            (workspace_id, *_who(owner)),
+        )
+        return {str(dict(r)["extension_id"]): bool(dict(r)["is_on"]) for r in rows}
+
+    def set_switch(self, owner: Owner, workspace_id: str, extension_id: str, on: bool) -> None:
+        self.get_workspace(owner, workspace_id)
+        who = _who(owner)
+        with self.db.transaction() as db:
+            db.execute(
+                f"DELETE FROM extension_switches WHERE workspace_id = ? AND extension_id = ? AND {_MINE}",
+                (workspace_id, extension_id, *who),
+            )
+            db.execute(
+                "INSERT INTO extension_switches(tenant_id, product_id, user_id, workspace_id, extension_id, is_on, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (*who, workspace_id, extension_id, int(on), now()),
+            )
 
     # ---- sessions ------------------------------------------------------------------------------
 

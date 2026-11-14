@@ -65,3 +65,43 @@ a developer should not meet them first.
 - Gates: with the network closed, a session starts and only the short list's skills are offered; a public skill and
   one of ours each fire in a real session, and switching one off stops it; a plugin with a hook is refused until
   approved.
+
+## Amendment (2026-11-15): what stage X2 built, and where it differs
+
+Stage X2 of `docs/v2-coding-agent-start-plan.md`. The owner's standing yes of 2026-11-15 covers its routes, its
+stream event and its actions.
+
+1. **The engine is told the skills; it loads none itself.** A conversation is started with the skills that are
+   on for its project, each with its whole text, in the conversation's own context. The engine's own loaders
+   (the public catalogue, the home folder, the project's folder) all stay off. So "our short list as the only
+   marketplace loaded" (stage X1) is done this way: nothing but what we name reaches a session, whatever else
+   is in the catalogue on disk.
+2. **Wasify AI's own skills live in the product's package**, `products/wasifyai-code/wasifyai_code/own/`, not
+   in a top-level `extensions/` folder as decision 3 said, so that they are shipped with the product. The
+   format is the same. The short list is `own/marketplace.json`.
+3. **The short list today:** three of ours (Explain in plain words, Pictures with Wasify AI, Write the tests
+   first) and four of the pinned catalogue (Code review, Front-end design, Security, Technical writing). The
+   first two of ours are on for a new project; every other is off until switched on. The names are stand-ins
+   and the list is the owner's to change: it is one file.
+4. **On or off is kept for one project and one person.** A switch holds from a session's next message: a
+   conversation's skills are fixed when it starts, so a project's sessions that are at rest begin a new
+   conversation, and are given the last answer to go on from. A turn that is running keeps its skills.
+5. **A skill's own files are put where the sandbox can read and not write them**
+   (`<app data>/coding-fixed/skills/`), only for the skills that are on, so the agent can read a skill's
+   further files when the skill names them. A folder is removed there when its skill is switched off.
+6. **Adding from a folder copies the folder** into `<app data>/code/extensions/`, without following links.
+   The person's folder is not changed and is not read again. At most 5 MB and 200 files. Two skills cannot
+   have the same name.
+7. **A plugin is recognised and refused** (a folder with `.plugin/plugin.json`). Plugins, with the approval
+   card for what they bring, are stage X3.
+8. **Which skills a message switched on is said on the stream** (`code_skills`), from the engine's own record
+   of it, and shown in the chat as a quiet line.
+9. **Actions:** `code.extension.list`, `code.extension.switch`, `code.extension.add`. Removing is on the
+   screen and in the Library, as for other things a person keeps.
+10. **Search (decision 10).** A skill the person added is a kind of its own in the Library, "Coding skill"
+    (`code_extension`), found by its name and by what it says it is for. The short list is the app's own and
+    is not in the Library; the Extensions screen has its own search over everything offered.
+11. **Not built:** plugins; adding from the internet; the integrations list; changing a skill's text in the
+    app; a skill switched on for every project at once.
+
+Measured in `docs/spikes/coding-x2.md`.

@@ -56,6 +56,13 @@
 //                                                               and used in the running page. Needs the coding
 //                                                               engine, Node for coding projects and a picture
 //                                                               model in DESKTOP_DATA_DIR
+//   WASIFYAI_AUDIT_FOLDER=<an empty folder> apps/desktop/scripts/ui-audit.sh light code-extensions
+//                                                               Extensions (X2): the short list for a project, a
+//                                                               public skill's text, one of ours firing in a real
+//                                                               session, ours switched off and a public one on, a
+//                                                               skill added from a folder whose rule the answer
+//                                                               follows, and its removal. A throwaway
+//                                                               DESKTOP_DATA_DIR with the coding engine
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -136,7 +143,7 @@ window.__TAURI_INTERNALS__ = {
       case "update_check": return { state: "not_configured" };
       case "component_status": return { state: "installed", version: "", accelerator: "mps" };
       case "plugin:event|listen": return 1;
-      case "plugin:dialog|open": return ${JSON.stringify(process.env.WASIFYAI_AUDIT_FOLDER ?? null)};
+      case "plugin:dialog|open": return window.__wasifyAuditFolder ?? ${JSON.stringify(process.env.WASIFYAI_AUDIT_FOLDER ?? null)};
       default: return null;
     }
   },
@@ -2459,6 +2466,169 @@ for (const scheme of ["light", "dark"]) {
       if (t?.result !== "passed") throw new Error(`the turn's check did not pass: ${t?.result}`);
       await pane.getByRole("button", { name: "Stop" }).click();
       await pane.getByText("Nothing is running yet").waitFor({ timeout: 20_000 });
+    });
+  }
+  // stage X2 of the coding agent: Extensions, with a real model. WASIFYAI_AUDIT_FOLDER is an empty throwaway
+  // folder; the walk makes a small project and a skill of the person's own in it. What "a skill fired" means
+  // here: the chat says which skill the message switched on, and for the person's own skill the answer
+  // follows a rule only that skill gives.
+  if (scheme === "light" && names.has("code-extensions")) {
+    await attempt("code-extensions", async () => {
+      const { mkdirSync, writeFileSync, existsSync } = await import("node:fs");
+      const top = process.env.WASIFYAI_AUDIT_FOLDER ?? "";
+      const project = join(top, "bakery-site");
+      const mine = join(top, "house-style");
+      mkdirSync(project, { recursive: true });
+      mkdirSync(mine, { recursive: true });
+      writeFileSync(
+        join(project, "index.html"),
+        "<h1>Bakery</h1>\n<p>A loaf costs 4 pounds.</p>\n",
+      );
+      writeFileSync(
+        join(project, "login.js"),
+        "export function login(user, password) {\n  return password === 'bread';\n}\n",
+      );
+      writeFileSync(
+        join(mine, "SKILL.md"),
+        "---\nname: house-style\ndescription: How this shop's pages and answers are worded.\ntriggers:\n  - price\n  - prices\n---\n\n# House style\n\nWhenever you answer a question about prices, end your final answer with this line, exactly, on a line of its own:\n\nBaked fresh every morning.\n",
+      );
+      const pick = (folder) =>
+        page.evaluate((f) => {
+          window.__wasifyAuditFolder = f;
+        }, folder);
+      const secs = (began) => ((Date.now() - began) / 1000).toFixed(1);
+      // a project, in Plan: the skills here are text, and a session that only reads shows them best
+      await open(page, "/code");
+      await pick(project);
+      await page.getByRole("button", { name: "Choose a folder" }).first().click();
+      const box = page.getByRole("textbox", { name: "Ask about this project" });
+      await box.waitFor();
+      const sessionHash = await page.evaluate(() => window.location.hash);
+      const chat = page.getByRole("region", { name: "Chat" });
+      const idle = () =>
+        chat
+          .getByRole("button", { name: "Stop", exact: true })
+          .waitFor({ state: "detached", timeout: 900_000 });
+      const ask = async (text) => {
+        await box.fill(text);
+        await box.press("Enter");
+        await chat
+          .getByRole("button", { name: "Stop", exact: true })
+          .waitFor({ timeout: 60_000 })
+          .catch(() => {});
+        await idle();
+      };
+      const lastTurn = () => chat.getByRole("article").last();
+      const usedIn = async (turn) =>
+        (await turn.getByText(/^Using the skills? /).count())
+          ? (
+              await turn
+                .getByText(/^Using the skills? /)
+                .first()
+                .innerText()
+            ).trim()
+          : "no skill";
+      // 1. the list, for this project
+      await open(page, "/extensions");
+      await page.getByRole("heading", { name: "Extensions" }).waitFor();
+      await page
+        .getByRole("switch", { name: "Explain in plain words: on for bakery-site" })
+        .waitFor({ timeout: 30_000 });
+      const rows = await page.getByRole("listitem").allInnerTexts();
+      console.log(
+        `code-extensions: ${rows.length} offered: ${rows.map((r) => r.split("\n")[0]).join(" | ")}`,
+      );
+      await shot(page, "code-extensions-list", 1100);
+      // 2. a public skill's text, read before it is switched on
+      await page.getByRole("button", { name: "Details of Security" }).click();
+      const detail = page.getByRole("dialog", { name: "Security" });
+      await detail.getByText("This text was not written by Wasify AI").waitFor();
+      const lines = await detail.getByText(/^SKILL\.md · \d+ lines/).innerText();
+      console.log(`code-extensions: the public skill "Security" shows its text: ${lines}`);
+      await shot(page, "code-extensions-detail", 1300);
+      await detail.getByRole("button", { name: "Done" }).click();
+      // 3. one of ours fires in a real session
+      await page.evaluate((h) => {
+        window.location.hash = h;
+      }, sessionHash);
+      await box.waitFor();
+      let began = Date.now();
+      await ask("Explain this project in plain words, in three sentences.");
+      let used = await usedIn(lastTurn());
+      console.log(`code-extensions: turn 1 (${secs(began)} s): ${used}`);
+      if (!/Explain in plain words/.test(used)) throw new Error("our own skill did not fire");
+      await shot(page, "code-extensions-ours", 1200);
+      // 4. ours off, a public one on: ours stops, the public one fires
+      await open(page, "/extensions");
+      await page
+        .getByRole("switch", { name: "Explain in plain words: on for bakery-site" })
+        .click();
+      await page
+        .getByRole("switch", { name: "Explain in plain words: off for bakery-site" })
+        .waitFor();
+      await page.getByRole("switch", { name: "Security: off for bakery-site" }).click();
+      await page.getByRole("switch", { name: "Security: on for bakery-site" }).waitFor();
+      await shot(page, "code-extensions-switched", 1100);
+      await page.evaluate((h) => {
+        window.location.hash = h;
+      }, sessionHash);
+      await box.waitFor();
+      began = Date.now();
+      await ask(
+        "Explain in plain words whether the login in login.js is a security risk, in two sentences.",
+      );
+      used = await usedIn(lastTurn());
+      console.log(`code-extensions: turn 2 (${secs(began)} s), ours off and Security on: ${used}`);
+      if (/Explain in plain words/.test(used))
+        throw new Error("the skill that was switched off still fired");
+      if (!/Security/.test(used)) throw new Error("the public skill did not fire");
+      await shot(page, "code-extensions-public", 1300);
+      // 5. a skill of the person's own, from a folder
+      await open(page, "/extensions");
+      await page.getByRole("button", { name: "Add from a folder" }).waitFor();
+      await pick(mine);
+      await page.getByRole("button", { name: "Add from a folder" }).click();
+      const add = page.getByRole("dialog", { name: "Add an extension from a folder" });
+      await add.getByText(/Found a skill: “House style”/).waitFor();
+      await shot(page, "code-extensions-add", 1300);
+      await add.getByRole("button", { name: "Add the skill" }).click();
+      await page
+        .getByRole("switch", { name: "House style: on for bakery-site" })
+        .waitFor({ timeout: 30_000 });
+      await page.evaluate((h) => {
+        window.location.hash = h;
+      }, sessionHash);
+      await box.waitFor();
+      began = Date.now();
+      await ask("What are the prices in this project? Answer in one sentence.");
+      used = await usedIn(lastTurn());
+      const answer = (await lastTurn().innerText()).replace(/\s+/g, " ");
+      const followed = answer.includes("Baked fresh every morning.");
+      console.log(
+        `code-extensions: turn 3 (${secs(began)} s), the person's own skill: ${used}; its rule ${followed ? "was followed" : "was NOT followed"}: …${answer.slice(-170)}`,
+      );
+      if (!/House style/.test(used)) throw new Error("the added skill did not fire");
+      if (!followed) throw new Error("the added skill's rule was not followed");
+      await shot(page, "code-extensions-added", 1300);
+      // 6. removed: our copy goes, the person's folder stays
+      await open(page, "/extensions");
+      await page.getByRole("button", { name: "Details of House style" }).click();
+      const own = page.getByRole("dialog", { name: "House style" });
+      await own.getByRole("button", { name: "Remove" }).click();
+      await page
+        .getByRole("dialog", { name: "Remove House style?" })
+        .getByRole("button", { name: "Remove" })
+        .click();
+      await page
+        .getByRole("button", { name: "Details of House style" })
+        .waitFor({ state: "detached", timeout: 30_000 });
+      if (!existsSync(join(mine, "SKILL.md")))
+        throw new Error("the person's own folder was touched");
+      console.log("code-extensions: the added skill was removed; the person's folder is as it was");
+      await page.setViewportSize({ width: 720, height: 700 });
+      await page.waitForTimeout(500);
+      await shot(page, "code-extensions-small");
+      await page.setViewportSize({ width: 1440, height: 900 });
     });
   }
   if (scheme === "light" && names.has("u11-make")) {

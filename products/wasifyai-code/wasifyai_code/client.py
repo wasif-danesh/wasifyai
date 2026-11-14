@@ -237,6 +237,11 @@ class ThisComputer:
         else:
             settings["tools"] = [{"name": name} for name in EDIT_TOOLS]
             settings["agent_context"] = {"system_message_suffix": EDIT_NOTE}
+        if spec.skills:
+            # the skills that are on for this project, with their text: the server is told to
+            # load none of its own (no catalogue, no home folder, no project folder)
+            context: dict[str, Any] = settings["agent_context"]
+            context["skills"] = [dict(s) for s in spec.skills]
         body: StartConversationRequest = {
             "workspace": {"working_dir": str(workspace)},
             "max_iterations": spec.step_limit,

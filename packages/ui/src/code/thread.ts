@@ -31,6 +31,8 @@ export type Part =
   | { kind: "refusal"; message: string }
   /** one run of the project's check: running, or with its result */
   | CheckPart
+  /** the person's message switched skills on */
+  | { kind: "skills"; titles: string[] }
   /** the agent goes on after a failed check: "Round 2 of 3" */
   | { kind: "round"; round: number; of: number };
 
@@ -220,6 +222,9 @@ function fromEvents(turn: TurnView, events: CodeEvent[]): TurnView {
       const last = parts[parts.length - 1];
       if (last?.kind === "message" && last.text === e.message) parts.pop();
       parts.push({ kind: "refusal", message: e.message });
+    } else if (e.event === "code_skills") {
+      const titles = e.titles?.length ? e.titles : e.names;
+      if (titles.length) parts.push({ kind: "skills", titles });
     } else if (e.event === "code_check") {
       flush();
       const open = checks.find((c) => c.running && c.round === e.round);

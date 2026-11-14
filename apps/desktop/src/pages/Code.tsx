@@ -2,7 +2,7 @@
 // Code (ADR-0101): the shared screens on this window's engine, with the computer's own folder window. A
 // session has an address of its own (`#/code/<id>`), so it is still open after a reload and Back leaves it.
 import { open } from "@tauri-apps/plugin-dialog";
-import { Code } from "@wasifyai/ui";
+import { Code, Extensions } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { code } from "../code";
 import { type Route, codePath, parseCodeSession } from "../router";
@@ -36,4 +36,9 @@ export function CodePage({ go }: { go: (r: Route) => void }) {
       }}
     />
   );
+}
+
+/** Extensions (ADR-0104): the skills a project's agent is taught. */
+export function ExtensionsPage({ go }: { go: (r: Route) => void }) {
+  return <Extensions api={code} pickFolder={pickFolder} onOpenProjects={() => go("code")} />;
 }

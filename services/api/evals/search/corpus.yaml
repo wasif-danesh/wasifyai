@@ -268,6 +268,15 @@ concepts:
       - { lang: en, text: "the coding session about the bakery website's opening hours" }
       - { lang: es, text: "la sesión de programación sobre el horario de la panadería" }
       - { lang: fr, text: "où j'ai demandé à l'agent de code d'afficher fermé le lundi" }
+  - id: house-style-coding-skill
+    items:
+      - { kind: code_extension, lang: en, text: "House style. A skill for the coding agent. How this shop's pages are worded and laid out: short sentences, prices with the pound sign, opening hours in 24-hour time" }
+      - { kind: transcript, lang: fr, text: "Aujourd'hui nous parlons du style de la maison: des phrases courtes, des couleurs sobres et beaucoup de lumière dans chaque pièce" }
+      - { kind: image, lang: es, text: "Una etiqueta de precio escrita a mano en la vitrina de una tienda, con el símbolo de la libra" }
+    queries:
+      - { lang: en, text: "the skill I added that tells the coding agent how our shop's pages are written" }
+      - { lang: de, text: "die Regeln für den Programmier-Agenten, wie die Seiten unseres Ladens formuliert werden" }
+      - { lang: fr, text: "la compétence qui explique à l'agent de code comment rédiger les pages de la boutique" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

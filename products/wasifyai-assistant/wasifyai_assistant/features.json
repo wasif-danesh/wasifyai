@@ -244,6 +244,20 @@
     ]
   },
   {
+    "screen": "code.extensions",
+    "where": "Code › Extensions",
+    "actions": [
+      "code.extension.add",
+      "code.extension.list",
+      "code.extension.switch"
+    ],
+    "does": [
+      "Add an extension from a folder",
+      "List the coding agent's extensions",
+      "Switch an extension on or off"
+    ]
+  },
+  {
     "screen": "creative",
     "where": "Creative Studio",
     "actions": [

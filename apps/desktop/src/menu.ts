@@ -18,6 +18,7 @@ export const ROUTES: Record<string, Route> = {
   motion: "videobuilder",
   model3d: "model3d",
   "code.projects": "code",
+  "code.extensions": "extensions",
   "voice.speak": "speak",
   "voice.transcribe": "transcribe",
   "voice.lipsync": "lipsync",
@@ -36,7 +37,7 @@ export const ROUTES: Record<string, Route> = {
 };
 
 /** Menu items the window has no screen for yet. */
-const NOT_BUILT: ReadonlySet<string> = new Set(["code.scheduled", "code.extensions"]);
+const NOT_BUILT: ReadonlySet<string> = new Set(["code.scheduled"]);
 
 /** What the window's menu does for each item, given where the person is. */
 export function resolveItem(
@@ -52,7 +53,7 @@ export function resolveItem(
   const { conversationId, notebook, cannot } = opts;
   return (id): ItemView | undefined => {
     if (cannot?.has(id)) return { hidden: true };
-    // not built yet (stages C6 and X2): left out of the window's menu until they are
+    // not built yet (stage C6): left out of the window's menu until it is
     if (NOT_BUILT.has(id)) return { hidden: true };
     if (id === "chat") {
       return {

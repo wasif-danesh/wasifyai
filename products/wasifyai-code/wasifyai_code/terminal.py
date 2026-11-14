@@ -24,13 +24,11 @@ that the tab can be closed and opened again.
 import asyncio
 import base64
 import contextlib
-import fcntl
 import os
 import signal
 import struct
 import subprocess
 import sys
-import termios
 import time
 import uuid
 from collections import deque
@@ -70,6 +68,11 @@ class TerminalError(Exception):
 
 
 def _size(fd: int, cols: int, rows: int) -> None:
+    # taken here and not at the top: neither module is there on Windows, where this file is still
+    # read (the product's routes name it) and no terminal is ever opened
+    import fcntl
+    import termios
+
     cols, rows = max(2, min(cols, 500)), max(2, min(rows, 300))
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
 
@@ -228,7 +231,7 @@ class Terminals:
         return found
 
     async def open(self, session_id: str, folder: Path, cols: int = 80, rows: int = 24) -> Terminal:
-        if self._sandbox is None:
+        if self._sandbox is None or sys.platform == "win32":
             raise TerminalError("no_sandbox", "A terminal is not available here.")
         for old in [t for t in self.of(session_id) if t.ended]:
             await self.close(session_id, old.id)

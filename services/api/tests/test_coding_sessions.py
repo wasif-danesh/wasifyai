@@ -171,11 +171,19 @@ async def test_the_server_is_given_the_gateways_address_and_a_token_never_a_key(
             assert KEY.encode() not in path.read_bytes(), path
 
 
-async def test_a_session_that_may_write_gets_the_engines_own_tools_and_a_writable_folder(box):
+async def test_a_session_that_may_write_edits_files_runs_nothing_and_waits_before_a_change(box):
     place = box.place()
     session = await place.start(box.spec(read_only=False))
     asked = await box.made_with(session)
-    assert "tools" not in asked["agent_settings"]  # the engine's standard set
+    # it reads and edits; it has no terminal, no patch tool and no browser
+    assert [t["name"] for t in asked["agent_settings"]["tools"]] == ["glob", "grep", "file_editor"]
+    assert (
+        "cannot run a command" in asked["agent_settings"]["agent_context"]["system_message_suffix"]
+    )
+    # every use of the editor that changes something waits; our rules give the answer
+    assert asked["security_analyzer"] == {"kind": "WasifyRules", "wait_tools": ["file_editor"]}
+    assert asked["confirmation_policy"]["kind"] == "ConfirmRisky"
+    assert asked["confirmation_policy"]["confirm_unknown"] is False
     assert box.server.workspaces == (real(box.project),)
 
 
@@ -612,7 +620,8 @@ def test_the_desktop_engine_serves_the_coding_product_and_opens_its_store(data_d
             assert r.status_code == 401, headers
         # the three actions are offered to the assistant, and say what to set up
         ids = {a.id for a in services.actions.registry}
-        assert {"code.session.start", "code.session.send", "code.session.stop"} <= ids
+        want = {"code.session.start", "code.session.send", "code.session.stop", "code.session.undo"}
+        assert want <= ids
         started = c.post(
             f"{BASE}/sessions", json={"folder": str(data_dir)}, headers=auth()
         )  # the app's own data folder
@@ -761,3 +770,132 @@ async def test_the_limit_of_a_session_can_be_changed_and_holds_at_the_gateway(bo
     assert (
         await box.http.patch(f"{BASE}/sessions/nobody", json={"cost_limit_usd": 3})
     ).status_code == 404
+
+
+# ---- a session that changes files (stage C2), through the routes -------------------------------
+
+
+async def card_of(box: Box, session_id: str, seconds: float = 20.0) -> dict:
+    """Wait until the session's turn waits for the person, and give the card's event."""
+    feed = box.services.code_sessions.feed(session_id)
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        view = (await box.http.get(f"{BASE}/sessions/{session_id}")).json()
+        cards = [e for e in feed.kept if e["event"] == "interrupt"]
+        if view["waiting"] and cards:
+            return cards[-1]
+        await asyncio.sleep(0.05)
+    raise AssertionError("no card came")
+
+
+def site(box: Box) -> None:
+    """The files the recorded edit turn was made on."""
+    (box.project / "src").mkdir()
+    (box.project / "src" / "home.html").write_text("<h1>Bakery</h1>\n<p>Welcome</p>\n")
+
+
+async def test_a_turn_that_edits_runs_to_its_end_and_its_changes_are_listed_and_undone(box):
+    site(box)
+    made = await started(box, mode="own")
+    assert made["mode"] == "own" and made["waiting"] is False
+    url = f"{BASE}/sessions/{made['id']}"
+    r = await box.http.post(f"{url}/messages", json={"text": "Add the hours. #replay:edit-asked"})
+    assert r.status_code == 202
+    seen = await ended(box, made["id"])
+    assert seen["ended"] == "finished" and seen["answer"] == "The hours are on the home page."
+    # the fake replays the steps and writes nothing: the folders a new file needs were made by
+    # the place when it let the "create" through
+    assert (box.project / "tests").is_dir()
+    # every change waited in the engine and was let through at once: nobody was asked
+    feed = box.services.code_sessions.feed(made["id"])
+    assert not [e for e in feed.kept if e["event"] == "interrupt"]
+    asked = await box.made_with(box.store.get_session(_owner(), made["id"])["place_session"])
+    assert asked["security_analyzer"]["kind"] == "WasifyRules"
+    # the Changes tab's routes (the replay changed no file, so the turn is not among them)
+    assert (await box.http.get(f"{url}/changes")).json() == {"items": []}
+    (turn_row,) = (await box.http.get(f"{url}/turns")).json()["items"]
+    assert turn_row["changed"] == 0 and not turn_row["can_undo"] and not turn_row["undone"]
+    r = await box.http.post(f"{url}/turns/{turn_row['id']}/undo")
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "not_last"
+    assert (await box.http.get(f"{url}/changes/{turn_row['id']}/file?path=a")).status_code == 404
+    # the checkpoints are in the app's data, which the sandbox closes, and not in the project
+    workspace = box.store.list_workspaces(_owner())[0]
+    assert (box.data / "code" / "checkpoints" / workspace["id"] / "HEAD").is_file()
+    assert not (box.project / ".git").exists()
+
+
+async def test_a_change_undo_cannot_put_back_is_asked_and_answered_through_the_routes(box):
+    site(box)
+    (box.project / ".gitignore").write_text("src/\n")  # the recorded turn edits src/home.html
+    made = await started(box, mode="ask")
+    url = f"{BASE}/sessions/{made['id']}"
+    project = (await box.http.get(f"{url}/project")).json()
+    assert project["mode"] == "ask" and [k["id"] for k in project["kinds"]] == [
+        "not_undoable",
+        "delete",
+        "install",
+    ]
+    await box.http.post(f"{url}/messages", json={"text": "#replay:edit-asked"})
+    card = await card_of(box, made["id"])
+    assert card["kind"] == "code_ask" and card["payload"]["ask"] == "not_undoable"
+    assert (
+        card["payload"]["path"] == "src/home.html" and card["payload"]["command"] == "str_replace"
+    )
+    assert (await box.http.get(url)).json()["working"]
+    # a wrong answer and a wrong card are refused in words
+    assert (
+        await box.http.post(f"{url}/asks/{card['interrupt_id']}", json={"answer": "maybe"})
+    ).status_code == 422
+    r = await box.http.post(f"{url}/asks/nothing", json={"answer": "yes"})
+    assert r.status_code == 200 and r.json()["answered"] is False
+    # "Allow for this project": it runs, and the next change of that kind does not ask
+    r = await box.http.post(f"{url}/asks/{card['interrupt_id']}", json={"answer": "allow"})
+    assert r.json()["answered"] is True
+    seen = await ended(box, made["id"])
+    assert seen["ended"] == "finished"
+    feed = box.services.code_sessions.feed(made["id"])
+    assert len([e for e in feed.kept if e["event"] == "interrupt"]) == 1
+    answers = [e["output"].get("answer") for e in feed.kept if e["event"] == "tool_result"]
+    assert answers == [None, "allow", None]  # looking; the ignored file; a file Undo knows
+    # the card, its answer and the count of changed files are events the SSE contract knows
+    from pydantic import TypeAdapter
+    from wasifyai_contracts.events import SseEvent
+
+    for event in feed.kept:
+        TypeAdapter(SseEvent).validate_python(event)
+    assert feed.kept[-1]["state"] == "done" and feed.kept[-1]["changed"] == 0
+    assert (await box.http.get(f"{url}/project")).json()["kinds"][0]["allowed"] is True
+    # taken back in "What this project may do"
+    r = await box.http.put(f"{url}/project/allowed/not_undoable", json={"allowed": False})
+    assert r.json()["kinds"][0]["allowed"] is False
+    assert (
+        await box.http.put(f"{url}/project/allowed/nothing", json={"allowed": True})
+    ).status_code == 422
+
+
+async def test_a_no_and_a_stop_while_the_card_waits_through_the_routes(box):
+    site(box)
+    (box.project / ".gitignore").write_text("secret.txt\nsrc/\n")
+    made = await started(box, mode="ask")
+    url = f"{BASE}/sessions/{made['id']}"
+    await box.http.post(f"{url}/messages", json={"text": "#replay:edit-refused"})
+    card = await card_of(box, made["id"])
+    assert card["payload"]["path"] == "secret.txt"
+    await box.http.post(f"{url}/asks/{card['interrupt_id']}", json={"answer": "no"})
+    seen = await ended(box, made["id"])
+    assert seen["ended"] == "finished" and seen["answer"] == "I left it."
+    feed = box.services.code_sessions.feed(made["id"])
+    (result,) = [e for e in feed.kept if e["event"] == "tool_result"]
+    assert result["status"] == "refused" and result["output"]["answer"] == "no"
+    # Stop while a card waits: the turn ends as stopped, within a second
+    await box.http.post(f"{url}/messages", json={"text": "#replay:edit-asked"})
+    await card_of(box, made["id"])
+    began = time.monotonic()
+    r = await box.http.post(f"{url}/stop")
+    assert r.json()["stopped"] is True and time.monotonic() - began < 1.5
+    seen = (await box.http.get(url)).json()
+    assert seen["ended"] == "stopped" and not seen["working"] and not seen["waiting"]
+    # the mode is changed through the same route as the limit
+    r = await box.http.patch(url, json={"mode": "plan"})
+    assert r.status_code == 200 and r.json()["mode"] == "plan"
+    assert (await box.http.patch(url, json={"mode": "everything"})).status_code == 422

@@ -398,7 +398,7 @@
       "id": "code.session.send",
       "title": "Ask the coding agent",
       "summary": "Send a coding session a message and get the agent's answer.",
-      "description": "Send a message to a coding session and wait for the agent's answer. Use it for questions about a project (\"analyse this codebase\", \"where is the login handled?\") and for a plan of a change. The agent reads the files it needs; it changes nothing. It can take from seconds to several minutes. With a cloud model, the parts of the files the agent reads are sent to that model's provider, and the session's cost is counted and limited. It returns how the turn ended (finished, stopped, step_limit, refused), the answer, the number of steps and the cost so far.",
+      "description": "Send a message to a coding session and wait for the agent's answer. Use it for questions about a project (\"analyse this codebase\", \"where is the login handled?\"), for a plan of a change and, in a session whose mode is ask or own, for the change itself. The agent reads the files it needs; in a plan session it changes nothing. It can take from seconds to several minutes. With a cloud model, the parts of the files the agent reads are sent to that model's provider, and the session's cost is counted and limited. It returns how the turn ended (finished, stopped, step_limit, refused), the answer, the number of steps, how many files were changed and the cost so far.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -453,6 +453,11 @@
           "cost_usd": {
             "title": "Cost Usd",
             "type": "number"
+          },
+          "changed": {
+            "default": 0,
+            "title": "Changed",
+            "type": "integer"
           }
         },
         "required": [
@@ -503,7 +508,7 @@
       "id": "code.session.start",
       "title": "Start a coding session",
       "summary": "Open a project's folder for the coding agent to read.",
-      "description": "Start a coding session on one folder of this computer. In this version every session only reads: the agent can find and read the files of that folder and cannot change a file or run a command. Nothing runs yet and nothing is read until a message is sent with code.session.send. Give the folder's whole path. The home folder, a whole disk and the app's own folders are refused. It returns the session's id.",
+      "description": "Start a coding session on one folder of this computer. By default the session only reads (mode plan): the agent can find and read the files of that folder and cannot change a file. With mode ask or own it can also change files of that folder; it can never run a command, and every turn can be undone. Nothing runs yet and nothing is read until a message is sent with code.session.send. Give the folder's whole path. The home folder, a whole disk and the app's own folders are refused. It returns the session's id.",
       "input": {
         "additionalProperties": false,
         "properties": {
@@ -535,6 +540,17 @@
             "minimum": 0,
             "title": "Cost Limit Usd",
             "type": "number"
+          },
+          "mode": {
+            "default": "plan",
+            "description": "How much the agent may do. plan: it only reads. ask: it changes files, and a change Undo cannot put back waits for the person's yes on the Code screen. own: it changes files and asks nothing.",
+            "enum": [
+              "plan",
+              "ask",
+              "own"
+            ],
+            "title": "Mode",
+            "type": "string"
           }
         },
         "required": [
@@ -684,6 +700,98 @@
       ],
       "consent": "",
       "help": "docs/help/code.session.stop.md"
+    },
+    {
+      "id": "code.session.undo",
+      "title": "Undo a coding turn",
+      "summary": "Put a project's files back to how they were before the agent's turn.",
+      "description": "Undo what a turn of a coding session changed: every file it changed, added or deleted goes back to how it was before that turn. Only the newest turn that changed files can be undone; leave turn_id empty for that one. Files the project ignores (such as .env) and changes the person made themselves since the turn are part of what goes back or stays; the result says so. An undo can be brought back on the Code screen.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "description": "The coding session.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "default": "",
+            "description": "The turn to undo. Leave empty for the newest turn that changed files.",
+            "maxLength": 64,
+            "title": "Turn Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "UndoIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "turn_id": {
+            "title": "Turn Id",
+            "type": "string"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "own_changes": {
+            "title": "Own Changes",
+            "type": "boolean"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id",
+          "turn_id",
+          "files",
+          "own_changes",
+          "notes"
+        ],
+        "title": "UndoOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "session_id": "0b7c1f9e000040008000000000000000"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": "code.projects",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.session.undo.md"
     },
     {
       "id": "creative.add_media",

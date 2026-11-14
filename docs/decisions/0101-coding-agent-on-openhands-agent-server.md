@@ -89,3 +89,15 @@ any code sends them. The proposal is in `docs/spikes/coding-c1b.md`. The owner's
 The fields are in `docs/contracts/sse-events.md`, "A coding session's stream". The route and the models are
 built with the session view; until then the engine relays inside itself.
 
+
+## Amendment (2026-11-14, owner): the approval card on the stream, and a turn's changes
+
+For stage C2 the owner chose again to reuse an existing kind (asked on 2026-11-14: "Reuse interrupt").
+
+1. The approval card is the contract's `interrupt` with `kind: "code_ask"`; its payload names the kind of request,
+   the step that waits, the file and whether Undo covers it. No new event kind.
+2. The answer is not a stream event. It is `POST .../sessions/{id}/asks/{interrupt_id}`; the step's `tool_result`
+   then says how it was answered (`output.answer`), with `status: "refused"` after a no.
+3. `code_state` with `state: "done"` gains the optional `changed`: how many files the turn changed.
+4. The coding API gains, as additions only: `mode` on a session, a turn's changes and one changed file before and
+   after, undo and "bring it back", the answer to a card, and what a project may do.

@@ -921,20 +921,37 @@
         "title": "ChooseTake",
         "type": "object"
       },
-      "CodeLimitIn": {
+      "CodeAllowIn": {
         "additionalProperties": false,
         "properties": {
-          "cost_limit_usd": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 100.0,
-            "title": "Cost Limit Usd",
-            "type": "number"
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
           }
         },
         "required": [
-          "cost_limit_usd"
+          "allowed"
         ],
-        "title": "CodeLimitIn",
+        "title": "CodeAllowIn",
+        "type": "object"
+      },
+      "CodeAnswerIn": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "enum": [
+              "yes",
+              "allow",
+              "no"
+            ],
+            "title": "Answer",
+            "type": "string"
+          }
+        },
+        "required": [
+          "answer"
+        ],
+        "title": "CodeAnswerIn",
         "type": "object"
       },
       "CodeMessageEvent": {
@@ -1056,6 +1073,16 @@
             "title": "Folder",
             "type": "string"
           },
+          "mode": {
+            "default": "plan",
+            "enum": [
+              "plan",
+              "ask",
+              "own"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "model": {
             "default": "",
             "maxLength": 64,
@@ -1075,9 +1102,58 @@
         "title": "CodeSessionIn",
         "type": "object"
       },
+      "CodeSessionPatch": {
+        "additionalProperties": false,
+        "description": "What can be changed about a session: the most it may cost, and how much the agent asks.",
+        "properties": {
+          "cost_limit_usd": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Limit Usd"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "plan",
+                  "ask",
+                  "own"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          }
+        },
+        "title": "CodeSessionPatch",
+        "type": "object"
+      },
       "CodeStateEvent": {
         "description": "A turn of a coding session changes state (ADR-0101, amendment of 2026-11-14). On a coding\nsession's stream `thread_id` is the session and `run_id` the turn; `state: \"done\"` is the\nturn's end, and the stream stays open for the next turn.",
         "properties": {
+          "changed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Changed"
+          },
           "cost_usd": {
             "default": 0.0,
             "title": "Cost Usd",
@@ -8493,7 +8569,7 @@
         ]
       },
       "patch": {
-        "description": "Change the most this session may cost. It holds from the next model call.",
+        "description": "Change the most this session may cost (it holds from the next model call), or how\nmuch the agent asks (Plan, Ask me, Work on its own).",
         "operationId": "change_session_products_wasifyai_code_code_sessions__session_id__patch",
         "parameters": [
           {
@@ -8510,7 +8586,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CodeLimitIn"
+                "$ref": "#/components/schemas/CodeSessionPatch"
               }
             }
           },
@@ -8541,6 +8617,180 @@
           }
         },
         "summary": "Change Session",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/asks/{ask_id}": {
+      "post": {
+        "description": "The person's answer to an approval card: yes, allow (yes, and stop asking about\nthis kind of request in this project) or no.",
+        "operationId": "answer_ask_products_wasifyai_code_code_sessions__session_id__asks__ask_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ask_id",
+            "required": true,
+            "schema": {
+              "title": "Ask Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeAnswerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Answer Ask Products Wasifyai Code Code Sessions  Session Id  Asks  Ask Id  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Answer Ask",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/changes": {
+      "get": {
+        "description": "The turns that changed files, the newest first, each with its files (the Changes\ntab).",
+        "operationId": "list_changes_products_wasifyai_code_code_sessions__session_id__changes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Changes Products Wasifyai Code Code Sessions  Session Id  Changes Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Changes",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/changes/{turn_id}/file": {
+      "get": {
+        "description": "One file a turn changed: before, after, and the two as lines.",
+        "operationId": "read_change_products_wasifyai_code_code_sessions__session_id__changes__turn_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "turn_id",
+            "required": true,
+            "schema": {
+              "title": "Turn Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "maxLength": 2000,
+              "minLength": 1,
+              "title": "Path",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Read Change Products Wasifyai Code Code Sessions  Session Id  Changes  Turn Id  File Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Change",
         "tags": [
           "wasifyai-code"
         ]
@@ -8826,6 +9076,115 @@
         ]
       }
     },
+    "/products/wasifyai-code/code/sessions/{session_id}/project": {
+      "get": {
+        "description": "What this session's project may do: each kind of request and whether it is allowed.",
+        "operationId": "get_project_products_wasifyai_code_code_sessions__session_id__project_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Project Products Wasifyai Code Code Sessions  Session Id  Project Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Project",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/project/allowed/{kind}": {
+      "put": {
+        "description": "Allow a kind of request for the project, or take that back.",
+        "operationId": "set_allowed_products_wasifyai_code_code_sessions__session_id__project_allowed__kind__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeAllowIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Allowed Products Wasifyai Code Code Sessions  Session Id  Project Allowed  Kind  Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Allowed",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
     "/products/wasifyai-code/code/sessions/{session_id}/stop": {
       "post": {
         "description": "Stop the turn in flight. It answers when the turn is closed.",
@@ -8910,6 +9269,114 @@
           }
         },
         "summary": "List Turns",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/turns/{turn_id}/redo": {
+      "post": {
+        "description": "Bring an undone turn's changes back.",
+        "operationId": "redo_turn_products_wasifyai_code_code_sessions__session_id__turns__turn_id__redo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "turn_id",
+            "required": true,
+            "schema": {
+              "title": "Turn Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Redo Turn Products Wasifyai Code Code Sessions  Session Id  Turns  Turn Id  Redo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Redo Turn",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/sessions/{session_id}/turns/{turn_id}/undo": {
+      "post": {
+        "description": "Put the project's files back to how they were before this turn.",
+        "operationId": "undo_turn_products_wasifyai_code_code_sessions__session_id__turns__turn_id__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "turn_id",
+            "required": true,
+            "schema": {
+              "title": "Turn Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Turn Products Wasifyai Code Code Sessions  Session Id  Turns  Turn Id  Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Turn",
         "tags": [
           "wasifyai-code"
         ]

@@ -79,3 +79,33 @@ The spikes measured what holds it:
   needs, is decided with the Browser tab (C4).
 - The hostile tests of the spike (writes outside, reads of secret folders, the internet, a model told to try other
   ways) become tests that run from C1a.
+
+## Amendment (2026-11-14, owner): "Allow for this project", and where a rule is decided
+
+Decision 6 said a marked request is asked. The owner decided that asking must not make the agent unusable:
+"Permissions should have an option to "accept all for a project" or similar so users don't need to allow 20
+different permissions. [...] We need to make the agent flexible and not an unusable one." The mockups drew it
+(`docs/spikes/coding-mockups.md`, choices 12 and 24 to 27) and were approved on 2026-11-14. Stage C2 builds it.
+
+1. **Three answers on every approval card:** yes, no, and "Allow for this project". The third is a yes, and that
+   *kind* of request is not asked about again in that project.
+2. **An allowance covers a kind, not one request.** The kinds are a fixed list in v1; a person cannot write a rule.
+   The list: changing a file Undo cannot put back (added by the owner on 2026-11-14 for stage C2, where the agent
+   edits and cannot run a command), deleting files and installing packages (asked once the agent can run commands,
+   stage C3).
+3. **An allowance is for one project and one person.** A new project starts with nothing allowed. There is no
+   "allow in every project".
+4. **It can be taken back** in "What this project may do", which lists every kind with Allow or Remove.
+5. **Three modes.** Plan: the agent only reads. Ask me: it changes files, and a kind that is not allowed is asked.
+   Work on its own: nothing of the list is asked. What is asked in every mode (deleting something of the person's
+   outside the project, going on past the cost limit) arrives with the tools that can do it.
+6. **Where a rule is decided.** The module loaded into the Agent Server (`services/coding-engine/wasify_rules.py`)
+   only makes every use of a tool that changes something wait, before anything has run. Which kind a waiting step
+   is, whether it is allowed, and whether a person is asked is decided in the Wasify engine
+   (`wasifyai_code/rules.py`), outside the sandbox. So nothing inside the sandbox knows or can change an allowance.
+7. **After a no** the agent is told what was refused and goes on another way; **Stop while a card waits** refuses
+   what waits and ends the turn.
+8. **A project with no git of its own does not get one.** The Agent Server runs `git init` in a workspace by
+   itself. The sandbox profile closes `<project>/.git` to writing when the project has none at the engine's start.
+
+Measured in `docs/spikes/coding-c2.md`.

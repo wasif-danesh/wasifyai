@@ -10,6 +10,8 @@ file changes, and the contract test and pyright say so before a screen does.
     MessageEvent (from the agent)  -> text
     ActionEvent "finish"           -> text (the agent's last message is what it finished with)
     ActionEvent, any other tool    -> step
+    ConversationStateUpdateEvent   -> confirm, when it says the conversation waits for a yes or
+                                      no: one event naming every step that waits
     ObservationEvent               -> result (ok)
     AgentErrorEvent                -> result (not ok): a tool failed and the agent was told
     UserRejectObservation          -> result (not ok): the person said no
@@ -91,6 +93,8 @@ class Reader:
     over: bool = False  # a turn that was running came to rest, and its end has not been given
     rest_id: str = ""  # the event at which it came to rest
     _tools: dict[str, str] = field(default_factory=dict)  # a tool call's id -> its tool
+    # the steps said and not yet answered by a result: what waits when the conversation waits
+    _open: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def read(self, event: Mapping[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         """One event of the Agent Server as zero or more of ours: (kind, data)."""
@@ -109,13 +113,18 @@ class Reader:
         if kind == "UserRejectObservation":
             r = cast(UserRejectObservation, event)
             said = r.get("rejection_reason") or "The person said no."
-            return [self._result(r.get("tool_call_id"), r.get("tool_name"), False, said)]
+            kind, data = self._result(r.get("tool_call_id"), r.get("tool_name"), False, said)
+            return [(kind, {**data, "refused": True})]
         if kind == "StreamingDeltaEvent":
             return self._piece(cast(StreamingDeltaEvent, event))
         if kind == "ConversationErrorEvent":
             c = cast(ConversationErrorEvent, event)
             self.last_error = (str(c.get("code") or ""), str(c.get("detail") or ""))
         return []
+
+    def waiting(self) -> list[dict[str, Any]]:
+        """The steps that were said and have no result yet."""
+        return list(self._open.values())
 
     # ---- each kind -----------------------------------------------------------------------------
 
@@ -133,12 +142,19 @@ class Reader:
         if value == RUNNING:
             if not self.was_running:  # a new turn begins
                 self.steps, self.last_error = 0, ("", "")
+                self._open.clear()
             self.was_running, self.over = True, False
             return [(places.STATE, {"state": "running"})]
         if value in RESTING and self.was_running:
             self.was_running, self.over = False, True
             self.rest_id = str(event.get("id") or "")
-        return [(places.STATE, {"state": "idle", "engine": value})]
+        out: list[tuple[str, dict[str, Any]]] = [(places.STATE, {"state": "idle", "engine": value})]
+        if value == WAITING and self._open:
+            steps = list(self._open.values())
+            what = str(steps[0].get("path") or steps[0].get("command") or steps[0].get("tool"))
+            ask = str(event.get("id") or steps[0]["id"])
+            out.append((places.CONFIRM, {"id": ask, "what": what, "steps": steps}))
+        return out
 
     def _message(self, event: MessageEvent) -> list[tuple[str, dict[str, Any]]]:
         if event.get("source") != "agent":
@@ -166,6 +182,7 @@ class Reader:
         summary = event.get("summary")
         if isinstance(summary, str) and summary.strip():
             data["summary"] = _cut(summary.strip(), MAX_ARG)
+        self._open[call] = data
         return [(places.STEP, data)]
 
     def _observation(self, event: ObservationEvent) -> list[tuple[str, dict[str, Any]]]:
@@ -179,6 +196,7 @@ class Reader:
 
     def _result(self, call: Any, tool: Any, ok: bool, text: Any) -> tuple[str, dict[str, Any]]:
         call = str(call or "")
+        self._open.pop(call, None)
         name = str(tool or self._tools.get(call, ""))
         return (
             places.RESULT,

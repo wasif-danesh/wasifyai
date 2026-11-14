@@ -141,6 +141,31 @@ class CheckpointStore:
             notes += self._restore_person_git(to, state)
             return Undone(to=to, before=before, notes=tuple(notes))
 
+    def file_at(self, checkpoint: str, path: str) -> bytes | None:
+        """One file as a checkpoint holds it; None when it is not in it (or is a folder)."""
+        with self._lock:
+            tree = self._tree_of(checkpoint)
+            kind = self._git("cat-file", "-t", f"{tree}:{path}", check=False).strip()
+            if kind != "blob":
+                return None
+            return self._git_bytes("cat-file", "blob", f"{tree}:{path}")
+
+    def is_left_out(self, path: str) -> bool:
+        """Would a file at this path (from the workspace's top) be left out of a checkpoint?
+        True for what the project ignores and for anything inside a `.git` folder: undo does
+        not put such a file back."""
+        parts = Path(path).parts
+        if not parts or ".." in parts or Path(path).is_absolute():
+            return False
+        if ".git" in parts:
+            return True
+        with self._lock:
+            self._open()
+            out = self._git(
+                "check-ignore", "-z", "--stdin", "--no-index", stdin=path + "\0", ok=(0, 1)
+            )
+        return bool(out.strip("\0"))
+
     def left_out(self) -> list[str]:
         """The ignored files and folders in the workspace: what a checkpoint does not hold. A
         folder that is ignored whole is named once, with a slash at its end."""

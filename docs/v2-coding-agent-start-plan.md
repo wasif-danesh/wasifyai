@@ -265,7 +265,7 @@ with a mockup. A piece is done when its gate is measured, not when its code is w
 | 2 | **The ADRs**, after the spikes (owner) | Written and accepted 2026-11-14: ADR-0101 (built on OpenHands' Agent Server), ADR-0102 (an optional part in a sandbox, the key outside), ADR-0103 (the check loop and undo are ours), ADR-0104 (extensions: their catalogue pinned, our module), ADR-0105 (a scheduler of our own) | Done |
 | 3 | **C1a The engine in the app, and X1** (no screen of its own) | The pin and the trimmed locks; the optional part in Settings › Optional parts; start in the sandbox with a free port, a new key and a clean environment; health; stop with the app; logs under the data folder; the catalogue pinned; the fake Agent Server for tests | Install, start, stop, repair and uninstall on a clean Mac from Settings. A second copy of the app starts beside it. Nothing is left running, and nothing is left in `/tmp`, after quit. The hostile tests pass. Size, start time and memory written down |
 | 4 | **C1b A session that only reads** | The product, the store, the three first actions, the gateway for the model, the live stream relayed over SSE, the session view (mockup first), the Files tab, Plan mode. The agent has no tool that writes or runs anything | The guideline's C1 gate: "Analyse this codebase" gives a correct map of three real projects, and nothing is written anywhere. Stop works within one second at any moment |
-| 5 | **C2 Edits with undo** | The checkpoint store outside the workspace, the Changes tab, Ask me mode with our cards and our rules module. `loop.py` and `checks.py` are built here against the fake server, with the check itself not yet allowed to run | The guideline's C2 gate: every change in the evaluation can be undone exactly. The loop's unit tests pass |
+| 5 | **C2 Edits with undo** | The checkpoint store outside the workspace, the Changes tab, Ask me mode with our cards and our rules module. `loop.py` and `checks.py` are built here against the fake server, with the check itself not yet allowed to run. Built 2026-11-14: `docs/spikes/coding-c2.md` | The guideline's C2 gate: every change in the evaluation can be undone exactly. The loop's unit tests pass |
 | 6 | **C3 Commands, and the loop switched on** | The agent's terminal, the person's Terminal tab, the check run inside the sandbox, package installs through an allow-listed proxy | The guideline's C3 gate, and section 6's gate |
 | 7 | **X2 Extensions screen** | Section 7 | Section 7 |
 | 8 | **C4 Browser and preview** | The Browser tab, the Preview tab for a running result, the first starter | The guideline's C4 gate, without Wasify's products as tools if spike 6 is not a go yet |
@@ -284,6 +284,9 @@ with a mockup. A piece is done when its gate is measured, not when its code is w
 | May the evaluation use what is left? | "Yes, use it" | Spike 3 ran; $5.84 counted in all |
 | Scheduled: their automation service or our own scheduler? (2026-11-14) | "We will write our own optimised scheduler" | ADR-0105. No automation service on the desktop in v1; the `/tmp` exception leaves the sandbox profile |
 | The five ADRs (2026-11-14) | "Accept all" | ADR-0101 to ADR-0105 are Accepted. The next piece is C1a |
+| Checkpoints (2026-11-14): restore the person's own git state? Keep ignored files such as `.env`? | "Yes to the undo questions" | The proposals of ADR-0103, decision 13: undo restores `HEAD` and the index; ignored files are left out and the app says so. ADR-0103, amendment of 2026-11-14 |
+| Asking (2026-11-14) | "Permissions should have an option to "accept all for a project" or similar" | "Allow for this project" on every approval card, kept per project and per person. ADR-0102, amendment of 2026-11-14 |
+| May "Ask me" ask before a change Undo cannot put back? (2026-11-14) | "Yes, add that kind" | A third fixed kind beside deleting and installing; the one a session can meet in stage C2 |
 | Desktop and Mac first? | "Coding, automation and extensions will be part of v1. Do desktop and mac first." Also in v1: web browser, file browser, file changes, result preview | Section 2; C6 and the extensions stages move forward |
 | The ADRs | "Write after the spikes." | Piece 2 of section 9 |
 
@@ -292,8 +295,7 @@ with a mockup. A piece is done when its gate is measured, not when its code is w
 
 1. **Nothing about money for now.** The owner allowed $10 under the key in Settings › Your keys; spikes 2
    and 3 used $5.84 as counted, and the gateway is stopped. Later gates on real projects will need a new limit.
-2. **Checkpoints (C2):** restore the person's own git state too, or stop the agent from committing?
-   Keep `.env` in checkpoints or leave ignored files out?
+2. **Checkpoints (C2):** answered on 2026-11-14 (the table above).
 3. **The short list for Extensions:** the owner picks, or a first proposal comes with the X2 mockup?
 
 ## 11. What can go wrong

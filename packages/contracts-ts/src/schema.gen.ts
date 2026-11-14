@@ -1112,9 +1112,72 @@ export interface paths {
         head?: never;
         /**
          * Change Session
-         * @description Change the most this session may cost. It holds from the next model call.
+         * @description Change the most this session may cost (it holds from the next model call), or how
+         *     much the agent asks (Plan, Ask me, Work on its own).
          */
         patch: operations["change_session_products_wasifyai_code_code_sessions__session_id__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/asks/{ask_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Ask
+         * @description The person's answer to an approval card: yes, allow (yes, and stop asking about
+         *     this kind of request in this project) or no.
+         */
+        post: operations["answer_ask_products_wasifyai_code_code_sessions__session_id__asks__ask_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Changes
+         * @description The turns that changed files, the newest first, each with its files (the Changes
+         *     tab).
+         */
+        get: operations["list_changes_products_wasifyai_code_code_sessions__session_id__changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/changes/{turn_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Change
+         * @description One file a turn changed: before, after, and the two as lines.
+         */
+        get: operations["read_change_products_wasifyai_code_code_sessions__session_id__changes__turn_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/products/wasifyai-code/code/sessions/{session_id}/events": {
@@ -1219,6 +1282,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/sessions/{session_id}/project": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Project
+         * @description What this session's project may do: each kind of request and whether it is allowed.
+         */
+        get: operations["get_project_products_wasifyai_code_code_sessions__session_id__project_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/project/allowed/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Allowed
+         * @description Allow a kind of request for the project, or take that back.
+         */
+        put: operations["set_allowed_products_wasifyai_code_code_sessions__session_id__project_allowed__kind__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/sessions/{session_id}/stop": {
         parameters: {
             query?: never;
@@ -1250,6 +1353,46 @@ export interface paths {
         get: operations["list_turns_products_wasifyai_code_code_sessions__session_id__turns_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/turns/{turn_id}/redo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redo Turn
+         * @description Bring an undone turn's changes back.
+         */
+        post: operations["redo_turn_products_wasifyai_code_code_sessions__session_id__turns__turn_id__redo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/sessions/{session_id}/turns/{turn_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Turn
+         * @description Put the project's files back to how they were before this turn.
+         */
+        post: operations["undo_turn_products_wasifyai_code_code_sessions__session_id__turns__turn_id__undo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4870,10 +5013,18 @@ export interface components {
             /** Take Id */
             take_id: string;
         };
-        /** CodeLimitIn */
-        CodeLimitIn: {
-            /** Cost Limit Usd */
-            cost_limit_usd: number;
+        /** CodeAllowIn */
+        CodeAllowIn: {
+            /** Allowed */
+            allowed: boolean;
+        };
+        /** CodeAnswerIn */
+        CodeAnswerIn: {
+            /**
+             * Answer
+             * @enum {string}
+             */
+            answer: "yes" | "allow" | "no";
         };
         /**
          * CodeMessageEvent
@@ -4951,6 +5102,12 @@ export interface components {
             /** Folder */
             folder: string;
             /**
+             * Mode
+             * @default plan
+             * @enum {string}
+             */
+            mode: "plan" | "ask" | "own";
+            /**
              * Model
              * @default
              */
@@ -4962,12 +5119,27 @@ export interface components {
             title: string;
         };
         /**
+         * CodeSessionPatch
+         * @description What can be changed about a session: the most it may cost, and how much the agent asks.
+         */
+        CodeSessionPatch: {
+            /** Cost Limit Usd */
+            cost_limit_usd?: number | null;
+            /** Mode */
+            mode?: ("plan" | "ask" | "own") | null;
+        };
+        /**
          * CodeStateEvent
          * @description A turn of a coding session changes state (ADR-0101, amendment of 2026-11-14). On a coding
          *     session's stream `thread_id` is the session and `run_id` the turn; `state: "done"` is the
          *     turn's end, and the stream stays open for the next turn.
          */
         CodeStateEvent: {
+            /**
+             * Changed
+             * @default null
+             */
+            changed: number | null;
             /**
              * Cost Usd
              * @default 0
@@ -8836,9 +9008,116 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CodeLimitIn"];
+                "application/json": components["schemas"]["CodeSessionPatch"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_ask_products_wasifyai_code_code_sessions__session_id__asks__ask_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                ask_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeAnswerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_changes_products_wasifyai_code_code_sessions__session_id__changes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_change_products_wasifyai_code_code_sessions__session_id__changes__turn_id__file_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+                turn_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -9037,6 +9316,77 @@ export interface operations {
             };
         };
     };
+    get_project_products_wasifyai_code_code_sessions__session_id__project_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_allowed_products_wasifyai_code_code_sessions__session_id__project_allowed__kind__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeAllowIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     stop_session_products_wasifyai_code_code_sessions__session_id__stop_post: {
         parameters: {
             query?: never;
@@ -9076,6 +9426,74 @@ export interface operations {
             header?: never;
             path: {
                 session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redo_turn_products_wasifyai_code_code_sessions__session_id__turns__turn_id__redo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                turn_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_turn_products_wasifyai_code_code_sessions__session_id__turns__turn_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+                turn_id: string;
             };
             cookie?: never;
         };

@@ -1,20 +1,25 @@
 "use client";
 // Code (ADR-0101; mockups in docs/spikes/coding-mockups.html): where coding lives, the projects, and a
-// session. This stage has Plan only: the agent reads the project and answers or gives a plan; it changes
-// nothing. The window calls the coding product's routes and never the coding engine.
-import type { CodeApi, CodeModel, CodeSession } from "@wasifyai/client";
+// session. In Plan the agent reads the project and answers or gives a plan. In "Ask me" and "Work on its
+// own" it also changes files, asks first where a rule says so, and every turn can be undone in the Changes
+// tab. It runs no command yet. The window calls the coding product's routes and never the coding engine.
+import type { CodeAnswer, CodeApi, CodeMode, CodeModel, CodeSession } from "@wasifyai/client";
 import {
   ArrowUp,
   Check,
   ChevronRight,
   CircleDashed,
+  FileDiff,
   Folder,
   FolderOpen,
+  Hand,
   ListChecks,
   Lock,
   Plus,
+  Redo2,
   Square,
   Trash2,
+  Undo2,
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -28,8 +33,10 @@ import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { PageHeader } from "../window-bar";
+import { AskCard, MODES, MayDialog, ModePill } from "./Asking";
+import { Changes } from "./Changes";
 import { Files } from "./Files";
-import { type Step, type TurnView, buildThread, stepLine } from "./thread";
+import { type Step, type TurnView, buildThread, isEdit, stepLine } from "./thread";
 import { useCode } from "./use-code";
 
 export type CodeProps = {
@@ -53,6 +60,8 @@ const STARTERS = [
   "Analyse this codebase",
   "How would you add a page? Give me a plan",
 ];
+/** What "Carry out this plan" sends, after the session has left Plan (the agent is given the plan again). */
+export const CARRY_OUT = "Carry out this plan.";
 
 const dollars = (n: number) => `$${n.toFixed(2)}`;
 
@@ -113,6 +122,12 @@ export function Code({
         onStop={code.stop}
         onBack={() => show(null)}
         onSetLimit={code.setLimit}
+        onSetMode={code.setMode}
+        onAnswer={code.answer}
+        onUndo={code.undo}
+        onRedo={code.redo}
+        filesTick={state.filesTick}
+        undoNote={state.undoNote}
       />
     );
   }
@@ -144,7 +159,7 @@ export function Code({
       lead={
         state.sessions.length
           ? "The folders the agent works in, each with its sessions."
-          : "Choose the folder of a project. An agent reads it and answers your questions about it, or gives you a plan for a change."
+          : "Choose the folder of a project. An agent reads it, answers your questions about it, and changes its files when you ask. Every change can be undone."
       }
       action={
         state.sessions.length ? (
@@ -261,6 +276,10 @@ function Rules() {
         <ul className="m-0 grid list-none gap-1.5 p-0 text-sm">
           {item(true, "find and read every file")}
           {item(true, "answer questions about the project and plan a change")}
+          {item(
+            true,
+            "change and add files, in “Ask me” and “Work on its own”; every turn can be undone",
+          )}
         </ul>
       </section>
       <section className="grid content-start gap-2 rounded-lg border p-4">
@@ -268,7 +287,10 @@ function Rules() {
           <Lock aria-hidden="true" className="size-4 text-destructive" /> It cannot
         </h2>
         <ul className="m-0 grid list-none gap-1.5 p-0 text-sm">
-          {item(false, "change, add or delete a file, or run a command (not in this version)")}
+          {item(
+            false,
+            "run a command, a test or a program, or delete a file (not in this version)",
+          )}
           {item(false, "read the rest of your home folder: documents, keys, other apps' data")}
           {item(false, "reach the internet")}
           {item(false, "see your model key")}
@@ -338,8 +360,19 @@ function Projects({
                     <CircleDashed aria-hidden="true" className="size-4 text-muted-foreground" />
                   )}
                   <span className="truncate font-medium">{s.title}</span>
-                  <span className="ms-auto shrink-0 text-xs text-muted-foreground">
-                    {s.working ? "Working" : s.turns ? `${s.turns} asked` : "Nothing asked yet"}
+                  <span
+                    className={cn(
+                      "ms-auto shrink-0 text-xs text-muted-foreground",
+                      s.waiting && "font-medium text-foreground",
+                    )}
+                  >
+                    {s.waiting
+                      ? "Waiting for you"
+                      : s.working
+                        ? "Working"
+                        : s.turns
+                          ? `${s.turns} asked`
+                          : "Nothing asked yet"}
                   </span>
                 </button>
                 <button
@@ -373,12 +406,13 @@ function Projects({
 
 // ---- a session ---------------------------------------------------------------------------------
 
-function chipFor(session: CodeSession, thread: TurnView[], busy: string | null) {
+function chipFor(session: CodeSession, thread: TurnView[], busy: string | null, waiting: boolean) {
   if (busy === "stopping") return "Stopping";
+  if (waiting) return "Waiting for you";
   if (session.working || busy === "sending") return "Working";
   const last = thread[thread.length - 1];
   if (last?.ended === "error") return "Stopped with a problem";
-  return "Plan · nothing is changed";
+  return session.mode === "plan" ? "Plan · nothing is changed" : MODES[session.mode].label;
 }
 
 function Session({
@@ -393,6 +427,12 @@ function Session({
   onStop,
   onBack,
   onSetLimit,
+  onSetMode,
+  onAnswer,
+  onUndo,
+  onRedo,
+  filesTick,
+  undoNote,
 }: {
   api: CodeApi;
   session: CodeSession;
@@ -405,11 +445,28 @@ function Session({
   onStop: () => void;
   onBack: () => void;
   onSetLimit: (usd: number) => void;
+  onSetMode: (mode: CodeMode) => Promise<boolean>;
+  onAnswer: (askId: string, answer: CodeAnswer) => void;
+  onUndo: (turnId: string) => Promise<void>;
+  onRedo: (turnId: string) => Promise<void>;
+  filesTick: number;
+  undoNote: string | null;
 }) {
   const [text, setText] = useState("");
-  // on a narrow window one pane shows at a time: the chat, or the files
-  const [pane, setPane] = useState<"chat" | "files">("chat");
+  // on a narrow window one pane shows at a time: the chat, the files, or the changes
+  const [pane, setPane] = useState<"chat" | "files" | "changes">("chat");
+  // beside the chat, on a wide window: the files or the changes
+  const [side, setSide] = useState<"files" | "changes">("files");
+  const [may, setMay] = useState(false);
+  const showSide = (which: "files" | "changes") => {
+    setSide(which);
+    setPane(which);
+  };
   const working = session.working || busy === "sending";
+  const waiting = thread.some((t) => t.parts.some((p) => p.kind === "ask" && p.open));
+  const carryOut = async () => {
+    if (await onSetMode("ask")) onSend(CARRY_OUT);
+  };
   const model = models.find((m) => m.id === session.model);
   const end = useRef<HTMLDivElement | null>(null);
   const count = thread.reduce((n, t) => n + t.parts.length, thread.length);
@@ -426,7 +483,7 @@ function Session({
   return (
     <div className="flex h-full min-h-0 flex-col" data-workspace>
       <PageHeader title className="flex items-center gap-3 border-b px-4 py-2">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-sm">
           <button
             type="button"
             onClick={onBack}
@@ -435,7 +492,7 @@ function Session({
             Projects
           </button>
           <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="max-w-[40%] shrink-0 truncate font-semibold">{session.project}</span>
+          <span className="min-w-16 truncate font-semibold">{session.project}</span>
           {session.title !== session.project ? (
             <span className="hidden truncate text-muted-foreground sm:inline">
               · {session.title}
@@ -446,7 +503,7 @@ function Session({
           <span className="hidden md:inline">{model?.title ?? session.model}</span>
           <output className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-foreground">
             {working ? <Spinner className="size-3" /> : null}
-            {chipFor(session, thread, busy)}
+            {chipFor(session, thread, busy, waiting)}
           </output>
           <Cost session={session} model={model} onSetLimit={onSetLimit} />
         </div>
@@ -456,20 +513,20 @@ function Session({
         role="tablist"
         aria-label="What to show"
       >
-        {(["chat", "files"] as const).map((p) => (
+        {(["chat", "files", "changes"] as const).map((p) => (
           <button
             key={p}
             type="button"
             role="tab"
             aria-selected={pane === p}
-            onClick={() => setPane(p)}
+            onClick={() => (p === "chat" ? setPane(p) : showSide(p))}
             className="rounded-md px-3 py-1 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring aria-selected:bg-accent aria-selected:font-semibold"
           >
-            {p === "chat" ? "Chat" : "Files"}
+            {p === "chat" ? "Chat" : p === "files" ? "Files" : "Changes"}
           </button>
         ))}
       </div>
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(22rem,2fr)_3fr]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(22rem,2fr)_minmax(0,3fr)]">
         <section
           aria-label="Chat"
           className={cn(
@@ -485,8 +542,9 @@ function Session({
                     What do you want to know about {session.project}?
                   </h2>
                   <p className="m-0 max-w-[40ch] text-sm text-muted-foreground">
-                    Ask how something works, or ask for a plan. In Plan the agent reads files and
-                    changes none.
+                    {session.mode === "plan"
+                      ? "Ask how something works, or ask for a plan. In Plan the agent reads files and changes none."
+                      : "Ask how something works, or ask for a change. Every turn that changes files can be undone."}
                   </p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {STARTERS.map((s) => (
@@ -497,8 +555,20 @@ function Session({
                   </div>
                 </div>
               ) : null}
-              {thread.map((turn) => (
-                <Turn key={turn.id} turn={turn} />
+              {thread.map((turn, n) => (
+                <Turn
+                  key={turn.id}
+                  turn={turn}
+                  mode={session.mode}
+                  last={n === thread.length - 1}
+                  idle={!working}
+                  onAnswer={onAnswer}
+                  onOpenMay={() => setMay(true)}
+                  onShowChanges={() => showSide("changes")}
+                  onUndo={onUndo}
+                  onRedo={onRedo}
+                  onCarryOut={() => void carryOut()}
+                />
               ))}
               {error ? (
                 <Notice
@@ -526,7 +596,11 @@ function Session({
             <div className="grid gap-2 rounded-xl border bg-surface p-2.5 shadow-card">
               <Textarea
                 aria-label="Ask about this project"
-                placeholder={`Ask about ${session.project}, or ask for a plan`}
+                placeholder={
+                  session.mode === "plan"
+                    ? `Ask about ${session.project}, or ask for a plan`
+                    : "Ask for a change, or ask a question"
+                }
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => {
@@ -538,12 +612,12 @@ function Session({
                 className="max-h-48 min-h-12 resize-none border-0 shadow-none focus-visible:ring-0"
               />
               <div className="flex items-center justify-between gap-2">
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
-                  title="In Plan the agent reads files and changes none. Modes that change files come in a later version."
-                >
-                  <ListChecks aria-hidden="true" className="size-3.5" /> Plan
-                </span>
+                <ModePill
+                  mode={session.mode}
+                  disabled={working}
+                  onChange={(mode) => void onSetMode(mode)}
+                  onOpenMay={() => setMay(true)}
+                />
                 {working ? (
                   <Button
                     type="button"
@@ -563,13 +637,47 @@ function Session({
             </div>
           </form>
         </section>
-        <section
-          aria-label="Files"
-          className={cn("min-h-0 lg:block", pane === "files" ? "block" : "hidden")}
+        <div
+          className={cn("min-h-0 min-w-0 flex-col lg:flex", pane === "chat" ? "hidden" : "flex")}
         >
-          <Files api={api} sessionId={session.id} project={session.project} />
-        </section>
+          <div
+            className="hidden gap-1 border-b px-3 py-1.5 lg:flex"
+            role="tablist"
+            aria-label="Beside the chat"
+          >
+            {(["files", "changes"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                role="tab"
+                aria-selected={side === p}
+                onClick={() => showSide(p)}
+                className="rounded-md px-3 py-1 text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring aria-selected:bg-accent aria-selected:font-semibold"
+              >
+                {p === "files" ? "Files" : "Changes"}
+              </button>
+            ))}
+          </div>
+          {side === "files" ? (
+            <section aria-label="Files" className="min-h-0 min-w-0 flex-1">
+              <Files api={api} sessionId={session.id} project={session.project} tick={filesTick} />
+            </section>
+          ) : (
+            <section aria-label="Changes" className="min-h-0 min-w-0 flex-1">
+              <Changes
+                api={api}
+                sessionId={session.id}
+                tick={filesTick}
+                working={working}
+                note={undoNote}
+                onUndo={onUndo}
+                onRedo={onRedo}
+              />
+            </section>
+          )}
+        </div>
       </div>
+      {may ? <MayDialog api={api} sessionId={session.id} onClose={() => setMay(false)} /> : null}
     </div>
   );
 }
@@ -694,8 +802,23 @@ function Cost({
   );
 }
 
-function Turn({ turn }: { turn: TurnView }) {
+type TurnActions = {
+  mode: CodeMode;
+  /** it is the session's newest turn */
+  last: boolean;
+  /** the agent is not working */
+  idle: boolean;
+  onAnswer: (askId: string, answer: CodeAnswer) => void;
+  onOpenMay: () => void;
+  onShowChanges: () => void;
+  onUndo: (turnId: string) => void;
+  onRedo: (turnId: string) => void;
+  onCarryOut: () => void;
+};
+
+function Turn({ turn, ...actions }: { turn: TurnView } & TurnActions) {
   const knows = turn.parts.some((p) => p.kind === "steps");
+  const asking = turn.parts.some((p) => p.kind === "ask" && p.open);
   return (
     <article className="grid gap-3" aria-label={turn.request || "A turn"}>
       {turn.request ? (
@@ -711,6 +834,18 @@ function Turn({ turn }: { turn: TurnView }) {
       {turn.parts.map((part, n) => {
         const key = `${turn.id}-${n}`;
         if (part.kind === "steps") return <Steps key={key} steps={part.steps} />;
+        if (part.kind === "ask") {
+          return (
+            <AskCard
+              key={key}
+              ask={part.ask}
+              open={part.open}
+              answer={part.answer}
+              onAnswer={(answer) => actions.onAnswer(part.id, answer)}
+              onOpenMay={actions.onOpenMay}
+            />
+          );
+        }
         if (part.kind === "refusal") {
           return (
             <Notice key={key} tone="info" title="The model declined this request">
@@ -726,10 +861,19 @@ function Turn({ turn }: { turn: TurnView }) {
       })}
       {turn.working ? (
         <output className="m-0 flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner className="size-3.5" /> Working…
+          {asking ? (
+            <>
+              <Hand aria-hidden="true" className="size-3.5" /> Waiting for you. Nothing else runs
+              until you answer.
+            </>
+          ) : (
+            <>
+              <Spinner className="size-3.5" /> Working…
+            </>
+          )}
         </output>
       ) : null}
-      <Ending turn={turn} />
+      <Ending turn={turn} {...actions} />
     </article>
   );
 }
@@ -738,6 +882,15 @@ function Steps({ steps }: { steps: Step[] }) {
   const failed = steps.filter((s) => s.status === "error").length;
   const running = steps.some((s) => s.status === "started");
   const [one] = steps;
+  const edits = steps.filter((s) => isEdit(s) && s.status === "ok").length;
+  const mark = (s: Step) =>
+    s.status === "error" && !isEdit(s)
+      ? " · did not work"
+      : s.answer === "allowed"
+        ? " · allowed for this project"
+        : "";
+  // a change that ran with no question, because its kind is allowed, is said on the closed line too
+  const allowed = steps.filter((s) => s.answer === "allowed").length;
   if (steps.length === 1 && one) {
     return (
       <details className="rounded-lg border text-sm">
@@ -750,7 +903,7 @@ function Steps({ steps }: { steps: Step[] }) {
           {running ? <Spinner className="size-3.5" /> : null}
           <span>
             {stepLine(one)}
-            {one.status === "error" ? " · did not work" : ""}
+            {mark(one)}
           </span>
         </summary>
         {one.text ? (
@@ -770,7 +923,9 @@ function Steps({ steps }: { steps: Step[] }) {
         />
         {running ? <Spinner className="size-3.5" /> : null}
         <span>
-          Looked at {steps.length} things
+          {steps.some(isEdit) ? `Took ${steps.length} steps` : `Looked at ${steps.length} things`}
+          {edits ? ` · changed ${edits} time${edits === 1 ? "" : "s"}` : ""}
+          {allowed ? ` · ${allowed} allowed for this project` : ""}
           {failed ? ` · ${failed} did not work` : ""}
         </span>
       </summary>
@@ -785,7 +940,7 @@ function Steps({ steps }: { steps: Step[] }) {
                 )}
               >
                 {stepLine(step)}
-                {step.status === "error" ? " · did not work" : ""}
+                {mark(step)}
               </summary>
               {step.text ? (
                 <pre className="mt-1 max-h-60 overflow-auto rounded-md bg-muted p-2 text-xs whitespace-pre-wrap">
@@ -800,42 +955,127 @@ function Steps({ steps }: { steps: Step[] }) {
   );
 }
 
-function Ending({ turn }: { turn: TurnView }) {
+/** What a turn left in the project's files, with the way to look at it and to undo it. */
+function Changed({ turn, ...actions }: { turn: TurnView } & TurnActions) {
+  const n = turn.changed;
+  const files = `${n} file${n === 1 ? "" : "s"}`;
+  if (turn.undone) {
+    return (
+      <section
+        aria-label="An undone turn"
+        className="flex flex-wrap items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm"
+      >
+        <Undo2 aria-hidden="true" className="size-4 shrink-0" />
+        <span className="flex-1">
+          <strong className="font-semibold">You undid this turn.</strong> {files}{" "}
+          {n === 1 ? "is" : "are"} back to how {n === 1 ? "it was" : "they were"} before it.
+        </span>
+        {turn.canRedo && actions.idle ? (
+          <Button size="sm" variant="outline" onClick={() => actions.onRedo(turn.id)}>
+            <Redo2 /> Bring it back
+          </Button>
+        ) : null}
+      </section>
+    );
+  }
+  return (
+    <section
+      aria-label="What this turn changed"
+      className="grid gap-2 rounded-lg border px-3.5 py-2.5 text-sm"
+    >
+      <p className="m-0 flex items-start gap-2">
+        <FileDiff aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        <span>
+          <strong className="font-semibold">Changed {files}.</strong> Not checked: the agent cannot
+          run your tests yet.
+        </span>
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" onClick={actions.onShowChanges}>
+          Look at the changes
+        </Button>
+        {turn.canUndo && actions.idle ? (
+          <Button size="sm" variant="ghost" onClick={() => actions.onUndo(turn.id)}>
+            <Undo2 /> Undo this turn
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function Ending({ turn, ...actions }: { turn: TurnView } & TurnActions) {
   if (turn.working || !turn.ended) return null;
+  const changed = turn.changed > 0;
+  const nothing = changed ? "" : " Nothing was changed.";
+  const card = changed ? <Changed turn={turn} {...actions} /> : null;
   if (turn.ended === "finished") {
+    if (changed) return card;
+    // a file the project ignores is changed without being one of the turn's changes: say that,
+    // and never "no file was changed" after a change the person has just seen
+    const outside = turn.parts.some(
+      (p) => p.kind === "steps" && p.steps.some((st) => isEdit(st) && st.status === "ok"),
+    );
+    if (outside) {
+      return (
+        <p className="m-0 text-sm text-muted-foreground">
+          This turn changed only files Undo cannot put back.
+        </p>
+      );
+    }
+    if (actions.mode !== "plan") {
+      return <p className="m-0 text-sm text-muted-foreground">No file was changed.</p>;
+    }
     return (
       <section
         aria-label="A plan"
-        className="grid gap-1 rounded-lg border border-primary/30 bg-primary/5 px-3.5 py-3 text-sm"
+        className="grid gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3.5 py-3 text-sm"
       >
         <h3 className="m-0 flex items-center gap-2 text-sm font-semibold">
           <ListChecks aria-hidden="true" className="size-4" /> Nothing was changed
         </h3>
-        <p className="m-0 text-muted-foreground">In Plan the agent reads files and changes none.</p>
+        <p className="m-0 text-muted-foreground">
+          In Plan the agent reads files and changes none.
+          {actions.last ? " Carrying the plan out switches this session to “Ask me”." : ""}
+        </p>
+        {actions.last && actions.idle ? (
+          <div>
+            <Button size="sm" onClick={actions.onCarryOut}>
+              Carry out this plan
+            </Button>
+          </div>
+        ) : null}
       </section>
     );
   }
   if (turn.ended === "stopped") {
     return (
-      <p className="m-0 text-sm text-muted-foreground">
-        You stopped this turn. Nothing was changed.
-      </p>
+      <>
+        <p className="m-0 text-sm text-muted-foreground">You stopped this turn.{nothing}</p>
+        {card}
+      </>
     );
   }
   if (turn.ended === "step_limit") {
     return (
-      <Notice tone="warn" title="The agent stopped at its step limit">
-        It used every step one turn allows. Nothing was changed. Ask it to go on, or ask a narrower
-        question.
-      </Notice>
+      <>
+        <Notice tone="warn" title="The agent stopped at its step limit">
+          It used every step one turn allows.{nothing} Ask it to go on, or ask a narrower question.
+        </Notice>
+        {card}
+      </>
     );
   }
   if (turn.ended === "error") {
     return (
-      <Notice tone="error" title="The turn stopped with a problem">
-        {turn.detail || "The coding engine reported an error."} Nothing was changed.
-      </Notice>
+      <>
+        <Notice tone="error" title="The turn stopped with a problem">
+          {turn.detail || "The coding engine reported an error."}
+          {nothing}
+        </Notice>
+        {card}
+      </>
     );
   }
-  return null;
+  return card;
 }

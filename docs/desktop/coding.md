@@ -1,11 +1,12 @@
 # The coding engine on the desktop
 
 Part of [the desktop profile](../desktop-profile.md). ADR-0101 to ADR-0105; the order of the work is in
-`docs/v2-coding-agent-start-plan.md`. **Built so far: stage C1a**, the engine in the app, and **the engine
-side of stage C1b**, a coding session that only reads, reached through the product's actions and routes,
-and **its first screens**: the menu group Code, Projects, and the session view in Plan (the mockups were
-approved by the owner on 2026-11-14) with its Files tab. Measurements are in
-`docs/spikes/coding-c1a.md` and `docs/spikes/coding-c1b.md`.
+`docs/v2-coding-agent-start-plan.md`. **Built so far: stage C1a**, the engine in the app; **stage C1b**, a
+coding session that only reads, with the menu group Code, Projects, and the session view with its Files tab
+(the mockups were approved by the owner on 2026-11-14); and **stage C2**, a session that changes files: the
+modes "Ask me" and "Work on its own", the approval card with "Allow for this project", a checkpoint around
+every turn, the Changes tab, undo and "Bring it back". The agent runs no command yet (stage C3). Measurements
+are in `docs/spikes/coding-c1a.md`, `docs/spikes/coding-c1b.md` and `docs/spikes/coding-c2.md`.
 
 ## What it is
 
@@ -81,7 +82,7 @@ The profile starts from "allow" and closes these. Where two rules match, the lat
 
 | | Closed | Opened again |
 |---|---|---|
-| Writes | Everything | `<app data>/coding`, the workspaces of sessions that may write (none yet), the terminal folder |
+| Writes | Everything | `<app data>/coding`, the workspaces of sessions that may write, the terminal folder. **Closed again:** `<workspace>/.git` of a workspace that has no git of its own when the engine starts (the Agent Server runs `git init` in a workspace by itself; a person's folder does not become a repository because it was opened) |
 | Reads | `/Users`, `/Volumes`, the per-user temp folders, `/tmp`, the app's own data folder | The same three, and read-only: `engine/coding`, the Python it was made with, **the workspaces of sessions that only read**, and `<app data>/coding-fixed` |
 | Network | Everything | This computer |
 | Other programs | A signal to a process outside the sandbox, opening an app or a file with `open`, a message to another app, a job handed to the system | Signals inside the sandbox |
@@ -139,12 +140,42 @@ action or route -> wasifyai_code.runtime.Sessions -> wasifyai_code.client.ThisCo
   (`docs/contracts/sse-events.md`, "A coding session's stream"; ADR-0101's amendment). Words as they are
   written are not kept; a window that comes later gets the finished message.
 
+## A session that changes files (stage C2)
+
+A session has a mode: `plan` (it only reads), `ask` or `own`. The engine's default is `plan`; a project opened
+on the Code screen starts in "Ask me". In `ask` and `own` the agent gets three tools: find files, search in
+files, and the file editor. It has no terminal, no patch tool and no browser, so it runs nothing.
+
+| Step | What happens |
+|---|---|
+| Before the turn | A checkpoint of the project (`checkpoints.py`) in `<app data>/code/checkpoints/<workspace id>`: outside the project, and inside the app's data, which the sandbox closes to the coding engine for reading and writing |
+| A change | Every use of the editor that changes something waits in the coding engine before it runs (`services/coding-engine/wasify_rules.py`, loaded with `--import-modules`, and the policy "ask when high"). `rules.py` then decides, in the Wasify engine: no rule asks about it (let through at once), its kind is allowed for the project (let through, and marked "allowed"), the session works on its own (let through), or the person is asked |
+| The card | `interrupt` on the stream with `kind: "code_ask"`. Answers: yes, no, "Allow for this project" (`POST /sessions/{id}/asks/{id}`). After a no the agent is told and goes on another way. Stop while a card waits refuses what waits and ends the turn |
+| After the turn | A second checkpoint. What the turn changed is the difference; `code_state` `done` carries `changed` |
+| Undo | `POST /sessions/{id}/turns/{id}/undo` puts every file back (content, permissions, added and deleted files, empty folders) and the person's own git (`HEAD`, the index). One more checkpoint is taken first, so `.../redo` ("Bring it back") returns the turn |
+
+The kinds of request are a fixed list (`rules.KINDS`): `not_undoable` (a file a checkpoint does not hold: one
+the project ignores, or one inside a `.git` folder), `delete` and `install`. Only the first can come up while the
+agent cannot run a command. An allowance is kept on the workspace's row, for one project and one person.
+
+Three things the pinned Agent Server does, each found by a real run (`docs/spikes/coding-c2.md`):
+
+- Its file editor cannot create a file in a folder that does not exist, and the agent has no command to make
+  one. The place makes the missing folders, inside the project only, at the moment a "create" is let through.
+- It runs `git init` in a workspace that is not a repository. The sandbox profile refuses it (the table above).
+- An interrupt does nothing to a conversation that waits for a yes or no. Stop refuses what waits first.
+
+Undo goes back one turn at a time, the newest that stands first. Files the project ignores are not kept and not
+put back. What the person changed themselves after the turn goes back with it, and the answer says so.
+
 ## The screens
 
 | Where | What |
 |---|---|
 | `packages/ui/src/shell/menu.ts` | The group **Code** with Projects, Scheduled and Extensions. The window shows Projects only until the other two are built; the web hides all three (`apps/web/lib/parity.ts`: desktop only) |
-| `packages/ui/src/code/Code.tsx` | The first screen (what the agent may and may not do, what leaves this computer, Choose a folder), the projects with their sessions, and the session view: the request, the agent's steps as quiet lines that open, its answer, the card "Nothing was changed", the box with the Plan pill and Stop; the bar with the project, the model, the state and the cost |
+| `packages/ui/src/code/Code.tsx` | The first screen (what the agent may and may not do, what leaves this computer, Choose a folder), the projects with their sessions ("Waiting for you" on one that waits), and the session view: the request, the agent's steps as quiet lines that open, its answer, what the turn changed with "Look at the changes" and "Undo this turn", an undone turn with "Bring it back", a plan with "Carry out this plan"; the box with the mode and Stop; the bar with the project, the model, the state and the cost |
+| `packages/ui/src/code/Asking.tsx` | The approval card (three answers, and what was answered afterwards), the mode pill with its menu, and "What this project may do" |
+| `packages/ui/src/code/Changes.tsx` | The Changes tab: one turn at a time, its files (a test file is marked), one file before, after or both, "Undo this turn" and "Bring it back", and what undo does not put back |
 | `packages/ui/src/code/Files.tsx` | The Files tab beside the chat: the project's folders as a tree, opened a folder at a time, and one file to read with its line numbers. Reading only. On a narrow window the chat and the files are two tabs |
 | `packages/ui/src/code/thread.ts`, `use-code.ts` | The stream turned into what is drawn, and the screen's state. A turn from before the app was started shows what was kept: the request, the answer and how many steps it took |
 | `packages/client/src/code.ts` | The window's calls: the routes above and the stream |
@@ -159,7 +190,9 @@ filter, "Coding sessions", and a search result opens it at its address.
 
 A session that nobody named is called by what was asked first. Walk it for real with
 `WASIFYAI_AUDIT_FOLDER=<a project> apps/desktop/scripts/ui-audit.sh light code-plan` on a throwaway
-`DESKTOP_DATA_DIR` that has the coding engine (pictures `docs/ui-audit/desktop/code-*.png`).
+`DESKTOP_DATA_DIR` that has the coding engine (pictures `docs/ui-audit/desktop/code-*.png`). The walk of a
+session that changes files is `... ui-audit.sh light code-edit` (pictures `code-edit-*.png`): it reads the
+project's files on disk after each change, undo, "bring it back", yes, no, allow and Stop.
 
 ## The model gateway (ADR-0102, decision 4)
 
@@ -184,6 +217,7 @@ address on loopback and a token for one session, and every model call of that se
 | `code.session.start` | A session on a folder. Nothing runs and nothing is read yet |
 | `code.session.send` | A message; waits for the agent's answer (a long action: it can become a job, and cancelling the job stops the turn) |
 | `code.session.stop` | Stops the turn at once |
+| `code.session.undo` | Puts the project's files back to before a turn (the newest that changed files, when none is named) |
 
 They are offered to the assistant and not to outside apps: an outside app that could open a session on any
 folder would be handed that folder's content. Help is in `docs/help/code.session.*.md`.
@@ -197,7 +231,11 @@ folder would be handed that folder's content. Help is in `docs/help/code.session
 | `POST /sessions/{id}/stop` | Stop the turn; answers when it is closed |
 | `GET /sessions/{id}/files?path=`, `GET /sessions/{id}/file?path=` | One folder of the project, and one file to read (`wasifyai_code/files.py`). The Wasify engine reads them for the person; the coding engine is not asked. A path is always inside the project, also through a link; the project's `.git` is left out; a file over 400 kB is cut at a line and says so; a file that is not text says so |
 | `GET /sessions/{id}/files/find?q=` | The project's files whose name holds `q`, at most 50 |
-| `PATCH /sessions/{id}` | Change the most the session may cost (`cost_limit_usd`) |
+| `PATCH /sessions/{id}` | Change the most the session may cost (`cost_limit_usd`), or its mode (`mode`: between `ask` and `own` at once, also in the middle of a turn; to or from `plan` only when no turn runs, and the next message begins a new conversation that is given the last answer) |
+| `POST /sessions/{id}/asks/{ask_id}` | Answer an approval card: `yes`, `allow` or `no` |
+| `GET /sessions/{id}/changes`, `GET /sessions/{id}/changes/{turn_id}/file?path=` | The turns that changed files with their files, and one file before, after and as lines |
+| `POST /sessions/{id}/turns/{turn_id}/undo`, `.../redo` | Undo a turn, and bring it back |
+| `GET /sessions/{id}/project`, `PUT /sessions/{id}/project/allowed/{kind}` | What the project may do, and allowing a kind or taking that back |
 | `GET /sessions/{id}/events` | The session's stream, open across turns; `Last-Event-ID` comes back after a number |
 
 A session is found by search (ADR-0041) by its title, its project's name and what was asked first (kind
@@ -227,14 +265,21 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 | `services/api/tests/test_coding_gateway.py` | The gateway against a pretended provider: the token, the key, the body byte for byte, streaming, tokens and cost, the limit, a refusal | `make test` |
 | `services/api/tests/test_coding_sessions.py` | A session from the routes down to the fake server: the tools of a session that only reads, the events, a dropped socket, Stop at any moment, one server for several workspaces, the folders that are refused | `make test` |
 | `products/wasifyai-code/tests/test_code_events.py`, `test_code_sessions.py` | The event translation and the sessions on the pretended place | `make test` |
+| `products/wasifyai-code/tests/test_code_edits.py` | A session that changes files, on the pretended place with a real git: the checkpoints, the card and its three answers, allowances, the Changes data, undo and "bring it back" (files compared byte for byte, with permissions), the person's own git, the rules | `make test` |
+| `services/api/tests/integration/test_coding_session_real.py` | The same against the real server in its sandbox with a scripted model: a session that only reads, and one that edits (it waits, a yes, a no, Stop while it waits, nothing outside the project, the checkpoint store out of reach, no `.git` made). It records the event streams the fake replays | `make test-coding`, opt-in |
 | `services/api/tests/integration/test_coding_sandbox.py` | Hostile tests against the real server in its sandbox | `make test-coding`, opt-in |
 | `apps/desktop/scripts/ui-audit.sh light coding-setup` (then `coding-repair`, `coding-remove`) | The part set up, repaired and removed from the real window's Settings, with the real downloads | By hand, on a throwaway `DESKTOP_DATA_DIR` |
 
 ## Not built
 
-- The dot for files changed in a session (nothing changes yet) and the other tabs beside the chat; "Carry
-  out this plan" and the mode menu (they need a mode that edits, C2); "Start in a new, empty folder".
-- Edits with undo, commands, the check loop switched on, the scheduler: stages C2 onwards.
+- The dot for files changed in a session, in the Files tab; the Terminal, Browser and Preview tabs; "Start in
+  a new, empty folder"; the approval card on other screens while a session waits (the list of projects says
+  "Waiting for you"); a project's "More" menu.
+- Commands, the check and the implement, check, fix loop: stage C3. Until then a turn that changed files says
+  "Not checked", and `loop.py` and `checks.py` are library code that nothing calls. The session's turn is still
+  run by `runtime.py`; handing it to `Loop.run_turn` is the first step of C3.
+- Dropping old checkpoints. The store under `<app data>/code/checkpoints` grows with the project.
+- The scheduler: stage C6.
 - A session going on after the app was closed and opened again: the session's token is gone, so its next
   message starts a new conversation with the agent, and the turn says so.
 - The coding product's own connection to Wasify's tools (stage C4): `docs/spikes/coding-c1b.md`, "Decided".

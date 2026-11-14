@@ -1,9 +1,17 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { CodeApi, CodeEvent, CodeSession, CodeTurn } from "@wasifyai/client";
+import type {
+  CodeApi,
+  CodeChange,
+  CodeChangeFile,
+  CodeEvent,
+  CodeProject,
+  CodeSession,
+  CodeTurn,
+} from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Code } from "./Code";
+import { CARRY_OUT, Code } from "./Code";
 import { buildThread, stepLine } from "./thread";
 
 vi.mock("../chat/thread/markdown/Markdown", () => ({
@@ -22,6 +30,7 @@ function session(over: Partial<CodeSession> = {}): CodeSession {
     model: "claude-sonnet-5-5",
     state: "new",
     working: false,
+    waiting: false,
     result: "",
     turns: 0,
     answer: "",
@@ -50,9 +59,53 @@ function turn(over: Partial<CodeTurn> = {}): CodeTurn {
     notes: [],
     started_at: "",
     finished_at: "",
+    changed: 0,
+    undone: false,
+    can_undo: false,
+    can_redo: false,
     ...over,
   };
 }
+
+const PROJECT: CodeProject = {
+  project: "bakery-site",
+  folder: FOLDER,
+  mode: "ask",
+  kinds: [
+    { id: "not_undoable", allowed: false, asked_now: true },
+    { id: "delete", allowed: false, asked_now: false },
+    { id: "install", allowed: false, asked_now: false },
+  ],
+};
+
+const CHANGED_FILE: CodeChangeFile = {
+  path: "src/home.html",
+  what: "changed",
+  test: false,
+  binary: false,
+  too_large: false,
+  before: "<h1>Bakery</h1>\n<p>Welcome</p>\n",
+  after: "<h1>Bakery</h1>\n<p>Open 9 to 5</p>\n",
+  lines: [
+    { t: "same", text: "<h1>Bakery</h1>", a: 1, b: 1 },
+    { t: "del", text: "<p>Welcome</p>", a: 2 },
+    { t: "add", text: "<p>Open 9 to 5</p>", b: 2 },
+  ],
+};
+
+const CHANGE: CodeChange = {
+  turn_id: "t1",
+  position: 1,
+  request: "Add the opening hours",
+  started_at: "2026-11-14T14:02:00Z",
+  undone: false,
+  can_undo: true,
+  can_redo: false,
+  files: [
+    { path: "src/home.html", what: "changed", test: false },
+    { path: "tests/home.test.js", what: "added", test: true },
+  ],
+};
 
 let seq = 0;
 const ev = (e: Record<string, unknown>, run = "t1") =>
@@ -120,6 +173,29 @@ function api(over: Partial<CodeApi> = {}): CodeApi {
       more: false,
     }),
     setLimit: async (_id: string, usd: number) => session({ cost_limit_usd: usd }),
+    setMode: async (_id: string, mode: CodeSession["mode"]) => session({ mode }),
+    answer: async () => true,
+    changes: async () => [],
+    change: async () => CHANGED_FILE,
+    undo: async (_id: string, turnId: string) => ({
+      turn_id: turnId,
+      undone: true,
+      files: 2,
+      own_changes: false,
+      notes: [],
+    }),
+    redo: async (_id: string, turnId: string) => ({
+      turn_id: turnId,
+      undone: false,
+      files: 2,
+      own_changes: false,
+      notes: [],
+    }),
+    project: async () => PROJECT,
+    allow: async (_id: string, kind: string, allowed: boolean) => ({
+      ...PROJECT,
+      kinds: PROJECT.kinds.map((k) => (k.id === kind ? { ...k, allowed } : k)),
+    }),
     events: () => feed().events(),
     ...over,
   } as CodeApi;
@@ -139,7 +215,10 @@ describe("where coding lives", () => {
       await screen.findByRole("heading", { name: "Build and fix code by asking" }),
     ).toBeTruthy();
     expect(screen.getByText("find and read every file")).toBeTruthy();
-    expect(screen.getByText(/change, add or delete a file, or run a command/)).toBeTruthy();
+    expect(
+      screen.getByText(/change and add files, in “Ask me” and “Work on its own”/),
+    ).toBeTruthy();
+    expect(screen.getByText(/run a command, a test or a program, or delete a file/)).toBeTruthy();
     expect(screen.getByText(/sent to the model you chose: Claude Sonnet 5.5/)).toBeTruthy();
   });
 
@@ -178,7 +257,12 @@ describe("where coding lives", () => {
     const start = vi.fn(async () => session());
     const { unmount } = render(<Code api={api({ start })} {...props} />);
     await userEvent.click(await screen.findByRole("button", { name: /Choose a folder/ }));
-    expect(start).toHaveBeenCalledWith({ folder: FOLDER, model: "claude-sonnet-5-5" });
+    // a project opened here starts in "Ask me"
+    expect(start).toHaveBeenCalledWith({
+      folder: FOLDER,
+      model: "claude-sonnet-5-5",
+      mode: "ask",
+    });
     expect(
       await screen.findByRole("heading", { name: "What do you want to know about bakery-site?" }),
     ).toBeTruthy();
@@ -479,5 +563,353 @@ describe("finding a file, the cost, and a session's address", () => {
     expect(await screen.findByRole("textbox", { name: "Ask about this project" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Projects" }));
     expect(onOpenChange).toHaveBeenLastCalledWith(null);
+  });
+});
+
+describe("a session that changes files", () => {
+  const ASK = {
+    ask: "not_undoable",
+    step_id: "c1",
+    tool: "file_editor",
+    command: "str_replace",
+    path: ".env",
+    says: "The key must be set for the hours to load.",
+    project: "bakery-site",
+    undo: false,
+    steps: 1,
+  };
+  const edit = {
+    event: "tool_call",
+    id: "c1",
+    name: "file_editor",
+    arguments: { command: "str_replace", path: `${FOLDER}/.env` },
+  };
+
+  it("shows the agent's question as a card with three answers, and what was answered afterwards", async () => {
+    const stream = feed();
+    const answer = vi.fn(async () => true);
+    const working = session({ mode: "ask", working: true, state: "working" });
+    render(
+      <Code
+        api={api({
+          sessions: async () => [working],
+          session: async () => working,
+          turns: async () => [
+            turn({ state: "working", why: "", answer: "", request: "Set the key" }),
+          ],
+          events: () => stream.events(),
+          answer,
+        })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    stream.push(ev({ event: "code_state", state: "working", cost_usd: 0 }));
+    stream.push(ev(edit));
+    expect(await screen.findByText("Wants to change …/Projects/bakery-site/.env")).toBeTruthy();
+    stream.push(ev({ event: "interrupt", interrupt_id: "a1", kind: "code_ask", payload: ASK }));
+    const card = await screen.findByRole("region", {
+      name: "The agent wants to change a file Undo cannot put back",
+    });
+    expect(within(card).getByText(".env")).toBeTruthy();
+    expect(within(card).getByText(/The key must be set for the hours to load/)).toBeTruthy();
+    expect(within(card).getByText(/Ask before changing files Undo cannot put back/)).toBeTruthy();
+    // while it waits the bar says so, and nothing else runs
+    expect(screen.getByText("Waiting for you")).toBeTruthy();
+    expect(screen.getByText(/Nothing else runs until you answer/)).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "Yes, change it" })).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "No" })).toBeTruthy();
+    await userEvent.click(within(card).getByRole("button", { name: "Allow for this project" }));
+    expect(answer).toHaveBeenCalledWith("s1", "a1", "allow");
+    stream.push(
+      ev({
+        event: "tool_result",
+        id: "c1",
+        name: "file_editor",
+        status: "ok",
+        output: { text: "edited", answer: "allow" },
+      }),
+    );
+    expect(
+      await within(card).findByText(
+        /You allowed changing files Undo cannot put back for this project\./,
+      ),
+    ).toBeTruthy();
+    expect(within(card).queryByRole("button", { name: "Yes, change it" })).toBeNull();
+    expect(await screen.findByText("Changed …/Projects/bakery-site/.env")).toBeTruthy();
+    // "Take it back" opens what the project may do
+    await userEvent.click(within(card).getByRole("button", { name: "Take it back" }));
+    expect(await screen.findByRole("heading", { name: "What bakery-site may do" })).toBeTruthy();
+  }, 20_000);
+
+  it("says no, and a card nobody answered is closed when the turn ends", () => {
+    const base = [
+      ev(edit),
+      ev({ event: "interrupt", interrupt_id: "a1", kind: "code_ask", payload: ASK }),
+    ];
+    const open = buildThread([turn({ state: "working", why: "" })], base)[0];
+    expect(open?.parts.at(-1)).toMatchObject({ kind: "ask", id: "a1", open: true, answer: "" });
+    const no = buildThread(
+      [turn({ state: "working", why: "" })],
+      [
+        ...base,
+        ev({
+          event: "tool_result",
+          id: "c1",
+          name: "file_editor",
+          status: "refused",
+          output: { text: "no", answer: "no" },
+        }),
+      ],
+    )[0];
+    expect(no?.parts.at(-1)).toMatchObject({ kind: "ask", open: false, answer: "no" });
+    const steps = no?.parts[0];
+    expect(steps?.kind === "steps" && stepLine(steps.steps[0] as never)).toBe(
+      "Did not change …/Projects/bakery-site/.env: you said no",
+    );
+    const stopped = buildThread(
+      [turn({ why: "stopped" })],
+      [
+        ...base,
+        ev({ event: "code_state", state: "done", why: "stopped", cost_usd: 0, changed: 0 }),
+      ],
+    )[0];
+    expect(stopped?.parts.at(-1)).toMatchObject({ kind: "ask", open: false, answer: "" });
+    // a step that ran with no question because its kind is allowed is marked, never hidden
+    const allowed = buildThread(
+      [turn()],
+      [
+        ev(edit),
+        ev({
+          event: "tool_result",
+          id: "c1",
+          name: "file_editor",
+          status: "ok",
+          output: { text: "", answer: "allowed" },
+        }),
+      ],
+    )[0];
+    const part = allowed?.parts[0];
+    expect(part?.kind === "steps" && part.steps[0]?.answer).toBe("allowed");
+    expect(
+      stepLine({
+        tool: "file_editor",
+        given: { command: "create", path: "/p/a.js" },
+        status: "ok",
+      }),
+    ).toBe("Wrote /p/a.js");
+    expect(
+      stepLine({
+        tool: "file_editor",
+        given: { command: "insert", path: "/p/a.js" },
+        status: "error",
+      }),
+    ).toBe("Could not change /p/a.js");
+  });
+
+  it("says what a turn changed, undoes it and brings it back", async () => {
+    const undo = vi.fn(async (_id: string, turnId: string) => ({
+      turn_id: turnId,
+      undone: true,
+      files: 2,
+      own_changes: true,
+      notes: [],
+    }));
+    const redo = vi.fn(async (_id: string, turnId: string) => ({
+      turn_id: turnId,
+      undone: false,
+      files: 2,
+      own_changes: false,
+      notes: [],
+    }));
+    let undone = false;
+    const turns = async () => [
+      turn({
+        request: "Add the opening hours",
+        answer: "Done.",
+        changed: 2,
+        undone,
+        can_undo: !undone,
+        can_redo: undone,
+      }),
+    ];
+    const done = session({ mode: "ask", state: "done", turns: 1 });
+    render(
+      <Code
+        api={api({
+          sessions: async () => [done],
+          session: async () => done,
+          turns,
+          undo: async (id, turnId) => {
+            undone = true;
+            return undo(id, turnId);
+          },
+          redo: async (id, turnId) => {
+            undone = false;
+            return redo(id, turnId);
+          },
+          changes: async () => [{ ...CHANGE, undone, can_undo: !undone, can_redo: undone }],
+        })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    const card = await screen.findByRole("region", { name: "What this turn changed" });
+    expect(within(card).getByText("Changed 2 files.")).toBeTruthy();
+    expect(within(card).getByText(/Not checked/)).toBeTruthy();
+    expect(screen.getByText("Ask me", { selector: "output" })).toBeTruthy();
+    await userEvent.click(within(card).getByRole("button", { name: "Undo this turn" }));
+    expect(undo).toHaveBeenCalledWith("s1", "t1");
+    const gone = await screen.findByRole("region", { name: "An undone turn" });
+    expect(within(gone).getByText("You undid this turn.")).toBeTruthy();
+    expect(within(gone).getByText(/2 files are back to how they were before it/)).toBeTruthy();
+    await userEvent.click(within(gone).getByRole("button", { name: "Bring it back" }));
+    expect(redo).toHaveBeenCalledWith("s1", "t1");
+    expect(await screen.findByRole("region", { name: "What this turn changed" })).toBeTruthy();
+  }, 20_000);
+
+  it("lists a turn's files in the Changes tab, shows one before and after, and undoes from there", async () => {
+    const undo = vi.fn(async (_id: string, turnId: string) => ({
+      turn_id: turnId,
+      undone: true,
+      files: 2,
+      own_changes: true,
+      notes: [],
+    }));
+    const change = vi.fn(async () => CHANGED_FILE);
+    let undone = false;
+    const done = session({ mode: "ask", state: "done", turns: 1 });
+    render(
+      <Code
+        api={api({
+          sessions: async () => [done],
+          session: async () => done,
+          turns: async () => [turn({ changed: 2, undone, can_undo: !undone, can_redo: undone })],
+          changes: async () => [{ ...CHANGE, undone, can_undo: !undone, can_redo: undone }],
+          change,
+          undo: async (id, turnId) => {
+            undone = true;
+            return undo(id, turnId);
+          },
+        })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    const tabs = await screen.findByRole("tablist", { name: "Beside the chat" });
+    await userEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    const pane = await screen.findByRole("region", { name: "Changes" });
+    const list = await within(pane).findByRole("navigation", { name: "Files turn 1 changed" });
+    expect(within(list).getByRole("button", { name: /home\.html/ })).toBeTruthy();
+    expect(within(list).getByText("test")).toBeTruthy(); // a test file is marked
+    await waitFor(() => expect(change).toHaveBeenCalledWith("s1", "t1", "src/home.html"));
+    const shown = await within(pane).findByLabelText("src/home.html, before and after");
+    expect(shown.querySelectorAll('[data-line="del"]').length).toBe(1);
+    expect(shown.querySelectorAll('[data-line="add"]').length).toBe(1);
+    expect(within(shown).getByText("<p>Welcome</p>")).toBeTruthy();
+    await userEvent.click(within(pane).getByRole("radio", { name: "After" }));
+    const after = await within(pane).findByLabelText("src/home.html, after");
+    expect(within(after).queryByText("<p>Welcome</p>")).toBeNull();
+    expect(within(after).getByText("<p>Open 9 to 5</p>")).toBeTruthy();
+    expect(within(pane).getByText(/It does not put back files your project ignores/)).toBeTruthy();
+    await userEvent.click(within(pane).getByRole("button", { name: "Undo this turn" }));
+    expect(undo).toHaveBeenCalledWith("s1", "t1");
+    expect(await within(pane).findByText("Turn 1 is undone")).toBeTruthy();
+    // the person's own changes went back too, and the screen says so
+    expect(
+      await within(pane).findByText(/Files you changed yourself after this turn went back too/),
+    ).toBeTruthy();
+    expect(within(pane).getByRole("button", { name: "Bring it back" })).toBeTruthy();
+  }, 20_000);
+
+  it("says so when nothing was changed yet", async () => {
+    const quiet = session({ mode: "ask" });
+    render(
+      <Code api={api({ sessions: async () => [quiet], session: async () => quiet })} {...props} />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    const tabs = await screen.findByRole("tablist", { name: "Beside the chat" });
+    await userEvent.click(within(tabs).getByRole("tab", { name: "Changes" }));
+    expect(await screen.findByText("No changes yet")).toBeTruthy();
+  });
+
+  it("changes the mode from the pill, and allows a kind in what the project may do", async () => {
+    const setMode = vi.fn(async (_id: string, mode: CodeSession["mode"]) => session({ mode }));
+    const allow = vi.fn(async (_id: string, kind: string, allowed: boolean) => ({
+      ...PROJECT,
+      kinds: PROJECT.kinds.map((k) => (k.id === kind ? { ...k, allowed } : k)),
+    }));
+    const asking = session({ mode: "ask" });
+    render(
+      <Code
+        api={api({ sessions: async () => [asking], session: async () => asking, setMode, allow })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "How much the agent asks: Ask me" }),
+    );
+    const menu = screen.getByRole("menu", { name: "How much the agent asks" });
+    expect(
+      within(menu)
+        .getByRole("menuitemradio", { name: /Ask me/ })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(within(menu).getByText(/Reads the project and writes a plan/)).toBeTruthy();
+    await userEvent.click(within(menu).getByRole("menuitemradio", { name: /Work on its own/ }));
+    expect(setMode).toHaveBeenCalledWith("s1", "own");
+    expect(
+      await screen.findByRole("button", { name: "How much the agent asks: Work on its own" }),
+    ).toBeTruthy();
+    await userEvent.click(
+      screen.getByRole("button", { name: "How much the agent asks: Work on its own" }),
+    );
+    await userEvent.click(screen.getByRole("menuitem", { name: /What this project may do/ }));
+    expect(await screen.findByRole("heading", { name: "What bakery-site may do" })).toBeTruthy();
+    expect(
+      screen.getByText(/once the agent can run commands/, { selector: "li:nth-child(2) *" }),
+    ).toBeTruthy();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Allow: changing files Undo cannot put back" }),
+    );
+    expect(allow).toHaveBeenCalledWith("s1", "not_undoable", true);
+    expect(
+      await screen.findByRole("button", { name: "Remove: changing files Undo cannot put back" }),
+    ).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByRole("heading", { name: "What bakery-site may do" })).toBeNull();
+  }, 20_000);
+
+  it("carries out a plan: the session leaves Plan and the agent is told to go on", async () => {
+    const setMode = vi.fn(async (_id: string, mode: CodeSession["mode"]) =>
+      session({ mode, turns: 1, state: "done" }),
+    );
+    const send = vi.fn(async () => session({ mode: "ask", working: true, state: "working" }));
+    const planned = session({ mode: "plan", turns: 1, state: "done" });
+    render(
+      <Code
+        api={api({
+          sessions: async () => [planned],
+          session: async () => planned,
+          turns: async () => [turn()],
+          setMode,
+          send,
+        })}
+        {...props}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    const plan = await screen.findByRole("region", { name: "A plan" });
+    expect(within(plan).getByText(/switches this session to “Ask me”/)).toBeTruthy();
+    await userEvent.click(within(plan).getByRole("button", { name: "Carry out this plan" }));
+    expect(setMode).toHaveBeenCalledWith("s1", "ask");
+    await waitFor(() => expect(send).toHaveBeenCalledWith("s1", CARRY_OUT));
+  });
+
+  it("says who waits on the list of projects", async () => {
+    const sessions = async () => [session({ title: "Set the key", working: true, waiting: true })];
+    render(<Code api={api({ sessions })} {...props} />);
+    expect(await screen.findByText("Waiting for you")).toBeTruthy();
   });
 });

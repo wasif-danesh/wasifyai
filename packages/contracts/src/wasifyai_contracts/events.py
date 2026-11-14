@@ -105,6 +105,8 @@ class CodeStateEvent(_Envelope):
     result: str = ""  # the session's word: passed, failed, not_checked, could_not_check, or none
     detail: str = ""  # a sentence for a person
     cost_usd: float = 0.0
+    # with `state: "done"`, in a session that may change files: how many files the turn changed
+    changed: int | None = None
 
 
 class CodeMessageEvent(_Envelope):

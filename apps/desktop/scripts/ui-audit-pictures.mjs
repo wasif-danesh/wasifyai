@@ -31,6 +31,14 @@
 //                                                               and its answer; needs the coding engine set up and
 //                                                               a model that is ready (CODING_OLLAMA_URL for the
 //                                                               local one); use a throwaway DESKTOP_DATA_DIR
+//   WASIFYAI_AUDIT_FOLDER=<a project> apps/desktop/scripts/ui-audit.sh light code-edit
+//                                                               Code (C2): a session in "Ask me" on a real model: a
+//                                                               change, the card for a file Undo cannot put back
+//                                                               (yes, no, Allow for this project, Stop), the Changes
+//                                                               tab, Undo and Bring it back checked on disk. The
+//                                                               project needs src/pages/home.html, a .env with
+//                                                               OPEN=0 and a .gitignore naming it; a throwaway
+//                                                               DESKTOP_DATA_DIR as for code-plan
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -1783,6 +1791,10 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("button", { name: "Choose a folder" }).click();
       const box = page.getByRole("textbox", { name: "Ask about this project" });
       await box.waitFor();
+      // a project opened here starts in "Ask me": this walk is of Plan, chosen from the pill
+      await page.getByRole("button", { name: "How much the agent asks: Ask me" }).click();
+      await page.getByRole("menuitemradio", { name: /^Plan/ }).click();
+      await page.getByRole("button", { name: "How much the agent asks: Plan" }).waitFor();
       await shot(page, "code-session-new");
       const began = Date.now();
       await box.fill(
@@ -1831,6 +1843,184 @@ for (const scheme of ["light", "dark"]) {
       await open(page, "/code");
       await page.getByRole("heading", { name: "Projects" }).waitFor();
       await shot(page, "code-projects");
+    });
+  }
+  // stage C2 of the coding agent: a session that changes files, with a real model. The project
+  // (WASIFYAI_AUDIT_FOLDER) must have src/pages/home.html, and a .gitignore that names .env; the walk
+  // reads the files on disk to see that a change, an undo and a "bring it back" really happened.
+  if (scheme === "light" && names.has("code-edit")) {
+    await attempt("code-edit", async () => {
+      const { readFileSync, existsSync } = await import("node:fs");
+      const folder = process.env.WASIFYAI_AUDIT_FOLDER ?? "";
+      const home = () => readFileSync(join(folder, "src", "pages", "home.html"), "utf8");
+      const env = () => readFileSync(join(folder, ".env"), "utf8");
+      const [homeWas, envWas] = [home(), env()];
+      await open(page, "/code");
+      await page.getByRole("button", { name: "Choose a folder" }).first().waitFor();
+      await page.getByRole("button", { name: "Choose a folder" }).first().click();
+      const box = page.getByRole("textbox", { name: "Ask about this project" });
+      await box.waitFor();
+      await page.getByRole("button", { name: "How much the agent asks: Ask me" }).waitFor();
+      await shot(page, "code-edit-new");
+      // the mode, opened, and what the project may do
+      await page.getByRole("button", { name: "How much the agent asks: Ask me" }).click();
+      await page.getByRole("menu", { name: "How much the agent asks" }).waitFor();
+      await shot(page, "code-edit-mode");
+      await page.getByRole("menuitem", { name: /What this project may do/ }).click();
+      await page.getByRole("heading", { name: /^What .* may do$/ }).waitFor();
+      // an earlier walk that stopped half way may have left the kind allowed: the walk begins with it asked
+      const kept = page.getByRole("button", { name: /^Remove: changing files/ });
+      await page.getByRole("button", { name: /^(Allow|Remove): changing files/ }).waitFor();
+      if (await kept.count()) await kept.click();
+      await page.getByRole("button", { name: /^Allow: changing files/ }).waitFor();
+      await shot(page, "code-edit-may");
+      await page.getByRole("button", { name: "Done" }).click();
+      // 1. a change to a file Undo knows: nothing is asked
+      let began = Date.now();
+      await box.fill(
+        "In src/pages/home.html add the line <p>Open 9 to 5</p> right after the first heading. Change nothing else.",
+      );
+      await box.press("Enter");
+      const card = page.getByRole("region", {
+        name: "The agent wants to change a file Undo cannot put back",
+      });
+      const changed = page.getByRole("region", { name: "What this turn changed" });
+      await changed.waitFor({ timeout: 900_000 });
+      console.log(`code-edit: turn 1 ended after ${((Date.now() - began) / 1000).toFixed(1)} s`);
+      if (!home().includes("Open 9 to 5")) throw new Error("home.html was not changed");
+      if ((await card.count()) !== 0) throw new Error("a card came for a file Undo knows");
+      console.log(`  the card says: ${(await changed.innerText()).replace(/\s+/g, " ")}`);
+      await shot(page, "code-edit-changed", 1400);
+      // 2. the Changes tab: the turn, its files, one before and after
+      await changed.getByRole("button", { name: "Look at the changes" }).click();
+      const pane = page.getByRole("region", { name: "Changes" });
+      await pane.getByRole("navigation", { name: /^Files turn \d+ changed$/ }).waitFor();
+      await pane.getByLabel(/home\.html, before and after/).waitFor();
+      const files = await pane.getByRole("navigation", { name: /^Files turn/ }).innerText();
+      console.log(`  the turn's files: ${files.replace(/\s+/g, " ")}`);
+      await shot(page, "code-edit-changes", 1400);
+      await pane.getByRole("radio", { name: "After" }).click();
+      await pane.getByLabel(/home\.html, after/).waitFor();
+      // 3. Undo this turn: the file on disk is byte for byte what it was
+      await pane.getByRole("button", { name: "Undo this turn" }).click();
+      await pane.getByText(/^Turn \d+ is undone$/).waitFor({ timeout: 60_000 });
+      if (home() !== homeWas) throw new Error("undo did not put home.html back exactly");
+      await page.getByRole("region", { name: "An undone turn" }).waitFor();
+      await shot(page, "code-edit-undone", 1400);
+      // 4. Bring it back, and undo again from the chat
+      await pane.getByRole("button", { name: "Bring it back" }).click();
+      await pane.getByRole("button", { name: "Undo this turn" }).waitFor({ timeout: 60_000 });
+      if (!home().includes("Open 9 to 5")) throw new Error("the turn did not come back");
+      await changed.getByRole("button", { name: "Undo this turn" }).click();
+      await pane.getByText(/^Turn \d+ is undone$/).waitFor({ timeout: 60_000 });
+      if (home() !== homeWas) throw new Error("the second undo did not put home.html back");
+      // 5a. a change to a file Undo does not know: it is asked first, and a yes lets it run
+      began = Date.now();
+      await box.fill(
+        "The shop opens on Sundays now. Change OPEN=0 to OPEN=1 in the file .env and change nothing else.",
+      );
+      await box.press("Enter");
+      await card.getByRole("button", { name: "Yes, change it" }).waitFor({ timeout: 900_000 });
+      console.log(`code-edit: asked after ${((Date.now() - began) / 1000).toFixed(1)} s`);
+      if (env() !== envWas) throw new Error(".env was changed before the answer");
+      await page.getByText("Waiting for you").first().waitFor();
+      await shot(page, "code-edit-ask", 1300);
+      await card.getByRole("button", { name: "Yes, change it" }).click();
+      await card.getByText("You said yes.").waitFor({ timeout: 60_000 });
+      await page
+        .getByRole("button", { name: "Stop" })
+        .waitFor({ state: "detached", timeout: 900_000 });
+      if (!env().includes("OPEN=1")) throw new Error(".env was not changed after the yes");
+      if (home() !== homeWas) throw new Error("the undone file was changed by a later turn");
+      await page.getByText("This turn changed only files Undo cannot put back.").waitFor();
+      // an ignored file is never among a turn's changes
+      const listed = await pane.getByRole("combobox", { name: "Which turn" }).innerText();
+      if (/opens on Sundays/.test(listed))
+        throw new Error("a turn that changed only .env is listed");
+      // 5. a no: the agent is told, the file stays, the turn goes on to its end
+      began = Date.now();
+      await box.fill(
+        "Add the line PHONE=555-0100 at the end of the file .env and change nothing else.",
+      );
+      await box.press("Enter");
+      const second = card.last();
+      await second.getByRole("button", { name: "No", exact: true }).waitFor({ timeout: 900_000 });
+      await second.getByRole("button", { name: "No", exact: true }).click();
+      await second.getByText(/You said no/).waitFor({ timeout: 60_000 });
+      await page
+        .getByRole("button", { name: "Stop" })
+        .waitFor({ state: "detached", timeout: 900_000 });
+      console.log(
+        `code-edit: the no, to the turn's end: ${((Date.now() - began) / 1000).toFixed(1)} s`,
+      );
+      if (env().includes("PHONE")) throw new Error(".env was changed after a no");
+      await shot(page, "code-edit-no", 1400);
+      // 6. "Allow for this project": it runs, and the next one of that kind runs with no card
+      await box.fill(
+        "I changed my mind: please do add the line PHONE=555-0100 at the end of the file .env.",
+      );
+      await box.press("Enter");
+      const third = card.last();
+      await third
+        .getByRole("button", { name: "Allow for this project" })
+        .waitFor({ timeout: 900_000 });
+      await third.getByRole("button", { name: "Allow for this project" }).click();
+      await third.getByText(/You allowed changing files/).waitFor({ timeout: 120_000 });
+      await page
+        .getByRole("button", { name: "Stop" })
+        .waitFor({ state: "detached", timeout: 900_000 });
+      if (!env().includes("PHONE=555-0100")) throw new Error(".env was not changed after Allow");
+      const cards = await card.count();
+      await box.fill("Also add the line CLOSED_ON=Monday at the end of the file .env.");
+      await box.press("Enter");
+      await page.getByRole("button", { name: "Stop" }).waitFor({ timeout: 60_000 });
+      await page
+        .getByRole("button", { name: "Stop" })
+        .waitFor({ state: "detached", timeout: 900_000 });
+      if (!env().includes("CLOSED_ON=Monday"))
+        throw new Error(".env was not changed once the kind was allowed");
+      if ((await card.count()) !== cards) throw new Error("a card came though the kind is allowed");
+      await page
+        .getByText(/· (1 )?allowed for this project/)
+        .last()
+        .waitFor();
+      await shot(page, "code-edit-allowed", 1400);
+      // taken back in "What this project may do"
+      await third.getByRole("button", { name: "Take it back" }).click();
+      await page.getByRole("button", { name: /^Remove: changing files/ }).click();
+      await page.getByRole("button", { name: /^Allow: changing files/ }).waitFor();
+      await page.getByRole("button", { name: "Done" }).click();
+      // 7. Stop while a card waits: within a second, and nothing is changed
+      await box.fill("Add the line CITY=Marlow at the end of the file .env.");
+      await box.press("Enter");
+      const fourth = card.last();
+      await fourth.getByRole("button", { name: "Yes, change it" }).waitFor({ timeout: 900_000 });
+      began = Date.now();
+      await page.getByRole("button", { name: "Stop" }).click();
+      await page
+        .getByText(/^You stopped this turn\./)
+        .last()
+        .waitFor({ timeout: 30_000 });
+      console.log(
+        `code-edit: Stop while the card waited: ${((Date.now() - began) / 1000).toFixed(2)} s`,
+      );
+      if (env().includes("CITY")) throw new Error(".env was changed though the turn was stopped");
+      await fourth.getByText(/The turn ended before this was answered/).waitFor();
+      await shot(page, "code-edit-stopped", 1400);
+      // nothing of ours is in the project
+      if (existsSync(join(folder, ".git"))) throw new Error("the project was given a .git folder");
+      // the smallest window: one pane at a time, with Changes as a tab
+      await page.setViewportSize({ width: 720, height: 520 });
+      await page
+        .getByRole("tablist", { name: "What to show" })
+        .getByRole("tab", { name: "Changes" })
+        .click();
+      await page.waitForTimeout(500);
+      await shot(page, "code-edit-changes-small");
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await open(page, "/code");
+      await page.getByRole("heading", { name: "Projects" }).waitFor();
+      await shot(page, "code-edit-projects");
     });
   }
   if (scheme === "light" && names.has("u11-make")) {

@@ -227,12 +227,14 @@
     "actions": [
       "code.session.send",
       "code.session.start",
-      "code.session.stop"
+      "code.session.stop",
+      "code.session.undo"
     ],
     "does": [
       "Ask the coding agent",
       "Start a coding session",
-      "Stop the coding agent"
+      "Stop the coding agent",
+      "Undo a coding turn"
     ]
   },
   {

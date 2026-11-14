@@ -123,7 +123,8 @@ if ! ls "$CODING_SRC"/requirements-*.lock >/dev/null 2>&1; then
   exit 1
 fi
 mkdir -p "$OUT/coding-engine"
-cp "$CODING_SRC/VERSION" "$CODING_SRC/engine.sb.template" "$CODING_SRC/build-constraints.txt" \
+cp "$CODING_SRC/VERSION" "$CODING_SRC/engine.sb.template" "$CODING_SRC/wasify_rules.py" \
+  "$CODING_SRC/build-constraints.txt" \
   "$CODING_SRC"/requirements-*.lock "$OUT/coding-engine/"
 
 for p in $PRODUCTS; do

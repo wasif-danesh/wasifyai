@@ -1,15 +1,17 @@
 """What coding can do, for the action catalogue (ADR-0068; ADR-0101, decision 4): start a session
-on a folder, send it a message, stop it. The window will call these and never the coding engine.
+on a folder, send it a message, stop it, undo a turn. The window calls these and never the coding
+engine.
 
-Every session of this stage only reads (the plan's "Plan mode"): the agent can look at files and
-search them, and has no tool that writes a file or runs a command. `code.session.send` is the one
+A session started here only reads unless a mode that changes files is asked for (`mode`). In
+"ask" and "own" the agent changes files of the folder with a file editor and runs nothing; every
+turn that changed files can be undone with `code.session.undo`. `code.session.send` is the one
 that costs: it reads the person's own folder and, on a cloud model, sends what it reads to that
 model's provider.
 
 They are offered to the assistant and not to outside apps (`surfaces`): an outside app that could
 open a session on any folder would be handed that folder's content."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk.actions import (
@@ -55,6 +57,12 @@ class StartIn(BaseModel):
         0, ge=0, le=100,
         description="The most this session may cost, in US dollars. 0 uses the usual limit.",
     )  # fmt: skip
+    mode: Literal["plan", "ask", "own"] = Field(
+        "plan",
+        description="How much the agent may do. plan: it only reads. ask: it changes files, "
+        "and a change Undo cannot put back waits for the person's yes on the Code screen. "
+        "own: it changes files and asks nothing.",
+    )
 
 
 class StartOut(BaseModel):
@@ -86,6 +94,25 @@ class SendOut(BaseModel):
     truncated: bool
     steps: int
     cost_usd: float
+    changed: int = 0
+
+
+class UndoIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    session_id: str = Field(min_length=1, max_length=64, description="The coding session.")
+    turn_id: str = Field(
+        "", max_length=64,
+        description="The turn to undo. Leave empty for the newest turn that changed files.",
+    )  # fmt: skip
+
+
+class UndoOut(BaseModel):
+    session_id: str
+    turn_id: str
+    files: int
+    own_changes: bool
+    notes: list[str]
 
 
 class StopIn(BaseModel):
@@ -108,7 +135,7 @@ async def _start(p: StartIn, ctx: ActionContext) -> Outcome:
     try:
         made = await _sessions(ctx).start(
             owner_of(ctx.actor), folder=p.folder, title=p.title, model=p.model,
-            cost_limit_usd=p.cost_limit_usd,
+            cost_limit_usd=p.cost_limit_usd, mode=p.mode,
         )  # fmt: skip
     except NotAvailable as e:
         return Outcome.refused(str(e), "unavailable")
@@ -124,8 +151,13 @@ async def _start(p: StartIn, ctx: ActionContext) -> Outcome:
             "mode": made["mode"],
             "model": made["model"],
         },
-        f'A coding session on "{made["project"]}" is ready. The agent can read the folder and '
-        "cannot change it. Send it a message with code.session.send.",
+        f'A coding session on "{made["project"]}" is ready. '
+        + (
+            "The agent can read the folder and cannot change it."
+            if made["mode"] == "plan"
+            else "The agent can read the folder and change its files; it runs no command."
+        )
+        + " Send it a message with code.session.send.",
     )
 
 
@@ -160,9 +192,44 @@ async def _send(p: SendIn, ctx: ActionContext) -> Outcome:
             "truncated": len(answer) > ANSWER_CHARS,
             "steps": turn["steps"],
             "cost_usd": seen["cost_usd"],
+            "changed": int(turn["changed"]),
         },
-        f"{said} It took {turn['steps']} step{'s' if turn['steps'] != 1 else ''}; nothing in "
-        "the folder was changed.",
+        f"{said} It took {turn['steps']} step{'s' if turn['steps'] != 1 else ''}; "
+        + (
+            f"{turn['changed']} file{'s were' if turn['changed'] != 1 else ' was'} changed. "
+            "code.session.undo puts them back."
+            if turn["changed"]
+            else "nothing in the folder was changed."
+        ),
+    )
+
+
+async def _undo(p: UndoIn, ctx: ActionContext) -> Outcome:
+    owner = owner_of(ctx.actor)
+    try:
+        sessions = _sessions(ctx)
+        turn_id = p.turn_id
+        if not turn_id:
+            able = [t for t in sessions.turns(owner, p.session_id) if t["can_undo"]]
+            if not able:
+                return Outcome.refused("No turn of this session can be undone.", "nothing_to_undo")
+            turn_id = able[-1]["id"]
+        done = await sessions.undo(owner, p.session_id, turn_id)
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    return Outcome.ok(
+        {
+            "session_id": p.session_id,
+            "turn_id": turn_id,
+            "files": done["files"],
+            "own_changes": done["own_changes"],
+            "notes": done["notes"],
+        },
+        f"{done['files']} file{'s are' if done['files'] != 1 else ' is'} back to how "
+        f"{'they were' if done['files'] != 1 else 'it was'} before the turn. It can be "
+        "brought back on the Code screen.",
     )
 
 
@@ -191,10 +258,12 @@ def actions() -> list[Action]:
             title="Start a coding session",
             summary="Open a project's folder for the coding agent to read.",
             description=(
-                "Start a coding session on one folder of this computer. In this version every "
-                "session only reads: the agent can find and read the files of that folder and "
-                "cannot change a file or run a command. Nothing runs yet and nothing is read "
-                "until a message is sent with code.session.send. Give the folder's whole path. "
+                "Start a coding session on one folder of this computer. By default the session "
+                "only reads (mode plan): the agent can find and read the files of that folder "
+                "and cannot change a file. With mode ask or own it can also change files of "
+                "that folder; it can never run a command, and every turn can be undone. "
+                "Nothing runs yet and nothing is read until a message is sent with "
+                "code.session.send. Give the folder's whole path. "
                 "The home folder, a whole disk and the app's own folders are refused. It "
                 "returns the session's id."
             ),
@@ -215,12 +284,13 @@ def actions() -> list[Action]:
             description=(
                 "Send a message to a coding session and wait for the agent's answer. Use it for "
                 'questions about a project ("analyse this codebase", "where is the login '
-                'handled?") and for a plan of a change. The agent reads the files it needs; it '
-                "changes nothing. It can take from seconds to several minutes. With a cloud "
+                'handled?"), for a plan of a change and, in a session whose mode is ask or own, '
+                "for the change itself. The agent reads the files it needs; in a plan session "
+                "it changes nothing. It can take from seconds to several minutes. With a cloud "
                 "model, the parts of the files the agent reads are sent to that model's "
                 "provider, and the session's cost is counted and limited. It returns how the "
                 "turn ended (finished, stopped, step_limit, refused), the answer, the number "
-                "of steps and the cost so far."
+                "of steps, how many files were changed and the cost so far."
             ),
             input=SendIn,
             output=SendOut,
@@ -250,6 +320,28 @@ def actions() -> list[Action]:
             requires=(need_product(PRODUCT_ID), ENGINE),
             product=PRODUCT_ID,
             bind=CallBinding(_stop),
+            ui="code.projects",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.session.undo",
+            title="Undo a coding turn",
+            summary="Put a project's files back to how they were before the agent's turn.",
+            description=(
+                "Undo what a turn of a coding session changed: every file it changed, added or "
+                "deleted goes back to how it was before that turn. Only the newest turn that "
+                "changed files can be undone; leave turn_id empty for that one. Files the "
+                "project ignores (such as .env) and changes the person made themselves since "
+                "the turn are part of what goes back or stays; the result says so. An undo can "
+                "be brought back on the Code screen."
+            ),
+            input=UndoIn,
+            output=UndoOut,
+            examples=({"session_id": SAMPLE_ID},),
+            effect="change",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            product=PRODUCT_ID,
+            bind=CallBinding(_undo),
             ui="code.projects",
             surfaces=("assistant",),
         ),

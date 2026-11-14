@@ -279,6 +279,7 @@ describe("the Library", () => {
           model: "claude-sonnet-5-5",
           state: "done" as const,
           working: false,
+          waiting: false,
           result: "" as const,
           turns: 1,
           answer: "",

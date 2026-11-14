@@ -198,13 +198,19 @@ holds every one of them to the models.
 
 | Event | New? | When | Payload (besides the envelope) |
 |---|---|---|---|
-| `code_state` | new | A turn changes state | `state` (`working` \| `turn_ended` \| `checking` \| `done`), `why?` (`finished` \| `stopped` \| `step_limit` \| `error` \| `refused`, later the check's reasons), `result?` (one of the four words, or empty), `detail?` (a sentence for a person), `cost_usd` |
+| `code_state` | new | A turn changes state | `state` (`working` \| `turn_ended` \| `checking` \| `done`), `why?` (`finished` \| `stopped` \| `step_limit` \| `error` \| `refused`, later the check's reasons), `result?` (one of the four words, or empty), `detail?` (a sentence for a person), `cost_usd`, `changed?` (with `done`, in a session that may change files: how many files the turn changed; added 2026-11-14 for stage C2) |
 | `tool_call` | existing | The agent uses a tool | `id`, `name`, `arguments`: what the tool was given, short (a path, a pattern, a command), never a file's content |
-| `tool_result` | existing | The tool answered | `id`, `name`, `status` (`ok` \| `error`), `output` `{text}`: the result, cut to 4,000 characters |
+| `tool_result` | existing | The tool answered | `id`, `name`, `status` (`ok` \| `error` \| `refused`: the person said no and it did not run), `output` `{text, answer?}`: the result, cut to 4,000 characters; `answer` says how the step's question was answered (`yes`, `allow`, `no`, or `allowed` when it ran with no question because its kind is allowed for the project) |
+| `interrupt` | existing | The agent waits for the person's yes or no before a change (stage C2; the owner chose to reuse this kind, 2026-11-14) | `interrupt_id` (the card's id), `kind: "code_ask"`, `payload`: `ask` (the kind of request: `not_undoable` \| `delete` \| `install`), `step_id` (the `tool_call` that waits), `tool`, `command`, `path` (from the project's top), `says` (the agent's reason, when it gave one), `project`, `undo` (whether Undo covers it), `steps` (how many steps wait together). Nothing has run while it waits |
 | `token` | existing | Words of the agent's message as they are written | `node: "agent"`, `text`. **Not kept:** a client that connects later does not get them; it gets the `code_message` |
 | `reasoning` | existing | The model's thinking as it is written | `node: "agent"`, `text`. Not kept |
 | `code_message` | new | A message of the agent is complete | `text`. It replaces what the `token` events of that message built |
 | `code_refusal` | new | The model declined the request | `message` (the model's own words, or "The model declined this request."), `category?`. The turn then ends with `code_state` `done`, `why: "refused"`. It is not an `error` |
+
+The card is answered with `POST .../sessions/{id}/asks/{interrupt_id}` and `{"answer": "yes" | "allow" | "no"}`
+(`allow` is yes, and the kind is not asked about again in this project). A card is open until the `tool_result` of
+its `step_id` arrives, or the turn's `code_state` `turn_ended`: a client that connects later reads the kept events
+and applies the same rule.
 
 No `done` event is sent on this stream: a turn's end is `code_state` with `state: "done"`, and the stream stays
 open for the next turn. `error` keeps its meaning (the stream itself failed).

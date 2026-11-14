@@ -10,7 +10,7 @@ import asyncio
 import json
 from collections.abc import AsyncGenerator, AsyncIterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
@@ -28,12 +28,28 @@ class CodeSessionIn(BaseModel):
     title: str = Field("", max_length=200)
     model: str = Field("", max_length=64)
     cost_limit_usd: float = Field(0, ge=0, le=100)
+    mode: Literal["plan", "ask", "own"] = "plan"
 
 
-class CodeLimitIn(BaseModel):
+class CodeSessionPatch(BaseModel):
+    """What can be changed about a session: the most it may cost, and how much the agent asks."""
+
     model_config = ConfigDict(extra="forbid")
 
-    cost_limit_usd: float = Field(gt=0, le=100)
+    cost_limit_usd: float | None = Field(None, gt=0, le=100)
+    mode: Literal["plan", "ask", "own"] | None = None
+
+
+class CodeAnswerIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answer: Literal["yes", "allow", "no"]
+
+
+class CodeAllowIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowed: bool
 
 
 class CodeMessageIn(BaseModel):
@@ -52,7 +68,9 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(404, str(e)) from None
 
     def refuse(e: Refused) -> HTTPException:
-        status = {"not_found": 404, "busy": 409, "model_not_ready": 409}.get(e.code, 422)
+        status = {"not_found": 404, "busy": 409, "model_not_ready": 409, "not_last": 409}.get(
+            e.code, 422
+        )
         return HTTPException(status, {"code": e.code, "message": e.message})
 
     @router.get("/models")
@@ -67,7 +85,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         try:
             return await sessions().start(
                 owner_of(identity), folder=body.folder, title=body.title, model=body.model,
-                cost_limit_usd=body.cost_limit_usd,
+                cost_limit_usd=body.cost_limit_usd, mode=body.mode,
             )  # fmt: skip
         except Refused as e:
             raise refuse(e) from None
@@ -95,11 +113,96 @@ def build_routes(deps: RouteDeps) -> APIRouter:
 
     @router.patch("/sessions/{session_id}")
     async def change_session(
-        session_id: str, body: CodeLimitIn, identity: Identity = Depends(deps.identity)
+        session_id: str, body: CodeSessionPatch, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
-        """Change the most this session may cost. It holds from the next model call."""
+        """Change the most this session may cost (it holds from the next model call), or how
+        much the agent asks (Plan, Ask me, Work on its own)."""
+        live, owner = sessions(), owner_of(identity)
         try:
-            return sessions().set_limit(owner_of(identity), session_id, body.cost_limit_usd)
+            if body.cost_limit_usd is not None:
+                live.set_limit(owner, session_id, body.cost_limit_usd)
+            if body.mode is not None:
+                await live.set_mode(owner, session_id, body.mode)
+            return live.view(owner, session_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/sessions/{session_id}/asks/{ask_id}")
+    async def answer_ask(
+        session_id: str, ask_id: str, body: CodeAnswerIn,
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:  # fmt: skip
+        """The person's answer to an approval card: yes, allow (yes, and stop asking about
+        this kind of request in this project) or no."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            taken = await live.answer(owner, session_id, ask_id, body.answer)
+            return {"answered": taken, "session": live.view(owner, session_id)}
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.get("/sessions/{session_id}/project")
+    async def get_project(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """What this session's project may do: each kind of request and whether it is allowed."""
+        try:
+            return sessions().project(owner_of(identity), session_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.put("/sessions/{session_id}/project/allowed/{kind}")
+    async def set_allowed(
+        session_id: str, kind: str, body: CodeAllowIn,
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:  # fmt: skip
+        """Allow a kind of request for the project, or take that back."""
+        try:
+            return sessions().allow(owner_of(identity), session_id, kind, body.allowed)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.get("/sessions/{session_id}/changes")
+    async def list_changes(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """The turns that changed files, the newest first, each with its files (the Changes
+        tab)."""
+        try:
+            return await sessions().changes(owner_of(identity), session_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.get("/sessions/{session_id}/changes/{turn_id}/file")
+    async def read_change(
+        session_id: str,
+        turn_id: str,
+        path: str = Query(min_length=1, max_length=2000),
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """One file a turn changed: before, after, and the two as lines."""
+        try:
+            return await sessions().change(owner_of(identity), session_id, turn_id, path)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/sessions/{session_id}/turns/{turn_id}/undo")
+    async def undo_turn(
+        session_id: str, turn_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Put the project's files back to how they were before this turn."""
+        try:
+            return await sessions().undo(owner_of(identity), session_id, turn_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/sessions/{session_id}/turns/{turn_id}/redo")
+    async def redo_turn(
+        session_id: str, turn_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Bring an undone turn's changes back."""
+        try:
+            return await sessions().redo(owner_of(identity), session_id, turn_id)
         except Refused as e:
             raise refuse(e) from None
 

@@ -242,6 +242,14 @@
   .menuitem b { font-size: .875rem; font-weight: 600; }
   .menuitem .d { grid-column: 2; font-size: .8125rem; color: var(--muted); }
   .menuitem > .ic { margin-top: 3px; }
+  .menuitem.foot { border-top: 1px solid var(--border); border-radius: 0 0 6px 6px; margin-top: 2px; padding-top: 10px; color: var(--muted); }
+  .menuitem.foot b { font-weight: 500; color: var(--text); }
+  .allowrow { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--border); font-size: .875rem; }
+  .allowrow:first-child { border-top: 0; }
+  .allowrow > .ic { color: var(--tone, var(--muted)); }
+  .allowrow .d { display: block; font-size: .8125rem; color: var(--muted); }
+  .allowlist { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 12px; }
+  .linkbtn { border: 0; background: transparent; padding: 0; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
   table.t { width: 100%; border-collapse: collapse; font-size: .875rem; }
   table.t th { text-align: start; font-weight: 500; color: var(--muted); font-size: .8125rem; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   table.t td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -618,12 +626,13 @@ const thread = (html, cls = '') => `<div class="thread ${cls}">${html}</div>`;
 
 const MODES = {
   plan: { label: 'Plan', icon: 'list-checks', d: 'Reads the project and writes a plan. Changes no file and runs nothing.' },
-  ask: { label: 'Ask me', icon: 'hand', d: 'Changes files and runs commands in this folder. Stops and asks you before anything a rule marks, such as deleting or installing.' },
-  own: { label: 'Work on its own', icon: 'zap', d: 'Does not stop to ask. It still cannot leave this folder or reach the internet, and every turn can be undone.' },
+  ask: { label: 'Ask me', icon: 'hand', d: 'Changes files and runs commands in this folder. Asks you before deleting or installing. You can allow each of these once for the whole project.' },
+  own: { label: 'Work on its own', icon: 'zap', d: 'Does not ask before commands or changes. It still cannot leave this folder or reach the internet, and every turn can be undone.' },
 };
 function modeMenu(cur) {
   return `<div class="pop modes" role="menu" aria-label="How much the agent asks">${Object.entries(MODES).map(([k, m]) =>
-    `<button class="menuitem" role="menuitemradio" aria-checked="${k === cur}">${ic(m.icon)}<b>${m.label}</b>${k === cur ? ic('check', 'tone t-info') : '<span></span>'}<span class="d">${m.d}</span></button>`).join('')}</div>`;
+    `<button class="menuitem" role="menuitemradio" aria-checked="${k === cur}">${ic(m.icon)}<b>${m.label}</b>${k === cur ? ic('check', 'tone t-info') : '<span></span>'}<span class="d">${m.d}</span></button>`).join('')}
+    <button class="menuitem foot" role="menuitem" data-go="project-may">${ic('shield')}<b>What this project may do</b>${ic('chevron-right', 's14')}</button></div>`;
 }
 function composer(o = {}) {
   const m = MODES[o.mode ?? 'ask'];
@@ -1066,23 +1075,25 @@ const askCard = (state) => `<section class="tcard ask t-warn" aria-label="The ag
     </dl>
     ${state === 'yes' ? `<p class="row muted">${ic('check', 'tone t-ok')}<span>You said yes · 14:31</span></p>`
       : state === 'no' ? `<p class="row muted">${ic('x', 's14')}<span>You said no · 14:31</span></p>`
-      : `<div class="btns"><button class="btn sm" data-go="ask-answered">Yes, run it</button><button class="btn outline sm" data-go="ask-answered">No</button></div>`}
+      : `<div class="btns"><button class="btn sm" data-go="ask-answered">Yes, run it</button><button class="btn outline sm" data-go="ask-answered">Allow for this project</button><button class="btn outline sm" data-go="ask-answered">No</button></div>
+      <p class="muted" style="font-size:.8125rem">“Allow for this project” runs it and stops asking before the agent deletes files in bakery-site. You can take it back in <button class="linkbtn" data-go="project-may">What this project may do</button>.</p>`}
   </section>`;
 const askSmall = (cmdText, says, rule, state) => `<section class="tcard ask t-warn" aria-label="The agent wants to run a command">
     <div class="head">${ic('hand')}<span class="word">The agent wants to run a command</span></div>
     <div class="cmd">${cmdText}</div><p>It says: “${says}”</p>
     <p class="muted" style="font-size:.8125rem">Why you are asked: the rule “${rule}”.</p>
-    <p class="row muted">${state === 'yes' ? ic('check', 'tone t-ok') : ic('x', 's14')}<span>You said ${state} · ${state === 'yes' ? '14:31' : '14:33'}</span></p></section>`;
+    ${state === 'allow' ? `<p class="row muted wrap">${ic('shield', 's14 tone t-ok')}<span>You allowed deleting files for this project · 14:31</span><button class="linkbtn" data-go="project-may">Take it back</button></p>`
+      : `<p class="row muted">${state === 'yes' ? ic('check', 'tone t-ok') : ic('x', 's14')}<span>You said ${state} · ${state === 'yes' ? '14:31' : '14:33'}</span></p>`}</section>`;
 
 add({ id: 'ask', g: G4, name: 'The approval card, and the session while it waits', menu: false,
-  note: 'In “Ask me”, a command that a rule marks stops for a yes or a no. The card shows the command, the agent’s reason in its own words, what it does, whether Undo covers it, and the rule. While it waits the bar says “Waiting for you” and nothing else runs.',
+  note: 'In “Ask me”, a command that a rule marks stops for an answer: yes, no, or “Allow for this project”, which runs it and stops asking for that kind of request in this project. The card shows the command, the agent’s reason in its own words, what it does, whether Undo covers it, and the rule. While it waits the bar says “Waiting for you” and nothing else runs.',
   render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'Build for the web' }), right: sessRight('waiting', '$0.06'),
     body: session({ tab: 'files', pane: { none: true },
       thread: thread(BUILD_ASK + ai(steps(read('package.json'), read('README.md')), p('The project builds into <code>dist/</code>. An old build is still there, so I will clear it first.'), askCard()), 'toend'),
       composer: { running: true, placeholder: 'Or say what to do instead', note: 'The agent is waiting for your answer. Nothing else runs until then.' } }) }) });
 
 add({ id: 'ask-elsewhere', g: G4, name: 'Waiting, seen from another screen', menu: true,
-  note: 'When the person is somewhere else in the app, the question comes to them: a card under the bar, as connection approvals do today, with the same yes and no. Projects shows “Waiting for you” on the row.',
+  note: 'When the person is somewhere else in the app, the question comes to them: a card under the bar, as connection approvals do today, with the same three answers. Projects shows “Waiting for you” on the row.',
   render: () => shell({ current: 'code.projects', body: `<div class="pagepad">
     <div class="pagehead"><div><h1>Projects</h1><p>The folders the agent works in. Each keeps its own sessions, check and extensions.</p></div>
       <button class="btn">${ic('folder-open')} Choose a folder</button></div>
@@ -1093,19 +1104,43 @@ add({ id: 'ask-elsewhere', g: G4, name: 'Waiting, seen from another screen', men
     <div class="pop" style="top:12px;inset-inline-end:12px;width:min(24rem,calc(100% - 24px));padding:0;border:0;box-shadow:var(--shadow)" role="alertdialog" aria-label="The agent in bakery-site is waiting for you">
       <section class="tcard ask t-warn" style="max-width:none"><div class="head">${ic('hand')}<span class="word">bakery-site is waiting for you</span></div>
         <p>The agent wants to run a command:</p><div class="cmd">rm -rf dist/</div>
-        <div class="btns"><button class="btn sm">Yes, run it</button><button class="btn outline sm">No</button><button class="btn ghost sm" data-go="ask">Open the session</button></div></section></div>` }) });
+        <div class="btns"><button class="btn sm">Yes, run it</button><button class="btn outline sm">Allow for this project</button><button class="btn outline sm">No</button><button class="btn ghost sm" data-go="ask">Open the session</button></div></section></div>` }) });
 
-add({ id: 'ask-answered', g: G4, name: 'After a yes, and after a no', menu: false,
-  note: 'An answered card stays in the chat and says what was answered. After a yes the command runs. After a no the agent is told, and goes on another way or stops; nothing is done behind the answer.',
+add({ id: 'ask-answered', g: G4, name: 'After an answer: allowed for the project, and a no', menu: false,
+  note: 'An answered card stays in the chat and says what was answered. After “Allow for this project” the command runs, and the next one of that kind runs without a card: it is a quiet line marked “allowed”, never hidden. A kind that was not allowed still asks. After a no the agent is told, and goes on another way or stops.',
   render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'Build for the web' }), right: sessRight('working', '$0.11'),
     body: session({ tab: 'terminal',
-      thread: thread(BUILD_ASK + ai(askSmall('rm -rf dist/', 'Remove the old build before I build again.', 'Ask before deleting files', 'yes'),
-        steps(cmd('rm -rf dist/', '· under 1 s · no errors', '', false), cmd('npm run build', '· 38 s · no errors', '', false)),
+      thread: thread(BUILD_ASK + ai(askSmall('rm -rf dist/', 'Remove the old build before I build again.', 'Ask before deleting files', 'allow'),
+        steps(cmd('rm -rf dist/', '· under 1 s · no errors', '', false), cmd('npm run build', '· 38 s · no errors', '', false),
+          cmd('rm -rf .cache/', '· under 1 s · <span class="badge" title="You allowed deleting files for this project">allowed</span>', '', false)),
         p('The build is ready in <code>dist/</code>. The pictures are large; a package called sharp could make them smaller.'),
         askSmall('npm install sharp', 'Install sharp to shrink the pictures.', 'Ask before installing packages', 'no'),
         p('All right, I will not install it. The pictures stay as they are. The site is built and ready.'),
         working('Finishing…')), 'toend'),
       composer: { running: true } }) }) });
+
+const allowRow = (icon, tone, t, d, act) => `<div class="allowrow ${tone}">${ic(icon)}<div><span>${t}</span><span class="d">${d}</span></div>${act ?? '<span></span>'}</div>`;
+const mayDialog = () => `<div class="scrim"><div class="dialog" role="dialog" aria-label="What bakery-site may do">
+    <h2>What bakery-site may do</h2>
+    <div class="field"><span class="lab">How much the agent asks</span>
+      <div class="seg" role="group" aria-label="How much the agent asks">${Object.entries(MODES).map(([k, m]) => `<button aria-pressed="${k === 'ask'}">${m.label}</button>`).join('')}</div>
+      <span class="hint">In “Ask me” the agent asks before each thing in this list, unless you allowed it.</span></div>
+    <div class="allowlist">
+      ${allowRow('shield', 't-ok', 'Delete files in this project', 'Allowed without asking · by you, today 14:31, in “Build for the web”', `<button class="btn outline sm">Remove</button>`)}
+      ${allowRow('hand', 't-warn', 'Install packages', 'Asks each time', `<button class="btn ghost sm">Allow</button>`)}
+    </div>
+    <div class="field"><span class="lab">Asked every time, in every mode</span>
+      <div class="allowlist">
+        ${allowRow('lock', '', 'Deleting something of yours outside this project', 'Such as a picture in your Library')}
+        ${allowRow('lock', '', 'Going on after the cost limit is reached', '$2.00 for one session')}
+      </div></div>
+    <p class="xs muted row top">${ic('info', 's12')}<span>This list is for bakery-site and for you only. Another project starts in “Ask me” with nothing allowed. Whatever is allowed, the agent cannot leave this folder or reach the internet, and what it does is still shown in the chat.</span></p>
+    <div class="acts"><button class="btn" data-go="session-done">Done</button></div>
+  </div></div>`;
+add({ id: 'project-may', g: G4, name: 'What this project may do', menu: false,
+  note: 'Where the person sees and takes back what they allowed. Opened from the mode pill, from an answered card’s “Take it back”, and from a project’s “More” on Projects. It holds the mode, each kind of request with “Remove” or “Allow”, and the short list that is asked in every mode.',
+  render: () => shell({ current: 'code.projects', slot: sessSlot({ name: 'Build for the web' }), right: sessRight('passed', '$0.14'), over: mayDialog(),
+    body: session({ tab: 'files', n: 3, thread: DONE_THREAD, composer: {} }) }) });
 
 add({ id: 'refusal', g: G4, name: 'The model declines a request', menu: false,
   note: 'When the model itself says no, the person sees that as a plain message with the model’s own words, and the turn ends. It is not an error, the session is not “stuck”, and nothing was changed or run.',

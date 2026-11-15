@@ -149,6 +149,8 @@ window.__TAURI_INTERNALS__ = {
       case "update_check": return { state: "not_configured" };
       case "component_status": return { state: "installed", version: "", accelerator: "mps" };
       case "plugin:event|listen": return 1;
+      case "stay_open_get": return { supported: true, on: window.__wasifyStays === true };
+      case "stay_open_set": window.__wasifyStays = !window.__wasifyStays; return { supported: true, on: window.__wasifyStays };
       case "plugin:dialog|open": return window.__wasifyAuditFolder ?? ${JSON.stringify(process.env.WASIFYAI_AUDIT_FOLDER ?? null)};
       default: return null;
     }
@@ -2836,6 +2838,30 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(800);
       await shot(page, "code-scheduled-small");
       await page.setViewportSize({ width: 1440, height: 900 });
+    });
+  }
+  // the Browser tab's own bar and the stay-open switch, as far as a browser can show them: the pages
+  // themselves are a second webview of the real shell, which this walk does not have (the shell tests that
+  // itself: WASIFYAI_BROWSER_TEST and WASIFYAI_STAY_TEST, docs/spikes/coding-browser.md)
+  if (scheme === "light" && names.has("code-browser")) {
+    await attempt("code-browser", async () => {
+      await open(page, "/code");
+      await page.getByRole("button", { name: "Choose a folder" }).first().click();
+      await page.getByRole("textbox", { name: "Ask about this project" }).waitFor();
+      const tabs = page.getByRole("tablist", { name: "Beside the chat" });
+      await tabs.getByRole("tab", { name: "Browser" }).click();
+      const pane = page.getByRole("region", { name: "Browser" });
+      await pane.getByText("A browser of your own").waitFor();
+      await pane.getByLabel("An address, or words to search for").fill("date getDay javascript");
+      await shot(page, "code-browser-tab", 1000);
+      await open(page, "/scheduled");
+      const stays = page.getByRole("switch", {
+        name: "Open Wasify AI when I log in, and keep it in the menu bar",
+      });
+      await stays.waitFor({ timeout: 30_000 });
+      await stays.click();
+      await page.getByText(/Quit it from its item in the menu bar/).waitFor();
+      await shot(page, "code-scheduled-stays", 1000);
     });
   }
   if (scheme === "light" && names.has("u11-make")) {

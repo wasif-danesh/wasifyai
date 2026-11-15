@@ -13,7 +13,8 @@ rust-version = "1.89"
 [workspace]
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# "unstable" gives a second webview inside the window (the Browser tab of a coding session)
+tauri = { version = "2", features = ["unstable"] }
 tauri-plugin-single-instance = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
@@ -30,6 +31,11 @@ base64 = "0.23"
 rand = "0.10"
 log = "0.4"
 env_logger = "0.11"
+
+# the menu bar item that keeps the app open for scheduled runs: a Mac only, like the switch itself
+# (elsewhere it would need system packages the builds do not have)
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

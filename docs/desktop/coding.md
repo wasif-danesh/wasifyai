@@ -232,6 +232,16 @@ environment; a write outside the project is refused by the operating system. The
 | Templates | `own/templates.json`: five of ours, as prompt text and a rule |
 | Search | A schedule is in the Library as "Coding schedule" (kind `code_schedule`) |
 
+## The Browser tab, and staying open (the Browser tab's piece)
+
+| What | How |
+|---|---|
+| The Browser tab | `packages/ui/src/code/Browser.tsx` draws the bar (back, forward, load again, the address, "Add this page to the chat", "Open in your own browser") and tells a `BrowserHost` where the tab's area is. The window's host is `apps/desktop/src/browser-host.ts`; without one (the web, a test) the tab says it is part of the desktop app |
+| The pages | A second webview inside the main window, `apps/desktop/src-tauri/src/browser.rs` (`browser_show`, `browser_hide`, `browser_close`, `browser_go`, `browser_text`; the event `code-browser-changed`). In no capability, a data store of its own, `http` and `https` only, no downloads, no new windows |
+| A page for the agent | Only by "Add this page to the chat": the page's title and visible text go into the person's message box, between `<page>` marks. The agent has no browser and no internet |
+| Staying open | `src-tauri/src/stay_open.rs`: the switch on the Scheduled screen writes or removes a launch agent of the person's own and shows a menu bar item; closing the window then hides it. A Mac only |
+| The shell testing itself | `WASIFYAI_BROWSER_TEST=<address>` and `WASIFYAI_STAY_TEST=1` (with `WASIFYAI_LOGIN_DIR` a throwaway folder) or `=login` with `--hidden`: each prints one line and quits. `WASIFYAI_DATA_DIR` keeps the real app data out of it |
+
 ## The screens
 
 | Where | What |
@@ -376,13 +386,12 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 
 ## Not built
 
-- The dot for files changed in a session, in the Files tab; the Browser tab (a second webview in the real
-  window; it is its own piece after C4); the approval card on other screens while a session waits (the list of projects says "Waiting
+- The dot for files changed in a session, in the Files tab; tabs, history and downloads in the Browser
+  tab; the approval card on other screens while a session waits (the list of projects says "Waiting
   for you"); a project's "More" menu.
 - Adding an extension from the internet, the integrations list, changing a skill's text in the app; a
   plugin's tool connections, commands and agents.
-- Starting at login and staying in the menu bar (moved to the Browser tab's stage, ADR-0105, amendment);
-  a scheduled run in the tray's "Running now"; a diff of each file before a run's changes are applied.
+- A scheduled run in the tray's "Running now"; a diff of each file before a run's changes are applied.
 - "Show what is running": the list of everything started in a project by the person, the agent or a check,
   with a way to stop each (mockup `terminal-processes`). The Terminal tab says that `ps` does not work and
   offers nothing in its place yet.

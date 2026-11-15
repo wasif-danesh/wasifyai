@@ -7,6 +7,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod browser;
 mod disk;
 mod download;
 mod engine;
@@ -17,6 +18,7 @@ mod manifest;
 mod memory;
 mod provision;
 mod session;
+mod stay_open;
 mod updater;
 mod windows_job;
 
@@ -188,6 +190,7 @@ fn main() {
         // the system's Save As box for "Save a copy" (nothing else of the plugin is allowed)
         .plugin(tauri_plugin_dialog::init())
         .manage(engine.clone())
+        .manage(stay_open::StayOpen::default())
         .invoke_handler(tauri::generate_handler![
             engine_status,
             engine_session,
@@ -198,7 +201,14 @@ fn main() {
             update_install,
             smoke_enabled,
             smoke_component,
-            smoke_report
+            smoke_report,
+            browser::browser_show,
+            browser::browser_hide,
+            browser::browser_close,
+            browser::browser_go,
+            browser::browser_text,
+            stay_open::stay_open_get,
+            stay_open::stay_open_set
         ])
         .setup(move |app| {
             // WASIFYAI_DATA_DIR: a different app data folder, for tests and for trying the installer
@@ -214,7 +224,14 @@ fn main() {
                 download_dir: app.path().download_dir().ok(),
             };
             engine.start(app.handle().clone(), input);
+            // the menu bar item and a quiet start at login, when the person switched that on; never
+            // in the shell's own self-test, which must end with its window
+            if !smoke_requested() {
+                stay_open::begin(app.handle());
+            }
             quit_on_signals(app.handle().clone());
+            browser::self_test(app.handle().clone());
+            stay_open::self_test(app.handle().clone());
             Ok(())
         });
     // Only a build with a signing key and a feed registers the updater (see updater.rs).
@@ -225,12 +242,28 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("failed to build the wasifyai desktop app");
 
-    app.run(|handle, event| {
-        if let RunEvent::Exit = event {
+    app.run(|handle, event| match event {
+        RunEvent::Exit => {
             // Quitting must not leave the engine behind.
             let engine = handle.state::<Engine>();
             tauri::async_runtime::block_on(engine.stop());
         }
+        // With "keep it in the menu bar" on, closing the window hides it and the app goes on, for
+        // its scheduled runs. Quit ends it as before.
+        RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::CloseRequested { api, .. },
+            ..
+        } if label == "main" && handle.state::<stay_open::StayOpen>().is_on() => {
+            api.prevent_close();
+            if let Some(window) = handle.get_webview_window("main") {
+                let _ = window.hide();
+            }
+        }
+        // a click on the Dock icon while the window is hidden brings it back
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => show_main_window(handle),
+        _ => {}
     });
 }
 
@@ -254,6 +287,9 @@ mod tests {
         ] {
             assert!(!web_address_ok(bad), "{bad:?}");
         }
-        assert!(!web_address_ok(&format!("https://example.com/{}", "a".repeat(2000))));
+        assert!(!web_address_ok(&format!(
+            "https://example.com/{}",
+            "a".repeat(2000)
+        )));
     }
 }

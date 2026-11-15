@@ -191,3 +191,31 @@ products; the routes and actions may be added.
    the Browser tab; the same on Windows and Linux.
 
 Measured in `docs/spikes/coding-c4.md`.
+
+## Amendment (2026-11-15): the Browser tab, as built
+
+The decisions above stand. Decided with the Browser tab, as this ADR said it would be, under the owner's
+standing yes of 2026-11-15:
+
+1. **The Browser tab is the person's browser, not the agent's.** The agent's own browser tool
+   (`browser-use`) stays out of the engine. The sandbox still reaches nothing outside this computer. The agent
+   sees a web page only when the person chooses "Add this page to the chat", and then as plain text in the
+   person's own message (at most 12,000 characters of it), marked as a page.
+2. **The pages are a second webview inside the main window**, laid by the shell over the tab's area
+   (`apps/desktop/src-tauri/src/browser.rs`). This needs Tauri's `unstable` feature: no new package, and the
+   lock file is unchanged.
+3. **What keeps a page away from the app:** the webview's label is in no capability file, so a page can call
+   none of the shell's commands (asked for the window's token, the shell answers "not allowed"); its cookies
+   and storage are in a store of its own; it goes to `http` and `https` addresses only, and to no name under
+   `.localhost` (where the app's own page lives on some systems); a download is refused; a page cannot open a
+   window.
+4. **What is typed** is an address, or a bare host with `https://` in front, or else a search. Searches go to
+   DuckDuckGo, and the tab says so.
+5. **The page's text is read only when the person asks**, by one small script that reads the title and the
+   visible text and changes nothing.
+6. **The window's own page lies under the browser**, so the browser is taken off the screen while another tab
+   is shown and while a dialog or a menu of the window is open, and is removed when the session is left.
+7. **Not built:** tabs within the browser, a history list, find in page, downloads, a page's own new windows,
+   zoom; pictures of a page for the agent; the same on Windows and Linux (the code is there, it was not run).
+
+Measured in `docs/spikes/coding-browser.md`.

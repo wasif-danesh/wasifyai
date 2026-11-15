@@ -9205,6 +9205,164 @@
         ]
       }
     },
+    "/products/wasifyai-code/code/harnesses": {
+      "get": {
+        "description": "The person's own agent programs (ADR-0107): set up or not, signed in or not, how and\non which plan. Never an email or a token.",
+        "operationId": "list_harnesses_products_wasifyai_code_code_harnesses_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Harnesses Products Wasifyai Code Code Harnesses Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Harnesses",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/harnesses/{harness}/models": {
+      "get": {
+        "description": "The models the program offers on the person's plan, named for a session's `model`.",
+        "operationId": "harness_models_products_wasifyai_code_code_harnesses__harness__models_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "harness",
+            "required": true,
+            "schema": {
+              "title": "Harness",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Harness Models Products Wasifyai Code Code Harnesses  Harness  Models Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Harness Models",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/harnesses/{harness}/sign-in": {
+      "post": {
+        "description": "Start the program's own sign-in: its page opens in the person's browser.",
+        "operationId": "sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "harness",
+            "required": true,
+            "schema": {
+              "title": "Harness",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sign In Harness Products Wasifyai Code Code Harnesses  Harness  Sign In Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign In Harness",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/harnesses/{harness}/sign-in/cancel": {
+      "post": {
+        "operationId": "cancel_sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "harness",
+            "required": true,
+            "schema": {
+              "title": "Harness",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Sign In Harness Products Wasifyai Code Code Harnesses  Harness  Sign In Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Sign In Harness",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
     "/products/wasifyai-code/code/models": {
       "get": {
         "description": "The models a session can run on, and whether each is ready (never a key).",

@@ -30,6 +30,14 @@ on one of them starts nothing. A folder that is new means the server starts agai
 while another session is in the middle of a turn. A workspace is opened for reading only unless a
 session that may write is on it, so in a session that only reads the operating system refuses a
 write whatever a tool tries (`docs/spikes/coding-c1b.md`).
+
+**A session on a harness** (ADR-0107; stage H1) runs on that harness's own server
+(`server.for_harness(id)`), as a conversation of kind `acp`: the person's own agent program, signed
+in to their own plan, started by OpenHands' ACP agent. It has no gateway token (there is no key of
+ours to protect and no call of ours to count), no skill, hook or rule of ours, and nothing waits
+for a yes or no: the program is told yes by the ACP agent. A session that only reads is held by
+the sandbox, which opens its project for reading only. What it used comes from the program's own
+report and is given to `on_call` once a turn ends.
 """
 
 import asyncio
@@ -41,6 +49,7 @@ import uuid
 from collections.abc import AsyncGenerator, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import quote
 
@@ -51,7 +60,14 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus, WebSocketExce
 from wasifyai_code import place as places
 from wasifyai_code.agent_types import SendMessageRequest, StartConversationRequest
 from wasifyai_code.events import RUNNING, WAITING, Reader
-from wasifyai_code.place import Busy, NoSuchSession, PlaceError, PlaceEvent, SessionSpec
+from wasifyai_code.place import (
+    Busy,
+    NoSuchSession,
+    PlaceError,
+    PlaceEvent,
+    SessionSpec,
+    harness_model,
+)
 from wasifyai_code.rules import INSTALL, command_kind, path_in
 
 log = logging.getLogger(__name__)
@@ -85,6 +101,13 @@ READ_ONLY_NOTE = (
     "file viewer cannot edit anything, the plan file included: do not try. Look at the files "
     "you need, then give your whole answer, or your plan, as your final message."
 )
+HARNESS_READ_ONLY_NOTE = (
+    "This session only reads: the project's files cannot be changed from here, and anything "
+    "that writes in it is refused. Look at the files you need, then give your whole answer, or "
+    "your plan, as your final message.\n\n"
+)
+# a harness's own mode that plans before it changes anything, for a session that only reads
+HARNESS_PLAN_MODE = {"claude-code": "plan"}
 USAGE_ID = "wasify-code"
 CLOSED_BAD_KEY, CLOSED_NOT_FOUND = 4001, 4004
 START_TIMEOUT_S = 90.0  # making a conversation loads the tools and the skills
@@ -99,6 +122,14 @@ def _within(folder: Path, opened: set[Path]) -> bool:
     return folder in opened or any(parent in opened for parent in folder.parents)
 
 
+def _after_rest(event: dict[str, Any]) -> bool:
+    """An event that belongs to the turn that just came to rest."""
+    kind = event.get("kind")
+    return kind == "ConversationErrorEvent" or (
+        kind == "ConversationStateUpdateEvent" and event.get("key") == "stats"
+    )
+
+
 @dataclass
 class _Live:
     """One session of the place."""
@@ -108,6 +139,8 @@ class _Live:
     account: str  # what the gateway counts this session under
     reader: Reader = field(default_factory=Reader)
     turn_open: bool = False  # a message was sent and its end has not been read
+    server: Any = None  # the server it is on: the Wasify engine's, or a harness's own
+    harness: str = ""  # the harness it runs on; "" for Wasify AI's own agent
 
 
 class ThisComputer:
@@ -128,8 +161,10 @@ class ThisComputer:
         self._on_call = on_call
         self.stream = stream
         self._sessions: dict[str, _Live] = {}
-        self._writable: set[Path] = set()  # folders a session that may write is on
+        # folders a session that may write is on, for each server ("" is the Wasify engine's)
+        self._writable: dict[str, set[Path]] = {}
         self._lock = asyncio.Lock()
+        self._usage: set[asyncio.Future[Any]] = set()
 
     # ---- the server ----------------------------------------------------------------------------
 
@@ -137,54 +172,83 @@ class ThisComputer:
     def _real(path: Path | str) -> Path:
         return Path(os.path.realpath(path))
 
-    def working(self) -> list[str]:
-        """The sessions that are in the middle of a turn."""
-        return [s.id for s in self._sessions.values() if s.turn_open]
+    def working(self, harness: str | None = None) -> list[str]:
+        """The sessions that are in the middle of a turn (on one server's harness, when given)."""
+        return [
+            s.id
+            for s in self._sessions.values()
+            if s.turn_open and (harness is None or s.harness == harness)
+        ]
+
+    def _harness_ids(self) -> tuple[str, ...]:
+        return tuple(getattr(self.server, "harness_ids", ()) or ())
+
+    def harness_server(self, harness: str) -> Any:
+        """A harness's own server (ADR-0107)."""
+        try:
+            return self.server.for_harness(harness)
+        except Exception as e:
+            if not hasattr(e, "message"):
+                raise
+            raise PlaceError(str(getattr(e, "message", e))) from None
 
     async def open_folder(self, folder: Path, *, write: bool = False) -> None:
         """Start the server with `folder` in reach before any session needs it. Sessions on
         folders inside it then start nothing (the evaluation makes one folder per task)."""
         await self._serve(folder, write=write)
 
-    async def _serve(self, workspace: Path, *, write: bool) -> None:
-        """A running server that can reach `workspace`, for writing if `write`."""
+    async def _serve(
+        self, workspace: Path, *, write: bool, server: Any = None, harness: str = ""
+    ) -> None:
+        """A running server that can reach `workspace`, for writing if `write`: the Wasify
+        engine's, or `server`, a harness's own."""
+        server = server or self.server
         async with self._lock:
             workspace = self._real(workspace)
             if not workspace.is_dir():
                 raise PlaceError(f"There is no folder at {workspace}.")
-            running = self.server.running
-            writable = {self._real(p) for p in self.server.workspaces} if running else set()
-            readable = {self._real(p) for p in self.server.read_only} if running else set()
+            running = server.running
+            writable = {self._real(p) for p in server.workspaces} if running else set()
+            readable = {self._real(p) for p in server.read_only} if running else set()
             if _within(workspace, writable) or (not write and _within(workspace, readable)):
                 return
             # the engine's own folder is always its to write: a scheduled run's copy of a
             # project lives there, so a run starts nothing again and cuts off no session
-            own = getattr(self.server, "run_dir", None)
+            own = getattr(server, "run_dir", None)
             if running and own is not None and _within(workspace, {self._real(own)}):
                 return
-            if running and self.working():
+            if running and self.working(harness):
                 raise Busy(
                     "The coding engine must start again to open this folder, and another "
                     "session is in the middle of a turn. Try again when it has ended."
                 )
+            mine = self._writable.setdefault(harness, set())
             if write:
-                self._writable.add(workspace)
+                mine.add(workspace)
             everything = {self._real(p) for p in self._known()} | writable | readable | {workspace}
-            write_to = sorted(self._writable | writable)
+            write_to = sorted(mine | writable)
             try:
                 # a start is never cut in half: if the caller is stopped while the server starts
                 # (Stop pressed at once), the start goes on to its end by itself
                 await asyncio.shield(
-                    self.server.ensure_running(write_to, sorted(everything - set(write_to)))
+                    server.ensure_running(write_to, sorted(everything - set(write_to)))
                 )
             except Exception as e:
                 if not hasattr(e, "message"):  # not the engine's own, sayable failure
                     raise
                 raise PlaceError(str(getattr(e, "message", e))) from None
 
-    async def _call(self, method: str, path: str, *, wait_s: float = CALL_TIMEOUT_S, **more: Any):
+    async def _call(
+        self,
+        method: str,
+        path: str,
+        *,
+        wait_s: float = CALL_TIMEOUT_S,
+        server: Any = None,
+        **more: Any,
+    ):
         try:
-            return await self.server.request(method, path, timeout=wait_s, **more)
+            return await (server or self.server).request(method, path, timeout=wait_s, **more)
         except httpx.HTTPError:
             raise PlaceError("The coding engine did not answer.") from None
         except Exception as e:
@@ -200,6 +264,9 @@ class ThisComputer:
     # ---- the interface -------------------------------------------------------------------------
 
     async def start(self, spec: SessionSpec) -> str:
+        on_harness = harness_model(spec.model, self._harness_ids())
+        if on_harness is not None:
+            return await self._start_harness(spec, *on_harness)
         await self._serve(spec.workspace, write=not spec.read_only)
         workspace = self._real(spec.workspace)
         who = spec.account
@@ -270,13 +337,84 @@ class ThisComputer:
             log.warning("the coding engine refused a conversation: %s", answer.status_code)
             raise PlaceError("The coding engine could not start a session on this folder.")
         made = str(answer.json()["id"])
-        self._sessions[made] = _Live(made, spec, account)
+        self._sessions[made] = _Live(made, spec, account, server=self.server)
         return made
+
+    async def _start_harness(self, spec: SessionSpec, harness: str, model: str) -> str:
+        """A session on the person's own agent program (ADR-0107): an `acp` conversation on the
+        harness's own server. No token, no tool, skill or hook of ours, nothing that waits."""
+        server = self.harness_server(harness)
+        await self._serve(spec.workspace, write=not spec.read_only, server=server, harness=harness)
+        workspace = self._real(spec.workspace)
+        who = spec.account
+        account = who.session_id if who else f"nobody-{uuid.uuid4().hex}"
+        try:
+            command = server.acp_command()
+        except Exception as e:
+            if not hasattr(e, "message"):
+                raise
+            raise PlaceError(str(getattr(e, "message", e))) from None
+        settings: dict[str, Any] = {
+            "agent_kind": "acp",
+            "acp_server": harness,
+            "acp_command": command,
+        }
+        if model:
+            settings["acp_model"] = model
+        if spec.read_only and harness in HARNESS_PLAN_MODE:
+            settings["acp_session_mode"] = HARNESS_PLAN_MODE[harness]
+        body: dict[str, Any] = {
+            "workspace": {"working_dir": str(workspace)},
+            "max_iterations": spec.step_limit,
+            "agent_settings": settings,
+        }
+        answer = await self._call(
+            "POST", "/api/conversations", json=body, wait_s=START_TIMEOUT_S, server=server
+        )
+        if answer.status_code not in (200, 201):
+            log.warning("the coding engine refused a harness conversation: %s", answer.status_code)
+            raise PlaceError("The coding engine could not start a session on this folder.")
+        made = str(answer.json()["id"])
+        self._sessions[made] = _Live(made, spec, account, server=server, harness=harness)
+        return made
+
+    async def harness_models(self, harness: str) -> dict[str, Any]:
+        """The models the person's own program offers on their plan, as the program says:
+        {"models": [{"id", "name"}], "current": ..., "error": ...}. Starts the harness's server
+        when it is not running, with nothing of the person's in reach."""
+        server = self.harness_server(harness)
+        try:
+            command = server.acp_command()
+            await server.ensure_running(server.workspaces, server.read_only)
+        except Exception as e:
+            if not hasattr(e, "message"):
+                raise
+            raise PlaceError(str(getattr(e, "message", e))) from None
+        answer = await self._call(
+            "POST", "/api/acp/models", server=server, wait_s=START_TIMEOUT_S,
+            json={"agent_settings": {"agent_kind": "acp", "acp_server": harness,
+                                     "acp_command": command}},
+        )  # fmt: skip
+        if answer.status_code != 200:
+            raise PlaceError(f"{harness} did not say which models it has.")
+        found = answer.json() or {}
+        models = []
+        for m in found.get("available_models") or []:
+            ident = str(m.get("model_id") or m.get("id") or "")
+            if ident:
+                models.append({"id": ident, "name": str(m.get("name") or ident)})
+        return {
+            "models": models,
+            "current": str(found.get("current_model_id") or ""),
+            "error": str(found.get("error") or ""),
+        }
 
     async def send(self, session: str, text: str, *, run: bool = True) -> None:
         live = self._get(session)
         if run and await self._status(live) == RUNNING:
             raise Busy(session)
+        if live.harness and live.spec.read_only:
+            text = HARNESS_READ_ONLY_NOTE + text
         body: SendMessageRequest = {
             "role": "user",
             "content": [{"type": "text", "text": text}],
@@ -284,7 +422,9 @@ class ThisComputer:
         }
         if run:
             live.turn_open = True
-        answer = await self._call("POST", f"/api/conversations/{session}/events", json=body)
+        answer = await self._call(
+            "POST", f"/api/conversations/{session}/events", json=body, server=live.server
+        )
         if answer.status_code == 404:
             live.turn_open = False
             raise NoSuchSession(session)
@@ -294,7 +434,7 @@ class ThisComputer:
 
     async def run(self, session: str) -> None:
         live = self._get(session)
-        answer = await self._call("POST", f"/api/conversations/{session}/run")
+        answer = await self._call("POST", f"/api/conversations/{session}/run", server=live.server)
         if answer.status_code == 409:
             raise Busy(session)
         if answer.status_code == 404:
@@ -315,9 +455,13 @@ class ThisComputer:
                     f"/api/conversations/{session}/events/respond_to_confirmation",
                     json={"accept": False, "reason": "The person stopped the turn."},
                     wait_s=STOP_TIMEOUT_S,
+                    server=live.server,
                 )
         answer = await self._call(
-            "POST", f"/api/conversations/{session}/interrupt", wait_s=STOP_TIMEOUT_S
+            "POST",
+            f"/api/conversations/{session}/interrupt",
+            wait_s=STOP_TIMEOUT_S,
+            server=live.server,
         )
         if answer.status_code == 404:
             raise NoSuchSession(session)
@@ -331,6 +475,7 @@ class ThisComputer:
             "POST",
             f"/api/conversations/{session}/events/respond_to_confirmation",
             json={"accept": allow, "reason": reason or "The person said no."},
+            server=live.server,
         )
         if answer.status_code >= 400:
             raise PlaceError("Nothing is waiting for an answer in this session.")
@@ -385,7 +530,7 @@ class ThisComputer:
         """Forget a session: its token stops working. The conversation itself stays in the
         coding engine's own state."""
         live = self._sessions.pop(session, None)
-        if live is not None:
+        if live is not None and not live.harness:
             self.gateway.close_session(live.account)
 
     def adopt(self, session: str, spec: SessionSpec) -> bool:
@@ -394,6 +539,8 @@ class ThisComputer:
         the conversation can then not reach its model, and a new one must be started."""
         if session in self._sessions:
             return True
+        if harness_model(spec.model, self._harness_ids()) is not None:
+            return False  # a harness's conversation is not taken up after a restart
         who = spec.account
         if who is None or not self.gateway.is_open(who.session_id):
             return False
@@ -403,7 +550,7 @@ class ThisComputer:
     # ---- following -----------------------------------------------------------------------------
 
     async def _status(self, live: _Live) -> str:
-        answer = await self._call("GET", f"/api/conversations/{live.id}")
+        answer = await self._call("GET", f"/api/conversations/{live.id}", server=live.server)
         if answer.status_code == 404:
             raise NoSuchSession(live.id)
         if answer.status_code >= 400:
@@ -412,13 +559,17 @@ class ThisComputer:
 
     async def _when(self, session: str, event_id: str) -> str | None:
         """The time of an event the caller already has, to ask for what came since."""
-        answer = await self._call("GET", f"/api/conversations/{session}/events/{event_id}")
+        server = self._sessions[session].server if session in self._sessions else None
+        answer = await self._call(
+            "GET", f"/api/conversations/{session}/events/{event_id}", server=server
+        )
         if answer.status_code != 200:
             return None
         return str(answer.json().get("timestamp") or "") or None
 
     def _socket(self, session: str, since: str | None, everything: bool) -> str:
-        url = str(self.server.url or "")
+        server = self._sessions[session].server if session in self._sessions else None
+        url = str((server or self.server).url or "")
         if not url:
             raise PlaceError("The coding engine is not running.")
         query = ""
@@ -450,7 +601,12 @@ class ThisComputer:
                 async with connect(url, max_size=None, open_timeout=10, close_timeout=1) as socket:
                     # the key goes in the first message, never in the address
                     await socket.send(
-                        json.dumps({"type": "auth", "session_api_key": self.server.session_key})
+                        json.dumps(
+                            {
+                                "type": "auth",
+                                "session_api_key": (live.server or self.server).session_key,
+                            }
+                        )
                     )
                     if opened is not None:
                         opened.set()
@@ -474,7 +630,9 @@ class ThisComputer:
                             if event_id == skipping:
                                 skipping = None
                             continue
-                        if reader.over and event.get("kind") != "ConversationErrorEvent":
+                        # an error that explains the rest, and the program's report of what it
+                        # used (it comes just after), are read before the turn is closed
+                        if reader.over and not _after_rest(event):
                             yield self._ended(live, last_at)
                         for n, (kind, data) in enumerate(reader.read(event)):
                             yield PlaceEvent(
@@ -498,18 +656,40 @@ class ThisComputer:
                 raise PlaceError("The coding engine stopped answering.")
             await asyncio.sleep(RETRY_S[tries])
             tries += 1
-            if not self.server.running:
+            if not (live.server or self.server).running:
                 raise PlaceError("The coding engine was stopped.")
 
     def _ended(self, live: _Live, at: str | None) -> PlaceEvent:
         """The turn's one `ended` event, once the conversation has come to rest."""
-        note = self.gateway.take_note(live.account)
+        if live.harness:
+            note: dict[str, Any] = {}
+            self._report_usage(live)
+        else:
+            note = self.gateway.take_note(live.account)
         data = live.reader.end(note)
         live.reader.over = False
         live.turn_open = False
         return PlaceEvent(f"{live.reader.rest_id}:ended", places.ENDED, at or "", data)
 
+    def _report_usage(self, live: _Live) -> None:
+        """What a harness's program said this turn used, given to `on_call` like a model call
+        through the gateway: its cost as the program reports it, and the tokens."""
+        used = live.reader.take_usage()
+        if used is None or self._on_call is None:
+            return
+        call = SimpleNamespace(
+            session_id=live.account, usd=used["usd"], input_tokens=used["tokens_in"],
+            output_tokens=used["tokens_out"], model=used["model"], harness=live.harness,
+        )  # fmt: skip
+        result = self._on_call(call)
+        if asyncio.iscoroutine(result):
+            task = asyncio.ensure_future(result)
+            self._usage.add(task)
+            task.add_done_callback(self._usage.discard)
+
     async def close(self) -> None:
+        if self._usage:
+            await asyncio.gather(*self._usage, return_exceptions=True)
         for session in list(self._sessions):
             with contextlib.suppress(PlaceError):
                 await self.end(session)

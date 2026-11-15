@@ -242,6 +242,27 @@ environment; a write outside the project is refused by the operating system. The
 | Staying open | `src-tauri/src/stay_open.rs`: the switch on the Scheduled screen writes or removes a launch agent of the person's own and shows a menu bar item; closing the window then hides it. A Mac only |
 | The shell testing itself | `WASIFYAI_BROWSER_TEST=<address>` and `WASIFYAI_STAY_TEST=1` (with `WASIFYAI_LOGIN_DIR` a throwaway folder) or `=login` with `--hidden`: each prints one line and quits. `WASIFYAI_DATA_DIR` keeps the real app data out of it |
 
+## Sessions on the person's own Claude Code or Codex (ADR-0107, stage H1)
+
+A session may run on the person's own agent program, on their own plan, instead of a model on a key. Stage
+notes: `docs/spikes/coding-harness-h0.md`, `coding-harness-h1.md`, `coding-harness-h2.md` and `coding-harness-h3.md`. The screens
+(stage H2) follow the mockup the owner approved, `docs/spikes/coding-harness-mockup.html`.
+
+| What | How |
+|---|---|
+| The programs | `services/api/src/wasifyai_api/coding_harness.py`. `HARNESSES` has two entries, `claude-code` and `codex`. For each one it names: the npm adapter; the program; the provider hosts; the sign-in paths in the home folder; the program's own sign-in commands |
+| Setting them up | The optional part `harness`, "Agent programs (Claude Code, Codex)" (`components/harness.py`). It runs `npm ci --ignore-scripts --omit=dev` from `services/coding-engine/harness/package-lock.json` (pinned, every package hashed), with the Node part's npm. It needs the coding engine and Node first. About 694 MB |
+| The sandbox | One Agent Server per harness, `CodingServer.for_harness(id)`, in `<data>/coding/harness/<id>`. Same profile as ours, also opened for: that program's sign-in paths (write); the keychain and the installed programs (read); the install proxy under the harness's own name, which lets through only the provider's hosts |
+| A session | The model is `<harness>:<program model>`, or `<harness>:default`. `client.py` starts an ACP conversation with no key, no token, no analyser and no hooks. Skills and plugins are not given. "Ask me" is refused. Plan is read-only through the sandbox; for Claude, its Plan mode and a note are added too. The program's own report of cost and tokens is kept, with `counted_in: "plan"` |
+| Sign-in | `HarnessAccounts` runs the program's own commands outside the sandbox, with the real home and a clean environment. It keeps only signed in, how and plan, never the email. "Sign in" starts the program's own login and gives back the provider's page. Nothing of ours reads a login or token |
+| Routes | `GET /code/harnesses`, `POST /code/harnesses/{harness}/sign-in` and `.../sign-in/cancel`, `GET /code/harnesses/{harness}/models`. A harness that is not set up, or is not signed in, gives 409 |
+| The Your agent tab (H2) | `packages/ui/src/models/AgentTab.tsx`, in the Code model button when the window gives `agents` (`ChoicesApi.agents`). Not set up: "Use your own Claude Code or Codex" and "Set up (694 MB)", then how far it is. Set up: each program signed in (its plan, then its models: "Its own choice" first) or not ("Sign in to …"; while it waits, "Signing in…", "Open the page again" and Cancel). The rows have `place: "agent"`; the button reads "Claude Code · Sonnet". The window's side is `apps/desktop/src/choices/agents.ts` and the rows in `code-choices.ts`; a program's models are asked once per sign-in, since asking starts it |
+| A session on a program (H2) | `Code.tsx`. The note before the first session on each program, once (kept in the window's storage). A session starts in Plan. The bar names the program and its model; the pill "Your Claude plan" or "Your ChatGPT plan" opens to the tokens and cost the program reported, with no limit of ours. The mode menu has "Ask me" greyed with the reason, and "Carry out this plan" goes to Work on its own. A stop whose words say the sign-in ended has "Sign in to …"; one that says a limit was reached shows the program's words with "Try again" and "New session on another agent" (`agentStop`) |
+| Scheduled on a program (H3) | A schedule runs on the model of the project's newest session (or its own model), so a project worked on with Claude Code or Codex is run on that program, on a copy in "Work on its own", the same as on a key (`scheduled.py`). A program not set up or signed out ends the run in words ("Sign in to Claude Code first") and nothing is copied |
+| Tested for coding (H3) | `HARNESS_TESTED` in `runtime.py` holds what the 36-task evaluation measured for each program model; `GET /code/harnesses/{harness}/models` gives it as `tested`, and the Your agent row says "Tested for coding here: …" or "Not tested for coding here." |
+| The evaluation on a program (H3) | `run_eval.py --data <data with the part set up> --model claude-code:<model>` (or `codex:<model>`): each task on the program's own sandboxed server, on the person's plan, with no `--app-keys`; the cost is what the program reported (`counted_in: "plan"`). A task the program refuses because the plan's limit was reached ends the run, and it and the rest are listed as not run with the program's words (`stopped`) |
+| Elsewhere (H2) | Projects says what each session runs on ("Claude Code · Sonnet", "Claude Sonnet 5.5 · your key"). Extensions says it is for Wasify AI's own agent only. Settings › Code, "Your agent programs" (`AgentPrograms`): each program's sign-in with "Sign in again" or "Sign in to …", and the part with Remove; removing does not sign out |
+
 ## The screens
 
 | Where | What |
@@ -278,7 +299,9 @@ session that changes files is `... ui-audit.sh light code-edit` (pictures `code-
 project's files on disk after each change, undo, "bring it back", yes, no, allow and Stop. The walk of stage C3
 is `... ui-audit.sh light code-check` on an empty throwaway folder (pictures `code-check-*.png`): the check set
 and tried, a failed round and a pass, a two-minute check, Stop, "needs you", the terminal, a delete that is
-asked first, and `git init` by the agent.
+asked first, and `git init` by the agent. The walk of the person's own programs is `... ui-audit.sh light
+code-agent` on an empty throwaway folder (pictures `agent-*.png`): the programs set up from the Your agent tab,
+then on Claude Code and on Codex a real change on the person's plan, read back from disk, and its undo.
 
 ## The model gateway (ADR-0102, decision 4)
 
@@ -427,6 +450,16 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 | `products/wasifyai-code/tests/test_code_scheduled.py` | Scheduled on the pretended place and a pretended clock, with a real git: a run on a copy with the project untouched, applying, a file changed meanwhile left alone, letting go, the five copies kept, the refusals | `make test` |
 | `services/api/tests/test_components_node.py` | The Node part against a fake download: four steps, the folder the sandbox is given, a wrong checksum, a Node that does not start, a state file that points outside | `make test` |
 | `services/api/tests/integration/test_coding_sandbox.py` | Hostile tests against the real server in its sandbox | `make test-coding`, opt-in |
+| `services/api/tests/test_coding_harness.py`, `test_components_harness.py` | A harness's server, profile, proxy and sign-in against the fake. The part installs from the lock with no install script, and refuses a changed lock | `make test` |
+| `products/wasifyai-code/tests/test_code_harness.py` | Sessions on a harness on the pretended place: the model, the modes, sign-in needed, no extensions, the reported cost, what the evaluation measured for a model | `make test` |
+| `products/wasifyai-code/tests/test_code_scheduled.py` (the H3 part) | A schedule on a program: a run on a copy, and a signed-out program that ends the run in words | `make test` |
+| `products/wasifyai-code/evals/run_eval.py --model claude-code:haiku` (and `codex:…`) | The H3 gate: the 36 tasks on each program, on the person's own plans | By hand |
+| `services/api/tests/integration/test_coding_harness_sandbox.py` | Hostile tests against a harness's real server: its sign-in only, nothing else of the home folder, only the provider through the proxy | `make test-coding`, opt-in |
+| `services/api/tests/integration/test_coding_harness_real.py` | The H1 gate: a session on each harness, on the person's own plan, changes a file, is checked and is undone | `CODING_E2E=1 CODING_HARNESS_E2E=1`, by hand |
+| `packages/ui/src/models/agent-tab.test.tsx` | The Your agent tab and Settings › Code: the program and model on the button, the plan's models, choosing one, the program's own sign-in and Cancel, the size before setting up, no tab for other groups, Sign in again, Remove only after a yes | `make test` |
+| `packages/ui/src/code/code.test.tsx` (the H2 part) | A session on a program: the bar and the plan pill with no limit of ours, "Ask me" greyed, a plan carried out on its own, a reached limit and an ended sign-in, Projects, the note before the first session and the start in Plan | `make test` |
+| `apps/desktop/src/choices/code-choices.test.ts` (the H2 part) | The rows under Your agent: a signed-in program's models with its own choice first, none for one not signed in, asked once, the choice kept, the part set up, "Tested for coding here" | `make test` |
+| `apps/desktop/scripts/ui-audit.sh light code-agent` | The H2 gate in the real window on each program, on the person's own plans | By hand, on a throwaway `DESKTOP_DATA_DIR` |
 | `apps/desktop/scripts/ui-audit.sh light coding-setup` (then `coding-repair`, `coding-remove`) | The part set up, repaired and removed from the real window's Settings, with the real downloads | By hand, on a throwaway `DESKTOP_DATA_DIR` |
 
 ## Not built
@@ -436,6 +469,8 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
   for you"); a project's "More" menu.
 - Adding an extension from the internet, the integrations list, changing a skill's text in the app; a
   plugin's tool connections, commands and agents.
+- A Scheduled screen that names the program a schedule runs on, and choosing one there; a schedule follows
+  the project's newest session.
 - A scheduled run in the tray's "Running now"; a diff of each file before a run's changes are applied.
 - "Show what is running": the list of everything started in a project by the person, the agent or a check,
   with a way to stop each (mockup `terminal-processes`). The Terminal tab says that `ps` does not work and

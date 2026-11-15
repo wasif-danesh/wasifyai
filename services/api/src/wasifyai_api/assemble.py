@@ -69,9 +69,11 @@ from wasifyai_api.admin import AdminStore, PostgresAdminStore
 from wasifyai_api.admin_providers import AdminProviders, CloudPlanSink
 from wasifyai_api.auth import Claims
 from wasifyai_api.coding_gateway import CodingGateway, known_in_catalogue
+from wasifyai_api.coding_harness import HarnessAccounts
 from wasifyai_api.components.coding import CodingComponent, coding_files
 from wasifyai_api.components.comfyui import ComfyUiComponent
 from wasifyai_api.components.desktop import service_components
+from wasifyai_api.components.harness import HarnessComponent
 from wasifyai_api.components.llamacpp import LlamaCppComponent
 from wasifyai_api.components.manifest import load_manifest
 from wasifyai_api.components.node import NodeComponent
@@ -944,6 +946,8 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
         desktop.styles.taught = lambda run: _taught_in(s, run)
     s.llama_server = desktop.llama
     s.coding_server = desktop.coding  # the coding engine (ADR-0102), for the coding product
+    if desktop.coding is not None:  # the person's own agent programs' sign-in (ADR-0107)
+        s.coding_harnesses = HarnessAccounts(desktop.settings.desktop_dir)
     _desktop_coding(s, desktop)
     s.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
     s.video_builder = desktop.video_builder  # the render engine (ADR-0077)
@@ -1074,6 +1078,11 @@ def _desktop_components(s: ApiServices, desktop: Desktop) -> Registry:
         # Node is for coding projects only: it is offered where the coding engine is
         node = NodeComponent(data_dir, manifest)
         registry.add(node, node.installer)
+        # the person's own agent programs (ADR-0107): offered where the coding engine is
+        harness = HarnessComponent(
+            data_dir, manifest, coding_files(s.products_dir), desktop.coding.supported
+        )
+        registry.add(harness, harness.installer)
     for part in service_components(s, desktop):
         registry.add(part)
     events = s.events
@@ -1110,6 +1119,8 @@ async def _close(
         await desktop.stop()
     if s.coding_gateway is not None:
         await s.coding_gateway.close()
+    if s.coding_harnesses is not None:
+        await s.coding_harnesses.close()
     if s.code_store is not None:
         await asyncio.to_thread(s.code_store.close)
     elif s.voice_store is not None:

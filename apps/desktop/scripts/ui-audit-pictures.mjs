@@ -56,6 +56,16 @@
 //                                                               and used in the running page. Needs the coding
 //                                                               engine, Node for coding projects and a picture
 //                                                               model in DESKTOP_DATA_DIR
+//   WASIFYAI_AUDIT_FOLDER=<an empty folder> apps/desktop/scripts/ui-audit.sh light code-agent
+//                                                               Code on the person's own Claude Code and Codex
+//                                                               (ADR-0107, H2): the programs set up from the Your
+//                                                               agent tab, then on each program: its model chosen,
+//                                                               the note before the first session, two modes, a
+//                                                               real change on the person's plan read back from
+//                                                               disk, the plan pill, Undo; Projects, Extensions
+//                                                               and Settings › Code. Needs both programs signed in
+//                                                               on this computer; a throwaway DESKTOP_DATA_DIR with
+//                                                               engine/coding and engine/node linked in
 //   WASIFYAI_AUDIT_FOLDER=<an empty folder> apps/desktop/scripts/ui-audit.sh light code-extensions
 //                                                               Extensions (X2): the short list for a project, a
 //                                                               public skill's text, one of ours firing in a real
@@ -2917,6 +2927,141 @@ for (const scheme of ["light", "dark"]) {
   // the Browser tab's own bar and the stay-open switch, as far as a browser can show them: the pages
   // themselves are a second webview of the real shell, which this walk does not have (the shell tests that
   // itself: WASIFYAI_BROWSER_TEST and WASIFYAI_STAY_TEST, docs/spikes/coding-browser.md)
+  // stage H2 of ADR-0107: sessions on the person's own Claude Code and Codex, on their own plans. Each program's
+  // change is read back from disk, and so is its undo. What it costs is the plan's, as the program reports it.
+  if (scheme === "light" && names.has("code-agent")) {
+    await attempt("code-agent", async () => {
+      const { mkdirSync: mk, readFileSync, writeFileSync } = await import("node:fs");
+      const base = process.env.WASIFYAI_AUDIT_FOLDER ?? "";
+      if (!base) throw new Error("WASIFYAI_AUDIT_FOLDER is not set");
+      const PROGRAMS = [
+        { id: "claude-code", title: "Claude Code", model: /^Haiku/ },
+        { id: "codex", title: "Codex", model: /terra/i },
+      ];
+      // the model button at the top of Code, whatever it names now
+      const modelButton = () =>
+        page
+          .locator('button[aria-haspopup="dialog"]')
+          .filter({ hasNotText: /Search/ })
+          .first();
+      for (const [n, prog] of PROGRAMS.entries()) {
+        const folder = join(base, `shop-${prog.id}`);
+        mk(folder, { recursive: true });
+        const was =
+          'def total(prices):\n    """The sum of the prices; 0 for none."""\n    return sum(prices) if prices else None\n';
+        writeFileSync(join(folder, "prices.py"), was);
+        writeFileSync(
+          join(folder, "check.py"),
+          "import prices\nassert prices.total([]) == 0\nassert prices.total([2, 3]) == 5\nprint('checked')\n",
+        );
+        await open(page, "/code");
+        await modelButton().waitFor({ timeout: 60_000 });
+        await modelButton().click();
+        const panel = page.getByRole("dialog", { name: "Select coding model" });
+        await panel.waitFor();
+        await panel.getByRole("tab", { name: "Your agent" }).click();
+        // the programs are set up once, from this tab: the size is said first
+        const setUp = panel.getByRole("button", { name: /^Set up/ });
+        await page.waitForTimeout(1500);
+        if (n === 0 && (await setUp.count())) {
+          await shot(page, "agent-tab-setup");
+          const began = Date.now();
+          await setUp.click();
+          await panel
+            .getByText(/^Setting up/)
+            .waitFor({ timeout: 30_000 })
+            .catch(() => {});
+          await shot(page, "agent-tab-setting-up");
+          await panel.getByRole("list", { name: prog.title }).waitFor({ timeout: 900_000 });
+          console.log(`code-agent: set up in ${((Date.now() - began) / 1000).toFixed(1)} s`);
+        }
+        const list = panel.getByRole("list", { name: prog.title });
+        // listing a program's models starts it the first time
+        await list.getByRole("button", { name: prog.model }).waitFor({ timeout: 300_000 });
+        await shot(page, `agent-tab-${prog.id}`, 1100);
+        await list.getByRole("button", { name: prog.model }).click();
+        await page
+          .getByRole("button", { name: new RegExp(`${prog.title} ·`) })
+          .first()
+          .waitFor();
+        // the note, once, before the first session on the program
+        await page.evaluate((f) => {
+          window.__wasifyAuditFolder = f;
+        }, folder);
+        await page.getByRole("button", { name: "Choose a folder" }).first().click();
+        const note = page.getByRole("dialog", { name: `${prog.title} works a little differently` });
+        await note.waitFor();
+        await shot(page, `agent-note-${prog.id}`);
+        await note.getByRole("button", { name: "Start the session" }).click();
+        const box = page.getByRole("textbox", { name: "Ask about this project" });
+        await box.waitFor({ timeout: 60_000 });
+        // two modes: it starts in Plan, and "Ask me" cannot be chosen
+        await page.getByRole("button", { name: "How much the agent asks: Plan" }).click();
+        const ask = page.getByRole("menuitemradio", { name: /Ask me/ });
+        if (!(await ask.isDisabled())) throw new Error("Ask me can be chosen on a program");
+        await shot(page, `agent-modes-${prog.id}`);
+        await page.getByRole("menuitemradio", { name: /Work on its own/ }).click();
+        await page
+          .getByRole("button", { name: "How much the agent asks: Work on its own" })
+          .waitFor();
+        const began = Date.now();
+        await box.fill(
+          "total([]) must return 0, as its docstring says. Fix prices.py with the smallest change. Do not change check.py.",
+        );
+        await box.press("Enter");
+        await page.getByRole("button", { name: "Stop" }).waitFor({ timeout: 60_000 });
+        await page.waitForTimeout(5000);
+        await shot(page, `agent-working-${prog.id}`);
+        const changed = page.getByRole("region", { name: "What this turn changed" });
+        await changed.waitFor({ timeout: 900_000 });
+        console.log(
+          `code-agent: ${prog.id} changed the file in ${((Date.now() - began) / 1000).toFixed(1)} s`,
+        );
+        const now = readFileSync(join(folder, "prices.py"), "utf8");
+        if (now === was || now.includes("if prices else None"))
+          throw new Error(`${prog.id}: prices.py was not fixed:\n${now}`);
+        await page.waitForTimeout(800);
+        await shot(page, `agent-session-${prog.id}`, 1400);
+        // the plan pill: what the program reported, and no limit of ours
+        await page.getByRole("button", { name: /^Your .* plan$/ }).click();
+        const so = page.getByRole("dialog", { name: "This session so far" });
+        await so.waitFor();
+        console.log(
+          `code-agent: ${prog.id} reported: ${(await so.innerText()).replace(/\s+/g, " ")}`,
+        );
+        await shot(page, `agent-cost-${prog.id}`, 1400);
+        await page.keyboard.press("Escape");
+        // every turn can be undone: read back from disk
+        await changed.getByRole("button", { name: "Undo this turn" }).click();
+        await page.getByText("You undid this turn.").waitFor({ timeout: 60_000 });
+        if (readFileSync(join(folder, "prices.py"), "utf8") !== was)
+          throw new Error(`${prog.id}: undo did not put prices.py back`);
+        console.log(`code-agent: ${prog.id} undone exactly`);
+      }
+      await open(page, "/code");
+      await page.getByRole("heading", { name: "Projects" }).waitFor();
+      await page
+        .getByText(/^Claude Code · /)
+        .first()
+        .waitFor();
+      await page
+        .getByText(/^Codex · /)
+        .first()
+        .waitFor();
+      await shot(page, "agent-projects");
+      await open(page, "/extensions");
+      await page.getByText(/For Wasify AI's own agent only/).waitFor();
+      await shot(page, "agent-extensions");
+      await open(page, "/settings");
+      const programs = page.getByRole("region", { name: "Your agent programs" });
+      await programs
+        .getByText(/Signed in/)
+        .first()
+        .waitFor({ timeout: 60_000 });
+      await programs.scrollIntoViewIfNeeded();
+      await shot(page, "agent-settings", 1400);
+    });
+  }
   if (scheme === "light" && names.has("code-browser")) {
     await attempt("code-browser", async () => {
       await open(page, "/code");

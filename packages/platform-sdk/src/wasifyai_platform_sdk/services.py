@@ -83,6 +83,8 @@ class EngineServices:
     llama_server: Any = None
     # OpenHands' Agent Server in its sandbox, for the coding product (ADR-0101, ADR-0102)
     coding_server: Any = None
+    # the person's own agent programs' sign-in (`coding_harness.HarnessAccounts`, ADR-0107)
+    coding_harnesses: Any = None
     # the coding sessions' model gateway: it holds the key, the server gets a token (ADR-0102, 4)
     coding_gateway: Any = None
     code_store: Any = None  # wasifyai_code's rows (`<app data>/code/code.db`)

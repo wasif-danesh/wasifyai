@@ -1,0 +1,9 @@
+{
+  "name": "wasify-harness",
+  "private": true,
+  "description": "The agent programs a coding session can run on (ADR-0107): the ACP adapters OpenHands 1.62.0 pins, which carry the programs.",
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.99.1",
+    "@agentclientprotocol/codex-acp": "2.2.2"
+  }
+}

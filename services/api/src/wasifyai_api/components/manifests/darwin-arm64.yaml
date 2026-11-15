@@ -63,6 +63,22 @@ components:
       sha256: ff6e17d4874b76d272212b908cc020d6e815fba5a6c7eaaa06add725840307fd
       kind: tar.gz
       strip: 1
+  harness:
+    # The agent programs a coding session can run on with the person's own plan (ADR-0107): the ACP adapters
+    # OpenHands 1.62.0 pins, which carry Claude Code and Codex. Installed with `npm ci` from the lock in
+    # services/coding-engine/harness, every package checked against its integrity hash, no install script run.
+    title: Agent programs (Claude Code, Codex)
+    version: 0.99.1+2.2.2  # claude-agent-acp + codex-acp
+    source: registry.npmjs.org
+    min_free_bytes: 1073741824
+    install_bytes: 694400000  # measured on disk, 694 MB (docs/spikes/coding-harness-h1.md)
+    lock: harness/package-lock.json
+    lock_sha256: 9186c8f73a474aa5affa3d0922e3f7ff98b492c562aa632cd28b1580f36546a9
+    manifest: harness/package.json
+    manifest_sha256: 3356273931d94d858d9f1979bcf2fcb0e487c8286833297230ba1c4151e5bbd5
+    adapters:
+      claude-code: '@agentclientprotocol/claude-agent-acp'
+      codex: '@agentclientprotocol/codex-acp'
 # What the parts the engine's services set up fetch (stage F2; these were the *_pins.json files).
 # Paths in them are relative to the wasifyai_api package. Every platform carries every part, so
 # an engine anywhere can say what a part needs and that it is not available on this computer.

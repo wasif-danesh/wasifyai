@@ -204,6 +204,29 @@ async def test_a_run_stops_before_the_task_that_would_begin_over_the_cost_limit(
     assert limits == [1.0, pytest.approx(0.4)]
 
 
+async def test_a_run_stops_where_the_programs_plan_ran_out_and_counts_no_failure(
+    tmp_path, monkeypatch
+):
+    said = "[-32603] Internal error: You’ve hit your usage limit. Try again later."
+    ran = []
+
+    async def run_task(place, task, folder, **more):
+        ran.append(task["id"])
+        if len(ran) == 1:
+            return {"id": task["id"], "kind": task["kind"], "passed": True, "status": "finished"}
+        return {"id": task["id"], "kind": task["kind"], "passed": False, "status": "error",
+                "detail": said}  # fmt: skip
+
+    monkeypatch.setattr(run_eval, "run_task", run_task)
+    tasks = [BY_ID[i] for i in ("bug-paginate", "bug-slug", "ask-what-does")]
+    out = await run_eval.run_all(FakePlace(None), tasks, tmp_path)
+    assert ran == ["bug-paginate", "bug-slug"]
+    assert (out["passed"], out["of"]) == (1, 1)
+    assert out["not_run"] == ["bug-slug", "ask-what-does"] and out["stopped"] == said
+    # an error of another kind is the agent's failure
+    assert not run_eval.plan_ran_out({"status": "error", "detail": "the server went away"})
+
+
 async def test_a_run_of_several_tasks_is_summed_up_by_kind(tmp_path):
     async def agent(turn: FakeTurn) -> None:
         if (turn.workspace / "paging.py").exists():
@@ -231,3 +254,11 @@ def test_the_script_proves_the_checks_without_a_model_and_says_what_it_cannot_do
     assert "--data (the real coding engine)" in capsys.readouterr().err
     with pytest.raises(ValueError, match="no such task: nope"):
         run_eval.main(["--start", "nope"])
+
+
+def test_a_model_of_the_persons_own_program_is_known_as_one():
+    """`--model claude-code:haiku` runs the tasks on the person's own program (ADR-0107, H3)."""
+    assert run_eval.harness_of("claude-code:haiku") == "claude-code"
+    assert run_eval.harness_of("codex:default") == "codex"
+    assert run_eval.harness_of("anthropic:claude-opus-5-5") == ""
+    assert run_eval.harness_of("qwen-27b-ollama") == ""

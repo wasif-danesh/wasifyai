@@ -14,6 +14,9 @@ one, and nothing else:
                                (`wasifyai_code/rules.py`), so a command that was not judged an
                                install cannot fetch anything
                       person   the person's own terminal. Always let through, to the same hosts
+                    and one name per harness (ADR-0107): the person's own agent program, let
+                    through always and only to its own provider's hosts (`harness_hosts`), never
+                    to a package index
     what is kept    a count and the host of each request, let through or refused. Never a path,
                     a header or a body
 
@@ -30,7 +33,7 @@ import secrets
 import socket
 import time
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -58,12 +61,25 @@ def read_hosts(path: Path = HOSTS_FILE) -> tuple[str, ...]:
 
 class InstallProxy:
     def __init__(
-        self, hosts: Sequence[str] | None = None, *, window_s: float = WINDOW_S, port: int = PORT
+        self,
+        hosts: Sequence[str] | None = None,
+        *,
+        window_s: float = WINDOW_S,
+        port: int = PORT,
+        harness_hosts: Mapping[str, Sequence[str]] | None = None,
     ):
-        """`port` is the one port a tunnel may go to; only tests give another."""
+        """`port` is the one port a tunnel may go to; only tests give another. `harness_hosts`
+        gives each harness its provider's hosts: a host is let through when it is one of them or
+        ends in "." and one of them."""
         self.hosts = frozenset(h.lower() for h in (read_hosts() if hosts is None else hosts))
         self.window_s, self.port = window_s, port
+        self.harness_hosts = {
+            name: frozenset(h.lower() for h in found)
+            for name, found in (harness_hosts or {}).items()
+        }
         self._tokens = {AGENT: secrets.token_urlsafe(24), PERSON: secrets.token_urlsafe(24)}
+        for name in self.harness_hosts:
+            self._tokens[name] = secrets.token_urlsafe(24)
         self._open_until = 0.0
         self._sock: socket.socket | None = None
         self._server: asyncio.Server | None = None
@@ -148,6 +164,12 @@ class InstallProxy:
             return 407, "who", host
         if not port.isdigit() or int(port) != self.port:
             return 403, "port", host
+        if who in self.harness_hosts:
+            # a harness reaches its own provider and nothing else, a package index included
+            mine = self.harness_hosts[who]
+            if host in mine or any(host.endswith("." + h) for h in mine):
+                return 200, who, host
+            return 403, "not_the_provider", host
         if host not in self.hosts:
             return 403, "not_on_the_list", host
         if who == AGENT and not self.open_to_agent:
@@ -220,6 +242,7 @@ class InstallProxy:
         """For diagnostics: never a password."""
         return {
             "hosts": sorted(self.hosts),
+            "harness_hosts": {k: sorted(v) for k, v in self.harness_hosts.items()},
             "open_to_agent": self.open_to_agent,
             "let_through": self.let_through,
             "refused": self.refused,

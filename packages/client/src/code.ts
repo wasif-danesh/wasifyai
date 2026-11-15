@@ -73,8 +73,11 @@ export type CodeSession = {
   model_calls: number;
   tokens_in: number;
   tokens_out: number;
-  /** "tokens": the model has no known price; the session is counted and limited in tokens */
-  counted_in?: "usd" | "tokens";
+  /** "tokens": the model has no known price; the session is counted and limited in tokens. "plan": it runs on the
+   * person's own agent program (ADR-0107) and is paid by their plan; the cost is what the program reported */
+  counted_in?: "usd" | "tokens" | "plan";
+  /** the person's own agent program the session runs on ("claude-code", "codex"); empty for Wasify AI's own agent */
+  harness?: string;
   /** the most tokens (in and out) such a session may use */
   token_limit?: number;
   created_at: string;
@@ -423,6 +426,33 @@ export type CodeFile = {
 };
 
 /** The coding engine as an optional part: is it set up, can this computer run it. */
+/** One of the person's own agent programs (ADR-0107): set up or not, signed in or not, how and on which plan.
+ * Never an email or a token: the program keeps those. */
+export type CodeHarness = {
+  id: string;
+  title: string;
+  /** what pays, in the screen's words: "your Claude plan" */
+  plan_words: string;
+  installed: boolean;
+  signed_in: boolean;
+  /** "plan", "key" or empty */
+  how: string;
+  /** the plan's name, as the program says it ("Max"); empty when not known */
+  plan: string;
+  /** the program's own sign-in is waiting in the browser */
+  signing_in: boolean;
+  /** the provider's sign-in page the program printed, for when no page opened by itself */
+  page: string;
+};
+
+/** The models a program offers on the person's plan; each `id` is a session's `model` ("claude-code:sonnet"). */
+export type CodeHarnessModels = {
+  /** `tested`: what the coding evaluation measured for it, in words; empty when it was not run */
+  models: { id: string; name: string; program_model: string; tested?: string }[];
+  current: string;
+  error: string;
+};
+
 export type CodeEngine = { supported: boolean; installed: boolean; running: boolean };
 
 export type CodeApi = ReturnType<typeof createCodeApi>;
@@ -451,6 +481,23 @@ export function createCodeApi(transport: Transport) {
     },
     async models(): Promise<CodeModel[]> {
       return (await json<{ items: CodeModel[] }>(`${BASE}/models`)).items;
+    },
+    /** The person's own agent programs (ADR-0107). */
+    async harnesses(): Promise<CodeHarness[]> {
+      return (await json<{ items: CodeHarness[] }>(`${BASE}/harnesses`)).items;
+    },
+    /** Start the program's own sign-in: it opens its page in the person's browser. */
+    signIn(harness: string): Promise<CodeHarness> {
+      return json<CodeHarness>(`${BASE}/harnesses/${encodeURIComponent(harness)}/sign-in`, post());
+    },
+    cancelSignIn(harness: string): Promise<CodeHarness> {
+      return json<CodeHarness>(
+        `${BASE}/harnesses/${encodeURIComponent(harness)}/sign-in/cancel`,
+        post(),
+      );
+    },
+    harnessModels(harness: string): Promise<CodeHarnessModels> {
+      return json<CodeHarnessModels>(`${BASE}/harnesses/${encodeURIComponent(harness)}/models`);
     },
     async sessions(): Promise<CodeSession[]> {
       return (await json<{ items: CodeSession[] }>(`${BASE}/sessions?limit=200`)).items;

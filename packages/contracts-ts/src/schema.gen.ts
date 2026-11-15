@@ -1167,6 +1167,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/harnesses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Harnesses
+         * @description The person's own agent programs (ADR-0107): set up or not, signed in or not, how and
+         *     on which plan. Never an email or a token.
+         */
+        get: operations["list_harnesses_products_wasifyai_code_code_harnesses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/harnesses/{harness}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Harness Models
+         * @description The models the program offers on the person's plan, named for a session's `model`.
+         */
+        get: operations["harness_models_products_wasifyai_code_code_harnesses__harness__models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/harnesses/{harness}/sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign In Harness
+         * @description Start the program's own sign-in: its page opens in the person's browser.
+         */
+        post: operations["sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/harnesses/{harness}/sign-in/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Sign In Harness */
+        post: operations["cancel_sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/models": {
         parameters: {
             query?: never;
@@ -9889,6 +9967,127 @@ export interface operations {
                 "application/json": components["schemas"]["CodeSwitchIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_harnesses_products_wasifyai_code_code_harnesses_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    harness_models_products_wasifyai_code_code_harnesses__harness__models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

@@ -497,6 +497,8 @@ export {
   type CodeScheduleRun,
   type CodeScheduleTemplate,
   type CodeMode,
+  type CodeHarness,
+  type CodeHarnessModels,
   type CodeModel,
   type CodePreview,
   type CodePreviewRun,

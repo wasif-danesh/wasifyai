@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
+  AgentPrograms,
   Button,
   Checkbox,
   ComputerCanDo,
@@ -17,12 +18,15 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { ComponentsPanel } from "../ComponentsPanel";
 import {
   assistantApi,
+  componentsApi,
   connectionsApi,
   discoveryApi,
   externalApi,
   hubApi,
   ownKeysApi,
 } from "../api";
+import { agentsApi } from "../choices/agents";
+import { code } from "../code";
 import { saveDiagnostics } from "../diagnostics";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
@@ -342,6 +346,8 @@ type Item = {
 };
 type Group = { id: string; title: string; items: Item[] };
 
+const agents = agentsApi({ code, parts: componentsApi });
+
 const GROUPS: Group[] = [
   {
     id: "general",
@@ -417,6 +423,19 @@ const GROUPS: Group[] = [
           "api key provider anthropic claude haiku openai gpt gemini google deepseek z.ai glm openrouter runware wavespeed fal hosted cloud own key",
         body: <YourKeys api={ownKeysApi} />,
         own: true,
+      },
+    ],
+  },
+  {
+    id: "code",
+    title: "Code",
+    items: [
+      {
+        // the person's own agent programs (ADR-0107, stage H2): their sign-in, and the part that holds them
+        id: "agent-programs",
+        title: "Your agent programs",
+        words: "claude code codex agent program plan sign in subscription harness",
+        body: <AgentPrograms api={agents} />,
       },
     ],
   },

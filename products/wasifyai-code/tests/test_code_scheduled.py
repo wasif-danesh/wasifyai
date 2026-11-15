@@ -281,3 +281,69 @@ async def test_a_schedule_with_no_model_named_uses_the_one_of_the_projects_newes
         ME, workspace_id=project["id"], request="Tidy.", rule=DAILY, time_zone="UTC"
     )
     assert schedule["model"] == session["model"] != ""
+
+
+# ---- a schedule on the person's own agent program (ADR-0107, stage H3) -------------------------
+
+
+class Accounts:
+    """The programs' sign-in, pretended: signed in or not."""
+
+    def __init__(self) -> None:
+        self.signed_in = True
+
+    async def status(self, harness: str) -> dict:
+        return {"id": harness, "title": "Claude Code", "installed": True,
+                "signed_in": self.signed_in, "how": "plan", "plan": "max"}  # fmt: skip
+
+
+def on_harness(world) -> tuple[Scheduled, PretendClock, dict]:
+    made, clock, more = rig(world)
+    world.state.coding_server.harness_ids = ("claude-code", "codex")
+    world.state.coding_harnesses = Accounts()
+    return made, clock, more
+
+
+async def test_a_schedule_runs_on_the_persons_own_program_on_a_copy(world):
+    made, clock, more = on_harness(world)
+    live = more["live"]
+    await live.start(ME, folder=str(world.project), model="claude-code:haiku", mode=rows.PLAN)
+    (project,) = live.workspaces(ME)
+    was = listing(world.project)
+    schedule = made.add(
+        ME, workspace_id=project["id"], request="Tidy.", rule=DAILY, time_zone="UTC"
+    )
+    # with no model named, the project's newest session's: the program's
+    assert schedule["model"] == "claude-code:haiku"
+    made.start()
+    try:
+        await clock.advance(61 * 60)  # 09:01
+        run = await until_done(made, schedule["id"], clock)
+    finally:
+        await made.close()
+    assert run["state"] == "done", run
+    assert run["changed"] >= 1 and run["open"]
+    session = live.store.get_session(ME, run["session_id"])
+    assert session["model"] == "claude-code:haiku" and session["mode"] == rows.OWN
+    assert live.view(ME, run["session_id"])["counted_in"] == "plan"
+    assert listing(world.project) == was  # the project itself is not touched
+
+
+async def test_a_schedule_on_a_program_that_is_signed_out_fails_in_words(world):
+    made, clock, more = on_harness(world)
+    live = more["live"]
+    await live.start(ME, folder=str(world.project), model="codex:gpt-5.6-terra", mode=rows.PLAN)
+    (project,) = live.workspaces(ME)
+    schedule = made.add(
+        ME, workspace_id=project["id"], request="Tidy.", rule=DAILY, time_zone="UTC"
+    )
+    world.state.coding_harnesses.signed_in = False
+    made.start()
+    try:
+        await clock.advance(61 * 60)  # 09:01
+        run = await until_done(made, schedule["id"], clock)
+    finally:
+        await made.close()
+    assert run["state"] == "failed", run
+    assert "Sign in to Claude Code first" in run["note"]
+    assert not run["open"]

@@ -4,6 +4,7 @@ import { type CreationKind, type CreationsApi, type MadeFrom, when } from "@wasi
 import {
   BookOpen,
   Box,
+  CalendarClock,
   Clapperboard,
   CodeXml,
   ExternalLink,
@@ -89,6 +90,7 @@ const ICON = {
   creative_project: Clapperboard,
   code_session: CodeXml,
   code_extension: Puzzle,
+  code_schedule: CalendarClock,
   notebook: BookOpen,
   taught: GraduationCap,
 };

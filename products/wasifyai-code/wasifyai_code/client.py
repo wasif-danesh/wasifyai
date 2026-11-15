@@ -157,6 +157,11 @@ class ThisComputer:
             readable = {self._real(p) for p in self.server.read_only} if running else set()
             if _within(workspace, writable) or (not write and _within(workspace, readable)):
                 return
+            # the engine's own folder is always its to write: a scheduled run's copy of a
+            # project lives there, so a run starts nothing again and cuts off no session
+            own = getattr(self.server, "run_dir", None)
+            if running and own is not None and _within(workspace, {self._real(own)}):
+                return
             if running and self.working():
                 raise Busy(
                     "The coding engine must start again to open this folder, and another "
@@ -247,6 +252,10 @@ class ThisComputer:
             "max_iterations": spec.step_limit,
             "agent_settings": settings,
         }
+        if spec.hooks and not spec.read_only:
+            # the hooks of plugins the person approved: plain commands, one second each, run by
+            # the server inside its sandbox. A session that only reads runs none
+            body["hook_config"] = spec.hooks
         if not spec.read_only:
             # a change waits before it happens (ADR-0102, decision 6); the answer is ours
             body["security_analyzer"] = {"kind": RULES_KIND, "wait_tools": list(WAIT_TOOLS)}

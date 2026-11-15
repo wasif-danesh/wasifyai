@@ -66,6 +66,18 @@ COLUMNS = (
     ("workspaces", "allowed", "TEXT NOT NULL DEFAULT '[]'"),  # kinds allowed for the project
     # stage C4: the command that starts the project for the Preview tab
     ("workspaces", "preview_command", "TEXT NOT NULL DEFAULT ''"),
+    # stage C6: a workspace that is the copy a scheduled run works on names the project it is of
+    ("workspaces", "copy_of", "TEXT"),
+    # ... and a run names its copy, what the copy was made from, and what became of its changes
+    ("schedule_runs", "copy_workspace", "TEXT"),
+    ("schedule_runs", "base_commit", "TEXT"),
+    ("schedule_runs", "changed", "INTEGER NOT NULL DEFAULT 0"),
+    ("schedule_runs", "applied_at", "TEXT"),
+    ("schedule_runs", "discarded_at", "TEXT"),
+    ("schedules", "model", "TEXT NOT NULL DEFAULT ''"),
+    # stage X3: when the person approved what a plugin brings (its hooks, its tool connections)
+    ("extensions", "approved_at", "TEXT"),
+    ("schedules", "title", "TEXT NOT NULL DEFAULT ''"),
 )
 
 LEFT_WORKING = "It was stopped when the app closed."
@@ -278,13 +290,14 @@ class CodeStore:
 
     def add_workspace(
         self, owner: Owner, path: str, *, name: str = "", check_command: str = "",
-        check_from: str = "", check_limit_s: int = 600,
+        check_from: str = "", check_limit_s: int = 600, copy_of: str | None = None,
     ) -> dict[str, Any]:  # fmt: skip
+        """`copy_of` names the project this folder is a scheduled run's copy of."""
         item = new_id()
         self.db.exec(
-            "INSERT INTO workspaces(id, tenant_id, product_id, user_id, name, path, check_command, check_from, check_limit_s, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (item, *_who(owner), name[:200], path, check_command, check_from if check_command else "", check_limit_s, now()),
+            "INSERT INTO workspaces(id, tenant_id, product_id, user_id, name, path, check_command, check_from, check_limit_s, created_at, copy_of) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (item, *_who(owner), name[:200], path, check_command, check_from if check_command else "", check_limit_s, now(), copy_of),
         )  # fmt: skip
         return self.get_workspace(owner, item)
 
@@ -369,13 +382,22 @@ class CodeStore:
     # ---- extensions (ADR-0104): what the person added, and what is on for a project -----------
 
     def add_extension(
-        self, owner: Owner, item: str, *, name: str, title: str, path: str, added_from: str = ""
-    ) -> dict[str, Any]:
-        """A skill the person added from a folder; `path` is our own copy of it."""
+        self, owner: Owner, item: str, *, name: str, title: str, path: str, added_from: str = "",
+        kind: str = "skill",
+    ) -> dict[str, Any]:  # fmt: skip
+        """A skill or plugin the person added from a folder; `path` is our own copy of it."""
         self.db.exec(
             "INSERT INTO extensions(id, tenant_id, product_id, user_id, kind, name, title, path, added_from, created_at) "
-            "VALUES (?, ?, ?, ?, 'skill', ?, ?, ?, ?, ?)",
-            (item, *_who(owner), name, title[:200], path, added_from[:1024], now()),
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (item, *_who(owner), kind, name, title[:200], path, added_from[:1024], now()),
+        )
+        return self._get("extensions", owner, item)
+
+    def approve_extension(self, owner: Owner, item: str) -> dict[str, Any]:
+        """The person approved what a plugin brings. Once."""
+        self.db.exec(
+            f"UPDATE extensions SET approved_at = COALESCE(approved_at, ?) WHERE id = ? AND {_MINE}",
+            (now(), item, *_who(owner)),
         )
         return self._get("extensions", owner, item)
 
@@ -700,6 +722,16 @@ class CodeStore:
     def get_schedule(self, owner: Owner, item: str) -> dict[str, Any]:
         return self._get("schedules", owner, item)
 
+    def name_schedule(self, owner: Owner, item: str, *, title: str, model: str) -> dict[str, Any]:
+        """What a schedule is called, and the model its runs work with ("" is the first choice)."""
+        n = self.db.exec(
+            f"UPDATE schedules SET title = ?, model = ?, updated_at = ? WHERE id = ? AND {_MINE}",
+            (title[:200], model[:64], now(), item, *_who(owner)),
+        )
+        if n == 0:
+            raise NotFound(f"schedules: {item}")
+        return self.get_schedule(owner, item)
+
     def list_schedules(self, owner: Owner) -> list[dict[str, Any]]:
         return self._list("schedules", owner)
 
@@ -815,6 +847,25 @@ class CodeStore:
 
     def get_run(self, owner: Owner, item: str) -> dict[str, Any]:
         return self._get("schedule_runs", owner, item)
+
+    def set_run_copy(self, run_id: str, *, copy_workspace: str, base_commit: str) -> None:
+        """The copy a run works on, and the checkpoint of the project it was made from."""
+        self.db.exec(
+            "UPDATE schedule_runs SET copy_workspace = ?, base_commit = ? WHERE id = ?",
+            (copy_workspace, base_commit, run_id),
+        )
+
+    def set_run_changed(self, run_id: str, changed: int) -> None:
+        self.db.exec("UPDATE schedule_runs SET changed = ? WHERE id = ?", (changed, run_id))
+
+    def close_run_copy(self, owner: Owner, run_id: str, *, applied: bool) -> dict[str, Any]:
+        """The person applied a run's changes to the project, or let them go."""
+        column = "applied_at" if applied else "discarded_at"
+        self.db.exec(
+            f"UPDATE schedule_runs SET {column} = ?, copy_workspace = NULL WHERE id = ? AND {_MINE}",
+            (now(), run_id, *_who(owner)),
+        )
+        return self.get_run(owner, run_id)
 
     def list_runs(self, owner: Owner, schedule_id: str) -> list[dict[str, Any]]:
         return self._list("schedule_runs", owner, "schedule_id = ?", (schedule_id,), "due_at, id")

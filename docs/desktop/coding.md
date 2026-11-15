@@ -211,11 +211,34 @@ environment; a write outside the project is refused by the operating system. The
 | Adding one | "Add from a folder": the folder is looked at first (its text is shown), then copied into `<app data>/code/extensions/<id>/`. A plugin (`.plugin/plugin.json`) is refused; that is stage X3 |
 | Search | An added skill is in the Library as "Coding skill" (kind `code_extension`), indexed by its name and what it is for, in the same index source as coding sessions |
 
+## Plugins (stage X3)
+
+| What | How |
+|---|---|
+| A plugin | A folder with `.plugin/plugin.json`. It can bring skills (`skills/<name>/SKILL.md`), hooks (`hooks/hooks.json`) and tool connections (`.mcp.json`). `extensions.read_plugin` reads it; it is added from a folder like a skill |
+| The approval | A plugin that brings a hook or a tool connection is off until the person approves it once: `POST /extensions/{id}/approve`, a route with no action, so only a person at the window can. `extensions.is_on` says no for an unapproved plugin whatever its switch says |
+| Its hooks | Plain commands only. `extensions.hooks_for_engine` gives them to the conversation (`hook_config`) with one second each and `PLUGIN_ROOT` pointing at our read-only copy under `<app data>/coding-fixed/skills/`. The coding engine runs them inside its sandbox. A session in Plan gets none |
+| Its tool connections | Listed on the approval card, never connected |
+
+## Scheduled runs (stage C6)
+
+| What | How |
+|---|---|
+| A schedule | A request, a project, a plain rule (five kinds, `schedules.py`), a time zone, "run when missed", and optionally a model. Kept in `schedules`; each due time is a row in `schedule_runs` |
+| The timer | One, in the Wasify engine (`schedules.Timer`), started with the desktop engine (`assemble.py`). It sleeps until the earliest due time and never longer than a minute |
+| One run | `scheduled.Scheduled._run`: a checkpoint of the project; what it holds copied to `<app data>/coding/copies/<run>/<name>/`; a session on the copy in "Work on its own", sent the request with `unattended=True`: the same turn as a chat message, with the project's check and extensions |
+| Nobody to ask | What a chat in "Ask me" would ask about is refused and written into the run's note, unless that kind is allowed for the project (`runtime._confirm`) |
+| The result | The check's word, how many files changed in the copy, and a note. The changes wait until "Apply to the project" (each file written only if the project's own is unchanged since the copy) or "Let it go" |
+| Templates | `own/templates.json`: five of ours, as prompt text and a rule |
+| Search | A schedule is in the Library as "Coding schedule" (kind `code_schedule`) |
+
 ## The screens
 
 | Where | What |
 |---|---|
-| `packages/ui/src/shell/menu.ts` | The group **Code** with Projects, Scheduled and Extensions. The window shows Projects only until the other two are built; the web hides all three (`apps/web/lib/parity.ts`: desktop only) |
+| `packages/ui/src/shell/menu.ts` | The group **Code** with Projects, Scheduled and Extensions. The window shows all three; the web hides all three (`apps/web/lib/parity.ts`: desktop only) |
+| `packages/ui/src/code/Scheduled.tsx` | Scheduled: the list (each schedule's rule in words, its next time, its last run, a switch, Run now or Stop, History), the form (a project, the request or a template, five plain kinds of rule, "Run when missed"; the same form changes a schedule), and one schedule's page (every due time with what happened; a run's changes listed, applied or let go; Delete). The note that schedules run only while the app is open is at the top. The window's page is `ScheduledPage` at `#/scheduled` |
+| `packages/ui/src/code/Extensions.tsx` (plugins) | A plugin's row says what it brings and has "Look and switch on" in place of its switch until it is approved. Its details list each skill, hook (when, on what, the command) and tool connection, with "Approve what it brings" |
 | `packages/ui/src/code/Code.tsx` | The first screen (what the agent may and may not do, what leaves this computer, Choose a folder), the projects with their sessions ("Waiting for you" on one that waits), and the session view: the request, the agent's steps as quiet lines that open, its answer, what the turn changed with "Look at the changes" and "Undo this turn", an undone turn with "Bring it back", a plan with "Carry out this plan"; the box with the mode and Stop; the bar with the project, the model, the state and the cost |
 | `packages/ui/src/code/Asking.tsx` | The approval card (three answers, and what was answered afterwards), the mode pill with its menu, and "What this project may do" |
 | `packages/ui/src/code/Checks.tsx` | The check: its word in the session's bar (it opens the dialog), the card of each run in the chat (checking with "Stop the check", passed, failed with the end of the output and "sent back to the agent", "needs you" with "Try 3 more rounds" and "Undo this turn", not checked with "Run the check now", could not check with "Change the check"), the tests the agent changed, and the dialog: the command, the suggestions, "Try it now", "No check for this project", the time limit |
@@ -272,7 +295,8 @@ address on loopback and a token for one session, and every model call of that se
 | `code.session.check` | Reads the project's check, sets it, and runs it now (a long action) |
 | `code.session.preview` | Starts the project's preview, stops it, or says where it is (a long action) |
 | `code.project.new` | A new project from a starter in a new folder, with a session on it |
-| `code.extension.list`, `code.extension.switch`, `code.extension.add` | The skills offered and which are on for a project (and one skill's whole text); switching one on or off; adding one from a folder |
+| `code.extension.list`, `code.extension.switch`, `code.extension.add` | The skills and plugins offered and which are on for a project (and one skill's whole text); switching one on or off; adding one from a folder. Approving a plugin is not an action |
+| `code.schedule.list`, `code.schedule.add`, `code.schedule.change`, `code.schedule.run` | The schedules with their next time and last run (and the templates); making one, from a template or not; pausing or changing one; running one now |
 
 They are offered to the assistant and not to outside apps: an outside app that could open a session on any
 folder would be handed that folder's content. Help is in `docs/help/code.session.*.md`.
@@ -300,6 +324,11 @@ folder would be handed that folder's content. Help is in `docs/help/code.session
 | `GET /extensions` (`workspace_id=`, `ids=`), `GET /extensions/{id}` | What is offered, with whether each is on for a project; one extension with its whole text and where it is on |
 | `PUT /extensions/{id}/on` | Switch it on or off for a project (`workspace_id`, `on`) |
 | `POST /extensions/look`, `POST /extensions`, `DELETE /extensions/{id}` | What a folder holds before it is added; adding it (with `workspace_id` it is switched on there); forgetting one the person added |
+| `POST /extensions/{id}/approve` | The person approves what a plugin brings |
+| `GET /schedules` (`ids=`), `POST /schedules`, `GET /schedules/{id}`, `PATCH /schedules/{id}`, `DELETE /schedules/{id}` | The schedules (and this computer's time zone); making one (`workspace_id`, `request`, `rule`, `time_zone`, `title`, `model`, `run_when_missed`); one with its runs; changing or pausing it (`enabled`); forgetting it with its history and copies |
+| `GET /schedules/templates` | Our short list of starting points |
+| `POST /schedules/{id}/run` | "Run now" (202) |
+| `GET /schedules/runs/{run_id}/changes`, `POST .../apply`, `POST .../discard`, `POST .../stop` | What a run changed in its copy and whether each file can be applied; writing the changes into the project; letting them go; stopping a run that is going |
 | `GET /starters`, `POST /projects` | What a new project can be started from, and making one (`parent`, `name`, `starter`, `model`, `mode`) |
 | `GET /sessions/{id}/terminals`, `POST /sessions/{id}/terminals` | The person's terminals in this session, and opening one (`cols`, `rows`) |
 | `GET /sessions/{id}/terminals/{tid}/events` | What the terminal prints, as a stream: `terminal_output` (`data`: the bytes in base64) and `terminal_ended` (`exit_code`); `Last-Event-ID` comes back after a number |
@@ -340,6 +369,7 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 | `services/api/tests/test_coding_proxy.py` | The install proxy on loopback: the person let through, the agent only while an install is allowed, every other request refused, and no password in what it says of itself | `make test` |
 | `products/wasifyai-code/tests/test_code_c4.py` | The preview with a real program on a real port (found by its port, open to the network or not, why it ended, a new start replaces the old), which command is suggested, the starter (its files, its refusals, its own check and page), and `wasify-make`: how a call is read, the card in every mode, the app's action run for the person, the file in the project, the note, a no, a failure | `make test` |
 | `products/wasifyai-code/tests/test_code_extensions.py` | The reader, every skill of ours, the short list and the switch for a project, what a session is started with and that a switch begins a new conversation, the skills a message switched on, adding from a folder (looked at, copied, links left out, found by search, refusals, removal) | `make test` |
+| `products/wasifyai-code/tests/test_code_scheduled.py` | Scheduled on the pretended place and a pretended clock, with a real git: a run on a copy with the project untouched, applying, a file changed meanwhile left alone, letting go, the five copies kept, the refusals | `make test` |
 | `services/api/tests/test_components_node.py` | The Node part against a fake download: four steps, the folder the sandbox is given, a wrong checksum, a Node that does not start, a state file that points outside | `make test` |
 | `services/api/tests/integration/test_coding_sandbox.py` | Hostile tests against the real server in its sandbox | `make test-coding`, opt-in |
 | `apps/desktop/scripts/ui-audit.sh light coding-setup` (then `coding-repair`, `coding-remove`) | The part set up, repaired and removed from the real window's Settings, with the real downloads | By hand, on a throwaway `DESKTOP_DATA_DIR` |
@@ -349,8 +379,10 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 - The dot for files changed in a session, in the Files tab; the Browser tab (a second webview in the real
   window; it is its own piece after C4); the approval card on other screens while a session waits (the list of projects says "Waiting
   for you"); a project's "More" menu.
-- Plugins (a folder that brings hooks or tool connections), adding an extension from the internet, the
-  integrations list, changing a skill's text in the app: stage X3 and later.
+- Adding an extension from the internet, the integrations list, changing a skill's text in the app; a
+  plugin's tool connections, commands and agents.
+- Starting at login and staying in the menu bar (moved to the Browser tab's stage, ADR-0105, amendment);
+  a scheduled run in the tray's "Running now"; a diff of each file before a run's changes are applied.
 - "Show what is running": the list of everything started in a project by the person, the agent or a check,
   with a way to stop each (mockup `terminal-processes`). The Terminal tab says that `ps` does not work and
   offers nothing in its place yet.
@@ -361,7 +393,6 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
   system folders and Homebrew. More starters than the one web app.
 - 3D models, music and video through `wasify-make`; a picture the agent can look at.
 - Dropping old checkpoints. The store under `<app data>/code/checkpoints` grows with the project.
-- The scheduler: stage C6.
 - A session going on after the app was closed and opened again: the session's token is gone, so its next
   message starts a new conversation with the agent, and the turn says so.
 - The coding product's own connection to Wasify's tools (stage C4): `docs/spikes/coding-c1b.md`, "Decided".

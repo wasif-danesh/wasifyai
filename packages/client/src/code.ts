@@ -209,11 +209,25 @@ export type CodePreview = {
 /** A project: a folder the person opened for the agent. */
 export type CodeWorkspace = { id: string; name: string; folder: string };
 
-/** A skill that can be switched on for a project (ADR-0104). */
+/** What a plugin brings when it is switched on: what the person approves (stage X3). */
+export type CodeBrings = {
+  skills: { name: string; description: string }[];
+  /** a command the coding engine runs by itself, inside its sandbox, one second at most */
+  hooks: { when: string; on: string; command: string }[];
+  /** named for the person; not connected in this version */
+  connections: { name: string; to: string }[];
+};
+
+/** A skill or a plugin that can be switched on for a project (ADR-0104). */
 export type CodeExtension = {
   /** "own:<name>", "catalogue:<name>" or "added:<id>" */
   id: string;
-  kind: "skill";
+  kind: "skill" | "plugin";
+  /** a plugin: what it brings, and whether the person has approved it */
+  brings?: CodeBrings | "text";
+  approved?: boolean;
+  /** a plugin that brings a hook or a tool connection and is not approved yet: it cannot be on */
+  needs_approval?: boolean;
   /** Wasify AI's own, the pinned OpenHands catalogue, or a folder the person added */
   source: "own" | "catalogue" | "added";
   name: string;
@@ -245,7 +259,81 @@ export type CodeFolderLook = Omit<CodeExtension, "on"> & {
   lines: number;
   folder: string;
   bytes: number;
-  brings: "text";
+};
+
+/** When a schedule runs, as a plain rule (ADR-0105): never cron text. 0 is Monday. */
+export type CodeRule =
+  | { kind: "once"; date: string; time: string }
+  | { kind: "every"; minutes?: number; hours?: number; start?: string }
+  | { kind: "daily"; time: string }
+  | { kind: "weekdays"; days: number[]; time: string }
+  | { kind: "monthly"; day: number; time: string };
+
+/** One time a schedule came due, and what happened. */
+export type CodeScheduleRun = {
+  id: string;
+  schedule_id: string;
+  due_at: string;
+  state: "waiting" | "running" | "done" | "missed" | "skipped" | "failed";
+  /** the check's word when the run ended: passed, failed, not_checked, could_not_check */
+  result: string;
+  note: string;
+  stands_for: number;
+  session_id: string | null;
+  /** how many files the run changed in its copy */
+  changed: number;
+  /** the copy is still there: its changes can be looked at, applied or let go */
+  open: boolean;
+  applied_at: string | null;
+  discarded_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type CodeSchedule = {
+  id: string;
+  title: string;
+  request: string;
+  workspace_id: string;
+  project: string;
+  rule: CodeRule;
+  rule_words: string;
+  time_zone: string;
+  enabled: boolean;
+  run_when_missed: boolean;
+  model: string;
+  next_due: string | null;
+  running: boolean;
+  last: CodeScheduleRun | null;
+  created_at: string;
+  runs?: CodeScheduleRun[];
+};
+
+export type CodeScheduleIn = {
+  workspace_id: string;
+  request: string;
+  rule: CodeRule;
+  time_zone?: string;
+  title?: string;
+  model?: string;
+  run_when_missed?: boolean;
+};
+
+/** A starting point for a schedule: prompt text and a rule, both the person's to change. */
+export type CodeScheduleTemplate = {
+  id: string;
+  title: string;
+  description: string;
+  request: string;
+  rule: CodeRule;
+  rule_words: string;
+};
+
+/** What a run changed in its copy; `conflict`: the project's own file was changed meanwhile. */
+export type CodeRunChanges = {
+  run: string;
+  project: string;
+  files: { path: string; what: string; conflict: boolean }[];
 };
 
 /** Something a new project can be started from. */
@@ -525,6 +613,62 @@ export function createCodeApi(transport: Transport) {
     /** Copy a skill's folder in; with a project it is switched on for it. */
     addExtension(folder: string, workspaceId = ""): Promise<CodeExtension> {
       return json<CodeExtension>(`${BASE}/extensions`, post({ folder, workspace_id: workspaceId }));
+    },
+    /** The person has seen what a plugin brings and says yes. */
+    approveExtension(id: string): Promise<CodeExtensionDetail> {
+      return json<CodeExtensionDetail>(
+        `${BASE}/extensions/${encodeURIComponent(id)}/approve`,
+        post(),
+      );
+    },
+    /** The person's schedules, the newest first, and this computer's time zone. */
+    schedules(): Promise<{ items: CodeSchedule[]; time_zone: string }> {
+      return json<{ items: CodeSchedule[]; time_zone: string }>(`${BASE}/schedules`);
+    },
+    async scheduleTemplates(): Promise<CodeScheduleTemplate[]> {
+      return (await json<{ items: CodeScheduleTemplate[] }>(`${BASE}/schedules/templates`)).items;
+    },
+    /** One schedule with its runs, the newest first. */
+    schedule(id: string): Promise<CodeSchedule> {
+      return json<CodeSchedule>(`${BASE}/schedules/${encodeURIComponent(id)}`);
+    },
+    addSchedule(body: CodeScheduleIn): Promise<CodeSchedule> {
+      return json<CodeSchedule>(`${BASE}/schedules`, post(body));
+    },
+    /** Change what a schedule asks or when it runs, or pause it (`enabled`). */
+    changeSchedule(
+      id: string,
+      body: Partial<Omit<CodeScheduleIn, "workspace_id">> & { enabled?: boolean },
+    ): Promise<CodeSchedule> {
+      return json<CodeSchedule>(`${BASE}/schedules/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    },
+    async removeSchedule(id: string): Promise<void> {
+      await call(`${BASE}/schedules/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+    /** "Run now": the same run as at its time. */
+    runSchedule(id: string): Promise<CodeScheduleRun> {
+      return json<CodeScheduleRun>(`${BASE}/schedules/${encodeURIComponent(id)}/run`, post());
+    },
+    runChanges(runId: string): Promise<CodeRunChanges> {
+      return json<CodeRunChanges>(`${BASE}/schedules/runs/${encodeURIComponent(runId)}/changes`);
+    },
+    /** Write a run's changes into the project; a file changed meanwhile is left and named. */
+    applyRun(runId: string): Promise<{ applied: string[]; left: string[]; run: CodeScheduleRun }> {
+      return json(`${BASE}/schedules/runs/${encodeURIComponent(runId)}/apply`, post());
+    },
+    /** Let a run's changes go. */
+    discardRun(runId: string): Promise<CodeScheduleRun> {
+      return json<CodeScheduleRun>(
+        `${BASE}/schedules/runs/${encodeURIComponent(runId)}/discard`,
+        post(),
+      );
+    },
+    stopRun(runId: string): Promise<{ stopped: boolean }> {
+      return json(`${BASE}/schedules/runs/${encodeURIComponent(runId)}/stop`, post());
     },
     /** Forget an extension the person added. */
     async removeExtension(id: string): Promise<void> {

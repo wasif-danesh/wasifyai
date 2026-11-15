@@ -86,3 +86,42 @@ What is left of it, on one person's computer, is a clock. A clock is small.
     project for a week has no missed and no doubled run and changes nothing outside its copy.
   - Idle cost: no extra process, and a wake a minute that reads nothing.
 - Starting at login needs a Tauri plugin. It is a new dependency, asked for when C6 begins.
+
+## Amendment (2026-11-15): Scheduled as built in stage C6
+
+The decisions above stand. What was settled while building, under the owner's standing yes of 2026-11-15:
+
+1. **The copy (decision 11).** A run first takes a checkpoint of the project as it is, then writes what that
+   checkpoint holds into `<app data>/coding/copies/<run>/<project's name>/`: the coding engine's own folder,
+   inside the sandbox, outside the project. What the project ignores (`.env`, `node_modules`) is not in a
+   checkpoint and so not in the copy. The copy is a project of its own in the store, marked as a copy and
+   hidden from the person's list of projects, with the project's check, allowances and extensions.
+2. **What a run may do.** Ordinary edits and commands run without a question. Whatever a chat in "Ask me"
+   would ask about (a command that deletes, an install, a file Undo cannot put back, a picture or speech from
+   Wasify AI) is refused and written down, unless the person allowed that kind for the project. The agent is
+   told the step was not done and goes on. This is stricter than "Work on its own" in a chat, where a delete
+   or an install is not asked: nobody is watching a run, and an install would open the way to the package
+   indexes.
+3. **Applying.** A run's changes stay in its copy until the person chooses "Apply to the project" or "Let it
+   go". Applying takes a checkpoint of the project first, then writes each changed file only if the
+   project's own file is still what the copy was made from; a file the person changed meanwhile is left as
+   it is and named. It is refused while the agent is working in the project.
+4. **Copies kept.** The copies of a schedule's five newest runs are kept; older ones nobody applied are let
+   go. Deleting a schedule lets go of all of them.
+5. **A schedule can name its model**; without one it uses the model a new session would.
+6. **"Every so many minutes or hours" is counted from when the schedule is saved** (or changed).
+7. **Routes and actions** are listed in `docs/desktop/coding.md`. Actions: `code.schedule.list`, `add`,
+   `change`, `run`. Deleting a schedule, and applying or letting go of a run's changes, are on the screen
+   only: a person looks first.
+8. **Search.** A schedule is a kind of its own in the Library, "Coding schedule" (`code_schedule`), found by
+   its name, its project, its rule in words and what it asks.
+9. **The timer starts with the desktop engine** and serves from then on; it starts no process.
+10. **Moved to the Browser tab's stage: starting at login and staying in the menu bar (decision 12).** Both
+    are work in the Tauri shell that can only be judged in the real window, which the next stage opens
+    anyway. Until then the screen says that schedules run only while Wasify AI is open, and has no switch
+    for it.
+11. **Not built:** waking the computer; a schedule moved to another
+    project; a diff of each changed file before applying (the list names the files and what happened to
+    each; the run's session can be opened to read what the agent did); the web.
+
+Measured in `docs/spikes/coding-c6.md`.

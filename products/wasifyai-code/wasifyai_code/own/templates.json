@@ -1,0 +1,40 @@
+{
+  "about": "Wasify AI's own short list of starting points for a scheduled run. Each is prompt text and a plain rule; the person can change both before saving. None needs an account or a connection outside this computer.",
+  "templates": [
+    {
+      "id": "nightly-check",
+      "title": "Check it every night",
+      "description": "Runs the project's check each night. When it fails, the agent finds why and fixes it in the copy.",
+      "request": "Run the project's check. If it passes, change nothing and say so in one sentence. If it fails, find the cause, fix it with the smallest change that makes the check pass, and say in plain words what was wrong.",
+      "rule": {"kind": "daily", "time": "02:00"}
+    },
+    {
+      "id": "weekly-readme",
+      "title": "Keep the README true",
+      "description": "Once a week, compares the README with the code and corrects what no longer holds.",
+      "request": "Read the README and compare it with the code as it is now. Correct what is no longer true: commands, file names, how to run it. Do not rewrite what is still right, and do not change any code. If the project has no README, write a short one: what the project is, how to run it, how to check it.",
+      "rule": {"kind": "weekdays", "days": [0], "time": "08:00"}
+    },
+    {
+      "id": "weekday-notes",
+      "title": "Notes on what is unfinished",
+      "description": "Each weekday morning, gathers the TODO and FIXME notes in the code into one file.",
+      "request": "Search the project's own code for comments marked TODO or FIXME. Write them into the file TODO.md, grouped by file, each with its line number and its words. Replace what TODO.md held before. Change no other file.",
+      "rule": {"kind": "weekdays", "days": [0, 1, 2, 3, 4], "time": "08:30"}
+    },
+    {
+      "id": "weekly-tests",
+      "title": "Add a missing test",
+      "description": "Once a week, finds one part of the code that no test covers and writes a test for it.",
+      "request": "Find one function or part of this project that has no test and is worth one. Write a small, clear test for it in the project's own way of testing, and run the project's check. Add one test only. If the test shows a real fault, do not fix the fault: say what you found.",
+      "rule": {"kind": "weekdays", "days": [4], "time": "16:00"}
+    },
+    {
+      "id": "monthly-tidy",
+      "title": "A monthly tidy",
+      "description": "Once a month, removes code nothing uses and says what it removed.",
+      "request": "Look for code in this project that nothing uses any more: imports, functions, files. Remove only what you are sure is unused, run the project's check, and list what you removed and why you are sure. If you are not sure about something, leave it and name it.",
+      "rule": {"kind": "monthly", "day": 1, "time": "09:00"}
+    }
+  ]
+}

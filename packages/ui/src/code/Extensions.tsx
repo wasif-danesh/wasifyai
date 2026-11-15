@@ -2,15 +2,18 @@
 // Extensions (ADR-0104; mockups `extensions`, `extension-detail`, `extension-add`): the skills that teach the
 // agent a way of working. A short list chosen for Wasify AI, a few of the public OpenHands catalogue, and what
 // the person added from a folder. Each is on or off for one project. A skill's text is shown before it is
-// switched on: it comes from outside, and it cannot widen what the agent may do.
+// switched on: it comes from outside, and it cannot widen what the agent may do. A plugin (stage X3; mockup
+// `extension-approve`) can bring hooks and tool connections too: it stays off until the person has seen what
+// it brings and approved it, once.
 import type {
   CodeApi,
+  CodeBrings,
   CodeExtension,
   CodeExtensionDetail,
   CodeFolderLook,
   CodeWorkspace,
 } from "@wasifyai/client";
-import { ChevronRight, FolderOpen, Puzzle, Search, Sparkles, Trash2 } from "lucide-react";
+import { ChevronRight, FolderOpen, Plug, Puzzle, Search, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
@@ -29,6 +32,23 @@ export const FROM: Record<CodeExtension["source"], string> = {
   catalogue: "OpenHands catalogue",
   added: "Your folder",
 };
+
+/** What a plugin brings, counted in words: "1 skill, 1 hook and 1 tool connection". */
+export function bringsWords(b: CodeBrings): string {
+  const n = (count: number, one: string) =>
+    count ? `${count} ${one}${count === 1 ? "" : "s"}` : "";
+  const parts = [
+    n(b.skills.length, "skill"),
+    n(b.hooks.length, "hook"),
+    n(b.connections.length, "tool connection"),
+  ].filter(Boolean);
+  return parts.length > 1
+    ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
+    : (parts[0] ?? "nothing");
+}
+
+const bringsOf = (x: { brings?: CodeBrings | "text" }): CodeBrings | null =>
+  x.brings && x.brings !== "text" ? x.brings : null;
 
 type Filter = "all" | "on" | "own" | "catalogue" | "added";
 const FILTERS: [Filter, string][] = [
@@ -165,8 +185,8 @@ export function Extensions({
         <div className="grid gap-1.5">
           <h1 className="m-0 text-2xl font-semibold">Extensions</h1>
           <p className="m-0 max-w-[60ch] text-muted-foreground">
-            Skills that teach the agent a way of working. Each is switched on or off for one
-            project.
+            Skills and plugins that teach the agent a way of working. Each is switched on or off for
+            one project.
           </p>
         </div>
         <Button variant="outline" onClick={() => void choose()}>
@@ -264,16 +284,29 @@ export function Extensions({
               key={x.id}
               className="flex items-center gap-3 rounded-lg border bg-surface px-3.5 py-3"
             >
-              <Sparkles aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+              {x.kind === "plugin" ? (
+                <Plug aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+              ) : (
+                <Sparkles aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+              )}
               <div className="grid min-w-0 flex-1 gap-0.5">
                 <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
                   <span className="font-semibold">{x.title}</span>
-                  <span className="rounded border px-1.5 text-xs text-muted-foreground">Skill</span>
+                  <span className="rounded border px-1.5 text-xs text-muted-foreground">
+                    {x.kind === "plugin" ? "Plugin" : "Skill"}
+                  </span>
                   <span className="text-xs text-muted-foreground">{FROM[x.source]}</span>
                 </p>
-                <p className="m-0 line-clamp-2 text-sm text-muted-foreground">{x.description}</p>
+                <p className="m-0 line-clamp-2 text-sm text-muted-foreground">
+                  {x.description}
+                  {bringsOf(x) ? ` Brings ${bringsWords(bringsOf(x) as CodeBrings)}.` : ""}
+                </p>
               </div>
-              {current ? (
+              {x.needs_approval ? (
+                <Button size="sm" variant="outline" onClick={() => setOpen(x.id)}>
+                  Look and switch on
+                </Button>
+              ) : current ? (
                 <Switch
                   on={x.on === true}
                   disabled={busy === x.id}
@@ -317,8 +350,80 @@ export function Extensions({
   );
 }
 
+/** What a plugin brings, listed: this is what the person approves. */
+function Brings({ brings }: { brings: CodeBrings }) {
+  return (
+    <div className="grid gap-2">
+      <h3 className="m-0 text-sm font-semibold">What it brings</h3>
+      <ul className="m-0 grid list-none gap-1.5 p-0 text-sm">
+        {brings.skills.map((s) => (
+          <li key={`s-${s.name}`} className="rounded-md border px-3 py-2">
+            <strong className="font-semibold">A skill: {s.name}.</strong>{" "}
+            <span className="text-muted-foreground">{s.description} Text only.</span>
+          </li>
+        ))}
+        {brings.hooks.map((h) => (
+          <li key={`h-${h.when}-${h.command}`} className="grid gap-1 rounded-md border px-3 py-2">
+            <span>
+              <strong className="font-semibold">A hook, {h.when}</strong>
+              {h.on && h.on !== "*" ? ` (for ${h.on})` : ""}.{" "}
+              <span className="text-muted-foreground">
+                The coding engine runs this command by itself, inside its sandbox, and stops it
+                after one second.
+              </span>
+            </span>
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs break-all">{h.command}</code>
+          </li>
+        ))}
+        {brings.connections.map((c) => (
+          <li key={`c-${c.name}`} className="rounded-md border px-3 py-2">
+            <strong className="font-semibold">A tool connection: {c.name}</strong>
+            {c.to ? (
+              <>
+                {" "}
+                to <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{c.to}</code>
+              </>
+            ) : null}
+            .{" "}
+            <span className="text-muted-foreground">
+              Named here so that you know of it. Wasify AI does not connect it in this version.
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** A skill's text, with the note that it comes from outside. */
-function SkillText({ text, lines, own }: { text: string; lines: number; own: boolean }) {
+function SkillText({
+  text,
+  lines,
+  own,
+  plugin,
+}: {
+  text: string;
+  lines: number;
+  own: boolean;
+  plugin?: boolean;
+}) {
+  if (plugin)
+    return (
+      <div className="grid gap-2">
+        <h3 className="m-0 text-sm font-semibold">What the plugin says about itself</h3>
+        <pre
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a long text must be scrollable by keyboard
+          tabIndex={0}
+          aria-label="The plugin's own description file"
+          className="m-0 max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {text}
+        </pre>
+        <p className="m-0 text-xs text-muted-foreground">
+          .plugin/plugin.json · {lines} line{lines === 1 ? "" : "s"} · shown as plain text
+        </p>
+      </div>
+    );
   return (
     <div className="grid gap-2">
       <h3 className="m-0 text-sm font-semibold">The text it gives the agent</h3>
@@ -392,6 +497,16 @@ function Detail({
       setProblem(say(e, "That could not be changed."));
     }
   };
+  const approve = async () => {
+    try {
+      const d = await api.approveExtension(id);
+      setDetail((was) => (was ? { ...was, ...d, where: was.where } : was));
+      setProblem(null);
+      onChanged();
+    } catch (e) {
+      setProblem(say(e, "That could not be approved."));
+    }
+  };
   const remove = async () => {
     try {
       await api.removeExtension(id);
@@ -408,18 +523,43 @@ function Detail({
         <>
           <p className="m-0 text-sm">{detail.description}</p>
           <p className="m-0 text-xs text-muted-foreground">
-            A skill · from {FROM[detail.source]}
+            A {detail.kind === "plugin" ? "plugin" : "skill"} · from {FROM[detail.source]}
             {detail.licence ? ` · licence: ${detail.licence}` : ""}
             {detail.files > 1 ? ` · ${detail.files} files` : ""} · already on this computer
           </p>
           {detail.needs ? (
             <p className="m-0 text-sm text-muted-foreground">It says it needs: {detail.needs}</p>
           ) : null}
-          <div className="grid gap-1">
-            <h3 className="m-0 text-sm font-semibold">When the agent uses it</h3>
-            <p className="m-0 text-sm text-muted-foreground">{when(detail.triggers)}</p>
-          </div>
-          <SkillText text={detail.text} lines={detail.lines} own={detail.source === "own"} />
+          {detail.kind === "plugin" ? null : (
+            <div className="grid gap-1">
+              <h3 className="m-0 text-sm font-semibold">When the agent uses it</h3>
+              <p className="m-0 text-sm text-muted-foreground">{when(detail.triggers)}</p>
+            </div>
+          )}
+          {bringsOf(detail) ? <Brings brings={bringsOf(detail) as CodeBrings} /> : null}
+          {detail.needs_approval ? (
+            <Notice
+              tone="warn"
+              title="This plugin brings more than text"
+              actions={
+                <Button size="sm" onClick={() => void approve()}>
+                  Approve what it brings
+                </Button>
+              }
+            >
+              It was not written by Wasify AI. Read the list above. It stays off until you approve
+              it; you approve it once, and then switch it on for a project. A hook runs inside the
+              same closed sandbox as the agent: it cannot reach the internet or your other folders.
+            </Notice>
+          ) : detail.kind === "plugin" && detail.approved ? (
+            <p className="m-0 text-xs text-muted-foreground">You approved what it brings.</p>
+          ) : null}
+          <SkillText
+            text={detail.text}
+            lines={detail.lines}
+            own={detail.source === "own"}
+            plugin={detail.kind === "plugin"}
+          />
           <div className="grid gap-2">
             <h3 className="m-0 text-sm font-semibold">Where it is on</h3>
             {detail.where.length ? (
@@ -432,6 +572,7 @@ function Detail({
                     <span className="min-w-0 truncate">{w.name}</span>
                     <Switch
                       on={w.on}
+                      disabled={detail.needs_approval}
                       label={`${detail.title}: ${w.on ? "on" : "off"} for ${w.name}`}
                       onChange={(on) => void flip(w.id, on)}
                     />
@@ -498,14 +639,16 @@ function Add({
   const add = async () => {
     setBusy(true);
     try {
-      await api.addExtension(found.folder, on && project ? project.id : "");
+      const here = on && project && !found.needs_approval ? project.id : "";
+      await api.addExtension(found.folder, here);
       onAdded();
     } catch (e) {
-      setProblem(say(e, "The skill could not be added."));
+      setProblem(say(e, "It could not be added."));
       setBusy(false);
     }
   };
   const kb = found.bytes < 1024 ? `${found.bytes} bytes` : `${(found.bytes / 1024).toFixed(1)} KB`;
+  const plugin = bringsOf(found);
   return (
     <Modal label="Add an extension from a folder" onClose={onClose} wide>
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -516,21 +659,35 @@ function Add({
           Choose another
         </Button>
       </div>
-      <p className="m-0 text-sm">
-        <strong className="font-semibold">Found a skill: “{found.title}”.</strong> SKILL.md, {kb}.
-        It brings text only: no hook and no tool connection.
-      </p>
+      {plugin ? (
+        <p className="m-0 text-sm">
+          <strong className="font-semibold">Found a plugin: “{found.title}”.</strong> It brings{" "}
+          {bringsWords(plugin)}.
+        </p>
+      ) : (
+        <p className="m-0 text-sm">
+          <strong className="font-semibold">Found a skill: “{found.title}”.</strong> SKILL.md, {kb}.
+          It brings text only: no hook and no tool connection.
+        </p>
+      )}
       <p className="m-0 text-sm text-muted-foreground">{found.description}</p>
-      <SkillText text={found.text} lines={found.lines} own={false} />
-      {project ? (
+      {plugin ? <Brings brings={plugin} /> : null}
+      {found.needs_approval ? (
+        <Notice tone="warn" title="It stays off until you approve it">
+          Adding copies it in and nothing more. Open its details afterwards to approve what it
+          brings and switch it on.
+        </Notice>
+      ) : null}
+      <SkillText text={found.text} lines={found.lines} own={false} plugin={Boolean(plugin)} />
+      {project && !found.needs_approval ? (
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />
           Switch it on for {project.name}
         </label>
       ) : null}
       <p className="m-0 text-xs text-muted-foreground">
-        It is copied into Wasify AI; your folder is not changed. A folder is a skill when it has a
-        SKILL.md.
+        It is copied into Wasify AI; your folder is not changed. A folder is an extension when it
+        has a SKILL.md or a .plugin/plugin.json.
       </p>
       {problem ? (
         <p role="alert" className="m-0 text-sm text-destructive">
@@ -542,7 +699,7 @@ function Add({
           Cancel
         </Button>
         <Button onClick={() => void add()} disabled={busy}>
-          {busy ? <Spinner className="size-3.5" /> : null} Add the skill
+          {busy ? <Spinner className="size-3.5" /> : null} Add the {plugin ? "plugin" : "skill"}
         </Button>
       </div>
     </Modal>

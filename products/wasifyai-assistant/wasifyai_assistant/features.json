@@ -244,6 +244,22 @@
     ]
   },
   {
+    "screen": "code.scheduled",
+    "where": "Code › Scheduled",
+    "actions": [
+      "code.schedule.add",
+      "code.schedule.change",
+      "code.schedule.list",
+      "code.schedule.run"
+    ],
+    "does": [
+      "Schedule a coding run",
+      "Change or pause a scheduled coding run",
+      "List the scheduled coding runs",
+      "Run a coding schedule now"
+    ]
+  },
+  {
     "screen": "code.extensions",
     "where": "Code › Extensions",
     "actions": [

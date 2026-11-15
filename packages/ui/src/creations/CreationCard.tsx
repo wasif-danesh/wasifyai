@@ -3,6 +3,7 @@ import {
   AudioLines,
   BookOpen,
   Box,
+  CalendarClock,
   Clapperboard,
   CodeXml,
   GraduationCap,
@@ -87,6 +88,7 @@ const ICON: Partial<Record<Entry["kind"], LucideIcon>> = {
   creative_project: Clapperboard,
   code_session: CodeXml,
   code_extension: Puzzle,
+  code_schedule: CalendarClock,
   notebook: BookOpen,
   taught: GraduationCap,
 };

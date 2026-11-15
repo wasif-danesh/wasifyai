@@ -83,6 +83,8 @@ class SessionSpec:
     # the skills that are on for the session's project, in the shape the place takes them
     # (`extensions.for_engine`); fixed when the session starts
     skills: tuple[dict[str, Any], ...] = ()
+    # the hooks of the approved plugins that are on (`extensions.hooks_for_engine`), or None
+    hooks: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,7 @@ Action: `code.extension.add`
 
 ## What it is for
 
-Add a skill you have in a folder of this computer. A folder is a skill when it has a file called `SKILL.md`: a few lines that name it and say what it is for, then the text for the agent. Wasify AI copies the folder in and shows you its text before it is switched on anywhere.
+Add a skill or a plugin you have in a folder of this computer. A folder is a skill when it has a file called `SKILL.md`: a few lines that name it and say what it is for, then the text for the agent. Wasify AI copies the folder in and shows you its text before it is switched on anywhere.
 
 ## Steps in the app
 
@@ -28,7 +28,9 @@ You can also ask the assistant in the chat.
 
 - The folder is copied; your own folder is not changed, and changes you make to it later are not picked up. Remove it and add it again to bring them in.
 - A folder of at most 5 MB and 200 files. Links in it are not followed.
-- A plugin (a folder with `.plugin/plugin.json`, which can bring hooks and tool connections) cannot be added yet.
+- A plugin (a folder with `.plugin/plugin.json`) can be added too. It can bring skills, hooks (a command the coding engine runs by itself before or after a step) and tool connections. One that brings a hook or a tool connection stays off until you have read what it brings and approved it in its details; only you can approve it, not the assistant.
+- A hook must be a plain command. It runs inside the same closed sandbox as the agent and is stopped after one second. A plugin with a hook that asks a model, or one that runs on in the background, is refused.
+- Tool connections of a plugin are named for you and are not connected in this version.
 - Two skills cannot have the same name.
 
 ## Needs

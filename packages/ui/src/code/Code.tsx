@@ -228,8 +228,8 @@ export function Code({
             </Button>
           }
         >
-          Coding works with Claude Sonnet 5.5 and your own Anthropic key. Save a key for Chat and
-          writing, then come back.
+          Coding works with Claude Sonnet 5.5, or the cheaper Claude Haiku 5.5, and your own
+          Anthropic key. Save a key for Chat and writing, then come back.
         </Notice>
       ) : null}
       {state.sessions.length === 0 ? (

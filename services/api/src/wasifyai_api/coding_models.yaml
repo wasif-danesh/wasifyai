@@ -1,5 +1,5 @@
-# The models a coding session can run on (ADR-0101, decision 7): Claude Sonnet 5.5 first, the
-# local Qwen 27B second. Read by the model gateway (wasifyai_api/coding_gateway.py). The picker
+# The models a coding session can run on (ADR-0101, decision 7): Claude Sonnet 5.5 first, then
+# Claude Haiku 5.5 (cheaper), then the local Qwen 27B. Read by the model gateway (wasifyai_api/coding_gateway.py). The picker
 # that exists takes this list over when the coding screens are built.
 #
 #   shape            how the Agent Server calls the model, and so which of the gateway's two
@@ -11,6 +11,9 @@
 #                    a model on this computer, which needs none
 #   price            US dollars per million tokens, as counted by the gateway. It is a count for
 #                    the session's limit and its header, not the provider's bill
+#   long_prompt      for a model that costs more for a long prompt: `over` (the prompt's tokens,
+#                    counting what was read from and written to the cache) and the `price` of
+#                    such a call. Each call is priced by itself
 #   engine_settings  passed to the Agent Server with the model, unchanged
 default: claude-sonnet-5-5
 models:
@@ -26,6 +29,23 @@ models:
     # a cache write that lasts five minutes costs 1.25 times the input price, one that lasts an
     # hour twice; a cache read 0.10 dollars
     price: { input: 2.0, output: 10.0, cache_read: 0.10, cache_write: 2.5, cache_write_1h: 4.0 }
+    engine_settings: {}
+  # the cheaper cloud model (owner, 2026-11-15): 35 and 36 of the 36 evaluation tasks in two runs,
+  # at about a thirteenth of Sonnet's cost and a third more steps (docs/spikes/coding-haiku.md)
+  claude-haiku-5-5:
+    title: Claude Haiku 5.5
+    where: cloud
+    shape: anthropic
+    provider: anthropic
+    engine_model: anthropic/claude-haiku-5-5
+    provider_model: claude-haiku-5-5
+    upstream: https://api.anthropic.com
+    secret: keys.chat.anthropic
+    price: { input: 0.10, output: 0.50, cache_read: 0.01, cache_write: 0.125, cache_write_1h: 0.20 }
+    # a call whose prompt is over 100,000 tokens costs five times as much, all of it
+    long_prompt:
+      over: 100000
+      price: { input: 0.50, output: 2.50, cache_read: 0.05, cache_write: 0.625, cache_write_1h: 1.0 }
     engine_settings: {}
   qwen-27b-ollama:
     title: Qwen 27B on this computer (Ollama)

@@ -288,7 +288,7 @@ address on loopback and a token for one session, and every model call of that se
 |---|---|
 | The token | Made per session, kept in memory only, dead when the session is deleted or the app closes. It is the route's identity: the tenant, the product and the person come from it. An unknown token is refused. The real key opens nothing here |
 | The key | Read from the app's secret store for each call and put on it (`keys.chat.anthropic`, the key saved for Chat and writing in Settings › Your keys). Never answered back, logged or written |
-| The model | Only the model the session was opened with is let through. The list is `coding_models.yaml`: Claude Sonnet 5.5 first; the local Qwen 27B through Ollama second, offered only when `CODING_OLLAMA_URL` is set |
+| The model | Only the model the session was opened with is let through. The list is `coding_models.yaml`: Claude Sonnet 5.5 first; Claude Haiku 5.5 second, on the same key and much cheaper (a call whose prompt is over 100,000 tokens is counted at its higher price, `long_prompt`); the local Qwen 27B through Ollama third, offered only when `CODING_OLLAMA_URL` is set |
 | The body | Passed on byte for byte, so the provider's prompt-cache marks arrive as the Agent Server wrote them |
 | Streaming | Passed through event by event |
 | Tokens and cost | Each call's tokens become usage events (`llm.input_tokens`, `llm.output_tokens`, capability `code.agent`) and its counted cost is added to the session's row. At the session's limit (5 dollars unless the session says otherwise) the next call is refused, and the turn ends saying so |

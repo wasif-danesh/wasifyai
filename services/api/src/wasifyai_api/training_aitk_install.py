@@ -20,6 +20,7 @@ def main(root: str) -> int:
     os.chdir(root)
     from manager import detect, env, ffmpeg, gitwin, spec, uvbin  # type: ignore[import-not-found]
 
+    _short_constraint_path(env, root)
     detection = detect.detect()
     try:
         s = spec.build_spec(detection, allow_cpu=False)
@@ -42,6 +43,26 @@ def main(root: str) -> int:
     env.write_sitecustomize(spec=s)
     print(f"AITK-SETUP-OK {s.backend}", flush=True)
     return 0
+
+
+def _short_constraint_path(env: object, root: str) -> None:
+    """Gives uv the manager's constraints file as a path from the AI Toolkit folder.
+
+    uv reads the value of `--constraint` as a list separated by spaces, so the full path, which holds
+    "Application Support" on a Mac, was cut at the space and the install stopped with "File not found".
+    The manager runs every command in the AI Toolkit folder, so a path from there names the same file."""
+    import os
+
+    pin_args = env._torch_pin_args  # type: ignore[attr-defined]
+
+    def short(*args: object, **kwargs: object) -> list[str]:
+        out = list(pin_args(*args, **kwargs))
+        for i, word in enumerate(out[:-1]):
+            if word == "--constraint" and os.path.isabs(out[i + 1]):
+                out[i + 1] = os.path.relpath(out[i + 1], root)
+        return out
+
+    env._torch_pin_args = short  # type: ignore[attr-defined]
 
 
 if __name__ == "__main__":

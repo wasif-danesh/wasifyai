@@ -257,7 +257,8 @@ async def test_a_row_saved_before_keys_per_provider_is_read_as_one_key_and_its_u
     # the old choice (a provider and its endpoint) is read as the model (stage CP3)
     assert (route.provider.id, route.model) == ("fal", "elevenlabs-music")
     assert await svc.route("images") is None  # it ran on this computer; the key stays
-    # both were the products' own fal.ai keys: the first goes under Media, the second is one too many
+    # both were the products' own fal.ai keys: the first goes under Media, the second is one too
+    # many
     assert secrets.values == {"keys.media.fal": GOOD}
     saved = await store.get(SETTINGS)
     assert isinstance(saved, dict)

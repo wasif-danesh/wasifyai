@@ -6,9 +6,9 @@ and writing run on a text vendor: Anthropic (Claude Haiku 5.5, the default), Ope
 DeepSeek, Z.ai or OpenRouter. The media products run on Runware, WaveSpeed and fal.ai, and their
 keys are kept once, under "Media" (`media`), for all of them (ADR-0100, amendment of 2026-11-15): a
 key given for one media product is kept there, and a product's own key saved by an older build moves
-there on the first start (`_share_media`). Each key is tested before it is saved. Keys of providers the app no longer offers (Groq, another
-OpenAI-compatible server, and fal.ai, WaveSpeed or Runware for chat) are deleted on the first start
-(`_prune`).
+there on the first start (`_share_media`). Each key is tested before it is saved. Keys of providers
+the app no longer offers (Groq, another OpenAI-compatible server, and fal.ai, WaveSpeed or Runware
+for chat) are deleted on the first start (`_prune`).
 
 The picker's Cloud tab lists the models of every provider with a key for that product
 (`own_keys_catalogue.py`); choosing one sets the product's `use`, choosing a model on this computer

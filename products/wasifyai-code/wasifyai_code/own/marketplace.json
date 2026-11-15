@@ -1,0 +1,13 @@
+{
+  "name": "wasify-ai",
+  "says": "The short list of extensions offered in Wasify AI. An entry is one of our own (source \"own\", in this folder) or one of the pinned OpenHands catalogue (source \"catalogue\", by its name there). The catalogue holds many more; an entry is added here when it is chosen for people who are not developers first.",
+  "entries": [
+    {"name": "explain-in-plain-words", "source": "own", "title": "Explain in plain words", "on": true},
+    {"name": "pictures-with-wasify", "source": "own", "title": "Pictures with Wasify AI", "on": true},
+    {"name": "write-the-tests-first", "source": "own", "title": "Write the tests first", "on": false},
+    {"name": "code-review", "source": "catalogue", "title": "Code review", "on": false},
+    {"name": "frontend-design", "source": "catalogue", "title": "Front-end design", "on": false},
+    {"name": "security", "source": "catalogue", "title": "Security", "on": false},
+    {"name": "technical-writing", "source": "catalogue", "title": "Technical writing", "on": false}
+  ]
+}

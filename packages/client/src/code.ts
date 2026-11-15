@@ -206,6 +206,48 @@ export type CodePreview = {
   running: CodePreviewRun | null;
 };
 
+/** A project: a folder the person opened for the agent. */
+export type CodeWorkspace = { id: string; name: string; folder: string };
+
+/** A skill that can be switched on for a project (ADR-0104). */
+export type CodeExtension = {
+  /** "own:<name>", "catalogue:<name>" or "added:<id>" */
+  id: string;
+  kind: "skill";
+  /** Wasify AI's own, the pinned OpenHands catalogue, or a folder the person added */
+  source: "own" | "catalogue" | "added";
+  name: string;
+  title: string;
+  description: string;
+  /** words in a message that make the agent use it; empty: the agent reads it when it fits */
+  triggers: string[];
+  /** what it says it needs, when it says so */
+  needs: string;
+  default_on: boolean;
+  /** on for the project that was asked about; null when none was */
+  on: boolean | null;
+  /** when the person added it; empty for one of the short list */
+  added_at?: string;
+};
+
+/** One extension with the whole text it gives the agent, and where it is on. */
+export type CodeExtensionDetail = Omit<CodeExtension, "on"> & {
+  text: string;
+  lines: number;
+  licence: string;
+  files: number;
+  where: (CodeWorkspace & { on: boolean })[];
+};
+
+/** What a folder the person chose holds, before it is added. */
+export type CodeFolderLook = Omit<CodeExtension, "on"> & {
+  text: string;
+  lines: number;
+  folder: string;
+  bytes: number;
+  brings: "text";
+};
+
 /** Something a new project can be started from. */
 export type CodeStarter = { id: string; title: string; says: string; needs: string[] };
 
@@ -259,6 +301,8 @@ export type CodeEvent = { seq: number; run_id: string; thread_id: string; ts: st
     }
   | { event: "token" | "reasoning"; node: string; text: string }
   | { event: "code_message"; text: string }
+  /** the person's message switched skills on: their names, and what a person calls them */
+  | { event: "code_skills"; names: string[]; titles: string[] }
   | { event: "code_refusal"; message: string; category?: string }
 );
 
@@ -452,6 +496,39 @@ export function createCodeApi(transport: Transport) {
         post(),
       );
       return out.session;
+    },
+    /** The person's projects, the newest first. */
+    async workspaces(): Promise<CodeWorkspace[]> {
+      return (await json<{ items: CodeWorkspace[] }>(`${BASE}/workspaces`)).items;
+    },
+    /** The short list and what the person added; with a project, whether each is on for it. */
+    async extensions(workspaceId = ""): Promise<CodeExtension[]> {
+      const q = new URLSearchParams(workspaceId ? { workspace_id: workspaceId } : {});
+      return (await json<{ items: CodeExtension[] }>(`${BASE}/extensions?${q}`)).items;
+    },
+    /** One extension with its whole text. */
+    extension(id: string): Promise<CodeExtensionDetail> {
+      return json<CodeExtensionDetail>(`${BASE}/extensions/${encodeURIComponent(id)}`);
+    },
+    /** Switch an extension on or off for one project. */
+    switchExtension(id: string, workspaceId: string, on: boolean): Promise<CodeExtension> {
+      return json<CodeExtension>(`${BASE}/extensions/${encodeURIComponent(id)}/on`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ workspace_id: workspaceId, on }),
+      });
+    },
+    /** What a folder holds, before it is added. */
+    lookAtFolder(folder: string): Promise<CodeFolderLook> {
+      return json<CodeFolderLook>(`${BASE}/extensions/look`, post({ folder }));
+    },
+    /** Copy a skill's folder in; with a project it is switched on for it. */
+    addExtension(folder: string, workspaceId = ""): Promise<CodeExtension> {
+      return json<CodeExtension>(`${BASE}/extensions`, post({ folder, workspace_id: workspaceId }));
+    },
+    /** Forget an extension the person added. */
+    async removeExtension(id: string): Promise<void> {
+      await call(`${BASE}/extensions/${encodeURIComponent(id)}`, { method: "DELETE" });
     },
     /** The project's preview. */
     preview(id: string): Promise<CodePreview> {

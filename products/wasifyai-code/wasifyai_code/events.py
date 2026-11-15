@@ -8,6 +8,7 @@ file changes, and the contract test and pyright say so before a screen does.
 
     ConversationStateUpdateEvent   -> state (running or idle), and, in `Reader`, the turn's end
     MessageEvent (from the agent)  -> text
+    MessageEvent (from the person) -> skills, when the message switched skills on
     ActionEvent "finish"           -> text (the agent's last message is what it finished with)
     ActionEvent, any other tool    -> step
     ConversationStateUpdateEvent   -> confirm, when it says the conversation waits for a yes or
@@ -158,7 +159,9 @@ class Reader:
 
     def _message(self, event: MessageEvent) -> list[tuple[str, dict[str, Any]]]:
         if event.get("source") != "agent":
-            return []  # the person's own message, or the engine's
+            # the person's own message: nothing to say of it but the skills it switched on
+            used = [str(n) for n in event.get("activated_skills") or [] if n]
+            return [(places.SKILLS, {"names": used})] if used else []
         message = event.get("llm_message") or {}
         text = text_of(message.get("content"))
         return [(places.TEXT, {"text": text})] if text.strip() else []

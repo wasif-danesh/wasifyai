@@ -223,6 +223,7 @@ export type {
 } from "./creative/MakePanel";
 export { Model3d, type Model3dProps } from "./model3d/Model3d";
 export { Code, type CodeProps } from "./code/Code";
+export { Extensions } from "./code/Extensions";
 export type { CandidateApi } from "./model3d/Candidates";
 export {
   type Saved,

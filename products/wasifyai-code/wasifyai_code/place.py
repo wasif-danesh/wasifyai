@@ -31,7 +31,8 @@ RESULT = "result"
 # data: {"id": ..., "what": ..., "steps": [{"id", "tool", and what the tool was given}]}
 CONFIRM = "confirm"
 ENDED = "ended"  # the turn is over; data: {"why": one of ENDINGS, "detail": ..., "steps": n}
-EVENT_KINDS = (STATE, TEXT, PIECE, STEP, RESULT, CONFIRM, ENDED)
+SKILLS = "skills"  # the person's message switched skills on; data: {"names": [...]}
+EVENT_KINDS = (STATE, TEXT, PIECE, STEP, RESULT, CONFIRM, ENDED, SKILLS)
 
 # ---- why a turn ended ----------------------------------------------------------------------------
 
@@ -79,6 +80,9 @@ class SessionSpec:
     ask: tuple[str, ...] = ()  # patterns of commands that must be asked first (ADR-0102, 6)
     read_only: bool = False  # the agent gets no tool that writes a file or runs a command
     account: Account | None = None  # None: nobody's (an evaluation run)
+    # the skills that are on for the session's project, in the shape the place takes them
+    # (`extensions.for_engine`); fixed when the session starts
+    skills: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)

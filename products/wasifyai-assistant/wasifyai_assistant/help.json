@@ -34,6 +34,50 @@
   "body": "# Find the chapters\n\nAction: `audiobook.plan`\n\n## What it is for\n\nFind the chapters of a long text and how long each takes to read aloud. Nothing is spoken.\n\n## Steps in the app\n\n1. Open **Voice › Audiobook**.\n2. Paste or open the text and choose **Find the chapters**; they are listed on the right to read and change.\n\n## Fields\n\n- `text`: The book.\n- `target`: About how long a chapter is, when the text has no headings.\n\n## Limits\n\n- Up to 400,000 characters; 200 chapters.\n\n## Needs\n\n- Nothing.\n\n## Examples\n\n- How many chapters is this book?\n\n## Problems\n\n- **Too long** Split the text into two books."
  },
  {
+  "action": "code.extension.add",
+  "title": "Add an extension from a folder",
+  "screen": "code.extensions",
+  "synonyms": [
+   "add a skill",
+   "add an extension",
+   "import a skill",
+   "my own skill",
+   "skill from a folder",
+   "install a skill",
+   "SKILL.md"
+  ],
+  "body": "# Add an extension from a folder\n\nAction: `code.extension.add`\n\n## What it is for\n\nAdd a skill you have in a folder of this computer. A folder is a skill when it has a file called `SKILL.md`: a few lines that name it and say what it is for, then the text for the agent. Wasify AI copies the folder in and shows you its text before it is switched on anywhere.\n\n## Steps in the app\n\n1. Open **Code › Extensions** and choose \"Add from a folder\".\n2. Pick the folder. You are shown what was found and the whole text.\n3. Choose whether to switch it on for the project at the top, then \"Add the skill\".\n\nYou can also ask the assistant in the chat.\n\n## Fields\n\n- `folder`: The whole path of a folder that holds a `SKILL.md`.\n- `session_id`: A coding session. The skill is switched on for its project.\n\n## Limits\n\n- The folder is copied; your own folder is not changed, and changes you make to it later are not picked up. Remove it and add it again to bring them in.\n- A folder of at most 5 MB and 200 files. Links in it are not followed.\n- A plugin (a folder with `.plugin/plugin.json`, which can bring hooks and tool connections) cannot be added yet.\n- Two skills cannot have the same name.\n\n## Needs\n\n- The coding engine set up (Settings, under Optional parts). The public skills come with it.\n\n## Examples\n\n- Add the skill in /Users/me/Documents/house-style.\n- Add my house style folder as a skill and switch it on for the bakery site.\n\n## Problems\n\n- **There is no such extension** Ask for the list first; an id looks like `own:explain-in-plain-words`.\n- **There is no SKILL.md in that folder** Choose the folder that holds the file itself.\n- **Coding is not available** Set up the coding engine in Settings, under Optional parts."
+ },
+ {
+  "action": "code.extension.list",
+  "title": "List the coding agent's extensions",
+  "screen": "code.extensions",
+  "synonyms": [
+   "extensions",
+   "skills",
+   "list skills",
+   "what skills are there",
+   "coding skills",
+   "agent skills",
+   "plugins"
+  ],
+  "body": "# List the coding agent's extensions\n\nAction: `code.extension.list`\n\n## What it is for\n\nSee which skills the coding agent can be taught and which are on for a project. A skill is a short text that tells the agent a way of working: how to explain something in plain words, how to review a change, how to write tests first. With one extension named you get the whole text it gives the agent, to read before you switch it on.\n\n## Steps in the app\n\n1. Open **Code › Extensions**.\n2. Choose the project at the top (\"For\"). Each row says whether it is on for that project.\n3. Choose \"Details\" on a row to read its text.\n\nYou can also ask the assistant in the chat.\n\n## Fields\n\n- `session_id`: A coding session. Says for its project whether each extension is on.\n- `extension_id`: One extension, to read its whole text.\n\n## Limits\n\n- The list is short on purpose: Wasify AI's own, a few of the public OpenHands catalogue, and what you added.\n- Everything listed is already on this computer. Nothing is fetched from the internet.\n\n## Needs\n\n- The coding engine set up (Settings, under Optional parts). The public skills come with it.\n\n## Examples\n\n- Which extensions does the coding agent have?\n- Show me what the code review skill tells the agent.\n\n## Problems\n\n- **There is no such extension** Ask for the list first; an id looks like `own:explain-in-plain-words`.\n- **There is no SKILL.md in that folder** Choose the folder that holds the file itself.\n- **Coding is not available** Set up the coding engine in Settings, under Optional parts."
+ },
+ {
+  "action": "code.extension.switch",
+  "title": "Switch an extension on or off",
+  "screen": "code.extensions",
+  "synonyms": [
+   "switch a skill on",
+   "enable a skill",
+   "turn off a skill",
+   "disable an extension",
+   "enable code review",
+   "use a skill"
+  ],
+  "body": "# Switch an extension on or off\n\nAction: `code.extension.switch`\n\n## What it is for\n\nSwitch a skill on or off for one coding project. A skill that is on is offered to the agent in that project, and its text is used when your message is about it.\n\n## Steps in the app\n\n1. Open **Code › Extensions** and choose the project at the top.\n2. Use the switch on a row. Or choose \"Details\" to read its text first; the same switch is there for each of your projects.\n\nYou can also ask the assistant in the chat.\n\n## Fields\n\n- `session_id`: A coding session of the project.\n- `extension_id`: The extension's id, from `code.extension.list`.\n- `on`: True switches it on, false off.\n\n## Limits\n\n- A change holds from a session's next message. A turn that is running keeps the skills it started with.\n- When the skills of a project change, the agent begins a new conversation with the next message and is given the last answer to go on from.\n- A skill is text. It can steer how the agent works; it cannot widen what the agent may do.\n\n## Needs\n\n- The coding engine set up (Settings, under Optional parts). The public skills come with it.\n\n## Examples\n\n- Switch the code review skill on for the bakery site.\n- Turn off \"Explain in plain words\" for this project.\n\n## Problems\n\n- **There is no such extension** Ask for the list first; an id looks like `own:explain-in-plain-words`.\n- **There is no SKILL.md in that folder** Choose the folder that holds the file itself.\n- **Coding is not available** Set up the coding engine in Settings, under Optional parts."
+ },
+ {
   "action": "code.project.new",
   "title": "Start a new coding project",
   "screen": "code.projects",

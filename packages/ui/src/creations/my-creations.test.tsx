@@ -20,6 +20,7 @@ const NONE = {
   compositions: [],
   creativeProjects: [],
   codeSessions: [],
+  codeExtensions: [],
   notebooks: [],
   taught: [],
 };
@@ -303,6 +304,33 @@ describe("the Library", () => {
     expect(
       screen.getByRole("link", { name: /Where are the opening hours shown/ }),
     ).toBeInTheDocument();
+  });
+
+  it("lists a skill the person added for the coding agent, with a filter of its own", async () => {
+    const user = userEvent.setup();
+    const others = {
+      ...NONE,
+      codeExtensions: [
+        {
+          id: "e1",
+          kind: "skill" as const,
+          source: "added" as const,
+          name: "house-style",
+          title: "House style",
+          description: "How this shop's pages are worded and laid out.",
+          triggers: ["prices"],
+          needs: "",
+          default_on: false,
+          on: null,
+          added_at: when,
+        },
+      ],
+    };
+    render(<MyCreations api={api(Promise.resolve(recent({ others })))} nav={nav()} />);
+    expect(await screen.findByRole("link", { name: /House style/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Coding skills/ }));
+    expect(screen.queryByRole("link", { name: /Rainy day/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /House style/ })).toBeInTheDocument();
   });
 
   it("lists the tools' own kinds with a filter once there is one", async () => {

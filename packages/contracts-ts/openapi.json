@@ -1082,6 +1082,28 @@
         "title": "CodeCheckIn",
         "type": "object"
       },
+      "CodeFolderIn": {
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Folder",
+            "type": "string"
+          },
+          "workspace_id": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "CodeFolderIn",
+        "type": "object"
+      },
       "CodeMessageEvent": {
         "description": "A message of the coding agent is complete. It replaces what the `token` events of that\nmessage built; those are not kept on a coding session's stream.",
         "properties": {
@@ -1327,6 +1349,57 @@
         "title": "CodeSessionPatch",
         "type": "object"
       },
+      "CodeSkillsEvent": {
+        "description": "The person's message switched skills on (ADR-0104; stage X2): the engine put their text\ninto the message because one of their words was in it.",
+        "properties": {
+          "event": {
+            "const": "code_skills",
+            "default": "code_skills",
+            "title": "Event",
+            "type": "string"
+          },
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "uuid",
+            "title": "Thread Id",
+            "type": "string"
+          },
+          "titles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Titles",
+            "type": "array"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "thread_id",
+          "seq",
+          "names"
+        ],
+        "title": "CodeSkillsEvent",
+        "type": "object"
+      },
       "CodeStateEvent": {
         "description": "A turn of a coding session changes state (ADR-0101, amendment of 2026-11-14). On a coding\nsession's stream `thread_id` is the session and `run_id` the turn; `state: \"done\"` is the\nturn's end, and the stream stays open for the next turn.",
         "properties": {
@@ -1433,6 +1506,27 @@
           "state"
         ],
         "title": "CodeStateEvent",
+        "type": "object"
+      },
+      "CodeSwitchIn": {
+        "additionalProperties": false,
+        "properties": {
+          "on": {
+            "title": "On",
+            "type": "boolean"
+          },
+          "workspace_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "on"
+        ],
+        "title": "CodeSwitchIn",
         "type": "object"
       },
       "CodeTerminalIn": {
@@ -5079,6 +5173,7 @@
             "code_check": "#/components/schemas/CodeCheckEvent",
             "code_message": "#/components/schemas/CodeMessageEvent",
             "code_refusal": "#/components/schemas/CodeRefusalEvent",
+            "code_skills": "#/components/schemas/CodeSkillsEvent",
             "code_state": "#/components/schemas/CodeStateEvent",
             "done": "#/components/schemas/DoneEvent",
             "error": "#/components/schemas/ErrorEvent",
@@ -5125,6 +5220,9 @@
           },
           {
             "$ref": "#/components/schemas/CodeCheckEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodeSkillsEvent"
           },
           {
             "$ref": "#/components/schemas/CodeMessageEvent"
@@ -8621,6 +8719,290 @@
         ]
       }
     },
+    "/products/wasifyai-code/code/extensions": {
+      "get": {
+        "description": "The short list and what the person added; with `workspace_id`, whether each is on\nfor that project. `ids` (the ids of added ones, for search) keeps only those.",
+        "operationId": "list_extensions_products_wasifyai_code_code_extensions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 64,
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Extensions Products Wasifyai Code Code Extensions Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Extensions",
+        "tags": [
+          "wasifyai-code"
+        ]
+      },
+      "post": {
+        "description": "Copy a skill's folder in. With `workspace_id` it is switched on for that project.",
+        "operationId": "add_extension_products_wasifyai_code_code_extensions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeFolderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Extension Products Wasifyai Code Code Extensions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Extension",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/extensions/look": {
+      "post": {
+        "description": "What a folder holds, before it is added: a skill with its text, or why not.",
+        "operationId": "look_at_folder_products_wasifyai_code_code_extensions_look_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeFolderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Look At Folder Products Wasifyai Code Code Extensions Look Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Look At Folder",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/extensions/{extension_id}": {
+      "delete": {
+        "description": "Forget an extension the person added.",
+        "operationId": "remove_extension_products_wasifyai_code_code_extensions__extension_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "extension_id",
+            "required": true,
+            "schema": {
+              "title": "Extension Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Extension",
+        "tags": [
+          "wasifyai-code"
+        ]
+      },
+      "get": {
+        "description": "One extension with the whole text it gives the agent, and where it is on.",
+        "operationId": "get_extension_products_wasifyai_code_code_extensions__extension_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "extension_id",
+            "required": true,
+            "schema": {
+              "title": "Extension Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Extension Products Wasifyai Code Code Extensions  Extension Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Extension",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/extensions/{extension_id}/on": {
+      "put": {
+        "description": "Switch an extension on or off for one project.",
+        "operationId": "switch_extension_products_wasifyai_code_code_extensions__extension_id__on_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "extension_id",
+            "required": true,
+            "schema": {
+              "title": "Extension Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeSwitchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Switch Extension Products Wasifyai Code Code Extensions  Extension Id  On Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Switch Extension",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
     "/products/wasifyai-code/code/models": {
       "get": {
         "description": "The models a session can run on, and whether each is ready (never a key).",
@@ -10466,6 +10848,30 @@
           }
         },
         "summary": "List Starters",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/workspaces": {
+      "get": {
+        "description": "The person's projects, the newest first.",
+        "operationId": "list_workspaces_products_wasifyai_code_code_workspaces_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Workspaces Products Wasifyai Code Code Workspaces Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Workspaces",
         "tags": [
           "wasifyai-code"
         ]

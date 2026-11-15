@@ -34,7 +34,7 @@ import { client, connectionsApi, creationsApi, externalApi, voiceApi } from "./a
 import { useItemsTheModelCannotDo } from "./engine-hooks";
 import { runningJobs } from "./jobs";
 import { resolveItem, titleFor } from "./menu";
-import { CodePage } from "./pages/Code";
+import { CodePage, ExtensionsPage } from "./pages/Code";
 import { CreatePage } from "./pages/Create";
 import { CreationsPage, navFor, toolFor } from "./pages/Creations";
 import { CreativePage } from "./pages/Creative";
@@ -373,6 +373,7 @@ export function Shell() {
               {route === "creative" ? <CreativePage go={go} /> : null}
               {route === "model3d" ? <Model3dPage go={go} /> : null}
               {route === "code" ? <CodePage go={go} /> : null}
+              {route === "extensions" ? <ExtensionsPage go={go} /> : null}
               {route === "train" ? (
                 <TrainPage
                   go={go}

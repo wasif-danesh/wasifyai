@@ -28,6 +28,7 @@ const noOthers = {
   compositions: [],
   creativeProjects: [],
   codeSessions: [],
+  codeExtensions: [],
   notebooks: [],
   taught: [],
 };

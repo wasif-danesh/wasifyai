@@ -1,7 +1,7 @@
 // My creations (ADR-0040, ADR-0041): every kind a person made, listed and searched in one place. The product list routes and
 // `/creations/search` are the same on the web and the desktop; only the transport differs.
 import type { SearchResponse } from "@wasifyai/contracts";
-import type { CodeSession } from "./code";
+import type { CodeExtension, CodeSession } from "./code";
 import type { CreativeProject } from "./creative";
 import type { ImagePage, ImageSummary } from "./images";
 import type { Model3d } from "./model3d";
@@ -39,6 +39,7 @@ export type CreationKind =
   | "composition"
   | "creative_project"
   | "code_session"
+  | "code_extension"
   | "notebook"
   | "taught";
 
@@ -53,6 +54,8 @@ export type Others = {
   creativeProjects: CreativeProject[];
   /** coding sessions (ADR-0101): desktop only */
   codeSessions: CodeSession[];
+  /** the skills a person added for the coding agent (ADR-0104): desktop only */
+  codeExtensions: CodeExtension[];
   notebooks: NotebookSummary[];
   taught: TrainedModel[];
 };
@@ -109,6 +112,7 @@ const NONE: Others = {
   compositions: [],
   creativeProjects: [],
   codeSessions: [],
+  codeExtensions: [],
   notebooks: [],
   taught: [],
 };
@@ -134,25 +138,37 @@ export function createCreationsApi(transport: Transport): CreationsApi {
     optional(json<{ items: T[] }>(`${VOICE}/${route}?${query}`, signal));
   /** the kinds that live in their own tools: every one optional (a service may not offer it) */
   async function others(signal?: AbortSignal): Promise<Others> {
-    const [models3d, compositions, creativeProjects, notebooks, taught, code] = await Promise.all([
-      optional(json<{ items: Model3d[] }>("/products/wasifyai-model3d/m3d/models", signal)),
-      optional(
-        json<{ items: BuilderProject[] }>("/products/wasifyai-video/builder/projects", signal),
-      ),
-      optional(
-        json<{ items: CreativeProject[] }>("/products/wasifyai-creative/creative/projects", signal),
-      ),
-      optional(json<NotebookSummary[]>("/products/wasifyai-notebooks/notebooks", signal)),
-      optional(
-        json<{ models: TrainedModel[] }>("/products/wasifyai-training/train/models", signal),
-      ),
-      optional(json<{ items: CodeSession[] }>("/products/wasifyai-code/code/sessions", signal)),
-    ]);
+    const [models3d, compositions, creativeProjects, notebooks, taught, code, added] =
+      await Promise.all([
+        optional(json<{ items: Model3d[] }>("/products/wasifyai-model3d/m3d/models", signal)),
+        optional(
+          json<{ items: BuilderProject[] }>("/products/wasifyai-video/builder/projects", signal),
+        ),
+        optional(
+          json<{ items: CreativeProject[] }>(
+            "/products/wasifyai-creative/creative/projects",
+            signal,
+          ),
+        ),
+        optional(json<NotebookSummary[]>("/products/wasifyai-notebooks/notebooks", signal)),
+        optional(
+          json<{ models: TrainedModel[] }>("/products/wasifyai-training/train/models", signal),
+        ),
+        optional(json<{ items: CodeSession[] }>("/products/wasifyai-code/code/sessions", signal)),
+        optional(
+          json<{ items: CodeExtension[] }>("/products/wasifyai-code/code/extensions", signal),
+        ),
+      ]);
     return {
       models3d: models3d?.items ?? [],
       compositions: compositions?.items ?? [],
       creativeProjects: creativeProjects?.items ?? [],
       codeSessions: code?.items ?? [],
+      // only what the person added is theirs to keep; the short list is the app's own. In the Library an
+      // added one goes by the id search knows it by (without the "added:" in front)
+      codeExtensions: (added?.items ?? [])
+        .filter((x) => x.source === "added")
+        .map((x) => ({ ...x, id: x.id.replace(/^added:/, "") })),
       notebooks: Array.isArray(notebooks) ? notebooks : [],
       taught: taught?.models ?? [],
     };
@@ -255,6 +271,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
           compositions: pick(all.compositions, "composition"),
           creativeProjects: pick(all.creativeProjects, "creative_project"),
           codeSessions: pick(all.codeSessions, "code_session"),
+          codeExtensions: pick(all.codeExtensions, "code_extension"),
           notebooks: pick(all.notebooks, "notebook"),
           taught: pick(all.taught, "taught"),
         },
@@ -293,6 +310,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         composition: `/products/wasifyai-video/builder/projects/${at}`,
         creative_project: `/products/wasifyai-creative/creative/projects/${at}`,
         code_session: `/products/wasifyai-code/code/sessions/${at}`,
+        code_extension: `/products/wasifyai-code/code/extensions/${encodeURIComponent(`added:${id}`)}`,
         notebook: `/products/wasifyai-notebooks/notebooks/${at}`,
         taught: `/products/wasifyai-training/train/models/${at}`,
       }[kind];

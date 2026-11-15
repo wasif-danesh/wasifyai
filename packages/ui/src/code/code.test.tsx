@@ -10,6 +10,7 @@ import type {
   CodeCheck,
   CodeCheckInfo,
   CodeEvent,
+  CodeExtension,
   CodePreview,
   CodePreviewRun,
   CodeProject,
@@ -19,6 +20,7 @@ import type {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { whyNot } from "./Checks";
 import { CARRY_OUT, Code } from "./Code";
+import { Extensions } from "./Extensions";
 import { buildThread, stepLine } from "./thread";
 import { XTERM_CSS } from "./xterm-css";
 
@@ -211,6 +213,57 @@ const RUNNING: CodePreviewRun = {
   output: "Serving this project at http://127.0.0.1:5173/",
 };
 
+const WORKSPACES = [
+  { id: "w1", name: "bakery-site", folder: FOLDER },
+  { id: "w2", name: "recipe-cards", folder: "/Users/me/Projects/recipe-cards" },
+];
+
+const ext = (over: Partial<CodeExtension>): CodeExtension => ({
+  id: "own:explain-in-plain-words",
+  kind: "skill",
+  source: "own",
+  name: "explain-in-plain-words",
+  title: "Explain in plain words",
+  description: "Explains a project, a file or an error for someone who is not a developer.",
+  triggers: ["plain words"],
+  needs: "",
+  default_on: true,
+  on: true,
+  ...over,
+});
+
+const ADDED = ext({
+  id: "added:e1",
+  source: "added",
+  name: "house-style",
+  title: "House style",
+  description: "How this shop's pages are worded and laid out.",
+  triggers: [],
+  default_on: false,
+  on: false,
+});
+
+const EXTENSIONS: CodeExtension[] = [
+  ext({}),
+  ext({
+    id: "catalogue:code-review",
+    source: "catalogue",
+    name: "code-review",
+    title: "Code review",
+    description: "Reads the changes of a turn and lists what could go wrong.",
+    triggers: ["/codereview", "check my changes"],
+    default_on: false,
+    on: false,
+  }),
+];
+
+const SKILL_TEXT = `---
+name: code-review
+description: Review the changes of a turn.
+---
+
+Read every changed file in full.`;
+
 let seq = 0;
 const ev = (e: Record<string, unknown>, run = "t1") =>
   ({ seq: ++seq, run_id: run, thread_id: "s1", ts: "", ...e }) as CodeEvent;
@@ -323,6 +376,30 @@ function api(over: Partial<CodeApi> = {}): CodeApi {
       { id: "web", title: "A small web app", says: "One page with tests.", needs: ["Node"] },
     ],
     newProject: async () => session({ id: "s9", project: "tax-shop", mode: "ask" }),
+    workspaces: async () => WORKSPACES,
+    extensions: async () => EXTENSIONS,
+    extension: async (id: string) => ({
+      ...(EXTENSIONS.find((x) => x.id === id) ?? EXTENSIONS[0]),
+      text: SKILL_TEXT,
+      lines: 6,
+      licence: "MIT",
+      files: 1,
+      where: WORKSPACES.map((w, n) => ({ ...w, on: n === 0 })),
+    }),
+    switchExtension: async (id: string, _w: string, on: boolean) => ({
+      ...(EXTENSIONS.find((x) => x.id === id) ?? EXTENSIONS[0]),
+      on,
+    }),
+    lookAtFolder: async (folder: string) => ({
+      ...ADDED,
+      text: SKILL_TEXT,
+      lines: 6,
+      folder,
+      bytes: 1229,
+      brings: "text" as const,
+    }),
+    addExtension: async () => ({ ...ADDED, on: true }),
+    removeExtension: async () => undefined,
     ...over,
   } as CodeApi;
 }
@@ -1684,5 +1761,146 @@ describe("the Preview tab and a new project", () => {
     expect(within(card).getByText(/a round logo of a loaf/)).toBeTruthy();
     expect(within(card).getByRole("button", { name: "Yes, make it" })).toBeTruthy();
     expect(within(card).getByText(/This is asked in every mode/)).toBeTruthy();
+  });
+});
+
+describe("Extensions", () => {
+  const shown = (given: Partial<CodeApi> = {}, more: Record<string, unknown> = {}) =>
+    render(
+      <Extensions
+        api={api(given)}
+        pickFolder={async () => "/Users/me/Documents/house-style"}
+        onOpenProjects={vi.fn()}
+        {...more}
+      />,
+    );
+
+  it("lists the short list for the project chosen, and switches one on", async () => {
+    const extensions = vi.fn(async () => EXTENSIONS);
+    const switchExtension = vi.fn(async (_id: string, _w: string, on: boolean) => ({
+      ...(EXTENSIONS[1] as CodeExtension),
+      on,
+    }));
+    shown({ extensions, switchExtension });
+    expect(await screen.findByText("Explain in plain words")).toBeTruthy();
+    await waitFor(() => expect(extensions).toHaveBeenLastCalledWith("w1"));
+    expect(screen.getByText("OpenHands catalogue")).toBeTruthy();
+    const on = screen.getByRole("switch", { name: "Explain in plain words: on for bakery-site" });
+    expect(on.getAttribute("aria-checked")).toBe("true");
+    const off = screen.getByRole("switch", { name: "Code review: off for bakery-site" });
+    await userEvent.click(off);
+    expect(switchExtension).toHaveBeenCalledWith("catalogue:code-review", "w1", true);
+    expect(
+      (await screen.findByRole("switch", { name: "Code review: on for bakery-site" })).getAttribute(
+        "aria-checked",
+      ),
+    ).toBe("true");
+    // another project is asked about by itself
+    await userEvent.selectOptions(screen.getByLabelText("For"), "w2");
+    await waitFor(() => expect(extensions).toHaveBeenLastCalledWith("w2"));
+    // searching and showing only what is on
+    await userEvent.type(screen.getByLabelText("Search extensions"), "review");
+    expect(screen.queryByText("Explain in plain words")).toBeNull();
+    expect(screen.getByText("Code review")).toBeTruthy();
+    await userEvent.clear(screen.getByLabelText("Search extensions"));
+    await userEvent.click(screen.getByRole("button", { name: "Public" }));
+    expect(screen.queryByText("Explain in plain words")).toBeNull();
+  });
+
+  it("shows a skill's whole text before it is switched on, with where it is on", async () => {
+    const switchExtension = vi.fn(async () => ({ ...(EXTENSIONS[1] as CodeExtension), on: true }));
+    shown({ switchExtension });
+    await userEvent.click(await screen.findByRole("button", { name: "Details of Code review" }));
+    const dialog = await screen.findByRole("dialog", { name: "Code review" });
+    expect(await within(dialog).findByText("This text was not written by Wasify AI")).toBeTruthy();
+    expect(within(dialog).getByText(/It cannot widen what the agent may do/)).toBeTruthy();
+    expect(within(dialog).getByLabelText("The skill's text").textContent).toBe(SKILL_TEXT);
+    expect(within(dialog).getByText(/“\/codereview”, “check my changes”/)).toBeTruthy();
+    expect(within(dialog).getByText(/licence: MIT/)).toBeTruthy();
+    await userEvent.click(
+      within(dialog).getByRole("switch", { name: "Code review: off for recipe-cards" }),
+    );
+    expect(switchExtension).toHaveBeenCalledWith("catalogue:code-review", "w2", true);
+    // one of the short list cannot be removed
+    expect(within(dialog).queryByRole("button", { name: "Remove" })).toBeNull();
+  });
+
+  it("adds a skill from a folder after showing what was found", async () => {
+    const lookAtFolder = vi.fn(async (folder: string) => ({
+      ...ADDED,
+      text: SKILL_TEXT,
+      lines: 6,
+      folder,
+      bytes: 1229,
+      brings: "text" as const,
+    }));
+    const addExtension = vi.fn(async () => ({ ...ADDED, on: true }));
+    shown({ lookAtFolder, addExtension });
+    await userEvent.click(await screen.findByRole("button", { name: "Add from a folder" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add an extension from a folder" });
+    expect(lookAtFolder).toHaveBeenCalledWith("/Users/me/Documents/house-style");
+    expect(within(dialog).getByText(/Found a skill: “House style”/)).toBeTruthy();
+    expect(within(dialog).getByText(/1.2 KB/)).toBeTruthy();
+    expect(within(dialog).getByText(/no hook and no tool connection/)).toBeTruthy();
+    expect(within(dialog).getByText(/your folder is not changed/)).toBeTruthy();
+    expect(
+      (within(dialog).getByLabelText("Switch it on for bakery-site") as HTMLInputElement).checked,
+    ).toBe(true);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add the skill" }));
+    expect(addExtension).toHaveBeenCalledWith("/Users/me/Documents/house-style", "w1");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("says why a folder cannot be added, and removes one the person added", async () => {
+    const removeExtension = vi.fn(async () => undefined);
+    shown({
+      extensions: async () => [...EXTENSIONS, ADDED],
+      lookAtFolder: async () => {
+        throw new Error("That folder is a plugin. Plugins cannot be added yet.");
+      },
+      removeExtension,
+      extension: async () => ({
+        ...ADDED,
+        text: SKILL_TEXT,
+        lines: 6,
+        licence: "",
+        files: 1,
+        where: [],
+      }),
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Add from a folder" }));
+    expect(await screen.findByText(/Plugins cannot be added yet/)).toBeTruthy();
+    expect(screen.getByText("Your folder")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Details of House style" }));
+    const dialog = await screen.findByRole("dialog", { name: "House style" });
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Remove" }));
+    const sure = await screen.findByRole("dialog", { name: "Remove House style?" });
+    expect(within(sure).getByText(/Your own folder is not touched/)).toBeTruthy();
+    await userEvent.click(within(sure).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(removeExtension).toHaveBeenCalledWith("added:e1"));
+  });
+
+  it("can be read with no project yet, and says where one is opened", async () => {
+    const onOpenProjects = vi.fn();
+    shown({ workspaces: async () => [] }, { onOpenProjects });
+    expect(await screen.findByText("Open a project first")).toBeTruthy();
+    expect(await screen.findByText("Explain in plain words")).toBeTruthy();
+    expect(screen.queryByRole("switch")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Open Projects" }));
+    expect(onOpenProjects).toHaveBeenCalled();
+  });
+
+  it("says in the chat which skill a message switched on", () => {
+    const [view] = buildThread(
+      [turn({ state: "working" })],
+      [
+        ev({
+          event: "code_skills",
+          names: ["explain-in-plain-words"],
+          titles: ["Explain in plain words"],
+        }),
+      ],
+    );
+    expect(view?.parts).toEqual([{ kind: "skills", titles: ["Explain in plain words"] }]);
   });
 });

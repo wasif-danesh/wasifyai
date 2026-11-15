@@ -1,5 +1,6 @@
 import type {
   BuilderProject,
+  CodeExtension,
   CodeSession,
   CreativeProject,
   ImageSummary,
@@ -28,6 +29,7 @@ export type Entry =
   | { kind: "composition"; id: string; createdAt: string; composition: BuilderProject }
   | { kind: "creative_project"; id: string; createdAt: string; project: CreativeProject }
   | { kind: "code_session"; id: string; createdAt: string; session: CodeSession }
+  | { kind: "code_extension"; id: string; createdAt: string; extension: CodeExtension }
   | { kind: "notebook"; id: string; createdAt: string; notebook: NotebookSummary }
   | { kind: "taught"; id: string; createdAt: string; taught: TrainedModel };
 
@@ -43,6 +45,7 @@ export type Filter =
   | "compositions"
   | "creativeProjects"
   | "codeSessions"
+  | "codeExtensions"
   | "notebooks"
   | "taught";
 
@@ -66,6 +69,7 @@ export function kindOf(filter: Filter): string | undefined {
     compositions: "composition",
     creativeProjects: "creative_project",
     codeSessions: "code_session",
+    codeExtensions: "code_extension",
     notebooks: "notebook",
     taught: "taught",
   } as const;
@@ -85,6 +89,7 @@ export const FILTER_KIND: Record<Filter, Entry["kind"] | null> = {
   compositions: "composition",
   creativeProjects: "creative_project",
   codeSessions: "code_session",
+  codeExtensions: "code_extension",
   notebooks: "notebook",
   taught: "taught",
 };
@@ -101,6 +106,7 @@ export const KIND_LABEL: Record<Entry["kind"], string> = {
   composition: "Motion graphics",
   creative_project: "Creative Studio",
   code_session: "Coding session",
+  code_extension: "Coding skill",
   notebook: "Notebook",
   taught: "Taught model",
 };
@@ -206,6 +212,14 @@ export function toRow(entry: Entry): Row {
         title: entry.session.title || entry.session.project,
         detail: entry.session.project,
         status: entry.session.working ? "working" : "done",
+      };
+    case "code_extension":
+      return {
+        ...base,
+        kindLabel: KIND_LABEL.code_extension,
+        title: entry.extension.title || entry.extension.name,
+        detail: entry.extension.description,
+        status: "done",
       };
     case "creative_project":
       return {

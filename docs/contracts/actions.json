@@ -395,6 +395,300 @@
       "help": "docs/help/audiobook.plan.md"
     },
     {
+      "id": "code.extension.add",
+      "title": "Add an extension from a folder",
+      "summary": "Copy a skill from a folder of this computer into Wasify AI.",
+      "description": "Add a skill the person has in a folder: a folder with a SKILL.md that names the skill, says what it is for, and holds the text for the agent. The folder is copied into Wasify AI; the person's folder is not changed and nothing comes from the internet. With session_id it is switched on for that session's project. A plugin (a folder with .plugin/plugin.json) is refused.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "folder": {
+            "description": "The whole path of a folder that holds a SKILL.md.",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Folder",
+            "type": "string"
+          },
+          "session_id": {
+            "default": "",
+            "description": "A coding session: the skill is switched on for its project.",
+            "maxLength": 64,
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "title": "ExtAddIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "extension_id": {
+            "title": "Extension Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "on": {
+            "title": "On",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "extension_id",
+          "title",
+          "description",
+          "on"
+        ],
+        "title": "ExtAddOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "folder": "/Users/me/Documents/house-style"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": "code.extensions",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.extension.add.md"
+    },
+    {
+      "id": "code.extension.list",
+      "title": "List the coding agent's extensions",
+      "summary": "Say which skills the coding agent can be taught, and which are on.",
+      "description": "List the extensions offered for coding: skills that teach the agent a way of working (Wasify AI's own, a few of the public OpenHands catalogue, and the ones the person added). With session_id it says for that session's project whether each is on. With extension_id it also returns the whole text that skill gives the agent, so the person can read it before switching it on.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "default": "",
+            "description": "A coding session: says for its project whether each extension is on.",
+            "maxLength": 64,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "extension_id": {
+            "default": "",
+            "description": "One extension's id, to read the whole text it gives the agent.",
+            "maxLength": 120,
+            "title": "Extension Id",
+            "type": "string"
+          }
+        },
+        "title": "ExtListIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "ExtRow": {
+            "properties": {
+              "id": {
+                "title": "Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "source": {
+                "title": "Source",
+                "type": "string"
+              },
+              "description": {
+                "title": "Description",
+                "type": "string"
+              },
+              "on": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "On"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "source",
+              "description"
+            ],
+            "title": "ExtRow",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/ExtRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ExtListOut",
+        "type": "object"
+      },
+      "examples": [
+        {},
+        {
+          "session_id": "0b7c1f9e000040008000000000000000"
+        }
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": "code.extensions",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.extension.list.md"
+    },
+    {
+      "id": "code.extension.switch",
+      "title": "Switch an extension on or off",
+      "summary": "Switch a skill on or off for one coding project.",
+      "description": "Switch an extension on or off for the project of a coding session. A skill that is on is offered to the agent in that project and used when a message is about it. A skill is text: it can steer how the agent works and cannot widen what the agent may do. The change holds from the session's next message.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "session_id": {
+            "description": "A coding session of the project.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "extension_id": {
+            "description": "The extension's id, from code.extension.list.",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Extension Id",
+            "type": "string"
+          },
+          "on": {
+            "description": "True switches it on for the project, false off.",
+            "title": "On",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id",
+          "extension_id",
+          "on"
+        ],
+        "title": "ExtSwitchIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "extension_id": {
+            "title": "Extension Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "project": {
+            "title": "Project",
+            "type": "string"
+          },
+          "on": {
+            "title": "On",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "extension_id",
+          "title",
+          "project",
+          "on"
+        ],
+        "title": "ExtSwitchOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "session_id": "0b7c1f9e000040008000000000000000",
+          "extension_id": "catalogue:code-review",
+          "on": true
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-code"
+        },
+        {
+          "kind": "runtime",
+          "name": "coding"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-code",
+      "ui": "code.extensions",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant"
+      ],
+      "consent": "",
+      "help": "docs/help/code.extension.switch.md"
+    },
+    {
       "id": "code.project.new",
       "title": "Start a new coding project",
       "summary": "Make a new project from a starter in a new folder, with a session on it.",

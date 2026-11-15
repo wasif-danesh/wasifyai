@@ -19,6 +19,7 @@ import {
   ListChecks,
   Lock,
   Plus,
+  Puzzle,
   Redo2,
   Square,
   Trash2,
@@ -960,6 +961,14 @@ function Turn({ turn, ...actions }: { turn: TurnView } & TurnActions) {
               onAnswer={(answer) => actions.onAnswer(part.id, answer)}
               onOpenMay={actions.onOpenMay}
             />
+          );
+        }
+        if (part.kind === "skills") {
+          return (
+            <p key={key} className="m-0 flex items-center gap-2 text-xs text-muted-foreground">
+              <Puzzle aria-hidden="true" className="size-3.5 shrink-0" />
+              Using {part.titles.length === 1 ? "the skill" : "the skills"} {part.titles.join(", ")}
+            </p>
           );
         }
         if (part.kind === "round") {

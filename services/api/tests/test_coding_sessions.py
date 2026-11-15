@@ -21,7 +21,7 @@ from wasifyai_code import place as places
 from wasifyai_code.client import READ_TOOLS, WRITE_TOOLS, ThisComputer
 from wasifyai_code.place import Account, Busy, NoSuchSession, SessionSpec
 from wasifyai_code.routes import build_routes
-from wasifyai_code.runtime import sessions_for
+from wasifyai_code.runtime import owner_of, sessions_for
 from wasifyai_code.store import CodeStore
 from wasifyai_platform_sdk import Identity, RouteDeps
 from wasifyai_platform_sdk.actions import need_runtime
@@ -968,3 +968,73 @@ async def test_no_terminal_is_opened_where_there_is_no_sandbox(box):
     ):
         assert (await call).status_code == 404
     assert (await box.http.delete(f"{url}/terminals/none")).status_code == 204
+
+
+# ---- extensions (stage X2) ---------------------------------------------------------------------------
+
+
+async def test_extensions_are_listed_switched_added_and_removed_through_the_routes(box, tmp_path):
+    made = await started(box)
+    (project,) = (await box.http.get(f"{BASE}/workspaces")).json()["items"]
+    assert project["name"] == "bakery-site"
+    listed = (await box.http.get(f"{BASE}/extensions?workspace_id={project['id']}")).json()["items"]
+    assert listed[0]["id"] == "own:explain-in-plain-words" and listed[0]["on"] is True
+    assert all(e["kind"] == "skill" and e["source"] in ("own", "catalogue") for e in listed)
+    assert (await box.http.get(f"{BASE}/extensions?workspace_id=nothing")).status_code == 404
+    one = (await box.http.get(f"{BASE}/extensions/own:write-the-tests-first")).json()
+    assert (
+        one["text"].startswith("---\nname: write-the-tests-first")
+        and one["where"][0]["on"] is False
+    )
+    assert (await box.http.get(f"{BASE}/extensions/own:nothing")).status_code == 404
+    url = f"{BASE}/extensions/own:write-the-tests-first/on"
+    r = await box.http.put(url, json={"workspace_id": project["id"], "on": True})
+    assert r.status_code == 200 and r.json()["on"] is True
+    assert (
+        await box.http.put(url, json={"workspace_id": "nothing", "on": True})
+    ).status_code == 404
+    # a session of the project is started with the skills that are on
+    await box.http.post(
+        f"{BASE}/sessions/{made['id']}/messages", json={"text": "Analyse this codebase."}
+    )
+    await ended(box, made["id"])
+    conversation = box.store.get_session(owner_of(ME), made["id"])["place_session"]
+    given = (await box.made_with(conversation))["agent_settings"]["agent_context"]["skills"]
+    assert [s["name"] for s in given] == [
+        "explain-in-plain-words", "pictures-with-wasify", "write-the-tests-first",
+    ]  # fmt: skip
+    assert all(s["content"] and s["is_agentskills_format"] for s in given)
+    # a folder of the person's
+    mine = tmp_path / "house-style"
+    mine.mkdir()
+    (mine / "SKILL.md").write_text(
+        "---\nname: house-style\ndescription: How pages are worded.\n---\nShort sentences.\n"
+    )
+    seen = await box.http.post(f"{BASE}/extensions/look", json={"folder": str(mine)})
+    assert seen.status_code == 200 and seen.json()["brings"] == "text"
+    assert (
+        await box.http.post(f"{BASE}/extensions/look", json={"folder": str(tmp_path)})
+    ).status_code == 422
+    added = await box.http.post(
+        f"{BASE}/extensions", json={"folder": str(mine), "workspace_id": project["id"]}
+    )
+    assert added.status_code == 201 and added.json()["on"] is True
+    item = added.json()["id"].split(":")[1]
+    only = (await box.http.get(f"{BASE}/extensions?ids={item}")).json()["items"]
+    assert [e["id"] for e in only] == [added.json()["id"]] and only[0]["added_at"]
+    # somebody else sees the short list and nothing of this person's
+    theirs = RouteDeps(box.services, lambda: Identity("t1", "someone-else"))
+    app = FastAPI()
+    app.include_router(build_routes(theirs), prefix="/products/wasifyai-code")
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://engine.test"
+    ) as other:
+        ids = [e["id"] for e in (await other.get(f"{BASE}/extensions")).json()["items"]]
+        assert added.json()["id"] not in ids and "own:explain-in-plain-words" in ids
+        assert (await other.get(f"{BASE}/extensions/{added.json()['id']}")).status_code == 404
+        assert (await other.get(f"{BASE}/workspaces")).json() == {"items": []}
+    assert (
+        await box.http.delete(f"{BASE}/extensions/own:explain-in-plain-words")
+    ).status_code == 403
+    assert (await box.http.delete(f"{BASE}/extensions/{added.json()['id']}")).status_code == 204
+    assert (await box.http.get(f"{BASE}/extensions?ids={item}")).json() == {"items": []}

@@ -209,6 +209,73 @@ class PreviewOut(BaseModel):
     output: str = ""
 
 
+class ExtListIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    session_id: str = Field(
+        "",
+        max_length=64,
+        description="A coding session: says for its project whether each extension is on.",
+    )
+    extension_id: str = Field(
+        "",
+        max_length=120,
+        description="One extension's id, to read the whole text it gives the agent.",
+    )
+
+
+class ExtRow(BaseModel):
+    id: str
+    title: str
+    source: str
+    description: str
+    on: bool | None = None
+
+
+class ExtListOut(BaseModel):
+    items: list[ExtRow]
+    text: str = ""  # the whole text of the one that was named
+
+
+class ExtSwitchIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    session_id: str = Field(
+        min_length=1, max_length=64, description="A coding session of the project."
+    )
+    extension_id: str = Field(
+        min_length=1, max_length=120, description="The extension's id, from code.extension.list."
+    )
+    on: bool = Field(description="True switches it on for the project, false off.")
+
+
+class ExtSwitchOut(BaseModel):
+    extension_id: str
+    title: str
+    project: str
+    on: bool
+
+
+class ExtAddIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    folder: str = Field(
+        min_length=1,
+        max_length=1024,
+        description="The whole path of a folder that holds a SKILL.md.",
+    )
+    session_id: str = Field(
+        "", max_length=64, description="A coding session: the skill is switched on for its project."
+    )
+
+
+class ExtAddOut(BaseModel):
+    extension_id: str
+    title: str
+    description: str
+    on: bool
+
+
 def _sessions(ctx: ActionContext) -> Any:
     return sessions_for(need_deps(ctx).state)
 
@@ -241,6 +308,78 @@ async def _start(p: StartIn, ctx: ActionContext) -> Outcome:
         )
         + " Send it a message with code.session.send.",
     )
+
+
+def _workspace_of(sessions: Any, owner: Any, session_id: str) -> tuple[str, str]:
+    """The project of a session: its id and its name."""
+    seen = sessions.view(owner, session_id)
+    found = next((w for w in sessions.workspaces(owner) if w["folder"] == seen["folder"]), None)
+    if found is None:
+        raise Refused("not_found", "That session's project is gone.")
+    return found["id"], found["name"]
+
+
+async def _ext_list(p: ExtListIn, ctx: ActionContext) -> Outcome:
+    owner = owner_of(ctx.actor)
+    try:
+        sessions = _sessions(ctx)
+        workspace = _workspace_of(sessions, owner, p.session_id)[0] if p.session_id else ""
+        items = sessions.list_extensions(owner, workspace)
+        text = sessions.extension(owner, p.extension_id)["text"] if p.extension_id else ""
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    rows = [
+        {
+            "id": i["id"], "title": i["title"], "source": i["source"],
+            "description": i["description"][:300], "on": i["on"],
+        }
+        for i in items
+    ]  # fmt: skip
+    on = sum(1 for i in items if i["on"])
+    return Outcome.ok(
+        {"items": rows, "text": text[:ANSWER_CHARS]},
+        f"{len(rows)} extension{'s are' if len(rows) != 1 else ' is'} offered"
+        + (f", {on} on for this project." if workspace else "."),
+    )
+
+
+async def _ext_switch(p: ExtSwitchIn, ctx: ActionContext) -> Outcome:
+    owner = owner_of(ctx.actor)
+    try:
+        sessions = _sessions(ctx)
+        workspace, project = _workspace_of(sessions, owner, p.session_id)
+        done = await sessions.switch_extension(owner, p.extension_id, workspace, p.on)
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    return Outcome.ok(
+        {"extension_id": done["id"], "title": done["title"], "project": project, "on": p.on},
+        f'"{done["title"]}" is now {"on" if p.on else "off"} for {project}. It holds from the '
+        "session's next message.",
+    )
+
+
+async def _ext_add(p: ExtAddIn, ctx: ActionContext) -> Outcome:
+    owner = owner_of(ctx.actor)
+    try:
+        sessions = _sessions(ctx)
+        workspace = _workspace_of(sessions, owner, p.session_id)[0] if p.session_id else ""
+        made = await sessions.add_extension(owner, p.folder, workspace)
+    except NotAvailable as e:
+        return Outcome.refused(str(e), "unavailable")
+    except Refused as e:
+        return Outcome.refused(e.message, e.code)
+    return Outcome.ok(
+        {
+            "extension_id": made["id"], "title": made["title"],
+            "description": made["description"][:300], "on": bool(made["on"]),
+        },
+        f'The skill "{made["title"]}" was copied into Wasify AI'
+        + (" and switched on for the project." if made["on"] else "; it is off until switched on."),
+    )  # fmt: skip
 
 
 async def _new(p: NewIn, ctx: ActionContext) -> Outcome:
@@ -583,6 +722,70 @@ def actions() -> list[Action]:
             product=PRODUCT_ID,
             bind=CallBinding(_check),
             ui="code.projects",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.extension.list",
+            title="List the coding agent's extensions",
+            summary="Say which skills the coding agent can be taught, and which are on.",
+            description=(
+                "List the extensions offered for coding: skills that teach the agent a way of "
+                "working (Wasify AI's own, a few of the public OpenHands catalogue, and the "
+                "ones the person added). With session_id it says for that session's project "
+                "whether each is on. With extension_id it also returns the whole text that "
+                "skill gives the agent, so the person can read it before switching it on."
+            ),
+            input=ExtListIn,
+            output=ExtListOut,
+            examples=({}, {"session_id": SAMPLE_ID}),
+            effect="read",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            product=PRODUCT_ID,
+            bind=CallBinding(_ext_list),
+            ui="code.extensions",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.extension.switch",
+            title="Switch an extension on or off",
+            summary="Switch a skill on or off for one coding project.",
+            description=(
+                "Switch an extension on or off for the project of a coding session. A skill "
+                "that is on is offered to the agent in that project and used when a message "
+                "is about it. A skill is text: it can steer how the agent works and cannot "
+                "widen what the agent may do. The change holds from the session's next message."
+            ),
+            input=ExtSwitchIn,
+            output=ExtSwitchOut,
+            examples=(
+                {"session_id": SAMPLE_ID, "extension_id": "catalogue:code-review", "on": True},
+            ),
+            effect="change",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            product=PRODUCT_ID,
+            bind=CallBinding(_ext_switch),
+            ui="code.extensions",
+            surfaces=("assistant",),
+        ),
+        Action(
+            id="code.extension.add",
+            title="Add an extension from a folder",
+            summary="Copy a skill from a folder of this computer into Wasify AI.",
+            description=(
+                "Add a skill the person has in a folder: a folder with a SKILL.md that names "
+                "the skill, says what it is for, and holds the text for the agent. The folder "
+                "is copied into Wasify AI; the person's folder is not changed and nothing "
+                "comes from the internet. With session_id it is switched on for that "
+                "session's project. A plugin (a folder with .plugin/plugin.json) is refused."
+            ),
+            input=ExtAddIn,
+            output=ExtAddOut,
+            examples=({"folder": "/Users/me/Documents/house-style"},),
+            effect="make",
+            requires=(need_product(PRODUCT_ID), ENGINE),
+            product=PRODUCT_ID,
+            bind=CallBinding(_ext_add),
+            ui="code.extensions",
             surfaces=("assistant",),
         ),
         Action(

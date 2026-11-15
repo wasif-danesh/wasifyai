@@ -82,6 +82,20 @@ class CodeNewIn(BaseModel):
     mode: Literal["plan", "ask", "own"] = "ask"
 
 
+class CodeSwitchIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace_id: str = Field(min_length=1, max_length=64)
+    on: bool
+
+
+class CodeFolderIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    folder: str = Field(min_length=1, max_length=1024)
+    workspace_id: str = Field("", max_length=64)
+
+
 class CodeTerminalIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -120,6 +134,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "no_check": 409,
             "ended": 409,
             "not_empty": 409,
+            "not_yours": 403,
             "taken": 409,
         }.get(  # fmt: skip
             e.code, 422
@@ -374,6 +389,90 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             return {"turn_id": turn["id"], "session": live.view(owner, session_id)}
         except Refused as e:
             raise refuse(e) from None
+
+    # ---- extensions (ADR-0104) -------------------------------------------------------------------
+
+    @router.get("/workspaces")
+    async def list_workspaces(identity: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """The person's projects, the newest first."""
+        return {"items": await asyncio.to_thread(sessions().workspaces, owner_of(identity))}
+
+    @router.get("/extensions")
+    async def list_extensions(
+        workspace_id: str = Query("", max_length=64),
+        ids: str | None = Query(None, max_length=4000),
+        identity: Identity = Depends(deps.identity),
+    ) -> dict[str, Any]:
+        """The short list and what the person added; with `workspace_id`, whether each is on
+        for that project. `ids` (the ids of added ones, for search) keeps only those."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            items = await asyncio.to_thread(live.list_extensions, owner, workspace_id)
+        except Refused as e:
+            raise refuse(e) from None
+        if ids is not None:
+            wanted = {f"added:{i}" for i in parse_ids(ids) or []}
+            items = [i for i in items if i["id"] in wanted]
+        return {"items": items}
+
+    @router.post("/extensions/look")
+    async def look_at_folder(
+        body: CodeFolderIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """What a folder holds, before it is added: a skill with its text, or why not."""
+        live = sessions()
+        try:
+            return await asyncio.to_thread(live.look_at_folder, body.folder)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/extensions", status_code=201)
+    async def add_extension(
+        body: CodeFolderIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Copy a skill's folder in. With `workspace_id` it is switched on for that project."""
+        try:
+            return await sessions().add_extension(
+                owner_of(identity), body.folder, body.workspace_id
+            )
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.get("/extensions/{extension_id}")
+    async def get_extension(
+        extension_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """One extension with the whole text it gives the agent, and where it is on."""
+        live, owner = sessions(), owner_of(identity)
+        try:
+            return await asyncio.to_thread(live.extension, owner, extension_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.put("/extensions/{extension_id}/on")
+    async def switch_extension(
+        extension_id: str, body: CodeSwitchIn, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Switch an extension on or off for one project."""
+        try:
+            return await sessions().switch_extension(
+                owner_of(identity), extension_id, body.workspace_id, body.on
+            )
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.delete("/extensions/{extension_id}", status_code=204)
+    async def remove_extension(
+        extension_id: str, identity: Identity = Depends(deps.identity)
+    ) -> Response:
+        """Forget an extension the person added."""
+        try:
+            gone = await sessions().remove_extension(owner_of(identity), extension_id)
+        except Refused as e:
+            raise refuse(e) from None
+        if gone:
+            await deps.unindex(identity, PRODUCT_ID, extension_id.partition(":")[2])
+        return Response(status_code=204)
 
     # ---- the preview and the starters ------------------------------------------------------------
 

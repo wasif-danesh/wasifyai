@@ -199,6 +199,18 @@ environment; a write outside the project is refused by the operating system. The
 | A new project | `starters.py`: "Start in a new, empty folder" copies a starter's files into `<chosen folder>/<name>` (a folder that holds files is refused) and opens a session on it in "Ask me", with the starter's check and preview set. The first starter, `web`, is one page with its script, styles and tests and a small server of its own that loads the page again on a change; it needs Node and nothing installed |
 | A picture or speech | `assets.py` and `services/coding-engine/wasify-make`. The agent runs `wasify-make picture "<what>" <file.png>` or `wasify-make speech "<words>" <file.wav>` alone, as the whole command. It waits like every command; its kind, `make`, is asked in every mode until allowed for the project. On a yes the Wasify engine runs `image.generate` or `speech.speak` for the person through the action executor, copies the result into the project and leaves a note under `<app data>/coding-fixed/made/`; the command then prints what the note says. What was made is in the person's library too |
 
+## Extensions: the skills a session is taught (stage X2)
+
+| What | How |
+|---|---|
+| A skill | A folder with a `SKILL.md`: a few first lines (name, what it is for, the words that switch it on) and the text for the agent. `extensions.py` reads it with a small reader of its own |
+| What is offered | Our short list, `wasifyai_code/own/marketplace.json`: Wasify AI's own skills (`own/skills/`) and a few entries of the pinned OpenHands catalogue, by name. Then what the person added. The rest of the catalogue stays on disk, unused |
+| On or off | Kept for one project and one person (`extension_switches` in the store); without a switch the short list's own word holds. A switch lets go of the conversations of the project's sessions that are at rest, so the next message starts with the new skills |
+| What a session is given | `Sessions.skills_for`: the skills that are on, each with its whole text, in the conversation's context (`agent_context.skills`). The engine's own loaders stay off. The skills' folders are copied to `<app data>/coding-fixed/skills/`, which the sandbox reads and cannot write |
+| When one fires | The engine puts a skill's text into the person's message when the message has one of its words, and says so; the stream carries it as `code_skills` and the chat shows "Using the skill ..." |
+| Adding one | "Add from a folder": the folder is looked at first (its text is shown), then copied into `<app data>/code/extensions/<id>/`. A plugin (`.plugin/plugin.json`) is refused; that is stage X3 |
+| Search | An added skill is in the Library as "Coding skill" (kind `code_extension`), indexed by its name and what it is for, in the same index source as coding sessions |
+
 ## The screens
 
 | Where | What |
@@ -210,6 +222,7 @@ environment; a write outside the project is refused by the operating system. The
 | `packages/ui/src/code/Terminal.tsx`, `xterm-css.ts` | The Terminal tab: the note about its limits, the person's terminals as small tabs, "New", and the terminal itself drawn by xterm.js, which is loaded when the tab is first opened. Its style sheet is carried as text, so no bundler has to load one from a package; a test compares it with the package's |
 | `packages/ui/src/code/Preview.tsx` | The Preview tab: the suggested command and "Change the command", starting, the page in a frame with its bar, why a preview ended (its exit code and output; where Node is set up when a tool was not found), and the warning when it listens to more than this computer |
 | `packages/ui/src/code/NewProject.tsx` | "Start in a new, empty folder": the starter, the project's name, the folder it is made in |
+| `packages/ui/src/code/Extensions.tsx` | Code › Extensions: the list for the project chosen at the top, with a switch on each row, a search and filters; "Details" with the whole text, the note that it comes from outside and cannot widen what the agent may do, and a switch for each project; "Add from a folder" with what was found; removing one the person added |
 | `packages/ui/src/code/Changes.tsx` | The Changes tab: one turn at a time, its files (a test file is marked), one file before, after or both, "Undo this turn" and "Bring it back", and what undo does not put back |
 | `packages/ui/src/code/Files.tsx` | The Files tab beside the chat: the project's folders as a tree, opened a folder at a time, and one file to read with its line numbers. Reading only. On a narrow window the chat and the files are two tabs |
 | `packages/ui/src/code/thread.ts`, `use-code.ts` | The stream turned into what is drawn, and the screen's state. A turn from before the app was started shows what was kept: the request, the answer and how many steps it took |
@@ -259,6 +272,7 @@ address on loopback and a token for one session, and every model call of that se
 | `code.session.check` | Reads the project's check, sets it, and runs it now (a long action) |
 | `code.session.preview` | Starts the project's preview, stops it, or says where it is (a long action) |
 | `code.project.new` | A new project from a starter in a new folder, with a session on it |
+| `code.extension.list`, `code.extension.switch`, `code.extension.add` | The skills offered and which are on for a project (and one skill's whole text); switching one on or off; adding one from a folder |
 
 They are offered to the assistant and not to outside apps: an outside app that could open a session on any
 folder would be handed that folder's content. Help is in `docs/help/code.session.*.md`.
@@ -282,6 +296,10 @@ folder would be handed that folder's content. Help is in `docs/help/code.session
 | `POST /sessions/{id}/check/again` | "Try 3 more rounds": a new turn that tells the agent the check still fails (202) |
 | `GET /sessions/{id}/preview`, `PUT /sessions/{id}/preview` | The project's preview (its command, what the files suggest, and the running one: state, port, address, whether it is open to the network, the end of its output), and setting the command |
 | `POST /sessions/{id}/preview/start`, `POST /sessions/{id}/preview/stop` | Start it (an optional `command` is kept as the project's) and stop it |
+| `GET /workspaces` | The person's projects, the newest first |
+| `GET /extensions` (`workspace_id=`, `ids=`), `GET /extensions/{id}` | What is offered, with whether each is on for a project; one extension with its whole text and where it is on |
+| `PUT /extensions/{id}/on` | Switch it on or off for a project (`workspace_id`, `on`) |
+| `POST /extensions/look`, `POST /extensions`, `DELETE /extensions/{id}` | What a folder holds before it is added; adding it (with `workspace_id` it is switched on there); forgetting one the person added |
 | `GET /starters`, `POST /projects` | What a new project can be started from, and making one (`parent`, `name`, `starter`, `model`, `mode`) |
 | `GET /sessions/{id}/terminals`, `POST /sessions/{id}/terminals` | The person's terminals in this session, and opening one (`cols`, `rows`) |
 | `GET /sessions/{id}/terminals/{tid}/events` | What the terminal prints, as a stream: `terminal_output` (`data`: the bytes in base64) and `terminal_ended` (`exit_code`); `Last-Event-ID` comes back after a number |
@@ -321,6 +339,7 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 | `products/wasifyai-code/tests/test_terminal.py` | The person's terminal without a sandbox: a real shell on a real pseudo-terminal, the size, Ctrl-C, closing ends what it started, the limit of four, and no terminal where there is no sandbox | `make test` |
 | `services/api/tests/test_coding_proxy.py` | The install proxy on loopback: the person let through, the agent only while an install is allowed, every other request refused, and no password in what it says of itself | `make test` |
 | `products/wasifyai-code/tests/test_code_c4.py` | The preview with a real program on a real port (found by its port, open to the network or not, why it ended, a new start replaces the old), which command is suggested, the starter (its files, its refusals, its own check and page), and `wasify-make`: how a call is read, the card in every mode, the app's action run for the person, the file in the project, the note, a no, a failure | `make test` |
+| `products/wasifyai-code/tests/test_code_extensions.py` | The reader, every skill of ours, the short list and the switch for a project, what a session is started with and that a switch begins a new conversation, the skills a message switched on, adding from a folder (looked at, copied, links left out, found by search, refusals, removal) | `make test` |
 | `services/api/tests/test_components_node.py` | The Node part against a fake download: four steps, the folder the sandbox is given, a wrong checksum, a Node that does not start, a state file that points outside | `make test` |
 | `services/api/tests/integration/test_coding_sandbox.py` | Hostile tests against the real server in its sandbox | `make test-coding`, opt-in |
 | `apps/desktop/scripts/ui-audit.sh light coding-setup` (then `coding-repair`, `coding-remove`) | The part set up, repaired and removed from the real window's Settings, with the real downloads | By hand, on a throwaway `DESKTOP_DATA_DIR` |
@@ -330,6 +349,8 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 - The dot for files changed in a session, in the Files tab; the Browser tab (a second webview in the real
   window; it is its own piece after C4); the approval card on other screens while a session waits (the list of projects says "Waiting
   for you"); a project's "More" menu.
+- Plugins (a folder that brings hooks or tool connections), adding an extension from the internet, the
+  integrations list, changing a skill's text in the app: stage X3 and later.
 - "Show what is running": the list of everything started in a project by the person, the agent or a check,
   with a way to stop each (mockup `terminal-processes`). The Terminal tab says that `ps` does not work and
   offers nothing in its place yet.

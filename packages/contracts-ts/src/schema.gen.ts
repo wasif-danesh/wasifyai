@@ -1057,6 +1057,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Extensions
+         * @description The short list and what the person added; with `workspace_id`, whether each is on
+         *     for that project. `ids` (the ids of added ones, for search) keeps only those.
+         */
+        get: operations["list_extensions_products_wasifyai_code_code_extensions_get"];
+        put?: never;
+        /**
+         * Add Extension
+         * @description Copy a skill's folder in. With `workspace_id` it is switched on for that project.
+         */
+        post: operations["add_extension_products_wasifyai_code_code_extensions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/extensions/look": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Look At Folder
+         * @description What a folder holds, before it is added: a skill with its text, or why not.
+         */
+        post: operations["look_at_folder_products_wasifyai_code_code_extensions_look_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/extensions/{extension_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Extension
+         * @description One extension with the whole text it gives the agent, and where it is on.
+         */
+        get: operations["get_extension_products_wasifyai_code_code_extensions__extension_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove Extension
+         * @description Forget an extension the person added.
+         */
+        delete: operations["remove_extension_products_wasifyai_code_code_extensions__extension_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/extensions/{extension_id}/on": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Switch Extension
+         * @description Switch an extension on or off for one project.
+         */
+        put: operations["switch_extension_products_wasifyai_code_code_extensions__extension_id__on_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/models": {
         parameters: {
             query?: never;
@@ -1679,6 +1768,26 @@ export interface paths {
          * @description What a new project can be started from.
          */
         get: operations["list_starters_products_wasifyai_code_code_starters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Workspaces
+         * @description The person's projects, the newest first.
+         */
+        get: operations["list_workspaces_products_wasifyai_code_code_workspaces_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5388,6 +5497,16 @@ export interface components {
             /** Limit S */
             limit_s?: number | null;
         };
+        /** CodeFolderIn */
+        CodeFolderIn: {
+            /** Folder */
+            folder: string;
+            /**
+             * Workspace Id
+             * @default
+             */
+            workspace_id: string;
+        };
         /**
          * CodeMessageEvent
          * @description A message of the coding agent is complete. It replaces what the `token` events of that
@@ -5528,6 +5647,36 @@ export interface components {
             mode?: ("plan" | "ask" | "own") | null;
         };
         /**
+         * CodeSkillsEvent
+         * @description The person's message switched skills on (ADR-0104; stage X2): the engine put their text
+         *     into the message because one of their words was in it.
+         */
+        CodeSkillsEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event: "code_skills";
+            /** Names */
+            names: string[];
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Seq */
+            seq: number;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /** Titles */
+            titles?: string[];
+            /** Ts */
+            ts?: string;
+        };
+        /**
          * CodeStateEvent
          * @description A turn of a coding session changes state (ADR-0101, amendment of 2026-11-14). On a coding
          *     session's stream `thread_id` is the session and `run_id` the turn; `state: "done"` is the
@@ -5598,6 +5747,13 @@ export interface components {
              * @default
              */
             why: string;
+        };
+        /** CodeSwitchIn */
+        CodeSwitchIn: {
+            /** On */
+            on: boolean;
+            /** Workspace Id */
+            workspace_id: string;
         };
         /** CodeTerminalIn */
         CodeTerminalIn: {
@@ -6978,7 +7134,7 @@ export interface components {
             /** Texts */
             texts: string[];
         };
-        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["ReasoningEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["CodeStateEvent"] | components["schemas"]["CodeCheckEvent"] | components["schemas"]["CodeMessageEvent"] | components["schemas"]["CodeRefusalEvent"];
+        SseEvent: components["schemas"]["NodeEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["ReasoningEvent"] | components["schemas"]["InterruptEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["JobProgressEvent"] | components["schemas"]["ErrorEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["CodeStateEvent"] | components["schemas"]["CodeCheckEvent"] | components["schemas"]["CodeSkillsEvent"] | components["schemas"]["CodeMessageEvent"] | components["schemas"]["CodeRefusalEvent"];
         /** StartIn */
         StartIn: {
             /**
@@ -9276,6 +9432,209 @@ export interface operations {
             };
         };
     };
+    list_extensions_products_wasifyai_code_code_extensions_get: {
+        parameters: {
+            query?: {
+                workspace_id?: string;
+                ids?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_extension_products_wasifyai_code_code_extensions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeFolderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    look_at_folder_products_wasifyai_code_code_extensions_look_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeFolderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_extension_products_wasifyai_code_code_extensions__extension_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extension_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_extension_products_wasifyai_code_code_extensions__extension_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extension_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    switch_extension_products_wasifyai_code_code_extensions__extension_id__on_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extension_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeSwitchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_models_products_wasifyai_code_code_models_get: {
         parameters: {
             query?: never;
@@ -10501,6 +10860,28 @@ export interface operations {
         };
     };
     list_starters_products_wasifyai_code_code_starters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    list_workspaces_products_wasifyai_code_code_workspaces_get: {
         parameters: {
             query?: never;
             header?: never;

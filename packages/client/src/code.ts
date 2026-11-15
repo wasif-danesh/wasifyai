@@ -15,6 +15,16 @@ export type CodeModel = {
   default: boolean;
   /** false: its key is not saved, or its address is not set */
   ready: boolean;
+  /** whose model it is: "anthropic", "openai", "gemini", "ollama" */
+  provider?: string;
+  /** the provider's name, for a model its key lists ("Anthropic"); empty for the others */
+  provider_title?: string;
+  /** it was run through the coding evaluation; false for a model the key lists that was not */
+  tested?: boolean;
+  /** its price per million tokens, in words; empty when none is known */
+  price?: string;
+  /** "tokens": no price is known, so its sessions are counted and limited in tokens */
+  counted_in?: "usd" | "tokens";
 };
 
 /** How a turn ended. A refusal is the model's own answer, not an error. */
@@ -63,6 +73,10 @@ export type CodeSession = {
   model_calls: number;
   tokens_in: number;
   tokens_out: number;
+  /** "tokens": the model has no known price; the session is counted and limited in tokens */
+  counted_in?: "usd" | "tokens";
+  /** the most tokens (in and out) such a session may use */
+  token_limit?: number;
   created_at: string;
   updated_at: string;
 };
@@ -492,6 +506,14 @@ export function createCodeApi(transport: Transport) {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ cost_limit_usd: usd }),
+      });
+    },
+    /** Change the most tokens a session on a model with no known price may use. */
+    setTokenLimit(id: string, tokens: number): Promise<CodeSession> {
+      return json<CodeSession>(`${BASE}/sessions/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token_limit: tokens }),
       });
     },
     /** How much the agent asks, from now on. */

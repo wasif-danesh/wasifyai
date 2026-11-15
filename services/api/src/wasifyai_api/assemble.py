@@ -68,7 +68,7 @@ from wasifyai_api.actions_engine import build_executor
 from wasifyai_api.admin import AdminStore, PostgresAdminStore
 from wasifyai_api.admin_providers import AdminProviders, CloudPlanSink
 from wasifyai_api.auth import Claims
-from wasifyai_api.coding_gateway import CodingGateway
+from wasifyai_api.coding_gateway import CodingGateway, known_in_catalogue
 from wasifyai_api.components.coding import CodingComponent, coding_files
 from wasifyai_api.components.comfyui import ComfyUiComponent
 from wasifyai_api.components.desktop import service_components
@@ -995,12 +995,24 @@ def _desktop_coding(s: ApiServices, desktop: Desktop) -> None:
     if desktop.coding is None or desktop.secrets is None:
         return
     settings = desktop.settings
+    own_keys = desktop.own_keys
+
+    async def listed(vendor: str) -> list[tuple[str, str]]:
+        """Every chat model `vendor` lists on the key saved for Chat and writing."""
+        from wasifyai_api.own_keys import PROVIDERS
+
+        if own_keys is None or vendor not in PROVIDERS:
+            return []
+        return await own_keys.vendor_models("chat", PROVIDERS[vendor])
+
     s.coding_gateway = CodingGateway(
         secrets=desktop.secrets,
         usage=desktop.usage,
         # this engine as a program on this computer reaches it; the port is the window's
         base_url=lambda: _loopback(settings.desktop_public_url),
         ollama_url=settings.coding_ollama_url,
+        lister=listed,
+        known=known_in_catalogue,
     )
     try:
         from wasifyai_code.store import CodeStore

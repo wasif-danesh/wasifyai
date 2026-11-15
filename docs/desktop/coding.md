@@ -260,13 +260,15 @@ environment; a write outside the project is refused by the operating system. The
 | `packages/ui/src/code/Files.tsx` | The Files tab beside the chat: the project's folders as a tree, opened a folder at a time, and one file to read with its line numbers. Reading only. On a narrow window the chat and the files are two tabs |
 | `packages/ui/src/code/thread.ts`, `use-code.ts` | The stream turned into what is drawn, and the screen's state. A turn from before the app was started shows what was kept: the request, the answer and how many steps it took |
 | `packages/client/src/code.ts` | The window's calls: the routes above and the stream |
+| `apps/desktop/src/choices/code-choices.ts` | Code's rows for the model picker: every model the engine lists, the one a new session starts with (remembered in the window), and why a row cannot be chosen |
 | `apps/desktop/src/pages/Code.tsx` | The page in the window, with the computer's own folder window (Tauri's dialog plugin, which the app already had; the window is now allowed to open it) |
 
 A session has an address of its own in the window (`#/code/<id>`): it is still open after a reload, and Back
 leaves it. "Find a file by name" in the Files tab looks through the project's file names (not into
 `node_modules`, `.git` and the like, and never through a link). The cost in the bar opens to what it is made
 of (the model, its calls, what was asked) and the session's limit, which can be changed there
-(`PATCH /sessions/{id}`; it holds from the next model call). A session is a card in the Library under its own
+(`PATCH /sessions/{id}`; it holds from the next model call). A session on a model with no known price is
+counted and limited in tokens there. A session is a card in the Library under its own
 filter, "Coding sessions", and a search result opens it at its address.
 
 A session that nobody named is called by what was asked first. Walk it for real with
@@ -288,11 +290,54 @@ address on loopback and a token for one session, and every model call of that se
 |---|---|
 | The token | Made per session, kept in memory only, dead when the session is deleted or the app closes. It is the route's identity: the tenant, the product and the person come from it. An unknown token is refused. The real key opens nothing here |
 | The key | Read from the app's secret store for each call and put on it (`keys.chat.anthropic`, the key saved for Chat and writing in Settings › Your keys). Never answered back, logged or written |
-| The model | Only the model the session was opened with is let through. The list is `coding_models.yaml`: Claude Sonnet 5.5 first; Claude Haiku 5.5 second, on the same key and much cheaper (a call whose prompt is over 100,000 tokens is counted at its higher price, `long_prompt`); the local Qwen 27B through Ollama third, offered only when `CODING_OLLAMA_URL` is set |
+| The model | Only the model the session was opened with is let through. Besides the file's models, every chat model a saved key lists can be chosen (see "The models" below). The file's own list is `coding_models.yaml`: Claude Sonnet 5.5 first; Claude Haiku 5.5 second, on the same key and much cheaper (a call whose prompt is over 100,000 tokens is counted at its higher price, `long_prompt`); the local Qwen 27B through Ollama third, offered only when `CODING_OLLAMA_URL` is set |
 | The body | Passed on byte for byte, so the provider's prompt-cache marks arrive as the Agent Server wrote them |
 | Streaming | Passed through event by event |
 | Tokens and cost | Each call's tokens become usage events (`llm.input_tokens`, `llm.output_tokens`, capability `code.agent`) and its counted cost is added to the session's row. At the session's limit (5 dollars unless the session says otherwise) the next call is refused, and the turn ends saying so |
 | A refusal | When the model declines (`stop_reason: "refusal"`), the Agent Server is answered with a plain message and no tool call, which ends its turn. The turn ends as "refused" with the model's own words. It is not an error |
+
+### The models (ADR-0101, amendment of 2026-11-15)
+
+A new session starts with the model on Code's model button (the picker every product has; the choice is
+remembered in the window, `apps/desktop/src/choices/code-choices.ts`). A session keeps the model it began
+with. `GET /models` lists them:
+
+| Which | Named | Said in the picker |
+|---|---|---|
+| The models of `coding_models.yaml` (`models`) | by their id there | "Tested for coding": they were run through the 36 evaluation tasks |
+| Every other chat model a vendor lists on the key saved for Chat and writing: Anthropic, OpenAI, Google Gemini (`vendors` in the file) | `<vendor>:<the vendor's model name>`, for example `anthropic:claude-opus-5-5` | "Not tested for coding here", under Cloud, by provider |
+
+- **The list is the vendor's own**, asked through the same code as chat's (`OwnKeysService.vendor_models`,
+  kept ten minutes). A vendor with no key saved is not asked. A session's model needs no list to open
+  again: the gateway builds its route from the name.
+- **Anthropic's models are called as the Messages API; OpenAI's and Gemini's as chat completions** at the
+  vendor's OpenAI-compatible address.
+- **The price** of a vendor's model is the one chat's catalogue knows (`own_keys_catalogue.py`, read by
+  `known_in_catalogue`). For Anthropic a cache read is counted at a tenth of the input price and a cache
+  write at 1.25 times (2 times for an hour); for the others a cached token is counted at the input price.
+- **A model with no known price is counted in tokens.** Its session shows tokens where the others show
+  dollars, and stops at a limit in tokens: `token_limit` in the file (3,000,000 in and out), or the
+  session's own (`PATCH /sessions/{id}` with `token_limit`; the column `sessions.token_limit`).
+- **"What this computer can do"** in Settings has a line for Code: the model a new session starts with, or
+  what is missing (the coding engine, or a key).
+
+Measured on 2026-11-15, through the real coding engine in its sandbox with the owner's key (two evaluation
+tasks each, `bug-paginate` and `feat-lru`, with the hidden checks and undo):
+
+| Model | Passed | Time | Counted cost | Undo |
+|---|---|---|---|---|
+| `anthropic:claude-opus-5-5` | 2 of 2 | 16.5 s and 22.2 s | $0.21 | exact, both |
+| `anthropic:claude-fable-5-2` | 2 of 2 | 18.1 s and 27.3 s | $0.43 | exact, both |
+
+```
+uv run python products/wasifyai-code/evals/run_eval.py --data "<app data with the coding engine>" \
+    --model anthropic:claude-opus-5-5 --app-keys --limit-usd 1.5 bug-paginate feat-lru
+```
+
+Not measured: the full 36 tasks on either, and any OpenAI or Gemini model in a real session (no key for
+either was saved). Those two vendors are tested against a pretended provider only
+(`services/api/tests/test_coding_gateway.py`). Walk the button for real with
+`WASIFYAI_AUDIT_FOLDER=<a project> ... ui-audit.sh light code-models` (pictures `code-models-*.png`).
 
 ## The product's actions and routes
 

@@ -147,3 +147,28 @@ Claude Haiku 5.5 to be measured and then said "Yes, add Haiku".
    The gateway prices each call by itself, so a session's cost and its limit stay true in a long session.
 
 Nothing else of the decision changes.
+
+## Amendment (2026-11-15, owner): every model a saved key lists can be chosen
+
+Decision 7 and the Haiku amendment made the models a short list in a file, each added after it was measured.
+The owner: "We should display opus and fable in the list and let user select a model when Anthropic key is
+provided. It applies to ChatGPT and Gemini as well when a key is provided. It shouldn't be hardcoded to 1/2
+options." The model is chosen for a new session; a session keeps the model it began with ("Choosing per new
+session for now").
+
+1. **Every chat model a saved key lists is a choice**, for Anthropic, OpenAI and Google Gemini, on the key
+   saved for Chat and writing (Settings › Your keys). The list is the vendor's own, asked as chat asks it. A
+   model is named `<vendor>:<the vendor's model name>`. The vendors are the `vendors` of `coding_models.yaml`.
+2. **The measured models stay first and are marked "Tested for coding"**: Sonnet 5.5, Haiku 5.5 and the local
+   Qwen 27B. The others say "Not tested for coding here". Nothing is hidden because it was not measured.
+3. **Sonnet 5.5 stays the first choice.**
+4. **A price is the one chat's catalogue knows.** A model with no known price is counted in tokens, and its
+   session stops at a limit in tokens (3,000,000 in and out unless the person sets another) where a priced
+   one stops at a limit in dollars.
+5. **Code is on the model button**, like every other product, and has a line in "What this computer can do".
+6. **Proven:** Claude Opus 5.5 and Claude Fable 5.2 each ran two evaluation tasks through the real coding
+   engine (`docs/desktop/coding.md`, "The models"). **Not proven:** an OpenAI or a Gemini model in a real
+   session; no key for either was saved when this was built. They are called as chat completions at the
+   vendor's OpenAI-compatible address, which is tested against a pretended provider only.
+
+Nothing else of the decision changes.

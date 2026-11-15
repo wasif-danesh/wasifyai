@@ -48,7 +48,10 @@ describe("what this computer can do", () => {
       video: [row({ id: "v", title: "LTX-Video 2B", state: "needs_download" })],
       three_d: [row({ id: "t", title: "Pixal3D", state: "unavailable" })],
       documents: [row({ id: "d", title: "BGE small" })],
+      code: [row({ id: "s", title: "Claude Sonnet 5.5", place: "cloud", chosen: true })],
     });
+    // Code is a job of its own: the model a new session starts with
+    expect(await screen.findByText("Ready: Claude Sonnet 5.5")).toBeInTheDocument();
     expect(await screen.findByText("Ready: Qwen3.8 27B (MLX)")).toBeInTheDocument();
     expect(screen.getByText("Needs a download: FLUX.2 klein 4B")).toBeInTheDocument();
     expect(screen.getByText("Ready: Kokoro 82M")).toBeInTheDocument();
@@ -59,5 +62,17 @@ describe("what this computer can do", () => {
     expect(
       await screen.findByText("This computer: 69 GB of memory, 87 GB free on the disk."),
     ).toBeInTheDocument();
+  });
+
+  it("says what Code still needs when nothing of it can be used", async () => {
+    const why = "Needs the coding engine: set it up in Settings, under Optional parts";
+    show({
+      code: [
+        row({ id: "s", title: "Claude Sonnet 5.5", state: "unavailable", unavailableReason: why }),
+        row({ id: "q", title: "Qwen 27B", state: "unavailable", unavailableReason: why }),
+      ],
+    });
+    expect(await screen.findByText(why)).toBeInTheDocument();
+    expect(screen.getByText("Code")).toBeInTheDocument();
   });
 });

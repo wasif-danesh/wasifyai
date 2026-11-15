@@ -291,6 +291,8 @@ class _Hooks(Hooks):
             account=Account(
                 owner.tenant_id, owner.product_id, owner.user_id, session["id"],
                 spent_usd=float(session["cost_usd"]), limit_usd=float(session["cost_limit_usd"]),
+                spent_tokens=int(session["tokens_in"]) + int(session["tokens_out"]),
+                limit_tokens=int(session["token_limit"] or 0),
             ),
         )  # fmt: skip
 
@@ -1187,12 +1189,34 @@ class Sessions:
             "model_calls": int(session["model_calls"]),
             "tokens_in": int(session["tokens_in"]),
             "tokens_out": int(session["tokens_out"]),
+            # a model with no known price is counted and limited in tokens, not in dollars
+            "counted_in": self._counted_in(session["model"]),
+            "token_limit": int(session["token_limit"] or 0) or self._usual_token_limit(),
             "created_at": session["created_at"],
             "updated_at": session["updated_at"],
         }
 
     def _usual_limit(self) -> float:
         return float(getattr(self.state.coding_gateway, "default_limit_usd", 0.0) or 0.0)
+
+    def _usual_token_limit(self) -> int:
+        return int(getattr(self.state.coding_gateway, "default_limit_tokens", 0) or 0)
+
+    def _counted_in(self, model: str) -> str:
+        try:
+            route = self.state.coding_gateway.model(model or None)
+        except Exception:
+            return "usd"
+        return "tokens" if getattr(route, "counted_in_tokens", False) else "usd"
+
+    def set_token_limit(self, owner: Owner, session_id: str, limit_tokens: int) -> dict[str, Any]:
+        """The most tokens a session on a model with no known price may use, from its next call."""
+        self._session(owner, session_id)
+        self.store.set_session_token_limit(owner, session_id, limit_tokens)
+        set_limit = getattr(self.state.coding_gateway, "set_token_limit", None)
+        if set_limit is not None:
+            set_limit(session_id, limit_tokens)
+        return self.view(owner, session_id)
 
     def set_limit(self, owner: Owner, session_id: str, limit_usd: float) -> dict[str, Any]:
         """The most the session may cost, from its next model call on."""

@@ -67,6 +67,9 @@ class Account:
     session_id: str
     spent_usd: float = 0.0
     limit_usd: float = 0.0  # 0: the gateway's own limit for one session
+    # a model with no known price is counted in tokens: what was used, and the most (0: the usual)
+    spent_tokens: int = 0
+    limit_tokens: int = 0
 
 
 @dataclass(frozen=True)

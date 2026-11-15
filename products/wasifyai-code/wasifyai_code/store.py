@@ -78,6 +78,8 @@ COLUMNS = (
     # stage X3: when the person approved what a plugin brings (its hooks, its tool connections)
     ("extensions", "approved_at", "TEXT"),
     ("schedules", "title", "TEXT NOT NULL DEFAULT ''"),
+    # a session on a model with no known price is limited in tokens (0: the usual limit)
+    ("sessions", "token_limit", "BIGINT NOT NULL DEFAULT 0"),
 )
 
 LEFT_WORKING = "It was stopped when the app closed."
@@ -504,6 +506,12 @@ class CodeStore:
             (limit_usd, now(), item, *_who(owner)),
         )
 
+    def set_session_token_limit(self, owner: Owner, item: str, limit_tokens: int) -> None:
+        self.db.exec(
+            f"UPDATE sessions SET token_limit = ?, updated_at = ? WHERE id = ? AND {_MINE}",
+            (int(limit_tokens), now(), item, *_who(owner)),
+        )
+
     def add_session_cost(
         self, item: str, *, usd: float, tokens_in: int, tokens_out: int, calls: int = 1
     ) -> None:
@@ -726,7 +734,7 @@ class CodeStore:
         """What a schedule is called, and the model its runs work with ("" is the first choice)."""
         n = self.db.exec(
             f"UPDATE schedules SET title = ?, model = ?, updated_at = ? WHERE id = ? AND {_MINE}",
-            (title[:200], model[:64], now(), item, *_who(owner)),
+            (title[:200], model[:128], now(), item, *_who(owner)),
         )
         if n == 0:
             raise NotFound(f"schedules: {item}")

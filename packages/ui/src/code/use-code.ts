@@ -306,10 +306,14 @@ export function useCode(api: CodeApi) {
   }, [api, openId, patch]);
 
   const setLimit = useCallback(
-    async (usd: number) => {
+    async (most: number, unit: "usd" | "tokens" = "usd") => {
       if (!openId) return;
       try {
-        patch({ session: await api.setLimit(openId, usd), error: null });
+        const changed =
+          unit === "tokens"
+            ? await api.setTokenLimit(openId, most)
+            : await api.setLimit(openId, most);
+        patch({ session: changed, error: null });
       } catch (e) {
         patch({ error: say(e, "The limit could not be changed.") });
       }

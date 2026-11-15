@@ -213,6 +213,8 @@ class ThisComputer:
                 model=spec.model or None,
                 spent_usd=who.spent_usd if who else 0.0,
                 limit_usd=who.limit_usd if who else None,
+                spent_tokens=who.spent_tokens if who else 0,
+                limit_tokens=who.limit_tokens if who else None,
                 on_call=self._on_call,
             )
         except Exception as e:

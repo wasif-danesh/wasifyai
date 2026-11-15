@@ -781,6 +781,18 @@ async def test_the_limit_of_a_session_can_be_changed_and_holds_at_the_gateway(bo
     ).status_code == 404
 
 
+async def test_a_session_says_what_it_is_counted_in_and_its_limit_in_tokens_can_be_changed(box):
+    made = await started(box)
+    # a model with a known price is counted in dollars; the usual limit in tokens is said too
+    assert made["counted_in"] == "usd" and made["token_limit"] == 3_000_000
+    url = f"{BASE}/sessions/{made['id']}"
+    changed = await box.http.patch(url, json={"token_limit": 4_000_000})
+    assert changed.status_code == 200 and changed.json()["token_limit"] == 4_000_000
+    assert box.store.get_session(_owner(), made["id"])["token_limit"] == 4_000_000
+    for bad in ({"token_limit": 0}, {"token_limit": 10**10}, {"token_limit": 1.5}):
+        assert (await box.http.patch(url, json=bad)).status_code == 422
+
+
 # ---- a session that changes files (stage C2), through the routes -------------------------------
 
 

@@ -69,6 +69,12 @@
 //                                                               back untouched, the changes applied; a plugin with
 //                                                               a hook that stays off until approved, then runs. A
 //                                                               throwaway DESKTOP_DATA_DIR with the coding engine
+//   WASIFYAI_AUDIT_FOLDER=<a project> WASIFYAI_AUDIT_CODE_MODEL="Claude Opus 5.5" \
+//     apps/desktop/scripts/ui-audit.sh light code-models         Code's model button: every model the saved key
+//                                                               lists under Cloud, one chosen, a real session on
+//                                                               it, and Code's line in "What this computer can
+//                                                               do". A throwaway DESKTOP_DATA_DIR with the coding
+//                                                               engine and DESKTOP_SECRET_STORE=keychain (paid)
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -128,7 +134,7 @@ const { chromium } = require("@playwright/test");
 const OUT = join(ROOT, "docs", "ui-audit", "desktop");
 const BASE = process.env.WASIFYAI_AUDIT_BASE ?? "http://127.0.0.1:8765";
 const TOKEN = process.env.WASIFYAI_AUDIT_TOKEN ?? "";
-const WINDOW = "http://localhost:1420";
+const WINDOW = process.env.WASIFYAI_AUDIT_WINDOW ?? "http://localhost:1420";
 const only = process.argv[2] ?? "";
 const names = new Set((process.argv[3] ?? "").split(",").filter(Boolean));
 const wanted = (name) => names.size === 0 || names.has(name);
@@ -1811,6 +1817,72 @@ for (const scheme of ["light", "dark"]) {
       console.log(`${name}: ${((Date.now() - began) / 1000).toFixed(1)} s`);
       console.log(`  the row says: ${(await row.innerText()).replace(/\s+/g, " ")}`);
       await shot(page, `${name}-after`, 1500);
+    });
+  }
+  // Code's model button (ADR-0101, amendment of 2026-11-15): the key's own models, one chosen, a real session
+  // on it in Plan, its cost, and Code's line in Settings. The model is WASIFYAI_AUDIT_CODE_MODEL (its title)
+  if (scheme === "light" && names.has("code-models")) {
+    await attempt("code-models", async () => {
+      const wanted = process.env.WASIFYAI_AUDIT_CODE_MODEL ?? "Claude Opus 5.5";
+      await open(page, "/code");
+      await page.getByRole("button", { name: "Choose a folder" }).waitFor();
+      const button = page.getByRole("button", {
+        name: /Claude|Qwen|GPT|Gemini|Select coding model/,
+      });
+      await button.first().waitFor();
+      console.log(`code-models: the button says "${(await button.first().innerText()).trim()}"`);
+      await shot(page, "code-models-start", 1200);
+      await button.first().click();
+      const dialog = page.getByRole("dialog");
+      await dialog.waitFor();
+      await page.waitForTimeout(600);
+      await shot(page, "code-models-picker");
+      await dialog.getByRole("tab", { name: "Cloud" }).click();
+      await page.waitForTimeout(600);
+      const rows = await dialog.locator("ul li button").count();
+      console.log(`code-models: ${rows} models under Cloud`);
+      await shot(page, "code-models-cloud", 1400);
+      await dialog.getByText(wanted, { exact: true }).first().click();
+      await page.waitForTimeout(300);
+      const use = dialog.getByRole("button", { name: /^Use/ });
+      if (await use.count()) await use.first().click();
+      await dialog
+        .waitFor({ state: "hidden", timeout: 10_000 })
+        .catch(() => page.keyboard.press("Escape"));
+      await page
+        .getByRole("button", { name: new RegExp(wanted) })
+        .first()
+        .waitFor();
+      await shot(page, "code-models-chosen", 1200);
+      await page.getByRole("button", { name: "Choose a folder" }).click();
+      const box = page.getByRole("textbox", { name: "Ask about this project" });
+      await box.waitFor();
+      await page.getByRole("button", { name: "How much the agent asks: Ask me" }).click();
+      await page.getByRole("menuitemradio", { name: /^Plan/ }).click();
+      await page.getByRole("button", { name: "How much the agent asks: Plan" }).waitFor();
+      const began = Date.now();
+      await box.fill("In two sentences: what is this project?");
+      await box.press("Enter");
+      await page.getByText("Nothing was changed").waitFor({ timeout: 600_000 });
+      console.log(
+        `code-models: ${wanted} answered in ${((Date.now() - began) / 1000).toFixed(1)} s`,
+      );
+      await page.waitForTimeout(800);
+      await shot(page, "code-models-answer", 1200);
+      // the cost in the bar opens to the model and the limit
+      await page
+        .getByRole("button", { name: /^\$\d|tokens$/ })
+        .first()
+        .click();
+      const cost = page.getByRole("dialog", { name: "This session so far" });
+      await cost.waitFor();
+      console.log(`  the cost says: ${(await cost.innerText()).replace(/\s+/g, " ")}`);
+      await shot(page, "code-models-cost", 1200);
+      await open(page, "/settings");
+      const line = page.locator("li", { hasText: /^Code/ }).first();
+      await line.waitFor({ timeout: 20_000 });
+      console.log(`  Settings says: ${(await line.innerText()).replace(/\s+/g, " ")}`);
+      await shot(page, "code-models-can-do", 1200);
     });
   }
   // stage C1b of the coding agent: Code, from the first screen to an answer in Plan, with a real model

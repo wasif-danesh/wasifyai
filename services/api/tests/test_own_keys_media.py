@@ -86,8 +86,9 @@ async def test_one_key_under_media_serves_every_media_product():
     route = await keys.route("images")
     assert route is not None and route.key == "shared-key"
     await keys.save_key("images", "fal", "new-key")  # given under Images, kept under Media
-    route = await keys.route("lipsync")
-    assert (await keys.route("images")).key == "new-key" and route is None  # no lip sync model yet
+    assert await keys.route("lipsync") is None  # no lip sync model yet
+    route = await keys.route("images")
+    assert route is not None and route.key == "new-key"
     # a model none of the keys can run is refused in words
     with pytest.raises(Exception, match="Nano Banana 2.1 needs a Runware or WaveSpeed key"):
         await keys.use("images", None, "nano-banana-2.1")

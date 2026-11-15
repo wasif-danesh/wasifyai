@@ -1,9 +1,9 @@
 "use client";
-// Settings > Your keys (ADR-0095, amendment of 2026-11-11; the approved mockup is docs/spikes/provider-keys-mockup.html,
-// third version): keys only. One row per product with the provider keys saved for it (several are fine), each with
-// Test and Remove, and "Add a key". A row never names a model: the product's model picker lists the models of each
-// provider with a key under Cloud. "Every media product" holds media keys that serve them all (ADR-0100, decision 9);
-// a product's own key for the same provider wins. A key goes to the engine once and is never shown again.
+// Settings › Cloud keys (ADR-0095; ADR-0100 and its amendment of 2026-11-15; the mockup approved on 2026-11-15): keys
+// only, never a model. Chat and writing keeps a key per text vendor. Media keeps one Runware, WaveSpeed and fal.ai key
+// each, under Media, for every media product; each job goes to the cheapest offer with a key. A table shows which
+// provider serves each media product and which products no key covers. The product's model picker lists, under Cloud,
+// the models its keys can run. A key goes to the engine once and is never shown again.
 import type {
   KeyProduct,
   KeyProvider,
@@ -12,7 +12,8 @@ import type {
   OwnKeysApi,
   SavedKey,
 } from "@wasifyai/client";
-import { useEffect, useId, useState } from "react";
+import { Check, Lock, Minus } from "lucide-react";
+import { type ReactNode, useEffect, useId, useState } from "react";
 import { Button } from "../components/button";
 import { ConfirmDialog } from "../components/dialog";
 import { Input } from "../components/input";
@@ -31,14 +32,28 @@ const titleOf = (providers: KeyProvider[], id: string) =>
 /** Whose keys these are: the person's, on this computer; or the service's, kept by an admin on the web (CP11). */
 export type KeysPlace = "computer" | "service";
 
-/** What a row with no key of its own means. */
-function noKey(product: KeyProduct, place: KeysPlace): string {
-  if (product.id === "media") return "No key: add one to use cloud models in every media product.";
-  const otherwise = place === "service" ? "" : ", or this computer's models";
-  if (product.kind === "media") {
-    return `No key of its own: ${product.title} uses the keys under Every media product${otherwise}.`;
-  }
-  return `No key: ${product.title} uses this computer's models only.`;
+/** The key row that serves every media product. */
+const MEDIA = "media";
+
+/** A card of the keys screen: a title, one line under it, then its rows. */
+function Card({
+  title,
+  line,
+  children,
+}: {
+  title: string;
+  line?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-label={title} className="rounded-xl border bg-card">
+      <div className="grid gap-0.5 px-4 pt-3.5 pb-2.5">
+        <h3 className="m-0 font-medium text-base">{title}</h3>
+        {line ? <p className="m-0 text-muted-foreground text-sm">{line}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
 }
 
 export function YourKeys({
@@ -71,27 +86,36 @@ export function YourKeys({
     setKeys(next);
     changed();
   };
+  const text = keys.products.filter((p) => p.kind === "text");
+  const media = keys.products.find((p) => p.id === MEDIA);
+  const served = keys.products.filter((p) => p.kind === "media" && p.id !== MEDIA);
 
   return (
-    <section className="grid gap-4" aria-label={place === "service" ? "Service keys" : "Your keys"}>
-      <h3 className="m-0 font-semibold text-base">
-        {place === "service" ? "Service keys" : "Your keys"}
-      </h3>
+    <div className="grid gap-4" aria-label={place === "service" ? "Service keys" : "Cloud keys"}>
       {place === "service" ? (
-        <p className="m-0 text-muted-foreground text-sm">
-          The service runs every picture, clip, voice, song, lip sync, 3D model and look on cloud
-          models. One Runware, WaveSpeed or fal.ai key under Every media product serves them all;
-          more keys let each job go to the cheapest, and a product's own key bills it apart. A key
-          is encrypted in the service's database and never shown again. Testing a key costs nothing.
-        </p>
+        <div className="grid gap-1.5">
+          <h3 className="m-0 font-semibold text-base">Service keys</h3>
+          <p className="m-0 text-muted-foreground text-sm">
+            The service runs every picture, clip, voice, song, lip sync, 3D model and look on cloud
+            models, on the keys below.
+          </p>
+          <p className="m-0 flex items-center gap-1.5 text-muted-foreground text-xs">
+            <Lock aria-hidden="true" className="size-3.5" />A key is encrypted in the service's
+            database and never shown again. Testing a key costs nothing.
+          </p>
+        </div>
       ) : (
-        <p className="m-0 text-muted-foreground text-sm">
-          Save a provider key for a product, and that provider's models for it appear in the
-          product's model picker, under Cloud. One Runware, WaveSpeed or fal.ai key under Every
-          media product serves pictures, video, voice, music, lip sync and 3D; more keys let each
-          job go to the cheapest. A key is kept in this computer's keychain, used only by its
-          products, and never shown again. Testing a key costs nothing.
-        </p>
+        <div className="grid gap-1.5">
+          <p className="m-0 text-muted-foreground text-sm">
+            Add a provider's key to use its cloud models. They appear in each product's model
+            picker, under Cloud.
+          </p>
+          <p className="m-0 flex items-center gap-1.5 text-muted-foreground text-xs">
+            <Lock aria-hidden="true" className="size-3.5" />
+            Keys stay in this computer's keychain and are never shown again. Testing a key costs
+            nothing.
+          </p>
+        </div>
       )}
       {!keys.can_save ? (
         <Notice tone="warn" title="Keys cannot be kept here">
@@ -100,33 +124,53 @@ export function YourKeys({
             : "This computer has nowhere safe to keep a key, so every product uses this computer's models."}
         </Notice>
       ) : null}
-      <ul className="m-0 grid list-none gap-0 divide-y rounded-xl border p-0">
-        {keys.products.map((p) => (
-          <ProductKeys
-            key={p.id}
+      {text.map((p) => (
+        <Card key={p.id} title={p.title} line="A key from one text provider is enough.">
+          <TextKeys
             api={api}
-            place={place}
             product={p}
             providers={keys.providers}
             canSave={keys.can_save}
             onChanged={update}
           />
-        ))}
-      </ul>
-    </section>
+        </Card>
+      ))}
+      {media ? (
+        <>
+          <Card
+            title="Media"
+            line="To use every media product in the cloud, add a fal.ai key, or both a Runware and a WaveSpeed key. With more than one key, each job goes to the cheapest."
+          >
+            <ul className="m-0 list-none divide-y border-t p-0">
+              {media.providers.map((id) => (
+                <MediaKey
+                  key={id}
+                  api={api}
+                  media={media}
+                  provider={id}
+                  providers={keys.providers}
+                  canSave={keys.can_save}
+                  onChanged={update}
+                />
+              ))}
+            </ul>
+          </Card>
+          <Coverage media={media} served={served} providers={keys.providers} place={place} />
+        </>
+      ) : null}
+    </div>
   );
 }
 
-function ProductKeys({
+/** The text vendors' keys of one product: each saved key, then "Add a key" with the vendors left. */
+function TextKeys({
   api,
-  place,
   product,
   providers,
   canSave,
   onChanged,
 }: {
   api: OwnKeysApi;
-  place: KeysPlace;
   product: KeyProduct;
   providers: KeyProvider[];
   canSave: boolean;
@@ -137,12 +181,10 @@ function ProductKeys({
   const left = product.providers.filter((id) => !saved.has(id));
 
   return (
-    <li className="grid gap-2 p-4 sm:grid-cols-[10rem_minmax(0,1fr)]" aria-label={product.title}>
-      <div className="font-medium text-sm">{product.title}</div>
-      <div className="grid min-w-0 gap-2">
-        {product.keys.map((k) => (
+    <ul className="m-0 list-none divide-y border-t p-0">
+      {product.keys.map((k) => (
+        <li key={k.provider} className="px-4 py-2.5">
           <KeyRow
-            key={k.provider}
             api={api}
             product={product}
             saved={k}
@@ -150,11 +192,15 @@ function ProductKeys({
             inUse={product.use?.provider === k.provider ? product.use.title : null}
             onChanged={onChanged}
           />
-        ))}
-        {product.keys.length === 0 && !adding ? (
-          <p className="m-0 text-muted-foreground text-sm">{noKey(product, place)}</p>
-        ) : null}
-        {adding ? (
+        </li>
+      ))}
+      {product.keys.length === 0 && !adding ? (
+        <li className="px-4 py-2.5 text-muted-foreground text-sm">
+          No key: {product.title.toLowerCase()} uses this computer's models only.
+        </li>
+      ) : null}
+      {adding ? (
+        <li className="p-3">
           <AddKey
             api={api}
             product={product}
@@ -165,24 +211,208 @@ function ProductKeys({
             }}
             onCancel={() => setAdding(false)}
           />
-        ) : left.length && canSave ? (
-          <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
-            <Button
-              type="button"
-              variant="link"
-              className="h-auto p-0"
-              aria-label={`Add a key for ${product.title}`}
-              onClick={() => setAdding(true)}
-            >
-              + Add a key
-            </Button>
-            <span className="text-muted-foreground text-xs">
-              {left.map((id) => titleOf(providers, id)).join(", ")}
-            </span>
-          </div>
+        </li>
+      ) : left.length && canSave ? (
+        <li className="flex flex-wrap items-baseline gap-x-2 px-4 py-2.5 text-sm">
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0"
+            aria-label={`Add a key for ${product.title}`}
+            onClick={() => setAdding(true)}
+          >
+            + Add a key
+          </Button>
+          <span className="text-muted-foreground text-xs">
+            {left.map((id) => titleOf(providers, id)).join(", ")}
+          </span>
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
+/** One media provider's row: its saved key with Test and Remove, or "No key" with "Add a key". */
+function MediaKey({
+  api,
+  media,
+  provider,
+  providers,
+  canSave,
+  onChanged,
+}: {
+  api: OwnKeysApi;
+  media: KeyProduct;
+  provider: string;
+  providers: KeyProvider[];
+  canSave: boolean;
+  onChanged: (keys: OwnKeys) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const title = titleOf(providers, provider);
+  const saved = media.keys.find((k) => k.provider === provider);
+  if (saved) {
+    return (
+      <li className="px-4 py-2.5">
+        <KeyRow
+          api={api}
+          product={media}
+          saved={saved}
+          title={title}
+          inUse={null}
+          onChanged={onChanged}
+        />
+      </li>
+    );
+  }
+  return (
+    <li className="grid gap-2 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-medium text-sm">{title}</span>
+        <span className="text-muted-foreground text-sm">No key</span>
+        {canSave && !adding ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ms-auto"
+            aria-label={`Add a ${title} key`}
+            onClick={() => setAdding(true)}
+          >
+            Add a key
+          </Button>
         ) : null}
       </div>
+      {adding ? (
+        <AddKey
+          api={api}
+          product={media}
+          providers={providers.filter((v) => v.id === provider)}
+          onDone={(next) => {
+            onChanged(next);
+            setAdding(false);
+          }}
+          onCancel={() => setAdding(false)}
+        />
+      ) : null}
     </li>
+  );
+}
+
+/** Media products that the same providers serve share a row of the table. */
+type Group = { titles: string[]; providers: string[] };
+
+function groupsOf(served: KeyProduct[]): Group[] {
+  const groups: Group[] = [];
+  for (const p of served) {
+    const same = groups.find((g) => g.providers.join() === p.providers.join());
+    if (same) same.titles.push(p.title);
+    else groups.push({ titles: [p.title], providers: [...p.providers] });
+  }
+  return groups;
+}
+
+/** What the Media keys cover: products by provider, with the ones no key covers named. */
+function Coverage({
+  media,
+  served,
+  providers,
+  place,
+}: {
+  media: KeyProduct;
+  served: KeyProduct[];
+  providers: KeyProvider[];
+  place: KeysPlace;
+}) {
+  const have = new Set(media.keys.map((k) => k.provider));
+  const covered = served.filter((p) => p.providers.some((id) => have.has(id))).length;
+  const elsewhere =
+    place === "service" ? "cannot run until a key covers them" : "run on this computer's models";
+  const status =
+    covered === served.length
+      ? { tone: "text-ok", words: "Your keys cover every media product." }
+      : covered === 0
+        ? {
+            tone: "text-muted-foreground",
+            words: `No media key yet: every media product ${place === "service" ? "is off" : "runs on this computer's models"}.`,
+          }
+        : {
+            tone: "text-warn",
+            words: `Your keys cover ${covered} of ${served.length} media products. The rest ${elsewhere}.`,
+          };
+  return (
+    <Card
+      title="What your keys cover"
+      line={
+        place === "service"
+          ? undefined
+          : "A product a key covers runs on this computer until you choose a cloud model in its picker."
+      }
+    >
+      <output className={`m-0 block px-4 pb-2.5 text-sm ${status.tone}`}>{status.words}</output>
+      <table className="w-full table-fixed border-collapse text-sm">
+        <caption className="sr-only">Which provider serves each media product</caption>
+        <thead>
+          <tr className="border-t">
+            <th
+              scope="col"
+              className="w-1/2 px-4 py-2 text-start font-medium text-muted-foreground text-xs"
+            >
+              Product
+            </th>
+            {media.providers.map((id) => (
+              <th
+                key={id}
+                scope="col"
+                className="px-2 py-2 text-center font-medium text-muted-foreground text-xs"
+              >
+                {titleOf(providers, id)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groupsOf(served).map((g) => {
+            const none = !g.providers.some((id) => have.has(id));
+            return (
+              <tr key={g.titles.join()} className="border-t align-top">
+                <th scope="row" className="px-4 py-2.5 text-start font-normal">
+                  {g.titles.join(", ")}
+                  {none ? (
+                    <span className="block text-warn text-xs">
+                      Needs a {g.providers.map((id) => titleOf(providers, id)).join(" or ")} key
+                    </span>
+                  ) : null}
+                </th>
+                {media.providers.map((id) => (
+                  <td key={id} className="px-2 py-2.5 text-center">
+                    {!g.providers.includes(id) ? (
+                      <Minus
+                        role="img"
+                        aria-label="Not offered"
+                        className="inline size-4 text-muted-foreground/60"
+                      />
+                    ) : have.has(id) ? (
+                      <Check
+                        role="img"
+                        aria-label="Covered by your key"
+                        className="inline size-4 text-ok"
+                      />
+                    ) : (
+                      <Check
+                        role="img"
+                        aria-label="Offered, no key saved"
+                        className="inline size-4 text-muted-foreground/60"
+                      />
+                    )}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 
@@ -228,7 +458,7 @@ function KeyRow({
             aria-hidden="true"
             className={`size-2 rounded-full ${saved.state === "ok" ? "bg-ok" : "bg-destructive"}`}
           />
-          {saved.state === "ok" ? "Saved · works" : "Key not working"}
+          {saved.state === "ok" ? "Works" : "Key not working"}
         </span>
         <span className="ms-auto flex gap-2">
           <Button
@@ -265,7 +495,11 @@ function KeyRow({
       {removing ? (
         <ConfirmDialog
           title={`Remove the ${title} key for ${product.title}?`}
-          message={`The key is deleted from this computer's keychain and ${title}'s models leave the ${product.title} picker.${inUse ? ` ${product.title} goes back to this computer's model.` : ""}`}
+          message={
+            product.id === MEDIA
+              ? `The key is deleted and ${title}'s models leave the picker of every media product. A product whose model only ${title} runs goes back to this computer's model.`
+              : `The key is deleted from this computer's keychain and ${title}'s models leave the ${product.title} picker.${inUse ? ` ${product.title} goes back to this computer's model.` : ""}`
+          }
           confirmLabel="Remove"
           onConfirm={() => {
             setRemoving(false);
@@ -318,8 +552,17 @@ function AddKey({
       className="grid gap-3 rounded-lg border bg-muted/40 p-3"
       aria-label={`Add a key for ${product.title}`}
     >
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-        <div className="grid gap-1.5">
+      {providers.length === 1 ? (
+        <p className="m-0 font-medium text-sm">Your {providers[0]?.title} key</p>
+      ) : null}
+      <div
+        className={
+          providers.length > 1
+            ? "grid gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]"
+            : "grid gap-3"
+        }
+      >
+        <div className={providers.length > 1 ? "grid gap-1.5" : "hidden"}>
           <Label htmlFor={ids.provider}>Provider</Label>
           <Select
             id={ids.provider}

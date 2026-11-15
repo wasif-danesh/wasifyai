@@ -128,3 +128,8 @@ stands, now one key per provider within a product.
    are unchanged.
 
 **Built 2026-11-11** against fakes of all three providers. Not seen in the real window; no real key used yet.
+
+## Note (2026-11-15)
+
+Media keys are no longer kept per product: ADR-0100's amendment of 2026-11-15 keeps Runware, WaveSpeed and fal.ai keys
+once, under Media, for every media product. Text keys stay per product.

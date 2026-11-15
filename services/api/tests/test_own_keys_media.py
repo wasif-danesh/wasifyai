@@ -42,11 +42,10 @@ async def test_with_no_key_every_job_stays_on_this_computer():
         assert await router.resolve(job(product, cap)) is local
 
 
-async def test_a_product_on_a_cloud_model_runs_its_offers_with_its_own_key():
+async def test_a_product_on_a_cloud_model_runs_its_offers_with_the_media_key():
     router, keys, local = rig()
     await keys.save_key("images", "fal", "img-key")
     await keys.use("images", None, "flux-3-klein")
-    await keys.save_key("video", "fal", "vid-key")
     await keys.use("video", None, "minimax-h3-max")
     pic = await router.resolve(job("wasifyai-image", "image.generate"))
     clip = await router.resolve(job("wasifyai-video", "video.animate"))
@@ -59,8 +58,8 @@ async def test_a_product_on_a_cloud_model_runs_its_offers_with_its_own_key():
     assert fal_pic.backend == "fal" and fal_pic._queue._headers == {"Authorization": "Key img-key"}
     assert fal_pic._offer.endpoint_for("edit") == "blackforestlabs/flux-3/klein/edit-image"
     assert fal_clip._offer.endpoint_for("extend") == "minimax/h3-max/extend-video"
-    assert fal_clip._queue._headers == {"Authorization": "Key vid-key"}
-    # other products are not affected by these keys
+    assert fal_clip._queue._headers == {"Authorization": "Key img-key"}  # one key for both
+    # a product with no cloud model chosen stays on this computer
     assert await router.resolve(job("wasifyai-voice", "music.generate")) is local
 
 
@@ -76,7 +75,7 @@ async def test_back_to_this_computer_applies_to_the_next_job():
     assert await router.resolve(job("wasifyai-image", "image.generate")) is local
 
 
-async def test_one_key_under_every_media_product_serves_them_all_and_a_products_own_wins():
+async def test_one_key_under_media_serves_every_media_product():
     router, keys, local = rig()
     await keys.save_key("media", "fal", "shared-key")
     view = {p["id"]: p for p in (await keys.view())["products"]}
@@ -86,14 +85,14 @@ async def test_one_key_under_every_media_product_serves_them_all_and_a_products_
     await keys.use("images", None, "flux-3-klein")
     route = await keys.route("images")
     assert route is not None and route.key == "shared-key"
-    await keys.save_key("images", "fal", "own-key")
+    await keys.save_key("images", "fal", "new-key")  # given under Images, kept under Media
+    assert await keys.route("lipsync") is None  # no lip sync model yet
     route = await keys.route("images")
-    assert route is not None and route.key == "own-key"
+    assert route is not None and route.key == "new-key"
     # a model none of the keys can run is refused in words
     with pytest.raises(Exception, match="Nano Banana 2.1 needs a Runware or WaveSpeed key"):
         await keys.use("images", None, "nano-banana-2.1")
-    # the shared key gone, its products run here again (unless they have their own)
-    await keys.remove_key("images", "fal")
+    # the key gone, its products run here again
     await keys.remove_key("media", "fal")
     assert await router.resolve(job("wasifyai-image", "image.generate")) is local
 

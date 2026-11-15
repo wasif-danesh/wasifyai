@@ -10,7 +10,7 @@ vi.mock("@/lib/run-client", () => ({ transport: { fetch: vi.fn() } }));
 const products = [
   {
     id: "media",
-    title: "Every media product",
+    title: "Media",
     kind: "media",
     providers: ["runware", "wavespeed", "fal"],
     keys: [{ provider: "fal", state: "ok", said: null, tested_at: 1 }],
@@ -63,7 +63,7 @@ describe("Admin › Media", () => {
     expect(screen.getByText(/encrypted in the service's database/)).toBeTruthy();
     expect(screen.queryByText(/keychain/)).toBeNull();
     await waitFor(() => expect(screen.getByRole("heading", { name: "Models" })).toBeTruthy());
-    // the media row "Every media product" holds keys only; Images has its model
+    // the Media row holds keys only; Images has its model
     expect(await screen.findByText(/GPT Image 2.5 · from \$0.04 per picture/)).toBeTruthy();
   });
 });

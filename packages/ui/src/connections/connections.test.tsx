@@ -82,17 +82,29 @@ describe("Settings > Connections", () => {
     const box = await screen.findByRole("checkbox", { name: /let other apps use wasify ai/i });
     expect(box).not.toBeChecked();
     expect(screen.queryByText(/claude mcp add/)).toBeNull();
+    expect(
+      screen.getByText(/Off: Claude Code, Codex and OpenCode cannot reach/),
+    ).toBeInTheDocument();
     await user.click(box);
     await waitFor(() => expect(a.setLauncher).toHaveBeenCalledWith(true));
+    // "Connect an app" asks which app, then gives that app's one step
+    await user.click(await screen.findByRole("button", { name: "+ Connect an app" }));
+    await user.click(screen.getByRole("button", { name: "Claude Code" }));
     expect(await screen.findByText(/claude mcp add/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Codex" }));
     expect(screen.getByText(/mcp_servers.wasify/)).toBeInTheDocument();
+    expect(screen.queryByText(/claude mcp add/)).toBeNull();
   });
 
   it("lists a connection with its scopes in words, and a change goes to the engine", async () => {
     const a = api();
     const user = userEvent.setup();
     render(<ConnectionsSettings api={a} />);
-    expect(await screen.findByText("Codex")).toBeInTheDocument();
+    const row = await screen.findByRole("listitem", { name: "Codex" });
+    // one line in words; the details only after Change
+    expect(row).toHaveTextContent("Can make things; asks before it makes something. Never used.");
+    expect(screen.queryByRole("checkbox", { name: /see and change your creations/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Change what Codex may do" }));
     const library = screen.getByRole("checkbox", { name: /see and change your creations/i });
     expect(library).not.toBeChecked();
     await user.click(library);
@@ -110,6 +122,7 @@ describe("Settings > Connections", () => {
   it("saves the daily quota of a connection", async () => {
     const a = api();
     render(<ConnectionsSettings api={a} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Change what Codex may do" }));
     const quota = await screen.findByLabelText(/tool calls a day/i);
     expect(quota).toHaveValue(1000);
     // the new number in one change, not cleared and typed key by key: on a busy runner the
@@ -164,6 +177,7 @@ describe("Settings > Connections", () => {
     });
     const user = userEvent.setup();
     render(<ConnectionsSettings api={a} />);
+    await user.click(await screen.findByRole("button", { name: /For experts/ }));
     await user.type(await screen.findByLabelText("Port"), "8765");
     await user.click(screen.getByRole("button", { name: "Turn on" }));
     await waitFor(() => expect(a.setFixedPort).toHaveBeenCalledWith(8765));
@@ -173,10 +187,25 @@ describe("Settings > Connections", () => {
     expect(await screen.findByText(/name: wasify-ai/)).toBeInTheDocument();
   });
 
+  it("hides removed connections until asked for", async () => {
+    const a = api({
+      list: vi.fn(async () => ({
+        connections: [codex, { ...codex, id: "c3", name: "J3 stop check", revoked: true }],
+      })),
+    });
+    const user = userEvent.setup();
+    render(<ConnectionsSettings api={a} />);
+    expect(await screen.findByText("Codex")).toBeInTheDocument();
+    expect(screen.queryByText("J3 stop check")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Show 1 removed connection" }));
+    expect(screen.getByText("J3 stop check")).toBeInTheDocument();
+  });
+
   it("adds a connection and shows its secret once", async () => {
     const a = api();
     const user = userEvent.setup();
     render(<ConnectionsSettings api={a} />);
+    await user.click(await screen.findByRole("button", { name: /For experts/ }));
     await user.type(await screen.findByLabelText("New connection"), "Claude Code at work");
     await user.click(screen.getByRole("button", { name: "Add" }));
     expect(await screen.findByText("wsc_c2_abcdefghijklmnopqrstuvwxyz")).toBeInTheDocument();
@@ -313,7 +342,10 @@ describe("Tools from other apps (ADR-0070)", () => {
     const user = userEvent.setup();
     render(<ExternalServers api={a} />);
     expect(await screen.findByText("github")).toBeInTheDocument();
-    expect(screen.getByText(/talks to mcp.github.example/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Talks to mcp.github.example. Asks you before every call./),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Change github" }));
     expect(screen.getByText(/3 calls, 2 KB sent, 40 KB received/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Test" }));
     expect(await screen.findByText("search_issues")).toBeInTheDocument();
@@ -330,6 +362,7 @@ describe("Tools from other apps (ADR-0070)", () => {
     const a = externalApiWith();
     const user = userEvent.setup();
     render(<ExternalServers api={a} />);
+    await user.click(await screen.findByRole("button", { name: "+ Add a tool server" }));
     await user.type(await screen.findByLabelText("Add a server"), "files");
     await user.selectOptions(screen.getByLabelText("Kind"), "stdio");
     await user.type(screen.getByLabelText(/command, with its arguments/i), "npx -y server-fs /tmp");
@@ -476,13 +509,14 @@ describe("a server's question as a form (ADR-0070 decision 10)", () => {
     });
     const user = userEvent.setup();
     render(<ExternalServers api={external} />);
+    await user.click(await screen.findByRole("button", { name: "Bring from another app" }));
     await user.selectOptions(await screen.findByLabelText("From"), "codex");
     await user.click(screen.getByRole("button", { name: "Find servers" }));
     expect(await screen.findByText("jira")).toBeInTheDocument();
     expect(screen.getByText(/with JIRA_TOKEN/)).toBeInTheDocument();
     expect(screen.getByText(/sse is not supported/)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Add" })).toHaveLength(2); // the form's Add and jira's
-    await user.click(screen.getAllByRole("button", { name: "Add" })[1] as HTMLElement);
+    expect(screen.getAllByRole("button", { name: "Add" })).toHaveLength(1); // jira's; the form is closed
+    await user.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() =>
       expect(external.importAdd).toHaveBeenCalledWith({ source: "codex" }, "jira"),
     );

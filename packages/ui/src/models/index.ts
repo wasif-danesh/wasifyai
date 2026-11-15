@@ -12,3 +12,4 @@ export {
 export { COPY, type Copy, displayName, hostOf, plainFor } from "./copy";
 export { ComputerCanDo } from "./CanDo";
 export { ReadyDot, type Readiness, readinessOf } from "./marks";
+export { AgentPrograms, AgentTab } from "./AgentTab";

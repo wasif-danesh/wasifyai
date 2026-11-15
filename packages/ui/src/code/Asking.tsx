@@ -166,17 +166,31 @@ export function AskCard({
 }
 
 /** The mode, as a pill in the box you write in; it opens to the three modes and the project's list. */
+/** What a mode says on the person's own agent program (ADR-0107): two modes, and "Ask me" says why it is not there. */
+export function agentSays(key: CodeMode, agent: { title: string; provider: string }): string {
+  if (key === "plan") {
+    return "Reads the project and writes a plan. Changes no file: the folder is opened for reading only.";
+  }
+  if (key === "ask") {
+    return `Not with ${agent.title}: it does not stop to ask during a turn. Choose Wasify AI's own agent for this.`;
+  }
+  return `Changes files and runs commands without asking. It still cannot leave this folder or reach anything but ${agent.provider}, and every turn can be undone.`;
+}
+
 export function ModePill({
   mode,
   disabled,
   onChange,
   onOpenMay,
+  agent,
 }: {
   mode: CodeMode;
   /** the agent is working: Plan cannot be entered or left until it has ended */
   disabled: boolean;
   onChange: (mode: CodeMode) => void;
   onOpenMay: () => void;
+  /** the session runs on the person's own agent program: "Ask me" cannot be chosen */
+  agent?: { title: string; provider: string } | null;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement | null>(null);
@@ -220,7 +234,10 @@ export function ModePill({
             const m = MODES[key];
             const MIcon = m.icon;
             // to or from Plan the agent's tools change, which cannot happen in the middle of a turn
-            const blocked = disabled && key !== mode && (key === "plan" || mode === "plan");
+            const busy = disabled && key !== mode && (key === "plan" || mode === "plan");
+            // the person's own agent program does not stop to ask during a turn
+            const notHere = Boolean(agent) && key === "ask" && mode !== "ask";
+            const blocked = busy || notHere;
             return (
               <button
                 key={key}
@@ -238,8 +255,8 @@ export function ModePill({
                 <span className="font-medium">{m.label}</span>
                 {key === mode ? <Check aria-hidden="true" className="mt-0.5 size-4" /> : <span />}
                 <span className="col-start-2 col-end-4 text-xs text-muted-foreground">
-                  {m.says}
-                  {blocked ? " Not while the agent is working." : ""}
+                  {agent ? agentSays(key, agent) : m.says}
+                  {busy ? " Not while the agent is working." : ""}
                 </span>
               </button>
             );

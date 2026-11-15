@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your own agent: mockup</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(20% 0.014 255));
+    --surface-2: light-dark(oklch(95.5% 0.006 250), oklch(25% 0.016 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(32% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 12%, transparent);
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --ok: light-dark(oklch(52% 0.13 155), oklch(74% 0.14 155));
+    --warn: light-dark(oklch(55% 0.13 70), oklch(80% 0.13 80));
+    --warn-soft: color-mix(in oklch, var(--warn) 14%, transparent);
+    --plan: light-dark(oklch(50% 0.14 300), oklch(78% 0.11 300));
+    --plan-soft: color-mix(in oklch, var(--plan) 13%, transparent);
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
+  .note { max-width: 1120px; margin: 18px auto 0; padding: 0 16px; color: var(--muted); font-size: 13px; }
+  .note b { color: var(--text); }
+  .tabs { max-width: 1120px; margin: 10px auto 0; padding: 0 16px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tabs button, .theme button { border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .tabs button[aria-selected="true"], .theme button[aria-pressed="true"] { background: var(--accent);
+    border-color: var(--accent); color: var(--on-accent); }
+  .theme { display: flex; gap: 6px; margin-left: auto; }
+  .what { max-width: 1120px; margin: 10px auto 0; padding: 0 16px; font-size: 13px; color: var(--muted); }
+  .what b { color: var(--text); }
+
+  /* the window */
+  .win { max-width: 1120px; margin: 10px auto 24px; border: 1px solid var(--border); border-radius: 14px;
+         background: var(--bg); display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 640px;
+         overflow: hidden; }
+  @media (max-width: 760px) { .win { grid-template-columns: minmax(0, 1fr); } .side { display: none; } }
+  .side { background: var(--surface-2); border-right: 1px solid var(--border); padding: 14px 10px; display: grid;
+          align-content: start; gap: 2px; font-size: 13.5px; }
+  .side .brand { font-weight: 700; font-size: 16px; padding: 4px 10px 12px; }
+  .side .it { padding: 6px 10px; border-radius: 8px; color: var(--text); }
+  .side .sub { padding-left: 26px; }
+  .side .on { background: var(--accent-soft); }
+  .side .dim { color: var(--muted); }
+  .app { display: grid; grid-template-rows: 48px minmax(0, 1fr); min-width: 0; position: relative; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border);
+         background: var(--surface); min-width: 0; white-space: nowrap; overflow: hidden; font-size: 13px; }
+  .bar .crumb { color: var(--muted); } .bar b { font-weight: 600; }
+  .bar .ask { color: var(--muted); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .bar .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px;
+          padding: 1px 9px; font-size: 12.5px; background: var(--surface); color: var(--text); font-family: inherit;
+          cursor: pointer; white-space: nowrap; }
+  .pill.plan { border-color: color-mix(in oklch, var(--plan) 45%, var(--border)); background: var(--plan-soft); }
+  .pill.money { background: var(--accent-soft); border-color: transparent; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.plan { background: var(--plan); } .dot.warn { background: var(--warn); }
+  .mb { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 10px;
+        padding: 4px 12px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600;
+        cursor: pointer; }
+  main { min-width: 0; overflow: hidden; }
+  .pad { padding: 22px 28px; display: grid; gap: 16px; align-content: start; }
+  h1 { margin: 0; font-size: 20px; } h2 { margin: 0; font-size: 15px; }
+  .lead { margin: 0; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+         padding: 5px 12px; font: inherit; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 0; }
+  .btn.small { padding: 2px 9px; font-size: 12.5px; }
+  .btn:focus-visible, .item:focus-visible, .tabs button:focus-visible, .pill:focus-visible, .mb:focus-visible,
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  /* the model panel */
+  .panel { position: absolute; z-index: 5; top: 44px; left: 52px; width: min(470px, calc(100% - 24px));
+           background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px;
+           box-shadow: 0 14px 36px rgb(0 0 0 / .25); }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 999px;
+         padding: 4px; gap: 2px; }
+  .seg button { border: 0; background: none; color: var(--muted); border-radius: 999px; padding: 6px 6px;
+                font: inherit; font-size: 13px; cursor: pointer; line-height: 1.2; }
+  .seg button[aria-selected="true"] { background: var(--surface-2); color: var(--text); }
+  .list { display: grid; gap: 2px; margin-top: 6px; max-height: 470px; overflow: auto; }
+  .gh { font-size: 12px; color: var(--muted); font-weight: 600; padding: 10px 12px 2px; display: flex; gap: 8px;
+        align-items: center; justify-content: space-between; }
+  .item { display: grid; gap: 1px; text-align: left; border: 0; background: none; color: var(--text); font: inherit;
+          padding: 8px 12px; border-radius: 10px; cursor: pointer; width: 100%; }
+  .item:hover, .item[aria-current="true"] { background: var(--surface-2); }
+  .item[aria-current="true"] { background: var(--accent-soft); }
+  .item .t { font-weight: 500; display: flex; justify-content: space-between; gap: 8px; }
+  .item .d { color: var(--muted); font-size: 13px; }
+  .item .s { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--plan); }
+  .badge { font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; font-weight: 500;
+           color: var(--muted); }
+  .prog { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin: 4px 2px 8px; display: grid;
+          gap: 8px; }
+  .prog .head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .prog .state { font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
+  .prog .state.ok { color: var(--ok); }
+  .meter { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--accent); width: 40%; }
+
+  /* the session */
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr); height: 100%; }
+  @media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); } .files { display: none; } }
+  .chat { display: grid; grid-template-rows: minmax(0, 1fr) auto; border-right: 1px solid var(--border);
+          min-height: 592px; }
+  .thread { padding: 18px; display: grid; gap: 12px; align-content: start; }
+  .me { justify-self: end; background: var(--accent-soft); border-radius: 14px; padding: 8px 13px; max-width: 85%; }
+  .steps { border: 1px solid var(--border); border-radius: 12px; padding: 7px 12px; color: var(--muted);
+           font-size: 13px; display: grid; gap: 3px; }
+  .steps .l { display: flex; gap: 8px; } .steps code { font-family: var(--mono); font-size: 12px; }
+  .card { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px;
+          background: var(--surface); }
+  .card.good { border-color: color-mix(in oklch, var(--ok) 40%, var(--border)); }
+  .card.warn { border-color: color-mix(in oklch, var(--warn) 50%, var(--border)); background: var(--warn-soft); }
+  .card.plan { border-color: color-mix(in oklch, var(--plan) 40%, var(--border)); background: var(--plan-soft); }
+  .card h3 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .card p { margin: 0; }
+  .box { margin: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
+         padding: 10px 12px; display: grid; gap: 10px; position: relative; }
+  .box .ph { color: var(--muted); padding: 2px 4px; }
+  .box .row { justify-content: space-between; }
+  .send { width: 30px; height: 30px; border-radius: 8px; border: 0; background: var(--accent); color: var(--on-accent);
+          font-size: 15px; }
+  .files { padding: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .ftabs { display: flex; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .ftabs span { padding: 3px 10px; border-radius: 8px; color: var(--muted); }
+  .ftabs span:first-child { background: var(--surface-2); color: var(--text); font-weight: 600; }
+  .tree { padding: 10px 14px; font-size: 13px; display: grid; gap: 5px; align-content: start; color: var(--text); }
+  .tree .ch { color: var(--ok); font-size: 11.5px; }
+
+  /* popovers */
+  .pop { position: absolute; z-index: 6; background: var(--surface); border: 1px solid var(--border);
+         border-radius: 14px; padding: 12px 14px; box-shadow: 0 14px 36px rgb(0 0 0 / .25); display: grid; gap: 8px;
+         font-size: 13px; }
+  .pop table { border-collapse: collapse; width: 100%; } .pop td { padding: 2px 0; }
+  .pop td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .menu { width: 330px; padding: 6px; gap: 0; }
+  .mi { display: grid; grid-template-columns: 22px minmax(0, 1fr) 16px; gap: 4px; padding: 8px 8px; border-radius: 10px; }
+  .mi:hover { background: var(--surface-2); }
+  .mi .d { color: var(--muted); font-size: 12.5px; } .mi.off { opacity: .55; }
+  .mi.off:hover { background: none; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 4px 0; }
+
+  /* settings and lists */
+  .rows { display: grid; border-top: 1px solid var(--border); }
+  .r { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 12px 4px;
+       border-bottom: 1px solid var(--border); align-items: center; }
+  .r .t { font-weight: 600; } .r .d { color: var(--muted); font-size: 13px; }
+  .r .s { font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; }
+  .proj { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px 14px;
+          display: grid; gap: 8px; }
+  .sess { display: flex; gap: 10px; align-items: center; font-size: 13.5px; }
+  .sess .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sess .m { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .scrim { position: absolute; inset: 0; background: rgb(0 0 0 / .32); display: grid; place-items: center; z-index: 8; }
+  .dialog { width: min(470px, calc(100% - 32px)); background: var(--surface); border: 1px solid var(--border);
+            border-radius: 16px; padding: 18px 20px; display: grid; gap: 12px; }
+  .dialog ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  .changes { max-width: 1120px; margin: 0 auto 40px; padding: 0 16px; color: var(--muted); font-size: 13px; }
+  .changes h3 { color: var(--text); font-size: 14px; margin: 16px 0 6px; }
+  .changes ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  .changes b { color: var(--text); }
+</style>
+</head>
+<body>
+<p class="note"><b>Mockup (not built), 2026-11-15, stage H2 of ADR-0107.</b> A coding session can run on the
+person's own <b>Claude Code</b> or <b>Codex</b>, on their own plan. The engine side is built (H1). These are the
+screens that show it. The example project is <code>bakery-site</code>.</p>
+
+<div class="tabs" role="tablist" aria-label="Screens in this mockup" id="tabs"></div>
+<p class="what" id="what"></p>
+
+<div class="win">
+  <nav class="side" aria-label="Menu">
+    <div class="brand">Wasify AI</div>
+    <div class="it dim">New chat</div><div class="it dim">Images</div><div class="it dim">Video</div>
+    <div class="it">Code</div>
+    <div class="it sub" id="nav-projects">Projects</div>
+    <div class="it sub dim">Scheduled</div>
+    <div class="it sub" id="nav-ext">Extensions</div>
+    <div class="it dim">Library</div><div class="it dim">Model hub</div>
+    <div class="it" id="nav-settings" style="margin-top:12px">Settings</div>
+  </nav>
+  <div class="app" id="app"></div>
+</div>
+
+<div class="changes">
+  <h3>What changes from today's screens</h3>
+  <ul>
+    <li><b>The model button in Code</b> gets a fourth tab, <b>Your agent</b>, next to Recommended, On this computer and
+      Cloud. It lists Claude Code and Codex. Each one shows whether it is signed in and which plan it is on, then the
+      models that plan offers, with "Its own choice" first. The other three tabs are Wasify AI's own agent, as today.</li>
+    <li><b>Setting up and signing in happen in that tab.</b> "Set up" installs both programs (694 MB, said before it starts).
+      "Sign in" opens the program's own sign-in page in your browser. Wasify AI never sees the password or the token.</li>
+    <li><b>Once, before the first session on Claude Code or Codex,</b> a short note says how it differs: it
+      does not ask during a turn, it stays in the folder, and every turn can be undone.</li>
+    <li><b>Two modes, not three.</b> "Ask me" is shown greyed, with one line saying why. Sessions already set to
+      "Ask me" start in Plan.</li>
+    <li><b>The bar shows the program and "Your Claude plan" or "Your ChatGPT plan"</b> where it shows dollars today.
+      Opening it shows what the program reported (cost and tokens). It says there is no limit of ours, because the
+      plan's own limits apply.</li>
+    <li><b>When the plan says no</b> (signed out, limit reached), the program's own words are shown in a card, with
+      one way forward.</li>
+    <li><b>Extensions</b> says, in one line on the screen and in the session's "+" menu, that they are for Wasify AI's own
+      agent; Claude Code and Codex use their own.</li>
+    <li><b>Projects</b> shows which agent each session ran on. <b>Settings › Code</b> gets a short "Your agent
+      programs" list with the same sign-in state and "Sign in" and "Remove".</li>
+    <li><b>Not in this mockup:</b> Gemini CLI (waiting on question 3); "Add your own agent"; Scheduled on a harness
+      (stage H3).</li>
+  </ul>
+</div>
+
+<script>
+const SCREENS = [
+  ["pick", "Your agent tab",
+   "The model button in Code. A fourth tab lists the person's own agent programs, their sign-in state and the models their plan offers."],
+  ["pick-setup", "Not set up yet",
+   "The same tab before the programs are installed. One button sets up both, and the size is said first."],
+  ["pick-signin", "Signing in",
+   "After \"Sign in\": the program has opened its own page in the browser. The tab waits, and shows a link in case no page opened."],
+  ["first", "Before the first session",
+   "Shown once, before the first session on Claude Code or Codex. It says how this agent differs, in four lines."],
+  ["session", "A session at work",
+   "A session on Claude Code. The bar shows the program, its model and \"Your Claude plan\". The steps, checks, Changes and Undo are as today."],
+  ["modes", "Two modes",
+   "The mode menu on a harness. \"Ask me\" is greyed and says why. Plan is read-only, because the sandbox only lets it read."],
+  ["cost", "What it reported",
+   "The plan pill opened: what the program reported for this session. No limit of ours."],
+  ["limit", "When the plan says no",
+   "The program's own message when the plan's limit is reached or the sign-in has ended, with one way forward each."],
+  ["plus", "The \"+\" menu",
+   "The box's \"+\" menu on a harness: adding files works; skills say they are for Wasify AI's agent."],
+  ["projects", "Projects",
+   "Each session's row says which agent it ran on."],
+  ["extensions", "Extensions",
+   "One line at the top of Extensions."],
+  ["settings", "Settings › Code",
+   "The agent programs in Settings: sign-in state, Sign in, Remove."],
+];
+let screen = new URLSearchParams(location.search).get("s") || "pick";
+let tab = "agent";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+const CLAUDE = { id: "claude-code", title: "Claude Code", plan: "Max plan", payer: "Your Claude plan",
+  models: [["Its own choice", "Whatever Claude Code picks on your plan."], ["Opus", "The most careful. Uses the plan fastest."],
+           ["Sonnet", "Most work."], ["Haiku", "Quick, small changes. Uses the plan slowest."]] };
+const CODEX = { id: "codex", title: "Codex", plan: "Plus plan", payer: "Your ChatGPT plan",
+  models: [["Its own choice", "Whatever Codex picks on your plan."], ["GPT-5.6", "Most work."],
+           ["GPT-5.6 Terra", "Quicker and lighter on the plan."]] };
+
+function topBar(kind) {
+  if (kind === "code") {
+    return `<div class="bar"><b>Code</b>
+      <button class="mb" aria-haspopup="dialog" aria-expanded="${screen.startsWith("pick")}">
+        <span class="dot plan"></span>Claude Code · Sonnet ▾</button>
+      <span class="crumb">for a new session</span>
+      <span class="right"><span class="pill"><span class="dot"></span>Idle</span></span></div>`;
+  }
+  if (kind === "session") {
+    return `<div class="bar"><span class="crumb">Projects ›</span><b>bakery-site</b>
+      <span class="ask">· Say "Closed today" on Mondays</span>
+      <span class="crumb">Claude Code · Sonnet</span>
+      <span class="pill">${screen === "limit" ? "Stopped" : screen === "modes" ? "Plan" : "Work on its own"}</span>
+      <span class="pill"><span class="dot ok"></span>Passed</span>
+      <button class="pill plan" aria-expanded="${screen === "cost"}">${CLAUDE.payer}</button>
+      <span class="right"><span class="pill"><span class="dot"></span>Idle</span></span></div>`;
+  }
+  return `<div class="bar"><b>${esc(kind)}</b><span class="right"><span class="pill"><span class="dot"></span>Idle</span></span></div>`;
+}
+
+function seg() {
+  return `<div class="seg" role="tablist">${[["rec", "Recommended"], ["here", "On this computer"], ["cloud", "Cloud"],
+    ["agent", "Your agent"]].map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" data-tab="${k}">${l}</button>`).join("")}</div>`;
+}
+
+function programBlock(p, state) {
+  if (state === "signed") {
+    return `<div class="gh"><span>${p.title} · signed in · ${p.plan}</span><span class="dot ok"></span></div>` +
+      p.models.map((m, i) => {
+        const on = p.id === "claude-code" && i === 2;
+        return `<button class="item" aria-current="${on}"><span class="t">${esc(m[0])}${i === 0 ? '<span class="badge">Recommended</span>' : ""}</span>
+          <span class="d">${esc(m[1])}</span>
+          <span class="s"><span class="dot plan"></span>${on ? "In use · " : ""}${esc(p.payer)}</span></button>`;
+      }).join("");
+  }
+  if (state === "signing") {
+    return `<div class="prog"><div class="head"><b>${p.title}</b><span class="state"><span class="dot warn"></span>Signing in…</span></div>
+      <p class="hint">${p.title} opened its own sign-in page in your browser. Finish there and come back; this
+        updates by itself. Wasify AI never sees your password or token.</p>
+      <div class="row"><button class="btn small">Open the page again</button><button class="btn small">Cancel</button></div></div>`;
+  }
+  if (state === "out") {
+    return `<div class="prog"><div class="head"><b>${p.title}</b><span class="state"><span class="dot"></span>Not signed in</span></div>
+      <p class="hint">Sign in with your ${p.id === "codex" ? "ChatGPT" : "Claude"} account. ${p.title} opens its own sign-in page in your browser.</p>
+      <div><button class="btn small primary">Sign in to ${p.title}</button></div></div>`;
+  }
+}
+
+function panel() {
+  let body = "";
+  if (screen === "pick") {
+    body = programBlock(CLAUDE, "signed") + programBlock(CODEX, "out");
+  } else if (screen === "pick-signin") {
+    body = programBlock(CLAUDE, "signed") + programBlock(CODEX, "signing");
+  } else {
+    body = `<div class="prog"><div class="head"><b>Use your own Claude Code or Codex</b></div>
+      <p class="hint">Sessions can run on the agent program you already pay for, on your Claude or ChatGPT plan, with no
+        key. It works inside the same sandbox as Wasify AI's agent. Setting up installs both programs: 694 MB.</p>
+      <div class="row"><button class="btn small primary">Set up (694 MB)</button>
+        <span class="hint">You sign in afterwards, on each program's own page.</span></div></div>
+      <div class="prog"><div class="head"><b>Setting up…</b><span class="state">Installing the programs · 280 of 694 MB</span></div>
+        <div class="meter"><i></i></div><p class="hint">Shown while it runs. Also in Settings › Optional parts.</p></div>`;
+  }
+  return `<div class="panel" role="dialog" aria-label="Model for Code">${seg()}<div class="list">${body}
+    <p class="hint" style="padding:8px 12px 2px">These run the program itself, on your plan. Extensions and "Ask me" are
+      for Wasify AI's own agent.</p></div></div>`;
+}
+
+function projectsBehind() {
+  return `<div class="pad" style="opacity:.55"><div class="row" style="justify-content:space-between"><div><h1>Projects</h1>
+    <p class="lead">Folders you have opened, and their sessions.</p></div><button class="btn primary">Choose a folder</button></div>
+    ${projectCard()}</div>`;
+}
+
+function projectCard() {
+  return `<div class="proj"><div class="row"><b>bakery-site</b><span class="hint">~/Sites/bakery-site</span></div>
+    <div><button class="btn small">+ New session</button></div>
+    <div class="sess"><span class="dot ok"></span><span class="grow">Say "Closed today" on Mondays</span>
+      <span class="m">Claude Code · Sonnet</span><span class="m">Passed · 1 asked</span></div>
+    <div class="sess"><span class="dot ok"></span><span class="grow">Add the opening hours to the home page</span>
+      <span class="m">Codex · GPT-5.6</span><span class="m">Passed · 2 asked</span></div>
+    <div class="sess"><span class="dot"></span><span class="grow">Explain this project in plain words</span>
+      <span class="m">Claude Sonnet 5.5 · your key</span><span class="m">3 asked</span></div></div>`;
+}
+
+function thread(extra) {
+  return `<div class="thread">
+    <div class="me">On Mondays the home page should say "Closed today" instead of the hours.</div>
+    <div class="steps"><div class="l">› Read <code>src/site.js</code>, <code>index.html</code></div>
+      <div class="l">› Changed <code>src/site.js</code> (+6 −1)</div><div class="l">› Ran <code>npm test</code></div></div>
+    <p style="margin:0">Done. <code>src/site.js</code> now checks the day: on Monday it writes "Closed today" where the hours go.
+      The test for Monday passes.</p>
+    <div class="card good"><h3><span class="dot ok"></span>Checked: passed</h3>
+      <p class="hint">npm test · 4 passed · 2.1 s</p><div class="row"><button class="btn small">Undo this turn</button>
+      <button class="btn small">See the changes</button></div></div>${extra || ""}</div>`;
+}
+
+function box(mode) {
+  return `<div class="box"><div class="ph">Ask Claude Code about bakery-site, or for a change</div>
+    <div class="row"><div class="row"><button class="pill">+</button><button class="pill">${mode} ▾</button></div>
+    <button class="send" aria-label="Send">↑</button></div></div>`;
+}
+
+function files() {
+  return `<div class="files"><div class="ftabs"><span>Files</span><span>Changes</span><span>Terminal</span><span>Browser</span><span>Preview</span></div>
+    <div class="tree"><div>▸ src</div><div style="padding-left:16px">site.js <span class="ch">● changed</span></div>
+    <div>▸ tests</div><div>index.html</div><div>package.json</div><div>README.md</div></div></div>`;
+}
+
+function session(opts = {}) {
+  return `<div class="split"><div class="chat">${opts.thread || thread()}${box(opts.mode || "Work on its own")}</div>${files()}</div>`;
+}
+
+function main() {
+  switch (screen) {
+    case "pick": case "pick-setup": case "pick-signin":
+      return topBar("code") + `<main>${projectsBehind()}</main>` + panel();
+    case "first":
+      return topBar("code") + `<main>${projectsBehind()}</main>
+        <div class="scrim"><div class="dialog" role="dialog" aria-label="Claude Code in Wasify AI">
+          <h2>Claude Code works a little differently</h2>
+          <ul><li><b>It does not ask during a turn.</b> Plan only reads; Work on its own changes files and runs commands
+            without asking. "Ask me" is for Wasify AI's own agent.</li>
+            <li><b>It stays in this folder.</b> It reaches only Anthropic, cannot read the rest of your home folder, and
+              cannot install packages.</li>
+            <li><b>Every turn can be undone</b>, and the check runs after each turn, as with any session.</li>
+            <li><b>It runs on your Claude plan.</b> Its use counts against your plan's limits, not a key.</li></ul>
+          <div class="row" style="justify-content:flex-end"><button class="btn">Cancel</button>
+            <button class="btn primary">Start the session</button></div></div></div>`;
+    case "session":
+      return topBar("session") + `<main>${session()}</main>`;
+    case "modes":
+      return topBar("session") + `<main>${session({ mode: "Plan" })}</main>
+        <div class="pop menu" style="left:24px; bottom:62px">
+          <div class="mi"><span>☰</span><div><b>Plan</b><div class="d">Reads the project and writes a plan. Changes no file:
+            the folder is opened for reading only.</div></div><span>✓</span></div>
+          <div class="mi off"><span>✋</span><div><b>Ask me</b><div class="d">Not with Claude Code: it does not stop to ask
+            during a turn. Choose Wasify AI's own agent for this.</div></div><span></span></div>
+          <div class="mi"><span>⚡</span><div><b>Work on its own</b><div class="d">Changes files and runs commands without asking.
+            It still cannot leave this folder or reach anything but Anthropic, and every turn can be undone.</div></div><span></span></div>
+          <hr><div class="mi"><span>⛉</span><div>What this project may do</div><span>›</span></div></div>`;
+    case "cost":
+      return topBar("session") + `<main>${session()}</main>
+        <div class="pop" style="right:70px; top:42px; width:310px">
+          <b>This session so far</b>
+          <table><tr><td>Claude Code · Sonnet, 3 turns</td><td></td></tr>
+            <tr><td>Tokens in</td><td>73,448</td></tr><tr><td>Tokens out</td><td>818</td></tr>
+            <tr><td>Cost Claude Code reported</td><td>$0.004</td></tr><tr><td>Asked</td><td>3</td></tr></table>
+          <p class="hint">On your Claude plan (Max), signed in by Claude Code itself. There is no limit of ours: your
+            plan's own limits apply, and Claude Code says when one is reached.</p></div>`;
+    case "limit":
+      return topBar("session") + `<main>${session({ thread: thread(`
+        <div class="me">Now add the holiday dates from holidays.txt.</div>
+        <div class="card warn"><h3><span class="dot warn"></span>Claude Code stopped: your plan's limit is reached</h3>
+          <p>Claude Code says: <i>"You've reached your usage limit. Your limit resets at 4 pm."</i></p>
+          <p class="hint">Nothing was changed in this turn. You can wait, or start a new session on another agent: the
+            project, the changes so far and the check stay. (The words are Claude Code's own; how a reached limit
+            looks was not seen yet, so this card is a guess at its shape.)</p>
+          <div class="row"><button class="btn small">Try again</button><button class="btn small">New session on another agent</button></div></div>
+        <div class="card warn"><h3><span class="dot warn"></span>Claude Code is not signed in any more</h3>
+          <p class="hint">The other case: the sign-in ended or was removed in Claude Code. Your message is kept.</p>
+          <div class="row"><button class="btn small primary">Sign in to Claude Code</button></div></div>`) })}</main>`;
+    case "plus":
+      return topBar("session") + `<main>${session()}</main>
+        <div class="pop menu" style="left:24px; bottom:62px">
+          <div class="mi"><span>📎</span><div><b>Add files or pictures</b><div class="d">Copied into the project for Claude Code to read.</div></div><span></span></div>
+          <hr><div class="mi off"><span>✦</span><div><b>Skills</b><div class="d">For Wasify AI's own agent. Claude Code
+            uses the skills set up in Claude Code itself.</div></div><span></span></div></div>`;
+    case "projects":
+      return topBar("Projects") + `<main><div class="pad"><div class="row" style="justify-content:space-between"><div>
+        <h1>Projects</h1><p class="lead">Folders you have opened, and their sessions.</p></div>
+        <button class="btn primary">Choose a folder</button></div>${projectCard()}</div></main>`;
+    case "extensions":
+      return topBar("Extensions") + `<main><div class="pad"><div><h1>Extensions</h1>
+        <p class="lead">Skills and plugins that teach Wasify AI's own agent how to work.</p></div>
+        <div class="card plan"><p><b>For Wasify AI's own agent only.</b> Sessions on Claude Code or Codex use the
+          extensions set up in those programs, not these.</p></div>
+        <div class="rows"><div class="r"><div><div class="t">Make pictures and speech</div><div class="d">Wasify AI's own · on</div></div><button class="btn small">Open</button></div>
+        <div class="r"><div><div class="t">Write tests first</div><div class="d">Wasify AI's own · off</div></div><button class="btn small">Open</button></div></div></div></main>`;
+    case "settings":
+      return topBar("Settings") + `<main><div class="pad"><div><h1>Code</h1>
+        <p class="lead">Your agent programs: sessions can run on these instead of a model on a key.</p></div>
+        <div class="rows">
+          <div class="r"><div><div class="t">Claude Code</div><div class="s"><span class="dot ok"></span>Signed in · Max plan</div>
+            <div class="d">Signed in by Claude Code itself. To sign out, use Claude Code.</div></div>
+            <div class="row"><button class="btn small">Sign in again</button></div></div>
+          <div class="r"><div><div class="t">Codex</div><div class="s"><span class="dot"></span>Not signed in</div>
+            <div class="d">Opens Codex's own sign-in page in your browser.</div></div>
+            <div class="row"><button class="btn small primary">Sign in to Codex</button></div></div>
+          <div class="r"><div><div class="t">Agent programs (Claude Code, Codex)</div><div class="d">Set up · 694 MB · versions 0.99.1 and 2.2.2</div></div>
+            <div class="row"><button class="btn small">Remove</button></div></div></div>
+        <p class="hint">Your sign-in stays with each program, in its own place on this computer. Removing the programs here
+          does not sign you out.</p></div></main>`;
+  }
+}
+
+function render() {
+  document.getElementById("tabs").innerHTML = SCREENS.map(([id, label]) =>
+    `<button role="tab" aria-selected="${id === screen}" data-s="${id}">${esc(label)}</button>`).join("") +
+    `<span class="theme"><button data-theme="light">Light</button><button data-theme="dark">Dark</button></span>`;
+  document.getElementById("what").innerHTML = `<b>${esc(SCREENS.find((s) => s[0] === screen)[1])}.</b> ${esc(SCREENS.find((s) => s[0] === screen)[2])}`;
+  document.getElementById("app").innerHTML = main();
+  const navOn = screen === "settings" ? "nav-settings" : screen === "extensions" ? "nav-ext" : "nav-projects";
+  document.querySelectorAll(".side .it").forEach((n) => n.classList.toggle("on", n.id === navOn));
+  const t = document.documentElement.dataset.theme || "";
+  document.querySelectorAll(".theme button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.theme === t)));
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.s) { screen = b.dataset.s; tab = "agent"; render(); }
+  else if (b.dataset.theme) { document.documentElement.dataset.theme = b.dataset.theme; render(); }
+  else if (b.dataset.tab) { tab = b.dataset.tab; render(); }
+});
+document.addEventListener("keydown", (e) => {
+  const i = SCREENS.findIndex((s) => s[0] === screen);
+  if (e.key === "ArrowRight") { screen = SCREENS[(i + 1) % SCREENS.length][0]; render(); }
+  if (e.key === "ArrowLeft") { screen = SCREENS[(i - 1 + SCREENS.length) % SCREENS.length][0]; render(); }
+});
+const th = new URLSearchParams(location.search).get("theme"); if (th) document.documentElement.dataset.theme = th;
+render();
+</script>
+</body>
+</html>

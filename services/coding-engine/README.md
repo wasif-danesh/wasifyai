@@ -12,6 +12,7 @@ what pins it. There is no package of ours here and none of OpenHands' source.
 | `build-constraints.txt` | The one build tool, with its hash. One package of the lock (`func-timeout`) is published as source only and is built while installing; without this file uv would fetch the newest `setuptools`, unchecked |
 | `engine.sb.template` | The macOS sandbox profile. The Wasify engine fills in five lists of folders at every start |
 | `wasify_rules.py` | Our rules as the Agent Server loads them (ADR-0102, decision 6): every use of a tool that changes something waits for an answer. It is the one file here that imports OpenHands, and it runs only inside the sandbox; the Wasify engine never imports it. It is copied to `<app data>/coding-fixed` at every start and named with `--import-modules` |
+| `harness/package.json`, `harness/package-lock.json` | The agent programs a session may run on instead of a key (ADR-0107): the Claude Code and Codex ACP adapters, pinned exactly, every package with its integrity hash. The optional part `harness` installs them with `npm ci --ignore-scripts`. Its pins (both files' SHA-256, `install_bytes`) are under `harness` in `manifests/darwin-arm64.yaml`. Moving a version means the same steps: change the pins, run `npm install --package-lock-only` (ask the owner first; it fetches from npm), put the new SHA-256s in the manifest, run `make test-coding` and the H1 gate |
 
 Where each is used:
 

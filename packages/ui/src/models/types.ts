@@ -140,8 +140,10 @@ export type ModelChoice = {
   /** `needs_download` whose files another tool already has on the computer ("ComfyUI"): getting it uses them where
    * they are, nothing of the model is downloaded (`downloadBytes` is then 0) */
   foundIn?: string | null;
-  /** a cloud model on the person's key (ADR-0095, amendment of 2026-11-11): shown under Cloud, not on this computer */
-  place?: "cloud";
+  /** a cloud model on the person's key (ADR-0095, amendment of 2026-11-11): shown under Cloud, not on this computer.
+   * "agent": a model of the person's own agent program, on their plan (ADR-0107): shown under Your agent, with
+   * `provider` the program's id and `providerTitle` its name ("Claude Code") */
+  place?: "cloud" | "agent";
   /** a cloud model's provider: its id and name ("fal.ai") */
   provider?: string;
   providerTitle?: string;
@@ -167,6 +169,39 @@ export type ChoiceList = {
 /** How far a "get and use" has got: the step in words, and how far through all of it (null: not known). */
 export type GetProgress = { label: string; fraction: number | null };
 
+/** One of the person's own agent programs, as the Your agent tab shows it (ADR-0107). */
+export type AgentProgram = {
+  id: string;
+  title: string;
+  /** "Your Claude plan" */
+  payer: string;
+  /** the account the person signs in with, in words: "Claude", "ChatGPT" */
+  account: string;
+  signedIn: boolean;
+  /** the plan's name ("Max"); empty when not known */
+  plan: string;
+  signingIn: boolean;
+  /** the sign-in page the program printed, for when no page opened by itself */
+  page: string;
+};
+
+/** The agent programs as one optional part: set up or not, and how far a setup is. */
+export type AgentSetup =
+  | { state: "not_installed"; bytes: number }
+  | { state: "installing"; fraction: number | null; label: string }
+  | { state: "installed"; version: string; bytes: number }
+  | { state: "failed"; message: string }
+  | { state: "unsupported"; reason: string };
+
+/** What the Your agent tab needs from the window: the programs, setting them up, and their own sign-in. */
+export type AgentsApi = {
+  programs(): Promise<{ setup: AgentSetup; programs: AgentProgram[] }>;
+  setUp(bytes: number): Promise<void>;
+  remove(): Promise<void>;
+  signIn(id: string): Promise<void>;
+  cancelSignIn(id: string): Promise<void>;
+};
+
 /**
  * What a group needs from its owner (the window): the rows, choosing one that is ready, and getting one that is not.
  * `get` fetches the engine if missing, then the model, then chooses it, and rejects with a sentence on failure.
@@ -182,4 +217,6 @@ export type ChoicesApi = {
   /** the group can run on cloud models with the person's keys: the picker shows a Cloud tab. `product` names it
    * in words ("Lip sync"); `setUp` opens Settings › Your keys */
   cloud?: { product: string; setUp?: () => void };
+  /** the group can run on the person's own agent programs (Code, ADR-0107): the picker shows a Your agent tab */
+  agents?: AgentsApi;
 };

@@ -127,6 +127,9 @@ cp "$CODING_SRC/VERSION" "$CODING_SRC/engine.sb.template" "$CODING_SRC/wasify_ru
   "$CODING_SRC/wasify-make" \
   "$CODING_SRC/build-constraints.txt" \
   "$CODING_SRC"/requirements-*.lock "$OUT/coding-engine/"
+# the agent programs a session can run on (ADR-0107): their npm lock, installed on request
+mkdir -p "$OUT/coding-engine/harness"
+cp "$CODING_SRC/harness/package.json" "$CODING_SRC/harness/package-lock.json" "$OUT/coding-engine/harness/"
 
 for p in $PRODUCTS; do
   mkdir -p "$OUT/products/$p"
@@ -170,7 +173,7 @@ bundle = {
             for f in sorted((out / "comfyui").glob("requirements-*.lock"))
         },
     },
-    "coding_engine": [entry(f) for f in sorted((out / "coding-engine").iterdir()) if f.is_file()],
+    "coding_engine": [entry(f) for f in sorted((out / "coding-engine").rglob("*")) if f.is_file()],
 }
 (out / "bundle.json").write_text(json.dumps(bundle, indent=2) + "\n")
 print(f"{len(bundle['wheels'])} wheels, {len(bundle['product_files'])} product files")

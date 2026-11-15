@@ -332,7 +332,7 @@ async def real_place(
     The engine's own parts are used as they are (imported here, not by the product): the
     supervisor that starts the sandboxed server, and the gateway, served on a port of its own.
     Without `app_keys` the secret store is empty, so only a model on this computer can run."""
-    from wasifyai_api.coding_gateway import CodingGateway, serve_alone
+    from wasifyai_api.coding_gateway import CodingGateway, known_in_catalogue, serve_alone
     from wasifyai_api.coding_server import CodingServer
     from wasifyai_code.client import ThisComputer
     from wasifyai_platform_sdk.secrets import InMemorySecretStore
@@ -355,6 +355,7 @@ async def real_place(
         usage=InMemoryUsageRecorder(),
         base_url=lambda: address[0],
         ollama_url=ollama_url,
+        known=known_in_catalogue,  # a vendor's model (`anthropic:<name>`) is priced as in the app
     )
     try:
         async with serve_alone(gateway) as url:
@@ -398,7 +399,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--out", type=Path, help="write the results here as JSON")
     parser.add_argument("--data", type=Path, help="an app data folder with the coding engine")
-    parser.add_argument("--model", default="", help="a model of coding_models.yaml")
+    parser.add_argument(
+        "--model",
+        default="",
+        help="a model of coding_models.yaml, or a vendor's own: anthropic:<name>, openai:<name>",
+    )
     parser.add_argument(
         "--app-keys",
         action="store_true",

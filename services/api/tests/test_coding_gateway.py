@@ -464,3 +464,161 @@ def test_haiku_is_offered_with_the_same_key_and_costs_five_times_as_much_for_a_l
     assert cost_of(long, haiku.price_for(long)) == pytest.approx(
         (20_001 * 0.50 + 70_000 * 0.05 + 10_000 * 0.625 + 1_000 * 2.50) / 1e6
     )
+
+
+# ---- every model a saved key lists (owner, 2026-11-15) ------------------------------------------
+
+
+def _vendors_box(listed: dict[str, list[tuple[str, str]]], known: dict | None = None) -> Box:
+    """A gateway with the file's vendors, a pretended list per vendor and a small catalogue."""
+    from wasifyai_api.coding_gateway import load_vendors
+
+    b = Box()
+    asked: list[str] = []
+
+    async def lister(vendor: str) -> list[tuple[str, str]]:
+        asked.append(vendor)
+        return listed.get(vendor, [])
+
+    b.gateway.vendors, b.gateway.default_limit_tokens = load_vendors()
+    b.gateway._lister = lister
+    b.gateway._known = lambda vendor, model: (known or {}).get((vendor, model))
+    b.asked = asked  # type: ignore[attr-defined]
+    return b
+
+
+async def test_every_model_a_saved_key_lists_is_offered_beside_the_tested_ones():
+    box = _vendors_box(
+        {
+            "anthropic": [("claude-opus-5-5", "Claude Opus 5.5"), ("cloud-1", "The tested one")],
+            "openai": [("gpt-6", "GPT-6")],
+            "gemini": [("gemini-3.8-pro", "Gemini 3.8 Pro")],
+        },
+        known={
+            ("anthropic", "claude-opus-5-5"): (
+                "Claude Opus 5.5",
+                "$4 in / $20 out per million tokens",
+            )
+        },  # noqa: E501
+    )
+    await box.secrets.put("keys.chat.anthropic", KEY)
+    await box.secrets.put("keys.chat.openai", "sk-openai")
+    try:
+        listed = {m["id"]: m for m in await box.gateway.list_models()}
+    finally:
+        await box.http.aclose()
+    # the tested ones first and marked; a vendor's line for a tested model is not said twice
+    assert list(listed)[:2] == ["cloud", "local"] and listed["cloud"]["tested"] is True
+    assert "anthropic:cloud-1" not in listed
+    opus = listed["anthropic:claude-opus-5-5"]
+    assert (opus["title"], opus["tested"], opus["ready"]) == ("Claude Opus 5.5", False, True)
+    assert (opus["provider_title"], opus["counted_in"]) == ("Anthropic", "usd")
+    assert opus["price"] == "$4 in / $20 out per million tokens"
+    # a tested model says its price in the same words
+    assert listed["cloud"]["price"] == "$2 in / $10 out per million tokens"
+    # a model with no known price is offered too, counted in tokens
+    assert (
+        listed["openai:gpt-6"]["counted_in"] == "tokens" and listed["openai:gpt-6"]["price"] == ""
+    )
+    # a vendor with no key saved is not asked, and nothing of it is listed
+    assert box.asked == ["anthropic", "openai"]  # type: ignore[attr-defined]
+    assert not [m for m in listed if m.startswith("gemini:")]
+    assert KEY not in json.dumps(listed) and "sk-openai" not in json.dumps(listed)
+
+
+async def test_a_vendors_model_is_called_with_its_own_key_at_its_own_address():
+    box = _vendors_box(
+        {},
+        known={
+            ("anthropic", "claude-opus-5-5"): (
+                "Claude Opus 5.5",
+                "$4 in / $20 out per million tokens",
+            )
+        },
+    )  # noqa: E501
+    await box.secrets.put("keys.chat.anthropic", KEY)
+    await box.secrets.put("keys.chat.openai", "sk-openai")
+    try:
+        # no list is needed for a session kept from an earlier day to open as it was
+        grant = box.open(model="anthropic:claude-opus-5-5")
+        assert grant.engine_model == "anthropic/claude-opus-5-5" and grant.shape == ANTHROPIC
+        box.provider.answer = {"usage": {"input_tokens": 1000, "output_tokens": 100,
+                                         "cache_read_input_tokens": 10_000}}  # fmt: skip
+        r = await box.ask(grant.token, {"model": "claude-opus-5-5", "messages": []})
+        assert r.status_code == 200
+        sent = box.provider.requests[-1]
+        assert str(sent.url) == "https://api.anthropic.com/v1/messages"
+        assert sent.headers["x-api-key"] == KEY
+        # priced from the catalogue's words; a cache read is a tenth of the input price
+        assert box.gateway.spent("s1")["usd"] == pytest.approx(
+            (1000 * 4 + 100 * 20 + 10_000 * 0.4) / 1e6
+        )
+        # another model than the session's is not let through
+        r = await box.ask(grant.token, {"model": "claude-fable-5-2", "messages": []})
+        assert r.status_code == 400
+        # OpenAI's and Gemini's are called as chat completions
+        other = box.open("s2", model="openai:gpt-6")
+        assert (other.engine_model, other.shape) == ("openai/gpt-6", "openai")
+        assert other.base_url.endswith("/coding-gateway/v1")
+        box.provider.answer = {"usage": {"prompt_tokens": 5, "completion_tokens": 2}}
+        r = await box.http.post(
+            "/coding-gateway/v1/chat/completions", json={"model": "gpt-6", "messages": []},
+            headers={"authorization": f"Bearer {other.token}"},
+        )  # fmt: skip
+        assert r.status_code == 200
+        sent = box.provider.requests[-1]
+        assert str(sent.url) == "https://api.openai.com/v1/chat/completions"
+        assert sent.headers["authorization"] == "Bearer sk-openai"
+        gemini = box.gateway.model("gemini:gemini-3.8-pro")
+        assert gemini.upstream == "https://generativelanguage.googleapis.com/v1beta/openai"
+        assert gemini.secret == "keys.chat.gemini"
+    finally:
+        await box.http.aclose()
+
+
+async def test_a_model_with_no_known_price_stops_at_its_limit_in_tokens():
+    box = _vendors_box({})
+    await box.secrets.put("keys.chat.openai", "sk-openai")
+    try:
+        # 900 tokens were used before the app was closed; the session may use 1,000
+        grant = box.open(model="openai:gpt-6", spent_tokens=900, limit_tokens=1000)
+        box.provider.answer = {"usage": {"prompt_tokens": 80, "completion_tokens": 30}}
+
+        async def ask():
+            return await box.http.post(
+                "/coding-gateway/v1/chat/completions", json={"model": "gpt-6", "messages": []},
+                headers={"authorization": f"Bearer {grant.token}"},
+            )  # fmt: skip
+
+        assert (await ask()).status_code == 200
+        assert box.gateway.spent("s1")["usd"] == 0.0  # nothing is known of its price
+        refused = await ask()
+        assert refused.status_code == 429
+        assert "limit of 1,000 tokens" in refused.json()["error"]["message"]
+        assert "1,000 tokens" in box.gateway.take_note("s1")["over_limit"]
+        box.gateway.set_token_limit("s1", 5000)
+        assert (await ask()).status_code == 200
+    finally:
+        await box.http.aclose()
+
+
+def test_a_name_that_is_no_vendors_model_is_refused():
+    box = _vendors_box({})
+    for bad in ("nobody:model", "openai:", "openai:has space", "openai:" + "x" * 200, "openai"):
+        with pytest.raises(GatewayError):
+            box.gateway.model(bad)
+
+
+def test_the_files_vendors_are_anthropic_openai_and_gemini_on_the_chat_keys():
+    from wasifyai_api.coding_gateway import load_vendors, price_from_words
+
+    vendors, token_limit = load_vendors()
+    assert {v.id: v.secret for v in vendors.values()} == {
+        "anthropic": "keys.chat.anthropic", "openai": "keys.chat.openai",
+        "gemini": "keys.chat.gemini",
+    }  # fmt: skip
+    assert token_limit == 3_000_000
+    assert price_from_words("per word used", {}) == {}
+    assert price_from_words("$0.75 in / $3.75 out per million tokens", {}) == {
+        "input": 0.75, "output": 3.75,
+    }  # fmt: skip

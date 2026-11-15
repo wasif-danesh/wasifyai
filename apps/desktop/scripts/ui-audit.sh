@@ -9,11 +9,13 @@
 #   apps/desktop/scripts/ui-audit.sh            # writes docs/ui-audit/desktop/*.png
 #
 # Needs the checkout's .venv (make setup) and pnpm install. Quit the desktop app first: both would use the
-# same database.
+# same database. With a throwaway DESKTOP_DATA_DIR the app may stay open if the window is served on another
+# port than the app's own 1420: WASIFYAI_AUDIT_WINDOW_PORT=1431 (and another WASIFYAI_AUDIT_PORT).
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 RUN=$(mktemp -d)
 PORT=${WASIFYAI_AUDIT_PORT:-8765}
+WINDOW_PORT=${WASIFYAI_AUDIT_WINDOW_PORT:-1420}
 DATA="${DESKTOP_DATA_DIR:-$HOME/Library/Application Support/ai.wasifyai.desktop}"
 SECRET=$("$ROOT/.venv/bin/python" -c "import secrets; print(secrets.token_urlsafe(36))")
 
@@ -28,6 +30,7 @@ trap cleanup EXIT
 # for cleanup is the process itself, not a subshell
 (cd "$DATA" && exec env DEPLOYMENT_PROFILE=desktop DESKTOP_DATA_DIR="$DATA" DESKTOP_IMAGE_ENGINE=auto \
   API_AUTH_SECRET="$SECRET" AUTH_MODE=jwt PRODUCTS_DIR="$ROOT/products" WASIFYAI_PORT="$PORT" \
+  DESKTOP_ALLOWED_ORIGINS="http://localhost:$WINDOW_PORT" \
   PYTHONUNBUFFERED=1 PYTHONUTF8=1 "$ROOT/.venv/bin/python" -m wasifyai_api.desktop >"$RUN/engine.log" 2>&1) &
 ENGINE_PID=$!
 for _ in $(seq 1 120); do
@@ -44,12 +47,13 @@ print(jwt.encode({"iss": "wasifyai-web", "aud": "wasifyai-api", "sub": "desktop:
 PY
 )
 
-(cd "$ROOT/apps/desktop" && exec node ./node_modules/vite/bin/vite.js --port 1420 --strictPort >"$RUN/vite.log" 2>&1) &
+(cd "$ROOT/apps/desktop" && exec node ./node_modules/vite/bin/vite.js --port "$WINDOW_PORT" --strictPort >"$RUN/vite.log" 2>&1) &
 VITE_PID=$!
 for _ in $(seq 1 60); do
-  curl -sf http://localhost:1420/ >/dev/null 2>&1 && break
+  curl -sf "http://localhost:$WINDOW_PORT/" >/dev/null 2>&1 && break
   sleep 1
 done
 
 WASIFYAI_AUDIT_BASE="http://127.0.0.1:$PORT" WASIFYAI_AUDIT_TOKEN="$TOKEN" \
+  WASIFYAI_AUDIT_WINDOW="http://localhost:$WINDOW_PORT" \
   node "$ROOT/apps/desktop/scripts/ui-audit-pictures.mjs" "$@"

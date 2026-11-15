@@ -37,7 +37,7 @@ class CodeSessionIn(BaseModel):
 
     folder: str = Field(min_length=1, max_length=1024)
     title: str = Field("", max_length=200)
-    model: str = Field("", max_length=64)
+    model: str = Field("", max_length=128)
     cost_limit_usd: float = Field(0, ge=0, le=100)
     mode: Literal["plan", "ask", "own"] = "plan"
 
@@ -48,6 +48,8 @@ class CodeSessionPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     cost_limit_usd: float | None = Field(None, gt=0, le=100)
+    # for a session on a model with no known price, which is counted in tokens
+    token_limit: int | None = Field(None, gt=0, le=200_000_000)
     mode: Literal["plan", "ask", "own"] | None = None
 
 
@@ -88,7 +90,7 @@ class CodeNewIn(BaseModel):
     parent: str = Field(min_length=1, max_length=1024)
     name: str = Field(min_length=1, max_length=64)
     starter: str = Field("web", max_length=32)
-    model: str = Field("", max_length=64)
+    model: str = Field("", max_length=128)
     mode: Literal["plan", "ask", "own"] = "ask"
 
 
@@ -109,7 +111,7 @@ class CodeScheduleIn(BaseModel):
     rule: dict[str, Any]
     time_zone: str = Field("", max_length=64)  # empty: this computer's own
     title: str = Field("", max_length=200)
-    model: str = Field("", max_length=64)
+    model: str = Field("", max_length=128)
     run_when_missed: bool = True
 
 
@@ -120,7 +122,7 @@ class CodeSchedulePatch(BaseModel):
     rule: dict[str, Any] | None = None
     time_zone: str | None = Field(None, min_length=1, max_length=64)
     title: str | None = Field(None, max_length=200)
-    model: str | None = Field(None, max_length=64)
+    model: str | None = Field(None, max_length=128)
     run_when_missed: bool | None = None
     enabled: bool | None = None
 
@@ -221,12 +223,14 @@ def build_routes(deps: RouteDeps) -> APIRouter:
     async def change_session(
         session_id: str, body: CodeSessionPatch, identity: Identity = Depends(deps.identity)
     ) -> dict[str, Any]:
-        """Change the most this session may cost (it holds from the next model call), or how
+        """Change the most this session may cost or use (it holds from the next model call), or how
         much the agent asks (Plan, Ask me, Work on its own)."""
         live, owner = sessions(), owner_of(identity)
         try:
             if body.cost_limit_usd is not None:
                 live.set_limit(owner, session_id, body.cost_limit_usd)
+            if body.token_limit is not None:
+                live.set_token_limit(owner, session_id, body.token_limit)
             if body.mode is not None:
                 await live.set_mode(owner, session_id, body.mode)
             return live.view(owner, session_id)

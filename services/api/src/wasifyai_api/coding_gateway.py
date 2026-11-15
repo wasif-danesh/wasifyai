@@ -30,7 +30,10 @@ What happens to a call:
                    sees an empty answer, nudges three times and ends "stuck" (C0 spike 2)
 
 The models a session can run on, their prices and where their keys are kept are in
-`coding_models.yaml`. Nothing here imports OpenHands' packages, and nothing here is specific to
+`coding_models.yaml`: the ones run through the coding evaluation, and the vendors whose own list
+of models is offered beside them. Every chat model a saved key lists is a choice
+(`<vendor>:<model>`); one with no known price is counted in tokens and has a limit in tokens.
+Nothing here imports OpenHands' packages, and nothing here is specific to
 one provider's SDK: it is HTTP in and HTTP out.
 """
 
@@ -38,6 +41,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
 import secrets as random
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
@@ -70,7 +74,16 @@ CAPABILITY = "code.agent"  # what the usage events say the tokens were for
 TIMEOUT = httpx.Timeout(600.0, connect=10.0)
 DECLINED = "The model declined this request."
 OVER_LIMIT = "This session reached its cost limit of ${limit:.2f}. Raise the limit to go on."
+OVER_TOKENS = "This session reached its limit of {limit:,} tokens. Raise the limit to go on."
 NO_KEY = "No key is saved for {title}. Save one in Settings, under Your keys."
+DEFAULT_LIMIT_TOKENS = 3_000_000  # for a session on a model with no known price
+# a vendor's own name for a model, as it may stand in a session's row and on a provider's address
+MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,110}")
+PRICE_WORDS = re.compile(r"\$([0-9.]+) in / \$([0-9.]+) out per million")
+# (the vendor's model name, its title), as the vendor lists them on the saved key
+Lister = Callable[[str], Awaitable[list[tuple[str, str]]]]
+# (title, price in words) of a model the app's catalogue knows, by vendor and model name
+Known = Callable[[str, str], tuple[str, str] | None]
 
 
 class GatewayError(Exception):
@@ -99,6 +112,13 @@ class ModelRoute:
     # a model that costs more for a long prompt: over how many prompt tokens, and that price
     long_over: int = 0
     long_price: dict[str, float] = field(default_factory=dict)
+    tested: bool = True  # run through the coding evaluation (an entry of the file's `models`)
+    price_words: str = ""  # a vendor's model: its price as chat's catalogue says it
+
+    @property
+    def counted_in_tokens(self) -> bool:
+        """A cloud model with no known price: its session is counted and limited in tokens."""
+        return self.where == "cloud" and not self.price
 
     def price_for(self, usage: dict[str, int]) -> dict[str, float]:
         """The price of one call: the long-prompt price when its prompt (what was sent, read
@@ -143,6 +163,63 @@ def load_models(
 
 
 @dataclass(frozen=True)
+class Vendor:
+    """One entry of the file's `vendors`: a provider whose own list of models is offered."""
+
+    id: str
+    title: str
+    shape: str
+    engine_prefix: str
+    upstream: str
+    secret: str
+    cache: dict[str, float]
+
+
+def load_vendors(path: Path = MODELS_FILE) -> tuple[dict[str, Vendor], int]:
+    """The vendors whose models are offered beside the tested ones, and the token limit of a
+    session on a model with no known price."""
+    data = yaml.safe_load(path.read_text())
+    vendors: dict[str, Vendor] = {}
+    for vendor_id, v in (data.get("vendors") or {}).items():
+        if v["shape"] not in (ANTHROPIC, OPENAI):
+            raise ValueError(f"{path.name}: {vendor_id} has a shape the gateway does not know")
+        vendors[vendor_id] = Vendor(
+            id=vendor_id,
+            title=str(v["title"]),
+            shape=str(v["shape"]),
+            engine_prefix=str(v["engine_prefix"]),
+            upstream=str(v["upstream"]).rstrip("/"),
+            secret=str(v["secret"]),
+            cache={k: float(n) for k, n in (v.get("cache") or {}).items()},
+        )
+    return vendors, int(data.get("token_limit") or DEFAULT_LIMIT_TOKENS)
+
+
+def known_in_catalogue(vendor: str, model: str) -> tuple[str, str] | None:
+    """What chat's catalogue says of a vendor's model: its title and its price in words. It is
+    the one list of prices the app keeps for the vendors' models."""
+    from wasifyai_api import own_keys_catalogue
+
+    found = own_keys_catalogue.find("chat", vendor, model)
+    return (found.title, found.price_words) if found else None
+
+
+def price_from_words(words: str, cache: dict[str, float]) -> dict[str, float]:
+    """A price per million tokens from the catalogue's words ("$4 in / $20 out per million
+    tokens"); nothing when the words say no such price. `cache` gives what a cached token costs
+    as a part of the input price."""
+    found = PRICE_WORDS.search(words or "")
+    if found is None:
+        return {}
+    price = {"input": float(found.group(1)), "output": float(found.group(2))}
+    parts = (("cache_read", "read"), ("cache_write", "write"), ("cache_write_1h", "write_1h"))
+    for ours, part in parts:
+        if part in cache:
+            price[ours] = round(price["input"] * cache[part], 6)
+    return price
+
+
+@dataclass(frozen=True)
 class Grant:
     """What a place needs to point an engine at the gateway for one session. `token` goes where
     the engine expects a key. Nothing here is a key."""
@@ -179,6 +256,8 @@ class _Session:
     route: ModelRoute
     limit_usd: float
     spent_usd: float = 0.0
+    limit_tokens: int = DEFAULT_LIMIT_TOKENS
+    earlier_tokens: int = 0  # counted before this engine started (from the session's row)
     calls: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -186,6 +265,19 @@ class _Session:
     over_limit: bool = False  # a call was refused at the limit and nobody has asked yet
     on_call: Callable[[Call], Awaitable[None] | None] | None = None
     tokens: list[str] = field(default_factory=list)
+
+    @property
+    def at_limit(self) -> bool:
+        if self.route.counted_in_tokens:
+            used = self.earlier_tokens + self.input_tokens + self.output_tokens
+            return used >= self.limit_tokens
+        return self.spent_usd >= self.limit_usd
+
+    @property
+    def limit_words(self) -> str:
+        if self.route.counted_in_tokens:
+            return OVER_TOKENS.format(limit=self.limit_tokens)
+        return OVER_LIMIT.format(limit=self.limit_usd)
 
 
 def cost_of(usage: dict[str, int], price: dict[str, float]) -> float:
@@ -202,6 +294,18 @@ def cost_of(usage: dict[str, int], price: dict[str, float]) -> float:
         + write_1h * price.get("cache_write_1h", price.get("cache_write", price.get("input", 0.0)))
     )
     return usd / 1_000_000
+
+
+def _price_words(price: dict[str, float]) -> str:
+    """A tested model's price in the catalogue's words; nothing for a model that costs nothing."""
+    if not price:
+        return ""
+
+    def say(usd: float) -> str:  # "$2", "$0.10"
+        return f"${usd:g}" if usd == int(usd) else f"${usd:.2f}"
+
+    into, out = say(price.get("input", 0.0)), say(price.get("output", 0.0))
+    return f"{into} in / {out} out per million tokens"
 
 
 def _int(value: Any) -> int:
@@ -398,11 +502,22 @@ class CodingGateway:
         ollama_url: str = "",
         models: tuple[str, dict[str, ModelRoute]] | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        vendors: tuple[dict[str, Vendor], int] | None = None,
+        lister: Lister | None = None,
+        known: Known | None = None,
     ) -> None:
         """`base_url` gives this engine's own address on loopback when it is asked (the port is
-        known once the engine listens). `transport` is for tests: the provider, pretended."""
+        known once the engine listens). `transport` is for tests: the provider, pretended.
+        `lister` gives the models a vendor lists on the saved key and `known` what the app's
+        catalogue says of one (its title and price): without a lister only the file's models
+        are offered."""
         self._secrets, self._usage, self._base_url = secrets, usage, base_url
         self.default, self.models = models or load_models(ollama_url=ollama_url)
+        if vendors is None:
+            vendors = ({}, DEFAULT_LIMIT_TOKENS) if models else load_vendors()
+        self.vendors, self.default_limit_tokens = vendors
+        self._lister, self._known = lister, known
+        self._titles: dict[str, str] = {}  # a vendor's model by our id, as its vendor names it
         self.default_limit_usd = DEFAULT_LIMIT_USD  # for a session that names none
         self._by_token: dict[str, _Session] = {}
         self._by_session: dict[str, _Session] = {}
@@ -416,10 +531,36 @@ class CodingGateway:
     # ---- what the product asks -----------------------------------------------------------------
 
     def model(self, model_id: str | None) -> ModelRoute:
-        found = self.models.get(model_id or self.default)
+        found = self.models.get(model_id or self.default) or self._vendor_model(model_id or "")
         if found is None:
             raise GatewayError("no_such_model", "That model is not one a coding session can use.")
         return found
+
+    def _vendor_model(self, model_id: str) -> ModelRoute | None:
+        """A model named `<vendor>:<the vendor's model name>`: any model of a vendor in the file.
+        It needs no list to be made, so a session kept from an earlier day opens as it was;
+        whether the key still serves the model is the vendor's to say when it is called."""
+        vendor_id, _, name = model_id.partition(":")
+        vendor = self.vendors.get(vendor_id)
+        if vendor is None or not MODEL_NAME.fullmatch(name):
+            return None
+        known = self._known(vendor_id, name) if self._known else None
+        words = known[1] if known else ""
+        return ModelRoute(
+            id=model_id,
+            title=self._titles.get(model_id) or (known[0] if known else name),
+            where="cloud",
+            shape=vendor.shape,
+            provider=vendor_id,
+            engine_model=vendor.engine_prefix + name,
+            provider_model=name,
+            upstream=vendor.upstream,
+            secret=vendor.secret,
+            price=price_from_words(words, vendor.cache),
+            engine_settings={},
+            tested=False,
+            price_words=words if PRICE_WORDS.search(words) else "",
+        )
 
     async def ready(self, model_id: str | None) -> str | None:
         """Why a session cannot run on this model now, in words; None when it can."""
@@ -429,9 +570,27 @@ class CodingGateway:
         return None
 
     async def list_models(self) -> list[dict[str, Any]]:
-        """The models, for the person to choose from: never a key, only whether one is saved."""
+        """The models, for the person to choose from: never a key, only whether one is saved.
+        The tested ones first, then every other chat model each vendor lists on its saved key."""
+        routes = list(self.models.values())
+        tested = {(r.provider, r.provider_model) for r in routes}
+        for vendor in self.vendors.values():
+            if self._lister is None or not self._secrets.ready:
+                break
+            if not await self._secrets.get(vendor.secret):
+                continue
+            for name, title in await self._lister(vendor.id):
+                model_id = f"{vendor.id}:{name}"
+                if (vendor.id, name) in tested or not MODEL_NAME.fullmatch(name):
+                    continue
+                known = self._known(vendor.id, name) if self._known else None
+                self._titles[model_id] = known[0] if known else title
+                route = self._vendor_model(model_id)
+                if route is not None:
+                    routes.append(route)
         out = []
-        for route in self.models.values():
+        for route in routes:
+            vendor = self.vendors.get(route.provider)
             out.append(
                 {
                     "id": route.id,
@@ -439,6 +598,12 @@ class CodingGateway:
                     "where": route.where,
                     "default": route.id == self.default,
                     "ready": await self.ready(route.id) is None,
+                    "provider": route.provider,
+                    "provider_title": vendor.title if vendor else "",
+                    "tested": route.tested,
+                    # per million tokens, in words; empty when none is known (counted in tokens)
+                    "price": route.price_words or _price_words(route.price),
+                    "counted_in": "tokens" if route.counted_in_tokens else "usd",
                 }
             )
         return out
@@ -453,6 +618,8 @@ class CodingGateway:
         model: str | None = None,
         spent_usd: float = 0.0,
         limit_usd: float | None = None,
+        spent_tokens: int = 0,
+        limit_tokens: int | None = None,
         on_call: Callable[[Call], Awaitable[None] | None] | None = None,
     ) -> Grant:
         """Let one session call its model, and give what its engine is pointed at. Asked again
@@ -460,15 +627,19 @@ class CodingGateway:
         started again); the earlier tokens stop working."""
         route = self.model(model)
         limit = DEFAULT_LIMIT_USD if not limit_usd or limit_usd <= 0 else float(limit_usd)
+        most = int(limit_tokens) if limit_tokens and limit_tokens > 0 else self.default_limit_tokens
         session = self._by_session.get(session_id)
         if session is None or (session.tenant_id, session.user_id) != (tenant_id, user_id):
-            session = _Session(tenant_id, product_id, user_id, session_id, route, limit, spent_usd)
+            session = _Session(
+                tenant_id, product_id, user_id, session_id, route, limit, spent_usd,
+                limit_tokens=most, earlier_tokens=max(0, int(spent_tokens)),
+            )  # fmt: skip
             self._by_session[session_id] = session
         else:
             for old in session.tokens:
                 self._by_token.pop(old, None)
             session.tokens.clear()
-            session.route, session.limit_usd = route, limit
+            session.route, session.limit_usd, session.limit_tokens = route, limit, most
             session.spent_usd = max(session.spent_usd, spent_usd)
         session.on_call = on_call
         token = "wcg-" + random.token_urlsafe(32)
@@ -511,6 +682,11 @@ class CodingGateway:
         if s is not None and limit_usd > 0:
             s.limit_usd = float(limit_usd)
 
+    def set_token_limit(self, session_id: str, limit_tokens: int) -> None:
+        s = self._by_session.get(session_id)
+        if s is not None and limit_tokens > 0:
+            s.limit_tokens = int(limit_tokens)
+
     def take_note(self, session_id: str) -> dict[str, Any]:
         """What the gateway saw that the engine cannot say: a refusal by the model, or a call
         refused at the cost limit. Each is given once."""
@@ -521,7 +697,7 @@ class CodingGateway:
         if s.refusal is not None:
             note["refusal"], s.refusal = s.refusal, None
         if s.over_limit:
-            note["over_limit"], s.over_limit = OVER_LIMIT.format(limit=s.limit_usd), False
+            note["over_limit"], s.over_limit = s.limit_words, False
         return note
 
     # ---- one call --------------------------------------------------------------------------------
@@ -554,11 +730,9 @@ class CodingGateway:
                 f"Only {route.provider_model} is let through for this session.",
             )  # fmt: skip
         counting = path.endswith("/count_tokens")
-        if not counting and session.spent_usd >= session.limit_usd:
+        if not counting and session.at_limit:
             session.over_limit = True
-            return _error(
-                shape, 429, "rate_limit_error", OVER_LIMIT.format(limit=session.limit_usd)
-            )
+            return _error(shape, 429, "rate_limit_error", session.limit_words)
         key = ""
         if route.secret:
             key = (await self._secrets.get(route.secret) if self._secrets.ready else None) or ""

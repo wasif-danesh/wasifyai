@@ -36,6 +36,9 @@ import { EmptyState } from "../components/empty-state";
 import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
+import { ModelSelect } from "../models/ModelSelect";
+import type { ChoicesApi } from "../models/types";
+import { useModelChoices } from "../models/use-model-choices";
 import { PageHeader } from "../window-bar";
 import { AskCard, MODES, MayDialog, ModePill } from "./Asking";
 import { type BrowserHost, BrowserPane } from "./Browser";
@@ -72,6 +75,11 @@ export type CodeProps = {
   onOpenChange?: (id: string | null) => void;
   /** What shows web pages in the Browser tab: the desktop shell's second webview. None: the tab says so. */
   browser?: BrowserHost;
+  /**
+   * The model picker's rows for Code (the window's): with it the model for a new session is chosen on the model
+   * button at the top, as on every other screen. Without it a small list under the projects does the same.
+   */
+  choices?: ChoicesApi | null;
 };
 
 const STARTERS = [
@@ -83,6 +91,9 @@ const STARTERS = [
 export const CARRY_OUT = "Carry out this plan.";
 
 const dollars = (n: number) => `$${n.toFixed(2)}`;
+const tokens = (n: number) => `${Math.round(n).toLocaleString("en-US")} tokens`;
+/** The least and the most a session's limit in tokens may be set to here. */
+const TOKEN_LIMITS = [100_000, 200_000_000] as const;
 
 export function Code({
   api,
@@ -92,9 +103,11 @@ export function Code({
   openId,
   onOpenChange,
   browser,
+  choices = null,
 }: CodeProps) {
   const code = useCode(api);
   const { state } = code;
+  const picker = useModelChoices(choices, "code");
   const shownId = state.session?.id ?? null;
   // the address says which session is open: follow it when it changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a change of the address opens or closes
@@ -114,7 +127,9 @@ export function Code({
   };
   const [model, setModel] = useState<string>("");
   const ready = state.models.filter((m) => m.ready);
-  const chosen = ready.find((m) => m.id === model) ?? ready.find((m) => m.default) ?? ready[0];
+  // with the model button, its choice is the model of a new session; the small list is for where there is none
+  const picked = choices ? picker.chosen?.id : model;
+  const chosen = ready.find((m) => m.id === picked) ?? ready.find((m) => m.default) ?? ready[0];
 
   const choose = async () => {
     const folder = await pickFolder();
@@ -213,6 +228,15 @@ export function Code({
         ) : null
       }
     >
+      {choices ? (
+        // the model button is at the top of the screen, as on the chat and image screens (ADR-0086)
+        <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
+          <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">
+            <ModelSelect group="code" api={choices} />
+            <span className="hidden text-muted-foreground md:inline">for a new session</span>
+          </div>
+        </PageHeader>
+      ) : null}
       {state.error ? (
         <Notice tone="error" title="That did not work">
           {state.error}
@@ -228,8 +252,8 @@ export function Code({
             </Button>
           }
         >
-          Coding works with Claude Sonnet 5.5, or the cheaper Claude Haiku 5.5, and your own
-          Anthropic key. Save a key for Chat and writing, then come back.
+          Coding works with your own Anthropic, OpenAI or Google Gemini key: every model the key
+          lists can be chosen. Save a key for Chat and writing, then come back.
         </Notice>
       ) : null}
       {state.sessions.length === 0 ? (
@@ -255,7 +279,7 @@ export function Code({
           canStart={Boolean(chosen)}
         />
       )}
-      {ready.length > 1 ? (
+      {!choices && ready.length > 1 ? (
         <label className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted-foreground">Model for a new session</span>
           <select
@@ -514,7 +538,7 @@ function Session({
   onSend: (text: string) => void;
   onStop: () => void;
   onBack: () => void;
-  onSetLimit: (usd: number) => void;
+  onSetLimit: (most: number, unit?: "usd" | "tokens") => void;
   onSetMode: (mode: CodeMode) => Promise<boolean>;
   onAnswer: (askId: string, answer: CodeAnswer) => void;
   onUndo: (turnId: string) => Promise<void>;
@@ -828,7 +852,7 @@ function Cost({
 }: {
   session: CodeSession;
   model: CodeModel | undefined;
-  onSetLimit: (usd: number) => void;
+  onSetLimit: (most: number, unit?: "usd" | "tokens") => void;
 }) {
   const [open, setOpen] = useState(false);
   const [limit, setLimit] = useState("");
@@ -850,8 +874,22 @@ function Cost({
     };
   }, [open]);
   const free = model?.where === "this-computer";
-  const part = session.cost_limit_usd > 0 ? session.cost_usd / session.cost_limit_usd : 0;
+  // a model with no known price: the session is counted and limited in tokens, not in dollars
+  const inTokens = !free && session.counted_in === "tokens";
+  const used = session.tokens_in + session.tokens_out;
+  const most = session.token_limit ?? 0;
+  const part = inTokens
+    ? most > 0
+      ? used / most
+      : 0
+    : session.cost_limit_usd > 0
+      ? session.cost_usd / session.cost_limit_usd
+      : 0;
   const wanted = Number(limit);
+  const fits = inTokens
+    ? Number.isInteger(wanted) && wanted >= TOKEN_LIMITS[0] && wanted <= TOKEN_LIMITS[1]
+    : wanted > 0 && wanted <= 100;
+  const soFar = free ? "No cost" : inTokens ? tokens(used) : dollars(session.cost_usd);
   return (
     <span className="relative" ref={box}>
       <button
@@ -861,7 +899,7 @@ function Cost({
         onClick={() => setOpen((o) => !o)}
         className="rounded-md px-1.5 py-0.5 tabular-nums outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
-        {free ? "No cost" : dollars(session.cost_usd)}
+        {soFar}
       </button>
       {open ? (
         <div
@@ -876,13 +914,15 @@ function Cost({
               {model?.title ?? session.model}, {session.model_calls} call
               {session.model_calls === 1 ? "" : "s"}
             </dt>
-            <dd className="m-0 tabular-nums">{free ? "No cost" : dollars(session.cost_usd)}</dd>
+            <dd className="m-0 tabular-nums">{soFar}</dd>
             <dt className="text-muted-foreground">Asked</dt>
             <dd className="m-0 tabular-nums">{session.turns}</dd>
             {free ? null : (
               <>
                 <dt className="text-muted-foreground">Limit for this session</dt>
-                <dd className="m-0 tabular-nums">{dollars(session.cost_limit_usd)}</dd>
+                <dd className="m-0 tabular-nums">
+                  {inTokens ? tokens(most) : dollars(session.cost_limit_usd)}
+                </dd>
               </>
             )}
           </dl>
@@ -899,36 +939,38 @@ function Cost({
                 />
               </div>
               <p className="m-0 text-xs text-muted-foreground">
-                Paid with your own key. At the limit the agent stops and says so.
+                {inTokens
+                  ? "Paid with your own key. This model's price is not known here, so the session is counted in tokens. At the limit the agent stops and says so."
+                  : "Paid with your own key. At the limit the agent stops and says so."}
               </p>
               <form
                 className="flex items-center gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (wanted > 0 && wanted <= 100) {
-                    onSetLimit(wanted);
+                  if (fits) {
+                    onSetLimit(wanted, inTokens ? "tokens" : "usd");
                     setLimit("");
                   }
                 }}
               >
                 <label className="flex items-center gap-1.5 text-xs">
-                  <span className="text-muted-foreground">New limit, in dollars</span>
+                  <span className="text-muted-foreground">
+                    {inTokens ? "New limit, in tokens" : "New limit, in dollars"}
+                  </span>
                   <input
                     type="number"
-                    min="0.5"
-                    max="100"
-                    step="0.5"
+                    min={inTokens ? TOKEN_LIMITS[0] : 0.5}
+                    max={inTokens ? TOKEN_LIMITS[1] : 100}
+                    step={inTokens ? 100_000 : 0.5}
                     value={limit}
                     onChange={(e) => setLimit(e.target.value)}
-                    className="h-7 w-16 rounded-md border border-input bg-transparent px-1.5 text-sm"
+                    className={cn(
+                      "h-7 rounded-md border border-input bg-transparent px-1.5 text-sm",
+                      inTokens ? "w-28" : "w-16",
+                    )}
                   />
                 </label>
-                <Button
-                  type="submit"
-                  size="xs"
-                  variant="outline"
-                  disabled={!(wanted > 0 && wanted <= 100)}
-                >
+                <Button type="submit" size="xs" variant="outline" disabled={!fits}>
                   Change
                 </Button>
               </form>

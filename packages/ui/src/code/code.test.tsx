@@ -20,6 +20,7 @@ import type {
   CodeTurn,
 } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ChoicesApi } from "../models/types";
 import { type BrowserHost, pageForChat } from "./Browser";
 import { whyNot } from "./Checks";
 import { CARRY_OUT, Code } from "./Code";
@@ -334,6 +335,7 @@ function api(over: Partial<CodeApi> = {}): CodeApi {
       more: false,
     }),
     setLimit: async (_id: string, usd: number) => session({ cost_limit_usd: usd }),
+    setTokenLimit: async (_id: string, most: number) => session({ token_limit: most }),
     setMode: async (_id: string, mode: CodeSession["mode"]) => session({ mode }),
     answer: async () => true,
     changes: async () => [],
@@ -2352,5 +2354,79 @@ describe("Staying open for the schedules", () => {
     );
     expect(await screen.findByText("No schedules yet")).toBeTruthy();
     expect(screen.queryByRole("switch")).toBeNull();
+  });
+});
+
+describe("the model of a new session, on the model button", () => {
+  const OPUS = {
+    id: "anthropic:claude-opus-5-5",
+    title: "Claude Opus 5.5",
+    where: "cloud" as const,
+    default: false,
+    ready: true,
+    tested: false,
+  };
+  const models = async () => [...(await api().models()), OPUS];
+  const choices = (chosen: string): ChoicesApi => ({
+    list: async () => ({
+      choices: (await models()).map((m) => ({
+        id: m.id,
+        title: m.title,
+        plain: "",
+        tier: "also" as const,
+        state: "ready" as const,
+        chosen: m.id === chosen,
+        downloadBytes: 0,
+        engineBytes: 0,
+        engineName: null,
+        fit: null,
+        fitReason: null,
+        source: "server" as const,
+        place: "cloud" as const,
+      })),
+      diskFreeBytes: null,
+      memoryBytes: null,
+    }),
+    choose: async () => {},
+    get: async () => {},
+  });
+
+  it("starts a session on the model the button shows, and has no second list", async () => {
+    const start = vi.fn(async () => session());
+    render(<Code api={api({ start, models })} {...props} choices={choices(OPUS.id)} />);
+    // the button names the model, as on every other screen
+    expect(await screen.findByRole("button", { name: /Claude Opus 5.5/ })).toBeTruthy();
+    expect(screen.queryByText("Model for a new session")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /Choose a folder/ }));
+    expect(start).toHaveBeenCalledWith({ folder: FOLDER, model: OPUS.id, mode: "ask" });
+  });
+
+  it("counts a session in tokens when its model has no known price, and sets its limit in tokens", async () => {
+    const open = session({
+      model: "openai:gpt-6",
+      counted_in: "tokens",
+      tokens_in: 12_000,
+      tokens_out: 345,
+      token_limit: 3_000_000,
+    });
+    const setTokenLimit = vi.fn(async (_id: string, most: number) => ({
+      ...open,
+      token_limit: most,
+    }));
+    render(
+      <Code
+        api={api({ session: async () => open, sessions: async () => [open], setTokenLimit })}
+        {...props}
+        openId={open.id}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "12,345 tokens" }));
+    const box = screen.getByRole("dialog", { name: "This session so far" });
+    expect(within(box).getByText("3,000,000 tokens")).toBeTruthy();
+    expect(within(box).getByText(/price is not known here/)).toBeTruthy();
+    await userEvent.type(within(box).getByLabelText("New limit, in tokens"), "5000000");
+    await userEvent.click(within(box).getByRole("button", { name: "Change" }));
+    expect(setTokenLimit).toHaveBeenCalledWith(open.id, 5_000_000);
+    expect(await within(box).findByText("5,000,000 tokens")).toBeTruthy();
   });
 });

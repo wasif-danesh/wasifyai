@@ -1217,6 +1217,7 @@ export interface paths {
         /**
          * List Schedules
          * @description The person's schedules, the newest first, each with its next time and last run.
+         *     `ids` (for search) keeps only those.
          */
         get: operations["list_schedules_products_wasifyai_code_code_schedules_get"];
         put?: never;
@@ -1409,7 +1410,7 @@ export interface paths {
         head?: never;
         /**
          * Change Session
-         * @description Change the most this session may cost (it holds from the next model call), or how
+         * @description Change the most this session may cost or use (it holds from the next model call), or how
          *     much the agent asks (Plan, Ask me, Work on its own).
          */
         patch: operations["change_session_products_wasifyai_code_code_sessions__session_id__patch"];
@@ -5886,6 +5887,8 @@ export interface components {
             cost_limit_usd?: number | null;
             /** Mode */
             mode?: ("plan" | "ask" | "own") | null;
+            /** Token Limit */
+            token_limit?: number | null;
         };
         /**
          * CodeSkillsEvent
@@ -9968,7 +9971,9 @@ export interface operations {
     };
     list_schedules_products_wasifyai_code_code_schedules_get: {
         parameters: {
-            query?: never;
+            query?: {
+                ids?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9984,6 +9989,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

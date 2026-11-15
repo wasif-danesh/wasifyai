@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Code, Extensions, Scheduled } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
 import { browserHost, stayOpen } from "../browser-host";
+import { choicesSource } from "../choices";
 import { code } from "../code";
 import { type Route, codePath, parseCodeSession } from "../router";
 
@@ -30,6 +31,7 @@ export function CodePage({ go }: { go: (r: Route) => void }) {
       api={code}
       pickFolder={pickFolder}
       browser={browserHost}
+      choices={choicesSource("code")}
       onOpenSetup={() => go("settings")}
       onOpenKeys={() => go("settings")}
       openId={openId}

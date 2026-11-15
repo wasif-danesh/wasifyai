@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
  */
 export type GroupId =
   | "chat"
+  | "code"
   | "images"
   | "video"
   | "voice"
@@ -32,6 +33,12 @@ export const GROUPS: Group[] = [
     title: "Chat",
     select: "Select chat model",
     about: "Answers your questions, writes and reads pictures",
+  },
+  {
+    id: "code",
+    title: "Code",
+    select: "Select coding model",
+    about: "Reads, changes and runs code in a project",
   },
   {
     id: "images",

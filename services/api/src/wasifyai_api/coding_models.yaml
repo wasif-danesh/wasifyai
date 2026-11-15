@@ -1,6 +1,16 @@
-# The models a coding session can run on (ADR-0101, decision 7): Claude Sonnet 5.5 first, then
-# Claude Haiku 5.5 (cheaper), then the local Qwen 27B. Read by the model gateway (wasifyai_api/coding_gateway.py). The picker
-# that exists takes this list over when the coding screens are built.
+# The models a coding session can run on (ADR-0101, decision 7). Read by the model gateway
+# (wasifyai_api/coding_gateway.py); the person chooses one on Code's model button.
+#
+# `models` are the ones run through the coding evaluation (products/wasifyai-code/evals): Claude
+# Sonnet 5.5 first, then Claude Haiku 5.5 (cheaper), then the local Qwen 27B. They are shown as
+# "Tested for coding".
+#
+# `vendors` are the providers whose own list of models is offered as well (owner, 2026-11-15:
+# "It shouldn't be hardcoded to 1/2 options"): every chat model the key saved under Settings ›
+# Your keys › Chat and writing lists is a choice, named `<vendor>:<the vendor's model name>`.
+# Such a model was not run through the evaluation. Its price is the one chat's catalogue knows
+# (own_keys_catalogue.py); a model with no known price is counted in tokens, and its session
+# stops at `token_limit` tokens in and out unless the person sets another.
 #
 #   shape            how the Agent Server calls the model, and so which of the gateway's two
 #                    doors it uses: "anthropic" (the Messages API) or "openai" (chat completions)
@@ -66,3 +76,30 @@ models:
       max_output_tokens: 4096
       temperature: 0.2
       num_retries: 1
+# every chat model a saved key lists, beside the tested ones above
+#   shape, upstream, secret   as for a model
+#   engine_prefix             put before the vendor's model name for the Agent Server
+#   cache                     what a cache read and a cache write cost, as parts of the input
+#                             price. Without it a cached token is counted at the input price
+vendors:
+  anthropic:
+    title: Anthropic
+    shape: anthropic
+    engine_prefix: anthropic/
+    upstream: https://api.anthropic.com
+    secret: keys.chat.anthropic
+    cache: { read: 0.1, write: 1.25, write_1h: 2.0 }
+  openai:
+    title: OpenAI
+    shape: openai
+    engine_prefix: openai/
+    upstream: https://api.openai.com/v1
+    secret: keys.chat.openai
+  gemini:
+    title: Google Gemini
+    shape: openai
+    engine_prefix: openai/
+    upstream: https://generativelanguage.googleapis.com/v1beta/openai
+    secret: keys.chat.gemini
+# the most tokens (in and out) one session on a model with no known price may use
+token_limit: 3000000

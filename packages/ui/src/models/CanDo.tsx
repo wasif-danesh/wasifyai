@@ -28,10 +28,14 @@ function JobLine({ group, title }: { group: GroupId; title: string }) {
           if (gone) return;
           const chosen = l.choices.find((c) => c.chosen);
           const here = l.choices.filter((c) => c.state === "ready" && c.place !== "cloud");
+          const why = l.choices.find((c) => c.unavailableReason)?.unavailableReason;
           if (chosen?.state === "ready")
             setLine({ state: "ready", text: `Ready: ${displayName(chosen.title)}` });
           else if (chosen)
             setLine({ state: "needs", text: `Needs a download: ${displayName(chosen.title)}` });
+          else if (why && l.choices.every((c) => c.state === "unavailable"))
+            // nothing of the group can be used yet, and its rows say why (Code: the coding engine, or a key)
+            setLine({ state: "needs", text: why });
           else if (here.length > 0 && BY_ITSELF.has(group))
             setLine({
               state: "ready",

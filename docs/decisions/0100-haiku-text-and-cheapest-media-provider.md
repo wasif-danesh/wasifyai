@@ -100,3 +100,24 @@ This changes ADR-0099's "the web runs no model" for this one CPU model; everythi
 - **Three media balances and at least one text balance to keep topped up.** All are prepaid with no fee.
 - **Outages:** a media provider's outage moves jobs to the next offer where there is one. A text vendor's outage stops
   the web's chat until the admin turns on another vendor. The desktop can still use its local models.
+
+## Amendment (2026-11-15, owner): media keys are kept once, under Media
+
+The owner, looking at Settings › Your keys: "As we are auto selecting the cheapest provider, we don't need the add a
+key option for each product. Showing which providers support each product is useful, though." The mockup with a
+coverage table was approved on 2026-11-15 ("Yes, build it").
+
+- **One place for media keys.** Runware, WaveSpeed and fal.ai keys are saved once, under "Media" (formerly "Every
+  media product", `media`), and serve every media product. A product no longer has keys of its own, so a product's
+  own key no longer wins and media cannot be billed apart per product. This replaces the media half of ADR-0095's
+  "one key per product"; text keys are unchanged.
+- **A key given for one media product is a Media key.** The engine's routes still take a product, so an older window
+  keeps working: `PUT /desktop/keys/images/keys/fal` saves the Media key.
+- **Keys saved apart move on the first start.** A media product's own key moves under Media when Media has none for
+  that provider, and is deleted otherwise (the Media key wins). The product keeps its model choice. This is the same
+  on the web, per tenant.
+- **Settings shows what the keys cover.** Each media product lists the Media keys whose provider has models for it,
+  and the screen shows a table of products by provider, with the products no key covers named. A product a key covers
+  still runs on this computer until a cloud model is chosen in its picker.
+- **What "covers every media product" means:** a fal.ai key alone, or Runware and WaveSpeed together (Runware has no
+  speech to text, voice change, sound effects or stem split; WaveSpeed has no music edit or training).

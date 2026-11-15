@@ -1,11 +1,12 @@
+import { invoke } from "@tauri-apps/api/core";
+import { notebooksApi } from "./api";
+import { gate } from "./choices/use-ready";
 // SPDX-License-Identifier: AGPL-3.0-only
 // A self-test of the whole window, run inside the real webview when the shell is started with
 // WASIFYAI_SMOKE=1: it types a prompt into the create form, presses the button, waits for the picture
 // to load from the engine, and tells the shell how it went (the shell exits 0 or 1). It drives the same
 // DOM a person would, so CORS, the content security policy and the signed file link are all exercised.
-import { invoke } from "@tauri-apps/api/core";
-import { notebooksApi } from "./api";
-import { gate } from "./choices/use-ready";
+import { showSettingsGroup } from "./settings-group";
 
 const PROMPT = "a red ceramic teapot on a wooden table";
 const TIMEOUT_MS = 90_000;
@@ -298,7 +299,8 @@ export async function runComponentSmoke(id: keyof typeof COMPONENTS = "comfyui")
   const started = Date.now();
   const words = COMPONENTS[id];
   try {
-    window.location.hash = "/settings"; // where the engines are set up
+    showSettingsGroup("computer"); // Settings › On this computer, where the engines are set up
+    window.location.hash = "/settings";
     await new Promise((r) => setTimeout(r, 100));
     const go = await until(`the ${words.button} button`, () =>
       [...document.querySelectorAll("button")].find(

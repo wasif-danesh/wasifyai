@@ -3,7 +3,7 @@ admin in Admin › Media, and the model each product runs on.
 
 The web runs no model of its own. Each tenant has the same keys service the desktop's Settings ›
 Your keys uses (`OwnKeysService`), set to `cloud_only`: media products only, a Runware, WaveSpeed or
-fal.ai key under "Every media product" (or one product's own), and each product on the model the
+fal.ai key under "Media" for every product, and each product on the model the
 admin chose for it, else the first of its catalogue models that a key can run. Each job then goes
 to the cheapest offer with a key, as on the desktop.
 

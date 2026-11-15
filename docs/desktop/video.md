@@ -52,7 +52,7 @@ load. Its picture to video workflow (`wan2.2-14b-i2v`) is written but waits for 
 
 ### Cloud models (ADR-0100, stage CP5)
 
-With a Runware, WaveSpeed or fal.ai key (Settings › Your keys, for Video or for Every media product), the picker's
+With a Runware, WaveSpeed or fal.ai key (Settings › Cloud keys, under Media), the picker's
 Cloud tab offers Gemini Omni Flash 1.2, Seedance 2.5, MiniMax H3 Max, MiniMax H3 Max Turbo and Grok Imagine Video 1.5
 lite, each once, "from" its lowest price per second with the keys there are. Every offer makes and animates a clip
 (720p, 768p for H3, no sound; the length nearest the one asked that the model takes). Extend runs on Gemini Omni with a

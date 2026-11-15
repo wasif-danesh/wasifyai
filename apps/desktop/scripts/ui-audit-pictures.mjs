@@ -75,6 +75,11 @@
 //                                                               it, and Code's line in "What this computer can
 //                                                               do". A throwaway DESKTOP_DATA_DIR with the coding
 //                                                               engine and DESKTOP_SECRET_STORE=keychain (paid)
+//   apps/desktop/scripts/ui-audit.sh light settings-make        Settings as redesigned on 2026-11-15: each of the six
+//                                                                groups, the Media keys and what they cover, a Privacy
+//                                                                link to its group, Other apps (Connect an app, For
+//                                                                experts, a tool server form), a search; a throwaway
+//                                                                DESKTOP_DATA_DIR (it turns the launcher on and off)
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -1767,6 +1772,11 @@ for (const scheme of ["light", "dark"]) {
     }
     console.log(`A11Y ${scheme}: ${SCREENS.length} screens, ${failing} rules failing`);
   }
+  // Optional parts shows only the parts set up; "Show all" opens the rest (the Settings redesign, 2026-11-15)
+  async function showAllParts(page) {
+    const more = page.getByRole("button", { name: /^Show all \d+ parts$/ });
+    if (await more.count()) await more.click();
+  }
   if (scheme === "light" && names.has("f2-parts")) {
     // stage F2: every optional part in one list, from the engine's /components
     await attempt("f2-parts", async () => {
@@ -1774,6 +1784,7 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("searchbox", { name: "Search settings" }).fill("parts");
       const list = page.getByRole("list", { name: "Optional parts" });
       await list.waitFor();
+      await showAllParts(page);
       const shown = await list.getByRole("listitem").count();
       const listed = (await engine("/components"))?.components?.length ?? -1;
       if (shown !== listed) throw new Error(`${shown} parts shown, ${listed} listed by the engine`);
@@ -1792,6 +1803,8 @@ for (const scheme of ["light", "dark"]) {
     await attempt(name, async () => {
       await open(page, "/settings");
       await page.getByRole("searchbox", { name: "Search settings" }).fill("parts");
+      await page.getByRole("list", { name: "Optional parts" }).waitFor();
+      await showAllParts(page);
       const row = page
         .getByRole("list", { name: "Optional parts" })
         .getByRole("listitem")
@@ -2938,9 +2951,84 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, "code-scheduled-stays", 1000);
     });
   }
+  if (scheme === "light" && names.has("settings-make")) {
+    // Settings as redesigned on 2026-11-15: one group at a time, each setting a card with one line
+    const group = async (title) => {
+      await page
+        .getByRole("navigation", { name: "Settings groups" })
+        .getByRole("button", { name: title })
+        .click();
+      await page.getByRole("heading", { level: 1, name: title }).waitFor();
+      await page.waitForTimeout(800);
+    };
+    await attempt("settings-general", async () => {
+      await open(page, "/settings");
+      await group("General"); // an earlier step may have left Settings open on another group or a search
+      await shot(page, "settings-general");
+    });
+    await attempt("settings-keys", async () => {
+      await group("Cloud keys");
+      await page.getByRole("region", { name: "Media" }).waitFor();
+      const status = await page
+        .locator("output")
+        .filter({ hasText: /media product/ })
+        .first()
+        .innerText();
+      console.log(`  coverage says: ${status}`);
+      await shot(page, "settings-keys", 1500);
+      // the add form for one provider, closed again: no key is sent anywhere
+      await page.getByRole("button", { name: "Add a fal.ai key" }).click();
+      await page.getByText("Your fal.ai key").waitFor();
+      await shot(page, "settings-keys-add");
+      await page.getByRole("button", { name: "Cancel" }).click();
+    });
+    await attempt("settings-computer", async () => {
+      await group("On this computer");
+      await page.getByRole("heading", { name: "What this computer can do" }).waitFor();
+      await page.waitForTimeout(4000);
+      await shot(page, "settings-computer", 2600);
+    });
+    await attempt("settings-privacy", async () => {
+      await group("Privacy");
+      await shot(page, "settings-privacy", 1200);
+      // a row's link opens the group where it is changed
+      await page
+        .getByRole("region", { name: "What leaves this computer" })
+        .getByRole("button", { name: "Cloud keys" })
+        .click();
+      await page.getByRole("heading", { level: 1, name: "Cloud keys" }).waitFor();
+    });
+    await attempt("settings-apps", async () => {
+      await group("Other apps");
+      await shot(page, "settings-apps", 1200);
+      const box = page.getByRole("checkbox", { name: "Let other apps use Wasify AI" });
+      const was = await box.isChecked();
+      if (!was) await box.click();
+      await page.getByRole("button", { name: "+ Connect an app" }).click();
+      await page.getByRole("button", { name: "Claude Code" }).click();
+      await page.getByText(/claude mcp add/).waitFor();
+      await page.getByRole("button", { name: /For experts/ }).click();
+      await page.getByLabel("New connection").waitFor();
+      await page.getByRole("button", { name: "+ Add a tool server" }).click();
+      await page.getByLabel("Add a server").waitFor();
+      await shot(page, "settings-apps-open", 2000);
+      if (!was) await box.click(); // the switch ends as it began
+    });
+    await attempt("settings-help", async () => {
+      await group("Help and repair");
+      await shot(page, "settings-help");
+    });
+    await attempt("settings-search", async () => {
+      await page.getByRole("searchbox", { name: "Search settings" }).fill("token");
+      await page.waitForTimeout(400);
+      await shot(page, "settings-search");
+      await page.getByRole("searchbox", { name: "Search settings" }).fill("");
+    });
+  }
   if (scheme === "light" && names.has("u11-make")) {
     await attempt("u11-settings", async () => {
       await open(page, "/settings");
+      await page.getByRole("button", { name: "On this computer" }).click();
       await page.getByRole("heading", { name: "What this computer can do" }).waitFor();
       await page.waitForTimeout(12_000); // each job reads its list, again once the running tools are found
       await shot(page, "u11-settings");
@@ -2949,6 +3037,7 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(400);
       await shot(page, "u11-settings-search");
       await page.getByRole("searchbox", { name: "Search settings" }).fill("");
+      await page.getByRole("button", { name: "On this computer" }).click();
       // saved as it changes: the switch off and on again, so the computer's setting is as it was
       const look = page.getByRole("checkbox", { name: "Look for models when the app starts" });
       const was = (await look.getAttribute("aria-checked")) === "true";
@@ -2964,6 +3053,7 @@ for (const scheme of ["light", "dark"]) {
         throw new Error("Look for models did not end as it began");
       const after = await engine("/desktop/discovery");
       if (after && after.enabled !== was) throw new Error("the engine kept the switch changed");
+      await page.getByRole("button", { name: "General" }).click();
       await page.getByRole("radio", { name: "Dark" }).click();
       await page.waitForTimeout(600);
       await shot(page, "u11-settings-dark");

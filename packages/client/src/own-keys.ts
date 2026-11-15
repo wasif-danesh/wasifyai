@@ -1,5 +1,5 @@
 // Settings > Your keys (ADR-0095, amendment of 2026-11-11; ADR-0100): each product keeps provider keys, never a
-// model; a media key saved under "Every media product" (`media`) serves every media product. A product's model
+// model; media keys are kept once, under Media (`media`), for every media product (ADR-0100, amendment of 2026-11-15). A product's model
 // picker lists, under Cloud, the models its keys can run, and choosing one makes the product run there: a text model
 // on its vendor, a media model on the cheapest of its offers with a key, priced for each job. The engine's
 // `/desktop/keys` routes; a key goes in once and is never answered back.

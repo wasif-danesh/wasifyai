@@ -76,42 +76,86 @@ function fakeApi(start: OwnKeys) {
   return api as typeof api & OwnKeysApi;
 }
 
-const row = (name: string) => screen.getByRole("listitem", { name });
+const row = (name: string) => screen.getByRole("region", { name });
 
-describe("Your keys", () => {
-  it("lists every product with its saved keys and never a model", async () => {
-    const api = fakeApi(
-      keys([
+const media = (over: Partial<KeyProduct> = {}) =>
+  product({
+    id: "media",
+    title: "Media",
+    kind: "media",
+    providers: ["runware", "wavespeed", "fal"],
+    ...over,
+  });
+const served = (id: string, title: string, offered: string[]) =>
+  product({ id, title, kind: "media", providers: offered });
+const mediaProviders: OwnKeys["providers"] = [
+  { id: "runware", title: "Runware", host: "runware.ai" },
+  { id: "wavespeed", title: "WaveSpeed", host: "wavespeed.ai" },
+  ...providers,
+];
+
+describe("Cloud keys", () => {
+  it("keeps media keys once, under Media, with a row per provider", async () => {
+    const api = fakeApi({
+      products: [
         product({}),
-        product({
-          id: "lipsync",
-          title: "Lip sync",
-          kind: "media",
-          providers: ["fal"],
-          keys: [saved("fal")],
-          use: { provider: "fal", model: "fal-ai/infinitalk", title: "InfiniteTalk", price: "" },
-        }),
-        product({
-          id: "music",
-          title: "Music",
-          kind: "media",
-          providers: ["fal"],
-          keys: [saved("fal", { state: "bad", said: "Key was revoked." })],
-        }),
-      ]),
-    );
+        media({ keys: [saved("fal", { state: "bad", said: "Key was revoked." })] }),
+        served("images", "Images", ["runware", "wavespeed", "fal"]),
+      ],
+      providers: mediaProviders,
+      can_save: true,
+    });
     render(<YourKeys api={api} />);
-    const chat = await screen.findByRole("listitem", { name: "Chat and writing" });
-    expect(chat).toHaveTextContent("No key: Chat and writing uses this computer's models only.");
-    expect(within(chat).getByText("OpenRouter")).toBeTruthy();
-    const lipsync = row("Lip sync");
-    expect(lipsync).toHaveTextContent("fal.aiSaved · works");
-    expect(lipsync).toHaveTextContent("In use: InfiniteTalk");
-    // lip sync's one provider has a key: nothing left to add
-    expect(within(lipsync).queryByRole("button", { name: /Add a key/ })).toBeNull();
-    const music = row("Music");
-    expect(music).toHaveTextContent("Key not working");
-    expect(music).toHaveTextContent("Key was revoked.");
+    const chat = await screen.findByRole("region", { name: "Chat and writing" });
+    expect(chat).toHaveTextContent("No key: chat and writing uses this computer's models only.");
+    const keys = row("Media");
+    expect(keys).toHaveTextContent("add a fal.ai key, or both a Runware and a WaveSpeed key");
+    expect(keys).toHaveTextContent("fal.aiKey not working");
+    expect(keys).toHaveTextContent("Key was revoked.");
+    expect(within(keys).getByRole("button", { name: "Add a Runware key" })).toBeTruthy();
+    expect(within(keys).getByRole("button", { name: "Add a WaveSpeed key" })).toBeTruthy();
+    // no product has keys of its own, and none is named a model
+    expect(screen.queryByRole("button", { name: /Add a key for Images/ })).toBeNull();
+  });
+
+  it("shows which provider serves each product and names what no key covers", async () => {
+    const user = userEvent.setup();
+    const api = fakeApi({
+      products: [
+        media({ keys: [saved("runware")] }),
+        served("images", "Images", ["runware", "wavespeed", "fal"]),
+        served("video", "Video", ["runware", "wavespeed", "fal"]),
+        served("sfx", "Sound effects", ["wavespeed", "fal"]),
+        served("train", "Train models", ["runware", "fal"]),
+      ],
+      providers: mediaProviders,
+      can_save: true,
+    });
+    render(<YourKeys api={api} />);
+    const table = await screen.findByRole("table", { name: /Which provider serves each/ });
+    // products the same providers serve share a row
+    expect(within(table).getByRole("rowheader", { name: "Images, Video" })).toBeTruthy();
+    const sfx = within(table).getByRole("row", { name: /Sound effects/ });
+    expect(sfx).toHaveTextContent("Needs a WaveSpeed or fal.ai key");
+    expect(within(sfx).getByRole("img", { name: "Not offered" })).toBeTruthy();
+    expect(within(sfx).getAllByRole("img", { name: "Offered, no key saved" })).toHaveLength(2);
+    const train = within(table).getByRole("row", { name: /Train models/ });
+    expect(within(train).getByRole("img", { name: "Covered by your key" })).toBeTruthy();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Your keys cover 3 of 4 media products. The rest run on this computer's models.",
+    );
+    // a fal.ai key covers the rest
+    const keys = row("Media");
+    await user.click(within(keys).getByRole("button", { name: "Add a fal.ai key" }));
+    const form = screen.getByRole("region", { name: "Add a key for Media" });
+    expect(within(form).getByText("Your fal.ai key")).toBeTruthy();
+    await user.type(within(form).getByLabelText("Key"), "fal-good");
+    await user.click(within(form).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Your keys cover every media product."),
+    );
+    expect(api.save).toHaveBeenCalledWith("media", "fal", { key: "fal-good" });
+    expect(screen.queryByText(/Needs a/)).toBeNull();
   });
 
   it("offers every text vendor for chat, Anthropic first, and saves the one picked", async () => {
@@ -130,7 +174,7 @@ describe("Your keys", () => {
       can_save: true,
     });
     render(<YourKeys api={api} />);
-    const chat = await screen.findByRole("listitem", { name: "Chat and writing" });
+    const chat = await screen.findByRole("region", { name: "Chat and writing" });
     expect(chat).toHaveTextContent("Anthropic, OpenAI, Google Gemini, DeepSeek, Z.ai, OpenRouter");
     await user.click(screen.getByRole("button", { name: "Add a key for Chat and writing" }));
     const form = screen.getByRole("region", { name: "Add a key for Chat and writing" });
@@ -161,7 +205,7 @@ describe("Your keys", () => {
     expect(api.test).toHaveBeenCalledWith("chat", "openrouter", { key: "sk-good-1" });
     expect(api.save).not.toHaveBeenCalled();
     await user.click(within(form).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(row("Chat and writing")).toHaveTextContent("Saved · works"));
+    await waitFor(() => expect(row("Chat and writing")).toHaveTextContent("Works"));
     expect(api.save).toHaveBeenCalledWith("chat", "openrouter", { key: "sk-good-1" });
     expect(document.body.textContent).not.toContain("sk-good-1");
     // OpenRouter has a key now: there is no other text provider to add
@@ -177,7 +221,7 @@ describe("Your keys", () => {
     await user.type(within(form).getByLabelText("Key"), "sk-bad");
     await user.click(within(form).getByRole("button", { name: "Save" }));
     expect((await screen.findByRole("alert")).textContent).toBe("fal.ai did not accept the key.");
-    expect(row("Chat and writing")).not.toHaveTextContent("Saved · works");
+    expect(row("Chat and writing")).not.toHaveTextContent("Works");
   });
 
   it("tests a saved key again, and removes one after asking", async () => {
@@ -208,7 +252,7 @@ describe("Your keys", () => {
     expect(dialog).toHaveTextContent("goes back to this computer's model");
     await user.click(within(dialog).getByRole("button", { name: "Remove" }));
     await waitFor(() =>
-      expect(row("Chat and writing")).toHaveTextContent("No key: Chat and writing"),
+      expect(row("Chat and writing")).toHaveTextContent("No key: chat and writing"),
     );
     expect(api.remove).toHaveBeenCalledWith("chat", "openrouter");
   });

@@ -119,8 +119,9 @@ def test_a_key_is_tested_saved_per_provider_and_never_answered_back():
         GOOD + "-an",
         "https://api.anthropic.com/v1/",
     )
+    # a media key given for one product is kept under Media, for every media product
     assert secrets.values == {
-        "keys.music.fal": GOOD,
+        "keys.media.fal": GOOD,
         "keys.chat.openrouter": GOOD + "-or",
         "keys.chat.anthropic": GOOD + "-an",
     }
@@ -148,9 +149,9 @@ def test_test_saves_nothing_and_uses_the_saved_key_when_none_is_given():
 @pytest.mark.parametrize(
     ("product", "provider", "body", "words"),
     [
-        ("sfx", "runware", {"key": GOOD}, "no sound effects models"),
-        ("images", "openai", {"key": GOOD}, "no images models"),
-        ("images", "openrouter", {"key": GOOD}, "no images models"),  # no media on OpenRouter
+        ("images", "anthropic", {"key": GOOD}, "no media models"),
+        ("images", "openai", {"key": GOOD}, "no media models"),
+        ("images", "openrouter", {"key": GOOD}, "no media models"),  # no media on OpenRouter
         ("chat", "fal", {"key": GOOD}, "no chat and writing models"),  # no text through fal.ai
         ("chat", "compatible", {"key": GOOD}, "no chat and writing models"),
     ],
@@ -197,7 +198,7 @@ def test_choosing_a_cloud_model_routes_the_product_and_clearing_it_keeps_the_key
     assert use["title"] == "MiniMax Music 2.6" and use["price"] == "$0.15 per song"
     off = c.put("/desktop/keys/music/use", json={"provider": None})
     assert off.status_code == 200 and svc.known("music") is None
-    assert secrets.values == {"keys.music.fal": GOOD}
+    assert secrets.values == {"keys.media.fal": GOOD}
 
 
 @pytest.mark.parametrize(
@@ -218,7 +219,7 @@ def test_a_cloud_model_needs_its_key_and_must_be_in_the_list(body, status, words
 def test_a_saved_key_that_stops_working_says_so_after_a_check():
     c, secrets, _ = rig()
     c.put("/desktop/keys/voice/keys/fal", json={"key": GOOD})
-    secrets.values["keys.voice.fal"] = BAD  # revoked at the provider, say
+    secrets.values["keys.media.fal"] = BAD  # revoked at the provider, say
     voice = rows(c.post("/desktop/keys/voice/keys/fal/check").json())["voice"]
     (key,) = voice["keys"]
     assert key["state"] == "bad" and key["said"] == "fal.ai did not accept the key."
@@ -229,11 +230,15 @@ def test_removing_a_key_forgets_it_and_a_model_that_used_it():
     c, secrets, _ = rig()
     svc = c.app.state.services.own_keys  # type: ignore[attr-defined]
     c.put("/desktop/keys/music/keys/fal", json={"key": GOOD})
-    c.put("/desktop/keys/sfx/keys/fal", json={"key": GOOD})
+    c.put("/desktop/keys/media/keys/runware", json={"key": GOOD + "-rw"})
     c.put("/desktop/keys/music/use", json={"provider": "fal", "model": "elevenlabs-music"})
-    music = rows(c.delete("/desktop/keys/music/keys/fal").json())["music"]
-    assert music["keys"] == [] and music["use"] is None
-    assert svc.known("music") is None and secrets.values == {"keys.sfx.fal": GOOD}
+    # the key is Media's: removing it from one product removes it from all of them
+    view = rows(c.delete("/desktop/keys/music/keys/fal").json())
+    music = view["music"]
+    assert [k["provider"] for k in music["keys"]] == ["runware"]
+    assert music["use"] is None  # Runware has no ElevenLabs Music
+    assert view["sfx"]["keys"] == []  # sound effects are not on Runware
+    assert svc.known("music") is None and secrets.values == {"keys.media.runware": GOOD + "-rw"}
 
 
 async def test_a_row_saved_before_keys_per_provider_is_read_as_one_key_and_its_use():
@@ -252,10 +257,12 @@ async def test_a_row_saved_before_keys_per_provider_is_read_as_one_key_and_its_u
     # the old choice (a provider and its endpoint) is read as the model (stage CP3)
     assert (route.provider.id, route.model) == ("fal", "elevenlabs-music")
     assert await svc.route("images") is None  # it ran on this computer; the key stays
-    assert secrets.values == {"keys.music.fal": GOOD, "keys.images.fal": GOOD}
+    # both were the products' own fal.ai keys: the first goes under Media, the second is one too many
+    assert secrets.values == {"keys.media.fal": GOOD}
     saved = await store.get(SETTINGS)
     assert isinstance(saved, dict)
-    assert saved["images"] == {"keys": {"fal": {"ok": True, "said": "", "tested_at": None}}}
+    assert saved["media"] == {"keys": {"fal": {"ok": True, "said": "", "tested_at": 1.0}}}
+    assert saved["images"] == {"keys": {}}
     assert saved["video"] == {"keys": {}}
 
 
@@ -290,21 +297,22 @@ async def test_keys_of_providers_no_longer_offered_are_deleted_on_first_start():
     svc = OwnKeysService(store, secrets, {"text": FakeProviders(), "media": FakeProviders()})
     assert await svc.route("chat") is None
     music = await svc.route("music")
-    assert music is not None and music.provider.id == "wavespeed"
+    # Images' Runware key now serves Music too, and wins the tie (Runware, WaveSpeed, fal.ai)
+    assert music is not None and music.provider.id == "runware"
+    # the media products' own keys go under Media (one per provider), the rest are deleted
     assert secrets.values == {
         "keys.chat.openai": GOOD,
         "keys.chat.openrouter": GOOD,
-        "keys.music.fal": GOOD,
-        "keys.music.wavespeed": GOOD,
-        "keys.images.runware": GOOD,
-        "keys.video.runware": GOOD,
+        "keys.media.fal": GOOD,
+        "keys.media.wavespeed": GOOD,
+        "keys.media.runware": GOOD,
     }
     saved = await store.get(SETTINGS)
     assert isinstance(saved, dict)
     assert list(saved["chat"]["keys"]) == ["openai", "openrouter"] and "use" not in saved["chat"]
-    assert list(saved["music"]["keys"]) == ["fal", "wavespeed"]
-    assert list(saved["images"]["keys"]) == ["runware"]
-    assert list(saved["video"]["keys"]) == ["runware"]  # Runware has video models (CP5)
+    assert list(saved["media"]["keys"]) == ["fal", "wavespeed", "runware"]
+    assert saved["music"]["keys"] == saved["images"]["keys"] == saved["video"]["keys"] == {}
+    assert saved["music"]["use"] == {"model": "minimax-music-2.6"}  # the choice stays
 
 
 # ---- the real testers, against fake providers ---------------------------------------------------

@@ -12,8 +12,17 @@ import {
   YourKeys,
   useTheme,
 } from "@wasifyai/ui";
-import { Search } from "lucide-react";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import {
+  Cpu,
+  KeyRound,
+  LifeBuoy,
+  type LucideIcon,
+  PlugZap,
+  Search,
+  Settings2,
+  ShieldCheck,
+} from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { ComponentsPanel } from "../ComponentsPanel";
 import {
   assistantApi,
@@ -26,6 +35,12 @@ import {
 import { saveDiagnostics } from "../diagnostics";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
+import {
+  type SettingsGroupId,
+  onSettingsGroup,
+  showSettingsGroup,
+  takeSettingsGroup,
+} from "../settings-group";
 
 /** "Saved." beside a setting that saves as it changes, or what went wrong. */
 function SavedLine({ state }: { state: "idle" | "saving" | "saved" | string }) {
@@ -57,10 +72,9 @@ function Diagnostics() {
   return (
     <div className="grid gap-3">
       <p className="m-0 text-muted-foreground text-sm">
-        One zip file to send when something goes wrong: the app's and the computer's versions, the
-        state of each optional part, your last 50 actions (which ones and how they ended, not what
-        you asked) and the end of the engine's logs. No pictures, sounds, documents, prompts or
-        chats; keys and tokens are hidden.
+        One zip file to send when something goes wrong: versions, the state of each part, your last
+        50 actions (not what you asked) and the engine's logs. No pictures, sounds, documents,
+        prompts, chats or keys.
       </p>
       <div className="flex items-center gap-3">
         <Button
@@ -69,7 +83,7 @@ function Diagnostics() {
           disabled={state === "saving"}
           onClick={() => void run()}
         >
-          Save diagnostics
+          Save a report file
         </Button>
         <output aria-live="polite" className="text-sm">
           {state === "saving" ? (
@@ -91,7 +105,7 @@ function ThemeSetting() {
   return (
     <div className="grid gap-2">
       <p className="m-0 text-muted-foreground text-sm">
-        How the app looks. "Like the computer" follows the system's light or dark setting.
+        Light, dark, or the same as this computer.
       </p>
       <Segmented
         label="Theme"
@@ -156,10 +170,8 @@ function FindingModels() {
   return (
     <div className="grid gap-3">
       <p className="m-0 text-muted-foreground text-sm">
-        When the app starts it looks in the folders where tools such as Ollama, LM Studio, ComfyUI
-        and the Hugging Face cache keep models, and lists what it finds in the Model hub. It reads
-        only the start of each file, never copies or changes anything, and the list stays on this
-        computer.
+        Lists the models that Ollama, LM Studio, ComfyUI and the Hugging Face cache keep on this
+        computer in the Model hub. Nothing is copied or changed.
       </p>
       <Checkbox
         checked={enabled}
@@ -202,9 +214,8 @@ function HubSwitch() {
   return (
     <div className="grid gap-3">
       <p className="m-0 text-muted-foreground text-sm">
-        Discover (in the Model hub) asks huggingface.co for lists of open models. It sends the words
-        you search for and the names of the models you open, with no account. Nothing is requested
-        while this is off.
+        Discover, in the Model hub, sends the words you search for and the models you open to
+        huggingface.co, with no account. Off: nothing is sent.
       </p>
       <Checkbox
         checked={enabled}
@@ -222,7 +233,7 @@ function HubSwitch() {
               .catch((err) => setState(err instanceof Error ? err.message : "That did not work.")),
           );
         }}
-        label="Let the app contact Hugging Face to browse models"
+        label="Browse models on Hugging Face"
       />
       <SavedLine state={state} />
     </div>
@@ -258,13 +269,12 @@ function HubToken() {
   }
   return (
     <div className="grid gap-3">
-      <p className="m-0 text-muted-foreground text-sm">
-        Some models on Hugging Face are gated: their authors ask you to accept a licence and sign in
-        before a download. Paste a token from your Hugging Face account to fetch them. It is kept in
-        this computer's keychain, sent only to huggingface.co, and never shown again.
-      </p>
       <label htmlFor={id} className="text-sm">
-        Token {state.set ? "(saved)" : "(not saved yet)"}
+        Account token {state.set ? "(saved)" : "(not saved)"}
+        <span className="block text-muted-foreground">
+          Needed only for models whose authors ask you to sign in. Kept in the keychain and sent
+          only to huggingface.co.
+        </span>
       </label>
       {/* a secret is saved on its button, never as it is typed */}
       <div className="flex flex-wrap items-center gap-2">
@@ -306,28 +316,59 @@ function HubToken() {
   );
 }
 
-/** What leaves this computer, in one place: each item names the setting that sends it. */
+/** One row of "What leaves this computer": what goes where, and the group where it is changed. */
+function Leaves({
+  title,
+  line,
+  to,
+}: { title: string; line: string; to?: [SettingsGroupId, string] }) {
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm">
+      <span className="min-w-0 flex-1">
+        {title}
+        <span className="block text-muted-foreground">{line}</span>
+      </span>
+      {to ? (
+        <Button
+          type="button"
+          variant="link"
+          className="h-auto p-0"
+          onClick={() => showSettingsGroup(to[0])}
+        >
+          {to[1]}
+        </Button>
+      ) : null}
+    </li>
+  );
+}
+
+/** What leaves this computer, in one place: each row names where it is changed. */
 function WhatLeaves() {
   return (
-    <ul className="m-0 grid list-disc gap-1.5 ps-5 text-muted-foreground text-sm">
-      <li>
-        What you make, your files and your chats stay on this computer. Models run here, not on a
-        service, unless you give a product your own key.
-      </li>
-      <li>
-        Searching the web (below, when you allow it) sends your question to the search service you
-        choose.
-      </li>
-      <li>
-        Browsing models (under Models) sends the words you search for to huggingface.co, while it is
-        on. A Hugging Face token is sent only there.
-      </li>
-      <li>Getting a model downloads it from the place its row names; nothing is uploaded.</li>
-      <li>Other apps (connections and tools) are reached only once you add them.</li>
-      <li>
-        A cloud model you choose in a picker (with a key saved in Your keys) sends what you make
-        with it to that model's provider.
-      </li>
+    <ul className="m-0 list-none divide-y p-0">
+      <Leaves
+        title="Cloud models"
+        line="What you make with a cloud model goes to its provider, on your key."
+        to={["keys", "Cloud keys"]}
+      />
+      <Leaves
+        title="Web search"
+        line="Sends your question to the search service you choose, when you allow it below."
+      />
+      <Leaves
+        title="Browsing models"
+        line="Sends the words you search for to huggingface.co, while it is on."
+        to={["computer", "On this computer"]}
+      />
+      <Leaves
+        title="Getting a model"
+        line="Downloads it from the place its row names. Nothing is uploaded."
+      />
+      <Leaves
+        title="Other apps"
+        line="Reached only after you add them."
+        to={["apps", "Other apps"]}
+      />
     </ul>
   );
 }
@@ -337,17 +378,26 @@ type Item = {
   title: string;
   words: string;
   body: ReactNode;
-  /** the shared section brings its own heading */
+  /** the shared screen draws its own cards */
   own?: boolean;
 };
-type Group = { id: string; title: string; items: Item[] };
+type Group = {
+  id: SettingsGroupId;
+  title: string;
+  /** one line under the title: what the group is for */
+  line: string;
+  icon: LucideIcon;
+  items: Item[];
+};
 
 const GROUPS: Group[] = [
   {
     id: "general",
     title: "General",
+    line: "How the app looks and stays up to date.",
+    icon: Settings2,
     items: [
-      { id: "theme", title: "Theme", words: "light dark look colour", body: <ThemeSetting /> },
+      { id: "theme", title: "Look", words: "theme light dark look colour", body: <ThemeSetting /> },
       {
         id: "updates",
         title: "Updates",
@@ -356,7 +406,7 @@ const GROUPS: Group[] = [
           <div className="grid gap-2">
             <UpdateBanner />
             <p className="m-0 text-muted-foreground text-sm">
-              The app checks for a newer version when it starts, once an update feed is set up.
+              The app looks for a newer version when it starts, once an update feed is set up.
             </p>
           </div>
         ),
@@ -364,19 +414,44 @@ const GROUPS: Group[] = [
     ],
   },
   {
-    id: "models",
-    title: "Models",
+    id: "keys",
+    title: "Cloud keys",
+    line: "Use cloud models with your own provider keys.",
+    icon: KeyRound,
     items: [
       {
+        id: "own-keys",
+        title: "Cloud keys",
+        words:
+          "your keys api key provider anthropic claude haiku openai gpt gemini google deepseek z.ai glm openrouter media runware wavespeed fal hosted cloud own key",
+        body: <YourKeys api={ownKeysApi} />,
+        own: true,
+      },
+    ],
+  },
+  {
+    id: "computer",
+    title: "On this computer",
+    line: "The parts and models that run here, with no cloud.",
+    icon: Cpu,
+    items: [
+      {
+        id: "can-do",
+        title: "What this computer can do",
+        words: "memory chip what can run",
+        body: <ComputerCanDo />,
+        own: true,
+      },
+      {
         id: "images",
-        title: "Image generation",
-        words: "engine comfyui pictures",
+        title: "Picture engine",
+        words: "engine comfyui pictures image generation",
         body: <ImageEngineCard />,
       },
       {
         id: "language",
-        title: "Language models",
-        words: "engine llama chat",
+        title: "Chat and writing engine",
+        words: "engine llama chat language models",
         body: <LanguageEngineCard />,
       },
       {
@@ -388,53 +463,44 @@ const GROUPS: Group[] = [
       },
       {
         id: "finding",
-        title: "Finding models",
-        words: "folders ollama lm studio look scan",
+        title: "Models you already have",
+        words: "finding folders ollama lm studio look scan",
         body: <FindingModels />,
       },
       {
-        id: "browsing",
-        title: "Browsing models",
-        words: "hugging face discover",
-        body: <HubSwitch />,
-      },
-      {
-        id: "token",
-        title: "Hugging Face token",
-        words: "gated keychain account",
-        body: <HubToken />,
-      },
-    ],
-  },
-  {
-    id: "keys",
-    title: "Your keys",
-    items: [
-      {
-        id: "own-keys",
-        title: "Your keys",
-        words:
-          "api key provider anthropic claude haiku openai gpt gemini google deepseek z.ai glm openrouter runware wavespeed fal hosted cloud own key",
-        body: <YourKeys api={ownKeysApi} />,
-        own: true,
+        id: "hub",
+        title: "Hugging Face",
+        words: "browsing discover hugging face token gated keychain account",
+        body: (
+          <div className="grid gap-4">
+            <HubSwitch />
+            <HubToken />
+          </div>
+        ),
       },
     ],
   },
   {
     id: "privacy",
-    title: "Privacy and sharing",
+    title: "Privacy",
+    line: "What you make, your files and your chats stay on this computer. This is everything that can leave it, and each one is your choice.",
+    icon: ShieldCheck,
     items: [
       {
         id: "leaves",
         title: "What leaves this computer",
-        words: "privacy data sent network",
+        words: "privacy data sent network sharing",
         body: <WhatLeaves />,
       },
       {
         id: "search",
-        title: "Searching the web",
-        words: "duckduckgo tavily web search consent",
-        body: <SearchSettings assistant={assistantApi} />,
+        title: "Web search",
+        words: "searching duckduckgo tavily web search consent",
+        body: (
+          <div className="rounded-xl border bg-card p-4 empty:hidden">
+            <SearchSettings assistant={assistantApi} />
+          </div>
+        ),
         own: true,
       },
     ],
@@ -442,51 +508,65 @@ const GROUPS: Group[] = [
   {
     id: "apps",
     title: "Other apps",
+    line: "Connect Wasify AI with the other apps you use. Nothing is connected until you add it here.",
+    icon: PlugZap,
     items: [
       {
         id: "connections",
-        title: "Connections",
-        words: "mcp claude cursor other apps",
+        title: "Apps that can use Wasify AI",
+        words: "connections mcp claude code codex opencode cursor other apps launcher secret port",
         body: <ConnectionsSettings api={connectionsApi} />,
         own: true,
       },
       {
         id: "tools",
-        title: "Tools from other apps",
-        words: "mcp servers external",
+        title: "Tools Wasify AI can use",
+        words: "tools from other apps mcp servers external github import",
         body: <ExternalServers api={externalApi} />,
         own: true,
       },
     ],
   },
   {
-    id: "advanced",
-    title: "Advanced",
+    id: "help",
+    title: "Help and repair",
+    line: "For when something seems stuck or broken.",
+    icon: LifeBuoy,
     items: [
       {
         id: "engine",
-        title: "The engine",
-        words: "restart repair process stuck",
+        title: "Fix a problem",
+        words: "advanced engine restart repair process stuck",
         body: (
-          <div className="grid gap-3">
-            <p className="m-0 text-muted-foreground text-sm">
-              The part of the app that makes things runs as its own process on this computer.
-              Restart it if something seems stuck; repair rebuilds its environment.
-            </p>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={() => void engineRestart()}>
+          <ul className="m-0 list-none divide-y p-0">
+            <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm">
+              <span className="min-w-0 flex-1">
                 Restart the engine
+                <span className="block text-muted-foreground">
+                  Try this first. The part that makes things starts again; nothing you made is lost.
+                </span>
+              </span>
+              <Button type="button" variant="outline" onClick={() => void engineRestart()}>
+                Restart
               </Button>
-              <Button type="button" variant="outline" onClick={() => void engineRepair()}>
+            </li>
+            <li className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 text-sm">
+              <span className="min-w-0 flex-1">
                 Repair the installation
+                <span className="block text-muted-foreground">
+                  Rebuilds the engine's files, if restarting did not help. It takes longer.
+                </span>
+              </span>
+              <Button type="button" variant="outline" onClick={() => void engineRepair()}>
+                Repair
               </Button>
-            </div>
-          </div>
+            </li>
+          </ul>
         ),
       },
       {
         id: "diagnostics",
-        title: "Diagnostics",
+        title: "Report a problem",
         words: "diagnostics logs support problem report zip",
         body: <Diagnostics />,
       },
@@ -497,16 +577,45 @@ const GROUPS: Group[] = [
 const matches = (q: string, ...texts: string[]) =>
   q === "" || texts.some((t) => t.toLowerCase().includes(q));
 
+/** A setting's card: a short title, then the setting. */
+function SettingCard({ item, hidden }: { item: Item; hidden: boolean }) {
+  if (item.own) {
+    return <div hidden={hidden}>{item.body}</div>;
+  }
+  return (
+    <section
+      hidden={hidden}
+      aria-label={item.title}
+      className="grid gap-3 rounded-xl border bg-card p-4"
+    >
+      <h3 className="m-0 font-medium text-muted-foreground text-sm">{item.title}</h3>
+      {item.body}
+    </section>
+  );
+}
+
 /**
- * Settings (ADR-0093 U11): what this computer can do at the top, then five groups (General, Models, Privacy and
- * sharing, Other apps, Advanced) with a list of them on the left and a search; each setting saves as it changes.
+ * Settings (ADR-0093 U11; the redesign approved on 2026-11-15): six groups (General, Cloud keys, On this computer,
+ * Privacy, Other apps, Help and repair) listed on the left, one shown at a time with one line on what it is for; each
+ * setting is a card with a short title and one line of help, and saves as it changes. A search shows every matching
+ * setting across the groups. Every group stays mounted, hidden when not shown, so a setting keeps what it read and
+ * what was typed in it.
  */
 export function SettingsPage() {
   const [query, setQuery] = useState("");
+  const [group, setGroup] = useState<SettingsGroupId>(() => takeSettingsGroup() ?? "general");
+  const top = useRef<HTMLDivElement>(null);
+  // a group is shown from its top, from the list or from another screen
+  const open = useCallback((id: SettingsGroupId) => {
+    setQuery("");
+    setGroup(id);
+    top.current?.scrollIntoView({ block: "start" });
+  }, []);
+  useEffect(() => onSettingsGroup(open), [open]);
   const q = query.trim().toLowerCase();
-  // a setting that does not match is hidden, not removed: it keeps what it read and what was typed in it
   const hit = (g: Group, i: Item) => matches(q, g.title, i.title, i.words);
-  const shown = GROUPS.filter((g) => g.items.some((i) => hit(g, i)));
+  const shown = (g: Group) => (q === "" ? g.id === group : g.items.some((i) => hit(g, i)));
+  const any = GROUPS.some(shown);
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-8 px-8 pt-10 pb-12 md:grid-cols-[12rem_minmax(0,1fr)]">
       <aside className="md:sticky md:top-6 md:self-start">
@@ -527,55 +636,55 @@ export function SettingsPage() {
           </div>
           <nav aria-label="Settings groups">
             <ul className="m-0 grid list-none gap-0.5 p-0">
-              {shown.map((g) => (
-                <li key={g.id}>
-                  <button
-                    type="button"
-                    className="w-full rounded-md px-2.5 py-1.5 text-start text-sm hover:bg-accent"
-                    onClick={() =>
-                      document
-                        .getElementById(`settings-${g.id}`)
-                        ?.scrollIntoView({ block: "start" })
-                    }
-                  >
-                    {g.title}
-                  </button>
-                </li>
-              ))}
+              {GROUPS.map((g) => {
+                const current = q === "" && g.id === group;
+                const Icon = g.icon;
+                return (
+                  <li key={g.id}>
+                    <button
+                      type="button"
+                      aria-current={current ? "page" : undefined}
+                      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-start text-sm hover:bg-accent ${current ? "bg-accent font-medium" : "text-muted-foreground"}`}
+                      onClick={() => open(g.id)}
+                    >
+                      <Icon aria-hidden="true" className="size-4 shrink-0" />
+                      {g.title}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </nav>
         </div>
       </aside>
 
-      <div className="grid min-w-0 gap-8">
-        <h1 className="m-0 font-semibold text-2xl">Settings</h1>
-        {q === "" ? <ComputerCanDo /> : null}
-        {shown.length === 0 ? (
+      <div ref={top} className="grid min-w-0 scroll-mt-6 content-start gap-8">
+        {!any ? (
           <p className="m-0 text-muted-foreground">No setting matches “{query.trim()}”.</p>
         ) : null}
         {GROUPS.map((g) => (
           <section
             key={g.id}
-            hidden={!shown.includes(g)}
+            hidden={!shown(g)}
             id={`settings-${g.id}`}
             aria-labelledby={`settings-${g.id}-title`}
-            className="grid scroll-mt-6 gap-5"
+            className="grid content-start gap-4"
           >
-            <h2 id={`settings-${g.id}-title`} className="m-0 border-b pb-2 font-semibold text-lg">
-              {g.title}
-            </h2>
-            {g.items.map((i) =>
-              i.own ? (
-                <div key={i.id} hidden={!hit(g, i)}>
-                  {i.body}
-                </div>
+            <div className="grid gap-1">
+              {q === "" ? (
+                <h1 id={`settings-${g.id}-title`} className="m-0 font-semibold text-2xl">
+                  {g.title}
+                </h1>
               ) : (
-                <section key={i.id} hidden={!hit(g, i)} aria-label={i.title} className="grid gap-2">
-                  <h3 className="m-0 font-semibold text-base">{i.title}</h3>
-                  {i.body}
-                </section>
-              ),
-            )}
+                <h2 id={`settings-${g.id}-title`} className="m-0 font-semibold text-lg">
+                  {g.title}
+                </h2>
+              )}
+              {q === "" ? <p className="m-0 text-muted-foreground text-sm">{g.line}</p> : null}
+            </div>
+            {g.items.map((i) => (
+              <SettingCard key={i.id} item={i} hidden={!hit(g, i)} />
+            ))}
           </section>
         ))}
       </div>

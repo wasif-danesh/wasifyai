@@ -1,7 +1,9 @@
 "use client";
-// Settings > Other apps > "Tools from other apps" (ADR-0070 decisions 2, 3, 4, 6): the outside MCP
-// servers the person added, what each one talks to and did, its trust, its tools after a Test, and
-// the form that adds one (a program is "installing software": the name is typed again).
+// Settings › Other apps, the second card: "Tools Wasify AI can use" (ADR-0070 decisions 2, 3, 4, 6; the Settings
+// mockup approved on 2026-11-15). Each outside MCP server the person added is one row: its name and one line (what it
+// talks to or runs, how it is trusted, how many tools), with Change for the details (trust, tools after a Test, what it
+// sent, its output) and Remove. "Add a tool server" opens the form (a program is "installing software": the name is
+// typed again); "Bring from another app" reads Claude Code's, Claude Desktop's or Codex's list.
 import type {
   ExternalApi,
   ExternalServer,
@@ -10,10 +12,16 @@ import type {
   ImportSource,
   ImportWhere,
 } from "@wasifyai/client";
+import { ArrowUpRight } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "../components/button";
 import { ConfirmDialog } from "../components/dialog";
 
+const TRUST_LINE: Record<string, string> = {
+  ask: "Asks you before every call",
+  trusted_read_only: "Runs tools that only read without asking",
+  blocked: "Blocked",
+};
 const TRUSTS: [string, string][] = [
   ["ask", "asks you before every call"],
   ["trusted_read_only", "runs the tools it says only read, without asking"],
@@ -97,77 +105,100 @@ function Row({
       setError(problem(e));
     }
   }
+  const [open, setOpen] = useState(false);
   const where =
     server.transport === "http" ? server.url : [server.command, ...server.args].join(" ");
+  const tools = server.tools
+    ? `, ${server.tools.length} tool${server.tools.length === 1 ? "" : "s"}`
+    : "";
   return (
-    <li className="grid gap-2 rounded-lg border p-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{server.name}</span>
-        <span className="text-muted-foreground text-xs">
-          {server.transport === "http" ? `talks to ${server.host}` : `runs ${server.host}`}
+    <li className="text-sm" aria-label={server.name}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+        <span className="min-w-0 flex-1">
+          <span className="font-medium">{server.name}</span>
+          {server.unhealthy ? (
+            <span className="ml-2 text-destructive text-xs">(not answering)</span>
+          ) : null}
+          <span className="block text-muted-foreground text-xs">
+            {server.transport === "http" ? `Talks to ${server.host}` : `Runs ${server.host}`}.{" "}
+            {TRUST_LINE[server.trust] ?? ""}
+            {tools}.
+          </span>
         </span>
-        {server.unhealthy ? (
-          <span className="text-destructive text-xs">(not answering)</span>
-        ) : null}
-      </div>
-      <code className="break-all text-muted-foreground text-xs">{where}</code>
-      <p className="m-0 text-muted-foreground text-xs">
-        {server.calls} calls, {kb(server.bytes_sent)} sent, {kb(server.bytes_received)} received
-        {server.last_used_at ? `, last ${new Date(server.last_used_at).toLocaleString()}` : ""}
-        {server.env_names.length ? `. Gets ${server.env_names.join(", ")}` : ""}
-        {server.has_token ? ". Sends a token" : ""}
-      </p>
-      {server.last_error ? (
-        <p className="m-0 text-destructive text-xs">{server.last_error}</p>
-      ) : null}
-      <label className="flex flex-wrap items-center gap-2">
-        <span className="text-muted-foreground text-xs">This server</span>
-        <select
-          className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
-          value={server.trust}
-          onChange={(e) =>
-            void run(
-              async () => (await api.update(server.id, { trust: e.target.value as Trust })).server,
-            )
-          }
-        >
-          {TRUSTS.map(([value, words]) => (
-            <option key={value} value={value}>
-              {words}
-            </option>
-          ))}
-        </select>
-      </label>
-      {server.tools ? (
-        <ul className="m-0 grid list-none gap-1 p-0" aria-label={`Tools of ${server.name}`}>
-          {server.tools.map((t) => (
-            <ToolRow key={t.name} tool={t} />
-          ))}
-        </ul>
-      ) : null}
-      <div className="flex flex-wrap gap-2">
         <Button
           type="button"
           size="sm"
           variant="outline"
-          disabled={testing}
-          onClick={() => void test()}
+          aria-expanded={open}
+          aria-label={`Change ${server.name}`}
+          onClick={() => setOpen((o) => !o)}
         >
-          {testing ? "Testing…" : "Test"}
+          {open ? "Done" : "Change"}
         </Button>
-        {server.transport === "stdio" ? (
-          <Button type="button" size="sm" variant="outline" onClick={() => void showLog()}>
-            Its output
-          </Button>
-        ) : null}
         <Button type="button" size="sm" variant="outline" onClick={() => setConfirm(true)}>
           Remove
         </Button>
       </div>
-      {log !== null ? (
-        <pre className="m-0 max-h-40 overflow-auto rounded-md border bg-muted/40 p-2 text-xs">
-          {log}
-        </pre>
+      {open ? (
+        <div className="grid gap-2 border-t bg-muted/30 px-4 py-3">
+          <code className="break-all text-muted-foreground text-xs">{where}</code>
+          <p className="m-0 text-muted-foreground text-xs">
+            {server.calls} calls, {kb(server.bytes_sent)} sent, {kb(server.bytes_received)} received
+            {server.last_used_at ? `, last ${new Date(server.last_used_at).toLocaleString()}` : ""}
+            {server.env_names.length ? `. Gets ${server.env_names.join(", ")}` : ""}
+            {server.has_token ? ". Sends a token" : ""}
+          </p>
+          {server.last_error ? (
+            <p className="m-0 text-destructive text-xs">{server.last_error}</p>
+          ) : null}
+          <label className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground text-xs">This server</span>
+            <select
+              className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+              value={server.trust}
+              onChange={(e) =>
+                void run(
+                  async () =>
+                    (await api.update(server.id, { trust: e.target.value as Trust })).server,
+                )
+              }
+            >
+              {TRUSTS.map(([value, words]) => (
+                <option key={value} value={value}>
+                  {words}
+                </option>
+              ))}
+            </select>
+          </label>
+          {server.tools ? (
+            <ul className="m-0 grid list-none gap-1 p-0" aria-label={`Tools of ${server.name}`}>
+              {server.tools.map((t) => (
+                <ToolRow key={t.name} tool={t} />
+              ))}
+            </ul>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={testing}
+              onClick={() => void test()}
+            >
+              {testing ? "Testing…" : "Test"}
+            </Button>
+            {server.transport === "stdio" ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => void showLog()}>
+                Its output
+              </Button>
+            ) : null}
+          </div>
+          {log !== null ? (
+            <pre className="m-0 max-h-40 overflow-auto rounded-md border bg-muted/40 p-2 text-xs">
+              {log}
+            </pre>
+          ) : null}
+        </div>
       ) : null}
       {confirm ? (
         <ConfirmDialog
@@ -184,7 +215,7 @@ function Row({
           }}
         />
       ) : null}
-      {error ? <p className="m-0 text-destructive">{error}</p> : null}
+      {error ? <p className="m-0 px-4 pb-2 text-destructive">{error}</p> : null}
     </li>
   );
 }
@@ -228,11 +259,11 @@ function ImportSection({
     }
   }
   return (
-    <div className="grid gap-2" aria-label="Import from another app">
+    <fieldset className="m-0 grid gap-2 border-0 p-0">
+      <legend className="sr-only">Bring from another app</legend>
       <p className="m-0 text-sm">
-        <span className="font-medium">Already set up elsewhere?</span> Read the servers another app
-        knows and add the ones you want. Their keys and variables go to the keychain; nothing is
-        added until you say so.
+        Read the tool servers another app knows and add the ones you want. Their keys and variables
+        go to the keychain; nothing is added until you say so.
       </p>
       <div className="flex flex-wrap items-end gap-2">
         <label htmlFor={`${id}-source`} className="grid gap-1 text-sm">
@@ -300,7 +331,7 @@ function ImportSection({
         </ul>
       ) : null}
       {error ? <p className="m-0 text-destructive text-sm">{error}</p> : null}
-    </div>
+    </fieldset>
   );
 }
 
@@ -362,15 +393,26 @@ export function ExternalServers({ api }: { api: ExternalApi }) {
     name.trim() &&
     (transport === "http" ? url.trim() : command.trim() && confirmName.trim() === name.trim());
 
+  const [adding, setAdding] = useState<"server" | "import" | null>(null);
+
   return (
-    <section className="grid gap-3" aria-label="Tools from other apps">
-      <h3 className="m-0 font-semibold text-base">Tools from other apps</h3>
-      <p className="m-0 text-muted-foreground text-sm">
-        The assistant can use tools of other MCP servers you add here: a code host, a database, a
-        chat. Each call shows you a card first, and whatever a server answers is treated as text
-        from a stranger. Only you can add one; the assistant and the servers cannot.
-      </p>
-      <ul className="m-0 grid list-none gap-2 p-0">
+    <section className="rounded-xl border bg-card" aria-label="Tools Wasify AI can use">
+      <div className="flex items-start gap-3 px-4 pt-3.5 pb-3">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
+          <ArrowUpRight aria-hidden="true" className="size-4" />
+        </span>
+        <div className="grid min-w-0 flex-1 gap-0.5">
+          <h3 className="m-0 font-medium text-base">Tools Wasify AI can use</h3>
+          <p className="m-0 text-muted-foreground text-sm">
+            Give the assistant tools from other services, such as a code host or a database. It
+            shows you a card before each use, and treats their answers as text from a stranger.
+          </p>
+        </div>
+      </div>
+      <ul className="m-0 list-none divide-y border-t p-0">
+        {servers.length === 0 ? (
+          <li className="px-4 py-2.5 text-muted-foreground text-sm">None yet.</li>
+        ) : null}
         {servers.map((s) => (
           <Row
             key={s.id}
@@ -381,108 +423,134 @@ export function ExternalServers({ api }: { api: ExternalApi }) {
           />
         ))}
       </ul>
-      <form
-        className="grid gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (ready) void add();
-        }}
-      >
-        <div className="flex flex-wrap items-end gap-2">
-          <label htmlFor={`${id}-name`} className="grid gap-1 text-sm">
-            <span>Add a server</span>
-            <input
-              id={`${id}-name`}
-              value={name}
-              maxLength={40}
-              placeholder="github"
-              onChange={(e) => setName(e.target.value)}
-              className="h-9 min-w-40 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            />
-          </label>
-          <label htmlFor={`${id}-kind`} className="grid gap-1 text-sm">
-            <span>Kind</span>
-            <select
-              id={`${id}-kind`}
-              className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
-              value={transport}
-              onChange={(e) => setTransport(e.target.value as "http" | "stdio")}
-            >
-              <option value="http">An address (https)</option>
-              <option value="stdio">A program on this computer</option>
-            </select>
-          </label>
-        </div>
-        {transport === "http" ? (
+      <div className="flex flex-wrap gap-2 border-t px-4 py-2.5">
+        <Button
+          type="button"
+          size="sm"
+          variant={adding === "server" ? "default" : "outline"}
+          aria-expanded={adding === "server"}
+          onClick={() => setAdding((a) => (a === "server" ? null : "server"))}
+        >
+          + Add a tool server
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={adding === "import" ? "default" : "outline"}
+          aria-expanded={adding === "import"}
+          onClick={() => setAdding((a) => (a === "import" ? null : "import"))}
+        >
+          Bring from another app
+        </Button>
+      </div>
+      {adding === "server" ? (
+        <form
+          className="grid gap-2 border-t px-4 py-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (ready) void add();
+          }}
+        >
           <div className="flex flex-wrap items-end gap-2">
-            <label htmlFor={`${id}-url`} className="grid gap-1 text-sm">
-              <span>Address</span>
+            <label htmlFor={`${id}-name`} className="grid gap-1 text-sm">
+              <span>Add a server</span>
               <input
-                id={`${id}-url`}
-                value={url}
-                placeholder="https://mcp.example.com/mcp"
-                onChange={(e) => setUrl(e.target.value)}
-                className="h-9 min-w-72 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-            </label>
-            <label htmlFor={`${id}-token`} className="grid gap-1 text-sm">
-              <span>Token (optional, kept in the keychain)</span>
-              <input
-                id={`${id}-token`}
-                type="password"
-                value={token}
-                autoComplete="off"
-                onChange={(e) => setToken(e.target.value)}
-                className="h-9 min-w-56 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-            </label>
-          </div>
-        ) : (
-          <div className="grid gap-2">
-            <label htmlFor={`${id}-command`} className="grid gap-1 text-sm">
-              <span>Command, with its arguments</span>
-              <input
-                id={`${id}-command`}
-                value={command}
-                placeholder="npx -y @modelcontextprotocol/server-filesystem /Users/me/Notes"
-                onChange={(e) => setCommand(e.target.value)}
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-            </label>
-            <label htmlFor={`${id}-env`} className="grid gap-1 text-sm">
-              <span>Variables it needs, one NAME=value per line (values go to the keychain)</span>
-              <textarea
-                id={`${id}-env`}
-                value={env}
-                rows={2}
-                onChange={(e) => setEnv(e.target.value)}
-                className="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-            </label>
-            <p className="m-0 text-sm">
-              This starts a program on your computer, as you, with only the variables above, in a
-              folder of its own under the app's data. Adding it is installing software: type its
-              name to confirm.
-            </p>
-            <label htmlFor={`${id}-confirm`} className="grid gap-1 text-sm">
-              <span>Type the name to confirm</span>
-              <input
-                id={`${id}-confirm`}
-                value={confirmName}
-                onChange={(e) => setConfirmName(e.target.value)}
+                id={`${id}-name`}
+                value={name}
+                maxLength={40}
+                placeholder="github"
+                onChange={(e) => setName(e.target.value)}
                 className="h-9 min-w-40 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
             </label>
+            <label htmlFor={`${id}-kind`} className="grid gap-1 text-sm">
+              <span>Kind</span>
+              <select
+                id={`${id}-kind`}
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+                value={transport}
+                onChange={(e) => setTransport(e.target.value as "http" | "stdio")}
+              >
+                <option value="http">An address (https)</option>
+                <option value="stdio">A program on this computer</option>
+              </select>
+            </label>
           </div>
-        )}
-        <div>
-          <Button type="submit" variant="outline" disabled={busy || !ready}>
-            Add
-          </Button>
+          {transport === "http" ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <label htmlFor={`${id}-url`} className="grid gap-1 text-sm">
+                <span>Address</span>
+                <input
+                  id={`${id}-url`}
+                  value={url}
+                  placeholder="https://mcp.example.com/mcp"
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="h-9 min-w-72 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+              </label>
+              <label htmlFor={`${id}-token`} className="grid gap-1 text-sm">
+                <span>Token (optional, kept in the keychain)</span>
+                <input
+                  id={`${id}-token`}
+                  type="password"
+                  value={token}
+                  autoComplete="off"
+                  onChange={(e) => setToken(e.target.value)}
+                  className="h-9 min-w-56 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+              </label>
+            </div>
+          ) : (
+            <div className="grid gap-2">
+              <label htmlFor={`${id}-command`} className="grid gap-1 text-sm">
+                <span>Command, with its arguments</span>
+                <input
+                  id={`${id}-command`}
+                  value={command}
+                  placeholder="npx -y @modelcontextprotocol/server-filesystem /Users/me/Notes"
+                  onChange={(e) => setCommand(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+              </label>
+              <label htmlFor={`${id}-env`} className="grid gap-1 text-sm">
+                <span>Variables it needs, one NAME=value per line (values go to the keychain)</span>
+                <textarea
+                  id={`${id}-env`}
+                  value={env}
+                  rows={2}
+                  onChange={(e) => setEnv(e.target.value)}
+                  className="rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+              </label>
+              <p className="m-0 text-sm">
+                This starts a program on your computer, as you, with only the variables above, in a
+                folder of its own under the app's data. Adding it is installing software: type its
+                name to confirm.
+              </p>
+              <label htmlFor={`${id}-confirm`} className="grid gap-1 text-sm">
+                <span>Type the name to confirm</span>
+                <input
+                  id={`${id}-confirm`}
+                  value={confirmName}
+                  onChange={(e) => setConfirmName(e.target.value)}
+                  className="h-9 min-w-40 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+              </label>
+            </div>
+          )}
+          <div>
+            <Button type="submit" variant="outline" disabled={busy || !ready}>
+              Add
+            </Button>
+          </div>
+        </form>
+      ) : null}
+      {adding === "import" ? (
+        <div className="border-t px-4 py-3">
+          <ImportSection api={api} onAdded={(s) => setServers((ss) => [...ss, s])} />
         </div>
-      </form>
-      {error ? <p className="m-0 text-destructive text-sm">{error}</p> : null}
-      <ImportSection api={api} onAdded={(s) => setServers((ss) => [...ss, s])} />
+      ) : null}
+      {error ? <p className="m-0 px-4 pb-3 text-destructive text-sm">{error}</p> : null}
     </section>
   );
 }

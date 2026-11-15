@@ -3,10 +3,10 @@ model, the model picker's Cloud tab chooses one; ADR-0100: text vendors and thre
 
 Settings › Your keys keeps, for each product, a key for each provider the person uses there. Chat
 and writing run on a text vendor: Anthropic (Claude Haiku 5.5, the default), OpenAI, Google Gemini,
-DeepSeek, Z.ai or OpenRouter. The media products run on Runware, WaveSpeed and fal.ai: a key saved
-under "Every media product" (`media`) serves them all, and a product's own key for the same provider
-wins (separate billing). Any one media key is enough (ADR-0100, decision 9). Each key is tested
-before it is saved. Keys of providers the app no longer offers (Groq, another
+DeepSeek, Z.ai or OpenRouter. The media products run on Runware, WaveSpeed and fal.ai, and their
+keys are kept once, under "Media" (`media`), for all of them (ADR-0100, amendment of 2026-11-15): a
+key given for one media product is kept there, and a product's own key saved by an older build moves
+there on the first start (`_share_media`). Each key is tested before it is saved. Keys of providers the app no longer offers (Groq, another
 OpenAI-compatible server, and fal.ai, WaveSpeed or Runware for chat) are deleted on the first start
 (`_prune`).
 
@@ -114,12 +114,12 @@ PROVIDERS: dict[str, Provider] = {
 }
 LEGACY_IDS = {"fal_text": "fal"}  # rows saved before 2026-11-11
 
-MEDIA = "media"  # the key row that serves every media product
+MEDIA = "media"  # the one key row of every media product
 MEDIA_PROVIDERS = TIE_ORDER  # runware, wavespeed, fal
 
 PRODUCTS = (
     Product("chat", "Chat and writing", "text"),
-    Product(MEDIA, "Every media product", "media"),
+    Product(MEDIA, "Media", "media"),
     Product("images", "Images", "media"),
     Product("video", "Video", "media"),
     Product("voice", "Voice", "media"),
@@ -157,6 +157,11 @@ def listed_price(provider: str) -> str:
 
 def secret_name(product: str, provider: str) -> str:
     return f"keys.{product}.{provider}"
+
+
+def key_owner(product: Product) -> Product:
+    """Where `product`'s keys are kept: a media product's under Media, a text product's its own."""
+    return BY_ID[MEDIA] if product.kind == "media" else product
 
 
 @dataclass(frozen=True)
@@ -442,7 +447,8 @@ class OwnKeysService:
         rows = {k: dict(v) for k, v in saved.items()} if isinstance(saved, dict) else {}
         if not self._migrated and self._secrets.ready:
             migrated = await self._migrate(rows)
-            if await self._prune(rows) or migrated:
+            shared = await self._share_media(rows)
+            if await self._prune(rows) or migrated or shared:
                 await self._store.put(SETTINGS, rows, "desktop")
             self._migrated = True
         return rows
@@ -479,9 +485,34 @@ class OwnKeysService:
             parts = name.split(".")
             if len(parts) == 3 and parts[0] == "keys":
                 p = BY_ID.get(parts[1])
-                if p is not None and parts[2] not in providers_for(p):
+                # a media product's own key with no row (`_share_media` moved those with one)
+                apart = p is not None and p.kind == "media" and p.id != MEDIA
+                if p is not None and (apart or parts[2] not in providers_for(p)):
                     await self._secrets.delete(name)
                     changed = True
+        return changed
+
+    async def _share_media(self, rows: dict[str, dict[str, Any]]) -> bool:
+        """A media product's own keys (an older build kept them apart) go under Media: moved when
+        Media has none for that provider, else deleted. The product keeps its model choice."""
+        changed = False
+        for pid, row in list(rows.items()):
+            p = BY_ID.get(pid)
+            if p is None or p.kind != "media" or p.id == MEDIA or not row.get("keys"):
+                continue
+            media = rows.setdefault(MEDIA, {"keys": {}})
+            media_keys = dict(media.get("keys") or {})
+            for prov, state in (row.get("keys") or {}).items():
+                name = secret_name(pid, prov)
+                key = await self._secrets.get(name)
+                if key and prov not in media_keys:
+                    await self._secrets.put(secret_name(MEDIA, prov), key)
+                    media_keys[prov] = state
+                    log.info("moved the %s key saved for %s under Media", prov, pid)
+                await self._secrets.delete(name)
+            media["keys"] = media_keys
+            row["keys"] = {}
+            changed = True
         return changed
 
     async def _migrate(self, rows: dict[str, dict[str, Any]]) -> bool:
@@ -540,8 +571,7 @@ class OwnKeysService:
         return KeyRoute(v, model, key, v.url_for("text"))
 
     async def keyed_media(self, product: str) -> dict[str, str]:
-        """The media providers with a key that serves `product`, and that key: the product's own,
-        else the one saved under "Every media product"."""
+        """The media providers with a key saved under Media, and that key."""
         return {prov: key for prov, (key, _) in (await self._keyed(product)).items()}
 
     async def _keyed(self, product: str) -> dict[str, tuple[str, str]]:
@@ -549,16 +579,14 @@ class OwnKeysService:
         out: dict[str, tuple[str, str]] = {}
         if not self._secrets.ready:
             return out
-        rows = await self._all()
+        saved = (await self._all()).get(MEDIA, {}).get("keys") or {}
         for prov in MEDIA_PROVIDERS:
-            for owner in (product, MEDIA):
-                if prov not in (rows.get(owner, {}).get("keys") or {}):
-                    continue
-                name = secret_name(owner, prov)
-                key = await self._secrets.get(name)
-                if key:
-                    out[prov] = (key, name)
-                    break
+            if prov not in saved:
+                continue
+            name = secret_name(MEDIA, prov)
+            key = await self._secrets.get(name)
+            if key:
+                out[prov] = (key, name)
         return out
 
     async def _first_model(self, product: str) -> str | None:
@@ -661,14 +689,10 @@ class OwnKeysService:
         return keys
 
     @staticmethod
-    def _media_keys(
-        own: list[dict[str, Any]], shared: list[dict[str, Any]], product: str
-    ) -> dict[str, dict[str, Any]]:
-        """The media keys that serve `product`, by provider: its own, else the shared one."""
-        out = {k["provider"]: {**k, "shared": True} for k in shared}
-        out.update({k["provider"]: {**k, "shared": False} for k in own})
+    def _media_keys(shared: list[dict[str, Any]], product: str) -> dict[str, dict[str, Any]]:
+        """The keys under Media whose provider has models for `product`, by provider."""
         offered = set(catalogue.providers_of(product))
-        return {p: k for p, k in out.items() if p in offered}
+        return {k["provider"]: k for k in shared if k["provider"] in offered}
 
     @staticmethod
     def _media_offer_row(
@@ -703,7 +727,12 @@ class OwnKeysService:
             if self.cloud_only and p.kind != "media":
                 continue  # the web's text runs through LiteLLM (Admin › Models)
             row = rows.get(p.id, {})
-            keys = self._key_rows(row, names, p.id)
+            # a media product lists the keys under Media that serve it (what Settings shows as
+            # covered); they are kept there, never under the product
+            keys = (
+                self._key_rows(row, names, p.id) if p.kind == "text" or p.id == MEDIA
+                else list(self._media_keys(shared, p.id).values())
+            )  # fmt: skip
             use = row.get("use")
             if use and not self._offered(p.id, use):  # a model taken off the list: not in use
                 use = None
@@ -724,7 +753,7 @@ class OwnKeysService:
             elif use:
                 m = catalogue.media_model(p.id, str(use.get("model") or ""))
                 offer_row = (
-                    self._media_offer_row(m, self._media_keys(keys, shared, p.id), use)
+                    self._media_offer_row(m, self._media_keys(shared, p.id), use)
                     if m else None
                 )  # fmt: skip
                 use = (
@@ -765,7 +794,7 @@ class OwnKeysService:
                         "providers": [v.id], "cheaper_with": None, "can": [],
                     })  # fmt: skip
             return {"product": p.id, "models": models, "has_keys": bool(row["keys"])}
-        keyed = self._media_keys(row["keys"], by_id[MEDIA]["keys"], p.id)
+        keyed = self._media_keys(by_id[MEDIA]["keys"], p.id)
         for m in catalogue.models_of(p.id):
             found = self._media_offer_row(m, keyed, use)
             if found is not None:
@@ -829,55 +858,56 @@ class OwnKeysService:
     async def test(self, product: str, provider: str | None, key: str | None) -> Tried:
         """One small request with the key given (or the one saved). Nothing is saved, nothing is
         charged but a one-token chat for a text vendor other than Anthropic."""
-        p = self._product(product)
+        p = key_owner(self._product(product))
         v = self._provider(p, provider)
         await self._all()  # old keys pruned first
         base = v.url_for(p.kind)
         name = self._test_model(p, v)
-        return await self._testers[p.kind](v, name, await self._key_for(product, v.id, key), base)
+        return await self._testers[p.kind](v, name, await self._key_for(p.id, v.id, key), base)
 
     async def save_key(self, product: str, provider: str | None, key: str | None) -> dict[str, Any]:
-        """Tested first, and saved only when the provider accepted it."""
-        p = self._product(product)
+        """Tested first, and saved only when the provider accepted it. A media key is kept under
+        Media, whichever media product it was given for."""
+        p = key_owner(self._product(product))
         if not self._secrets.ready:
             raise OwnKeyRefused("This computer has nowhere safe to keep a key.", 409)
         v = self._provider(p, provider)
-        tried = await self.test(product, v.id, key)
+        tried = await self.test(p.id, v.id, key)
         if not tried.ok:
             raise OwnKeyRefused(tried.said)
         if key and key.strip():
-            await self._secrets.put(secret_name(product, v.id), key.strip())
-        row = (await self._all()).get(product, {"keys": {}})
+            await self._secrets.put(secret_name(p.id, v.id), key.strip())
+        row = (await self._all()).get(p.id, {"keys": {}})
         keys = dict(row.get("keys") or {})
         keys[v.id] = {"ok": True, "said": "", "tested_at": time.time()}
-        await self._put(product, {**row, "keys": keys})
+        await self._put(p.id, {**row, "keys": keys})
         return await self.view()
 
     async def check_key(self, product: str, provider: str) -> dict[str, Any]:
         """Test a saved key and keep the answer (the state "Key not working" comes from here)."""
-        p = self._product(product)
+        p = key_owner(self._product(product))
         v = self._provider(p, provider)
-        row = (await self._all()).get(product, {})
+        row = (await self._all()).get(p.id, {})
         saved = (row.get("keys") or {}).get(v.id)
         if saved is None:
             raise OwnKeyRefused(f"No {v.title} key is saved for {p.title.lower()}.")
-        tried = await self.test(product, v.id, None)
+        tried = await self.test(p.id, v.id, None)
         keys = {**row["keys"], v.id: {**saved, "ok": tried.ok, "said": tried.said,
                                        "tested_at": time.time()}}  # fmt: skip
-        await self._put(product, {**row, "keys": keys})
+        await self._put(p.id, {**row, "keys": keys})
         return await self.view()
 
     async def remove_key(self, product: str, provider: str) -> dict[str, Any]:
-        p = self._product(product)
+        p = key_owner(self._product(product))
         pid = LEGACY_IDS.get(provider, provider)
         if self._secrets.ready:
             await self._secrets.delete(secret_name(p.id, pid))
-        row = (await self._all()).get(product, {})
+        row = (await self._all()).get(p.id, {})
         keys = {k: v for k, v in (row.get("keys") or {}).items() if k != pid}
         new: dict[str, Any] = {**row, "keys": keys}
         if p.kind == "text" and (row.get("use") or {}).get("provider") == pid:
             new.pop("use", None)
-        await self._put(product, new)
+        await self._put(p.id, new)
         return await self.view()
 
     async def use(self, product: str, provider: str | None, model: str | None) -> dict[str, Any]:

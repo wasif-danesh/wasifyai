@@ -29,7 +29,7 @@ question for the owner (licence and size).
 
 ### Voice on cloud models (ADR-0100, stage CP7)
 
-With a Runware, WaveSpeed or fal.ai key (for the product, or for Every media product), each voice task can run on a
+With a Runware, WaveSpeed or fal.ai key (Settings › Cloud keys, under Media), each voice task can run on a
 cloud model, chosen in its own picker. Four cloud products carry them, each with its own model in use:
 
 | Product (Settings › Your keys) | Tasks | Models and offers |
@@ -183,7 +183,7 @@ the same four on fal.ai in Admin › Media (row `speech.lipsync`, `docs/runbooks
 
 **The cheaper offers (ADR-0100, stage CP6).** The same four models also run where they are cheaper, with fal.ai kept as
 the fallback: Fabric 1.0 on WaveSpeed ($0.07 a second at 480p), InfiniteTalk on WaveSpeed ($0.03), Kling Avatar v2
-on Runware ($0.044) and OmniHuman 1.5 on Runware ($0.132). A key for Lip sync or for Every media product on any of the
+on Runware ($0.044) and OmniHuman 1.5 on Runware ($0.132). A Media key on any of the
 three providers is enough. Each job goes to the cheapest offer with a key, and a provider that refuses before running
 hands it to the next. The screen's price per second is the cheapest keyed offer's at each size, and its "where" is the
 provider of the default size. WaveSpeed is sent `image`, `audio` and the size (and InfiniteTalk a prompt), both

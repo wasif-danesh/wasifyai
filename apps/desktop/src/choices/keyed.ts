@@ -1,11 +1,12 @@
+import type { CloudModel, OwnKeysApi } from "@wasifyai/client";
+import type { ModelChoice } from "@wasifyai/ui";
+import { routePath } from "../router";
 // SPDX-License-Identifier: AGPL-3.0-only
 // Cloud models in the picker (ADR-0095, amendment of 2026-11-11; ADR-0100): every model the product's keys in
 // Settings › Your keys can run is a row under the picker's Cloud tab, a media model once whatever provider runs it
 // (each job goes to its cheapest offer with a key). Choosing one makes the product run there; choosing a model on
 // this computer takes the product off the cloud. The keys stay saved either way.
-import type { CloudModel, OwnKeysApi } from "@wasifyai/client";
-import type { ModelChoice } from "@wasifyai/ui";
-import { routePath } from "../router";
+import { showSettingsGroup } from "../settings-group";
 
 /** A cloud row's picker id: `cloud:<product>:<provider>:<model>` (a model may hold colons). */
 export const cloudId = (product: string, provider: string, model: string) =>
@@ -28,7 +29,7 @@ export function parseCloud(
 /** The product names, for the picker's Cloud tab when no key is saved. */
 const PRODUCT_TITLES: Record<string, string> = {
   chat: "Chat and writing",
-  media: "Every media product",
+  media: "Media",
   images: "Images",
   video: "Video",
   voice: "Voice",
@@ -60,13 +61,10 @@ const SENT: Record<string, string> = {
   train: "the pictures and their captions",
 };
 
-/** Settings › Your keys, from the picker's Cloud tab. */
+/** Settings › Cloud keys, from the picker's Cloud tab. */
 export function openYourKeys() {
+  showSettingsGroup("keys");
   window.location.hash = routePath("settings");
-  window.setTimeout(
-    () => document.getElementById("settings-keys")?.scrollIntoView({ block: "start" }),
-    150,
-  );
 }
 
 /** The `cloud` a group's ChoicesApi carries: the product's name and the way to its keys. */

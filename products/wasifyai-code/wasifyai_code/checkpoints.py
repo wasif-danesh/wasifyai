@@ -141,6 +141,26 @@ class CheckpointStore:
             notes += self._restore_person_git(to, state)
             return Undone(to=to, before=before, notes=tuple(notes))
 
+    def copy_to(self, checkpoint: str, folder: Path) -> int:
+        """Write the files a checkpoint holds into another folder, which must be empty or not
+        there yet: a copy of the project for a scheduled run to work on (ADR-0105, decision 11).
+        What the project ignores is not in a checkpoint and so not in the copy. Gives how many
+        files were written."""
+        import io
+        import tarfile
+
+        with self._lock:
+            tree = self._tree_of(checkpoint)
+            data = self._git_bytes("archive", "--format=tar", tree)
+        folder = Path(folder)
+        if folder.exists() and any(folder.iterdir()):
+            raise CheckpointError(f"the folder for the copy is not empty: {folder}")
+        folder.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+            names = [m for m in tar.getmembers() if m.name != "pax_global_header"]
+            tar.extractall(folder, members=names, filter="tar")  # our own archive of our own store
+        return sum(1 for m in names if m.isfile())
+
     def file_at(self, checkpoint: str, path: str) -> bytes | None:
         """One file as a checkpoint holds it; None when it is not in it (or is a folder)."""
         with self._lock:

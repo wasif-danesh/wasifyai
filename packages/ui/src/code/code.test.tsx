@@ -14,13 +14,17 @@ import type {
   CodePreview,
   CodePreviewRun,
   CodeProject,
+  CodeSchedule,
+  CodeScheduleRun,
   CodeSession,
   CodeTurn,
 } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { type BrowserHost, pageForChat } from "./Browser";
 import { whyNot } from "./Checks";
 import { CARRY_OUT, Code } from "./Code";
-import { Extensions } from "./Extensions";
+import { Extensions, bringsWords } from "./Extensions";
+import { Scheduled, moreOf, outcomeOf, ruleOf } from "./Scheduled";
 import { buildThread, stepLine } from "./thread";
 import { XTERM_CSS } from "./xterm-css";
 
@@ -1856,7 +1860,7 @@ describe("Extensions", () => {
     shown({
       extensions: async () => [...EXTENSIONS, ADDED],
       lookAtFolder: async () => {
-        throw new Error("That folder is a plugin. Plugins cannot be added yet.");
+        throw new Error("The plugin has a hook that asks a model.");
       },
       removeExtension,
       extension: async () => ({
@@ -1869,7 +1873,7 @@ describe("Extensions", () => {
       }),
     });
     await userEvent.click(await screen.findByRole("button", { name: "Add from a folder" }));
-    expect(await screen.findByText(/Plugins cannot be added yet/)).toBeTruthy();
+    expect(await screen.findByText(/a hook that asks a model/)).toBeTruthy();
     expect(screen.getByText("Your folder")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Details of House style" }));
     const dialog = await screen.findByRole("dialog", { name: "House style" });
@@ -1902,5 +1906,451 @@ describe("Extensions", () => {
       ],
     );
     expect(view?.parts).toEqual([{ kind: "skills", titles: ["Explain in plain words"] }]);
+  });
+});
+
+describe("A plugin (stage X3)", () => {
+  const brings = {
+    skills: [{ name: "log-style", description: "How the log is worded." }],
+    hooks: [{ when: "after each step", on: "terminal", command: "sh ${PLUGIN_ROOT}/log.sh" }],
+    connections: [{ name: "tracker", to: "npx" }],
+  };
+  const PLUGIN = {
+    id: "added:p1",
+    kind: "plugin" as const,
+    source: "added" as const,
+    name: "work-log",
+    title: "Work log",
+    description: "Keeps a log of the work.",
+    triggers: [],
+    needs: "",
+    default_on: false,
+    on: false,
+    brings,
+    approved: false,
+    needs_approval: true,
+  };
+
+  it("says what it brings in words", () => {
+    expect(bringsWords(brings)).toBe("1 skill, 1 hook and 1 tool connection");
+    expect(bringsWords({ ...brings, hooks: [], connections: [] })).toBe("1 skill");
+  });
+
+  it("has no switch until the person has read what it brings and approved it", async () => {
+    let approved = false;
+    const detail = () => ({
+      ...PLUGIN,
+      approved,
+      needs_approval: !approved,
+      text: '{"name": "work-log"}',
+      lines: 1,
+      licence: "",
+      files: 3,
+      where: [{ id: "w1", name: "bakery-site", folder: "/p", on: false }],
+    });
+    const approveExtension = vi.fn(async () => {
+      approved = true;
+      return detail();
+    });
+    const switchExtension = vi.fn(async () => ({ ...PLUGIN, on: true }));
+    render(
+      <Extensions
+        api={api({
+          extensions: async () => [{ ...PLUGIN, approved, needs_approval: !approved }],
+          extension: async () => detail(),
+          approveExtension,
+          switchExtension,
+        } as Partial<CodeApi>)}
+        pickFolder={async () => null}
+        onOpenProjects={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText(/Brings 1 skill, 1 hook and 1 tool connection/)).toBeTruthy();
+    expect(screen.queryByRole("switch", { name: /Work log/ })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Look and switch on" }));
+    const dialog = await screen.findByRole("dialog", { name: "Work log" });
+    expect(await within(dialog).findByText("A hook, after each step")).toBeTruthy();
+    expect(within(dialog).getByText("sh ${PLUGIN_ROOT}/log.sh")).toBeTruthy();
+    expect(within(dialog).getByText(/does not connect it in this version/)).toBeTruthy();
+    const off = within(dialog).getByRole("switch", { name: "Work log: off for bakery-site" });
+    expect((off as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Approve what it brings" }));
+    expect(approveExtension).toHaveBeenCalledWith("added:p1");
+    expect(await within(dialog).findByText("You approved what it brings.")).toBeTruthy();
+    const now = within(dialog).getByRole("switch", { name: "Work log: off for bakery-site" });
+    expect((now as HTMLButtonElement).disabled).toBe(false);
+    await userEvent.click(now);
+    expect(switchExtension).toHaveBeenCalledWith("added:p1", "w1", true);
+  });
+});
+
+describe("Scheduled", () => {
+  const run = (over: Partial<CodeScheduleRun> = {}): CodeScheduleRun => ({
+    id: "r1",
+    schedule_id: "sc1",
+    due_at: "2027-03-15T02:00:00+00:00",
+    state: "done",
+    result: "passed",
+    note: "",
+    stands_for: 1,
+    session_id: "s7",
+    changed: 2,
+    open: true,
+    applied_at: null,
+    discarded_at: null,
+    started_at: "2027-03-15T02:00:01+00:00",
+    finished_at: "2027-03-15T02:04:00+00:00",
+    ...over,
+  });
+  const schedule = (over: Partial<CodeSchedule> = {}): CodeSchedule => ({
+    id: "sc1",
+    title: "Check it every night",
+    request: "Run the project's check.",
+    workspace_id: "w1",
+    project: "bakery-site",
+    rule: { kind: "daily", time: "02:00" },
+    rule_words: "Every day at 02:00",
+    time_zone: "Europe/London",
+    enabled: true,
+    run_when_missed: true,
+    model: "",
+    next_due: "2027-03-16T02:00:00+00:00",
+    running: false,
+    last: run(),
+    created_at: "2027-03-01T10:00:00+00:00",
+    ...over,
+  });
+  const TEMPLATE = {
+    id: "nightly-check",
+    title: "Check it every night",
+    description: "Runs the check each night.",
+    request: "Run the project's check.",
+    rule: { kind: "daily" as const, time: "02:00" },
+    rule_words: "Every day at 02:00",
+  };
+  const shown = (given: Record<string, unknown>, more: Record<string, unknown> = {}) =>
+    render(
+      <Scheduled
+        api={api(given as Partial<CodeApi>)}
+        onOpenProjects={vi.fn()}
+        onOpenSession={vi.fn()}
+        {...more}
+      />,
+    );
+
+  it("says each outcome in one word, and what a run left", () => {
+    expect(outcomeOf(run()).word).toBe("Passed");
+    expect(outcomeOf(run({ result: "failed" })).word).toBe("Check failed");
+    expect(outcomeOf(run({ result: "could_not_check" })).word).toBe("Could not check");
+    expect(outcomeOf(run({ result: "not_checked" })).word).toBe("Not checked");
+    expect(outcomeOf(run({ state: "missed" })).word).toBe("Missed");
+    expect(outcomeOf(run({ state: "skipped" })).word).toBe("Skipped: still running");
+    expect(outcomeOf(run({ state: "running" })).word).toBe("Running now");
+    expect(outcomeOf(run({ state: "failed" })).word).toBe("Could not run");
+    expect(outcomeOf(run({ note: "It was stopped.", result: "not_checked" })).word).toBe("Stopped");
+    expect(moreOf(run())).toBe("2 files changed, waiting for you");
+    expect(moreOf(run({ open: false, applied_at: "x", changed: 1 }))).toBe(
+      "1 file changed, applied by you",
+    );
+    expect(moreOf(run({ changed: 0 }))).toBe("Nothing needed changing");
+    expect(moreOf(run({ state: "missed", note: "the app was not open", stands_for: 3 }))).toBe(
+      "the app was not open. stands for 3 missed times",
+    );
+  });
+
+  it("an empty list says what goes there, and that the app must be open", async () => {
+    shown({ schedules: async () => ({ items: [], time_zone: "Europe/London" }) });
+    expect(await screen.findByText("No schedules yet")).toBeTruthy();
+    expect(
+      screen.getByText("Schedules run only while Wasify AI is open and this computer is awake"),
+    ).toBeTruthy();
+  });
+
+  it("lists a schedule with its rule, next time and last run, and runs or pauses it", async () => {
+    const runSchedule = vi.fn(async () => run({ state: "waiting" }));
+    const changeSchedule = vi.fn(async () => schedule({ enabled: false }));
+    shown({
+      schedules: async () => ({ items: [schedule()], time_zone: "Europe/London" }),
+      runSchedule,
+      changeSchedule,
+    });
+    expect(await screen.findByText("Check it every night")).toBeTruthy();
+    expect(screen.getByText("Every day at 02:00, Europe/London")).toBeTruthy();
+    expect(screen.getByText("Passed")).toBeTruthy();
+    expect(screen.getByText(/2 files changed, waiting for you/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Run Check it every night now" }));
+    expect(runSchedule).toHaveBeenCalledWith("sc1");
+    await userEvent.click(screen.getByRole("switch", { name: "Check it every night: on" }));
+    expect(changeSchedule).toHaveBeenCalledWith("sc1", { enabled: false });
+  });
+
+  it("makes a schedule from a template, with a plain rule", async () => {
+    const addSchedule = vi.fn(async () => schedule());
+    shown({
+      schedules: async () => ({ items: [], time_zone: "Europe/London" }),
+      scheduleTemplates: async () => [TEMPLATE],
+      addSchedule,
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "New schedule" }));
+    const save = await screen.findByRole("button", { name: "Save the schedule" });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(await screen.findByRole("button", { name: "Check it every night" }));
+    expect((screen.getByLabelText("What should be done") as HTMLTextAreaElement).value).toBe(
+      "Run the project's check.",
+    );
+    expect((screen.getByLabelText("At") as HTMLInputElement).value).toBe("02:00");
+    await userEvent.click(save);
+    expect(addSchedule).toHaveBeenCalledWith({
+      workspace_id: "w1",
+      request: "Run the project's check.",
+      rule: { kind: "daily", time: "02:00" },
+      title: "Check it every night",
+      run_when_missed: true,
+    });
+  });
+
+  it("changes a schedule's words and time from its history page", async () => {
+    const changeSchedule = vi.fn(async () => schedule());
+    shown({
+      schedules: async () => ({ items: [schedule()], time_zone: "Europe/London" }),
+      schedule: async () => schedule({ runs: [] }),
+      scheduleTemplates: async () => [],
+      changeSchedule,
+    });
+    await userEvent.click(
+      await screen.findByRole("button", { name: "History of Check it every night" }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    expect(await screen.findByRole("heading", { name: "Change the schedule" })).toBeTruthy();
+    const box = screen.getByLabelText("What should be done") as HTMLTextAreaElement;
+    expect(box.value).toBe("Run the project's check.");
+    await userEvent.type(box, " Twice.");
+    await userEvent.click(screen.getByRole("button", { name: "Save the schedule" }));
+    expect(changeSchedule).toHaveBeenCalledWith("sc1", {
+      request: "Run the project's check. Twice.",
+      rule: { kind: "daily", time: "02:00" },
+      title: "Check it every night",
+      run_when_missed: true,
+    });
+  });
+
+  it("turns what the form holds into a plain rule", () => {
+    expect(
+      ruleOf({
+        kind: "weekdays",
+        time: "09:00",
+        days: [4, 0],
+        day: 1,
+        n: 2,
+        unit: "hours",
+        date: "",
+      }),
+    ).toEqual({ kind: "weekdays", days: [0, 4], time: "09:00" });
+    expect(
+      ruleOf({ kind: "every", time: "", days: [], day: 1, n: 30, unit: "minutes", date: "" }),
+    ).toEqual({ kind: "every", minutes: 30 });
+  });
+
+  it("shows a run's changes and applies them, naming a file the person changed meanwhile", async () => {
+    const applyRun = vi.fn(async () => ({
+      applied: ["src/home.html"],
+      left: ["notes.txt"],
+      run: run({ open: false, applied_at: "2027-03-15T08:00:00+00:00" }),
+    }));
+    const onOpenSession = vi.fn();
+    shown(
+      {
+        schedules: async () => ({ items: [schedule()], time_zone: "Europe/London" }),
+        schedule: async () =>
+          schedule({
+            runs: [
+              run(),
+              run({
+                id: "r0",
+                state: "missed",
+                open: false,
+                changed: 0,
+                note: "the app was not open",
+              }),
+            ],
+          }),
+        runChanges: async () => ({
+          run: "r1",
+          project: "bakery-site",
+          files: [
+            { path: "src/home.html", what: "changed", conflict: false },
+            { path: "notes.txt", what: "changed", conflict: true },
+          ],
+        }),
+        applyRun,
+      },
+      { onOpenSession },
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "History of Check it every night" }),
+    );
+    expect(await screen.findByText("Missed")).toBeTruthy();
+    expect(screen.getByText(/Your project has not been touched/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Read what the agent did" }));
+    expect(onOpenSession).toHaveBeenCalledWith("s7");
+    await userEvent.click(screen.getByRole("button", { name: "Look at the changes" }));
+    const dialog = await screen.findByRole("dialog", { name: "What the run changed" });
+    expect(within(dialog).getByText(/you changed it meanwhile: it will be left/)).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Apply to the project" }));
+    expect(applyRun).toHaveBeenCalledWith("r1");
+    expect(await screen.findByText(/1 file was written into the project/)).toBeTruthy();
+    expect(screen.getByText(/because you changed it meanwhile: notes.txt/)).toBeTruthy();
+  });
+});
+
+describe("The Browser tab", () => {
+  const host = (over: Partial<BrowserHost> = {}) => {
+    let tell: (now: { url: string; loading: boolean }) => void = () => {};
+    const made: BrowserHost = {
+      show: vi.fn(async () => undefined),
+      hide: vi.fn(),
+      close: vi.fn(),
+      go: vi.fn(async () => undefined),
+      text: vi.fn(async () => ({
+        url: "https://example.org/getDay",
+        title: "getDay",
+        text: "Returns the day of the week.",
+        cut: false,
+      })),
+      onChange: (told) => {
+        tell = told;
+        return () => {};
+      },
+      openOutside: vi.fn(),
+      ...over,
+    };
+    return { made, tell: (now: { url: string; loading: boolean }) => tell(now) };
+  };
+  const open = async (browser?: BrowserHost) => {
+    const one = session();
+    render(
+      <Code
+        api={api({ sessions: async () => [one], session: async () => one })}
+        {...props}
+        browser={browser}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /^bakery-site/ }));
+    const tabs = await screen.findByRole("tablist", { name: "Beside the chat" });
+    await userEvent.click(within(tabs).getByRole("tab", { name: "Browser" }));
+    return screen.getByRole("region", { name: "Browser" });
+  };
+
+  it("puts a page into words for the chat, and says when only its beginning is given", () => {
+    const words = pageForChat({
+      url: "https://a.example/x",
+      title: "T",
+      text: "Hello",
+      cut: false,
+    });
+    expect(words).toContain('A page I am reading, "T" (https://a.example/x):');
+    expect(words).toContain("<page>\nHello\n</page>");
+    const long = pageForChat({
+      url: "https://a.example/x",
+      title: "",
+      text: "a".repeat(20_000),
+      cut: false,
+    });
+    expect(long).toContain("(https://a.example/x), its beginning:");
+    expect(long.length).toBeLessThan(12_400);
+  });
+
+  it("says where the browser is when this is not the desktop window", async () => {
+    const pane = await open(undefined);
+    expect(within(pane).getByText("The browser is part of the desktop app")).toBeTruthy();
+  });
+
+  it("opens what is typed over the tab's own area, follows the page, and adds it to the chat", async () => {
+    const box = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ left: 420, top: 96, width: 700, height: 560 } as DOMRect);
+    const { made, tell } = host();
+    const pane = await open(made);
+    expect(
+      within(pane).getByText(/The agent cannot open pages or reach the internet/),
+    ).toBeTruthy();
+    const address = within(pane).getByLabelText("An address, or words to search for");
+    await userEvent.type(address, "date getDay{Enter}");
+    expect(made.show).toHaveBeenCalledWith(
+      { x: 420, y: 96, width: 700, height: 560 },
+      "date getDay",
+    );
+    tell({ url: "https://example.org/getDay", loading: false });
+    await waitFor(() =>
+      expect((address as HTMLInputElement).value).toBe("https://example.org/getDay"),
+    );
+    await userEvent.click(within(pane).getByRole("button", { name: "Load again" }));
+    expect(made.go).toHaveBeenCalledWith("reload");
+    await userEvent.click(within(pane).getByRole("button", { name: "Open in your own browser" }));
+    expect(made.openOutside).toHaveBeenCalledWith("https://example.org/getDay");
+    await userEvent.click(within(pane).getByRole("button", { name: /Add this page to the chat/ }));
+    const message = (await screen.findByRole("textbox", {
+      name: "Ask about this project",
+    })) as HTMLTextAreaElement;
+    await waitFor(() => expect(message.value).toContain("Returns the day of the week."));
+    expect(message.value).toContain('"getDay" (https://example.org/getDay)');
+    // another tab: the page is taken off the screen, and it is not loaded again when the tab comes back
+    const tabs = screen.getByRole("tablist", { name: "Beside the chat" });
+    await userEvent.click(within(tabs).getByRole("tab", { name: "Files" }));
+    await waitFor(() => expect(made.hide).toHaveBeenCalled());
+    expect(made.close).not.toHaveBeenCalled();
+    box.mockRestore();
+  });
+
+  it("says in words why a page could not be opened", async () => {
+    const box = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ left: 0, top: 0, width: 700, height: 560 } as DOMRect);
+    const { made } = host({
+      show: vi.fn(async () => {
+        throw "that is not a web address";
+      }),
+    });
+    const pane = await open(made);
+    await userEvent.type(
+      within(pane).getByLabelText("An address, or words to search for"),
+      "file:///etc/passwd{Enter}",
+    );
+    expect((await within(pane).findByRole("alert")).textContent).toBe("that is not a web address");
+    box.mockRestore();
+  });
+});
+
+describe("Staying open for the schedules", () => {
+  it("shows the switch only where the shell offers it, and flips it", async () => {
+    const set = vi.fn(async (on: boolean) => ({ supported: true, on }));
+    render(
+      <Scheduled
+        api={api({ schedules: async () => ({ items: [], time_zone: "UTC" }) } as Partial<CodeApi>)}
+        stayOpen={{ get: async () => ({ supported: true, on: false }), set }}
+        onOpenProjects={vi.fn()}
+        onOpenSession={vi.fn()}
+      />,
+    );
+    const flip = await screen.findByRole("switch", {
+      name: "Open Wasify AI when I log in, and keep it in the menu bar",
+    });
+    expect(screen.getByText(/closing the window quits Wasify AI/)).toBeTruthy();
+    await userEvent.click(flip);
+    expect(set).toHaveBeenCalledWith(true);
+    expect(await screen.findByText(/Quit it from its item in the menu bar/)).toBeTruthy();
+  });
+
+  it("has no switch where there is none to offer", async () => {
+    render(
+      <Scheduled
+        api={api({ schedules: async () => ({ items: [], time_zone: "UTC" }) } as Partial<CodeApi>)}
+        stayOpen={{ get: async () => ({ supported: false, on: false }), set: vi.fn() }}
+        onOpenProjects={vi.fn()}
+        onOpenSession={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText("No schedules yet")).toBeTruthy();
+    expect(screen.queryByRole("switch")).toBeNull();
   });
 });

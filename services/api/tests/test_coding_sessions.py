@@ -1038,3 +1038,100 @@ async def test_extensions_are_listed_switched_added_and_removed_through_the_rout
     ).status_code == 403
     assert (await box.http.delete(f"{BASE}/extensions/{added.json()['id']}")).status_code == 204
     assert (await box.http.get(f"{BASE}/extensions?ids={item}")).json() == {"items": []}
+
+
+# ---- plugins (stage X3) and scheduled runs (stage C6) ------------------------------------------------
+
+
+async def test_a_plugin_is_approved_through_its_own_route_and_only_then_switched_on(box, tmp_path):
+    await started(box)
+    (project,) = (await box.http.get(f"{BASE}/workspaces")).json()["items"]
+    folder = tmp_path / "work-log"
+    (folder / ".plugin").mkdir(parents=True)
+    (folder / ".plugin" / "plugin.json").write_text(
+        json.dumps({"name": "work-log", "description": "Keeps a log of the work."})
+    )
+    (folder / "hooks").mkdir()
+    hooks = {"PostToolUse": [{"matcher": "*", "hooks": [{"command": "date >> log.txt"}]}]}
+    (folder / "hooks" / "hooks.json").write_text(json.dumps({"hooks": hooks}))
+    seen = (await box.http.post(f"{BASE}/extensions/look", json={"folder": str(folder)})).json()
+    assert seen["kind"] == "plugin" and seen["brings"]["hooks"][0]["command"] == "date >> log.txt"
+    added = await box.http.post(
+        f"{BASE}/extensions", json={"folder": str(folder), "workspace_id": project["id"]}
+    )
+    assert added.status_code == 201 and added.json()["on"] is False
+    url = f"{BASE}/extensions/{added.json()['id']}"
+    on = {"workspace_id": project["id"], "on": True}
+    refused = await box.http.put(f"{url}/on", json=on)
+    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "needs_approval"
+    assert (await box.http.post(f"{BASE}/extensions/own:nothing/approve")).status_code == 404
+    approved = await box.http.post(f"{url}/approve")
+    assert approved.status_code == 200 and approved.json()["approved"] is True
+    assert (await box.http.put(f"{url}/on", json=on)).json()["on"] is True
+
+
+async def test_a_schedule_is_made_from_a_template_run_now_and_let_go_through_the_routes(box):
+    site(box)
+    await started(box, mode="own")
+    (project,) = (await box.http.get(f"{BASE}/workspaces")).json()["items"]
+    templates = (await box.http.get(f"{BASE}/schedules/templates")).json()["items"]
+    nightly = next(t for t in templates if t["id"] == "nightly-check")
+    assert nightly["rule_words"] == "Every day at 02:00"
+    body = {
+        "workspace_id": project["id"], "request": "Add the hours. #replay:edit-asked",
+        "rule": nightly["rule"], "title": nightly["title"], "model": "qwen-27b-ollama",
+    }  # fmt: skip
+    for bad, code in (
+        ({"rule": {"kind": "every", "minutes": 1}}, "bad_rule"),
+        ({"workspace_id": "nothing"}, "not_found"),
+        ({"model": "no-such-model"}, "no_such_model"),
+    ):
+        r = await box.http.post(f"{BASE}/schedules", json=body | bad)
+        assert r.status_code in (404, 422) and r.json()["detail"]["code"] == code, r.text
+    made = await box.http.post(f"{BASE}/schedules", json=body)
+    assert made.status_code == 201, made.text
+    schedule = made.json()
+    assert schedule["title"] == "Check it every night" and schedule["next_due"]
+    assert schedule["project"] == "bakery-site" and schedule["enabled"] is True
+    listed = (await box.http.get(f"{BASE}/schedules")).json()
+    assert [s["id"] for s in listed["items"]] == [schedule["id"]] and listed["time_zone"]
+    url = f"{BASE}/schedules/{schedule['id']}"
+    run = await box.http.post(f"{url}/run")
+    assert run.status_code == 202 and run.json()["state"] == "waiting"
+    deadline = time.monotonic() + 30
+    latest: dict = {}
+    while time.monotonic() < deadline:
+        (latest,) = (await box.http.get(url)).json()["runs"]
+        if latest["state"] not in ("waiting", "running"):
+            break
+        await asyncio.sleep(0.05)
+    assert latest["state"] == "done" and latest["open"] is True, latest
+    # the run's session is a scheduled run's, on a copy inside the coding engine's own folder,
+    # and the copy is not one of the person's projects
+    session = (await box.http.get(f"{BASE}/sessions/{latest['session_id']}")).json()
+    assert session["scheduled_run"] is True and session["mode"] == "own"
+    assert [w["id"] for w in (await box.http.get(f"{BASE}/workspaces")).json()["items"]] == [
+        project["id"]
+    ]
+    copies = Path(box.server.run_dir) / "copies" / latest["id"]
+    assert (copies / "bakery-site" / "src" / "home.html").is_file()
+    runs = f"{BASE}/schedules/runs/{latest['id']}"
+    assert (await box.http.get(f"{runs}/changes")).json()["files"] == []
+    gone = await box.http.post(f"{runs}/discard")
+    assert gone.status_code == 200 and gone.json()["open"] is False and not copies.exists()
+    again = await box.http.post(f"{runs}/apply")
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "no_copy"
+    # paused: no next time; another person sees nothing of it; deleted: gone
+    paused = await box.http.patch(url, json={"enabled": False})
+    assert paused.json()["enabled"] is False and paused.json()["next_due"] is None
+    other = RouteDeps(box.services, lambda: Identity("t1", "someone-else"))
+    app = FastAPI()
+    app.include_router(build_routes(other), prefix="/products/wasifyai-code")
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://engine.test"
+    ) as theirs:
+        assert (await theirs.get(f"{BASE}/schedules")).json()["items"] == []
+        assert (await theirs.get(url)).status_code == 404
+        assert (await theirs.post(f"{runs}/discard")).status_code == 404
+    assert (await box.http.delete(url)).status_code == 204
+    assert (await box.http.get(url)).status_code == 404

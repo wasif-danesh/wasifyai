@@ -182,7 +182,8 @@ def test_the_first_set_is_there(catalogue):
     # 91 with code.session.check (ADR-0103; stage C3, the project's check)
     # 93 with code.project.new and code.session.preview (stage C4)
     # 96 with code.extension.list, switch and add (ADR-0104; stage X2)
-    assert 35 <= len(ids) <= 96
+    # 100 with code.schedule.list, add, change and run (ADR-0105; stage C6)
+    assert 35 <= len(ids) <= 100
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",

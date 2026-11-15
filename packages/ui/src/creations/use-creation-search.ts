@@ -36,6 +36,7 @@ async function cards(
       creative_project: ids("creative_project"),
       code_session: ids("code_session"),
       code_extension: ids("code_extension"),
+      code_schedule: ids("code_schedule"),
       notebook: ids("notebook"),
       taught: response.results.filter((r) => taught.has(r.kind)).map((r) => r.id),
     },
@@ -107,6 +108,13 @@ async function cards(
       id: extension.id,
       createdAt: extension.added_at ?? "",
       extension,
+    });
+  for (const schedule of found.others.codeSchedules)
+    byKey.set(`code_schedule:${schedule.id}`, {
+      kind: "code_schedule",
+      id: schedule.id,
+      createdAt: schedule.created_at,
+      schedule,
     });
   for (const project of creativeProjects)
     byKey.set(`creative_project:${project.id}`, {

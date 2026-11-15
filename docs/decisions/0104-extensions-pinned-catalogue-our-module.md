@@ -105,3 +105,40 @@ stream event and its actions.
     app; a skill switched on for every project at once.
 
 Measured in `docs/spikes/coding-x2.md`.
+
+## Amendment (2026-11-15): plugins and templates, as built in stage X3
+
+The decisions above stand. What was settled while building, under the owner's standing yes of 2026-11-15
+("Yes, add and document"):
+
+1. **A plugin is added from a folder, like a skill** (a folder with `.plugin/plugin.json`). Nothing of the
+   catalogue's 13 plugins is on the short list: several need accounts or connections outside this computer,
+   and the short list stays the owner's to choose.
+2. **What a plugin brings is read by our own reader and listed before anything is copied:** its skills
+   (`skills/<name>/SKILL.md`), its hooks (`hooks/hooks.json`) and its tool connections (`.mcp.json`, by name
+   and where each goes; what a connection is given, such as a key, is never read back out).
+3. **A plugin that brings a hook or a tool connection stays off until the person approves it** (decision 6).
+   Approval is once per plugin, at the window only: there is a route and no action, so the assistant cannot
+   approve. Switching it on for a project is a separate step. A switch written without the approval is not
+   honoured: a session is given neither the plugin's skills nor its hooks. A plugin that brings text only
+   needs no approval.
+4. **A hook is a plain command and nothing else.** A hook that asks a model (the format's `prompt` and
+   `agent` kinds), one that runs on in the background, and one for a moment we do not know make the whole
+   plugin unreadable: we never run a part of what would be approved as a whole.
+5. **Hooks are given to the coding engine with the conversation** (`hook_config`), each with one second to
+   run whatever the plugin asks for (ADR-0102), and with `PLUGIN_ROOT` set to our read-only copy of the
+   plugin. The engine runs them inside its sandbox, so a hook can do no more than the agent's own commands.
+   A session that only reads (Plan) is given no hook.
+6. **Tool connections are listed and not connected.** The sandbox reaches nothing outside this computer,
+   and a tool server started inside it would need its own review. The approval card says so.
+7. **Templates (decision 9)** are our own short list, `wasifyai_code/own/templates.json`: five starting
+   points, each prompt text and a plain rule. None of the catalogue's 27 automation templates is used as it
+   is: every one of them needs an integration (GitHub, Slack, Jira and others) or an incoming webhook, which
+   a run in the sandbox cannot reach. A template only fills the form; the person can change everything.
+8. **Search.** An added plugin is in the Library with the added skills (`code_extension`), found by its name
+   and what it says it is for.
+9. **Not built:** a plugin's commands and agents (they are copied and unused); connecting a plugin's tool
+   connections; plugins from the catalogue or the internet; taking an approval back (removing the plugin
+   does that).
+
+Measured in `docs/spikes/coding-c6.md`.

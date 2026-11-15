@@ -1126,6 +1126,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/extensions/{extension_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Extension
+         * @description The person has seen what a plugin brings (its hooks, its tool connections) and says
+         *     yes. It is not an action: only a person at the window approves.
+         */
+        post: operations["approve_extension_products_wasifyai_code_code_extensions__extension_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/extensions/{extension_id}/on": {
         parameters: {
             query?: never;
@@ -1180,6 +1201,173 @@ export interface paths {
          * @description A new project from a starter, in a new folder inside `parent`, and a session on it.
          */
         post: operations["new_project_products_wasifyai_code_code_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Schedules
+         * @description The person's schedules, the newest first, each with its next time and last run.
+         */
+        get: operations["list_schedules_products_wasifyai_code_code_schedules_get"];
+        put?: never;
+        /** Add Schedule */
+        post: operations["add_schedule_products_wasifyai_code_code_schedules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/schedules/runs/{run_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Run
+         * @description Write a run's changes into the project; a file changed meanwhile is left and named.
+         */
+        post: operations["apply_run_products_wasifyai_code_code_schedules_runs__run_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/schedules/runs/{run_id}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run Changes
+         * @description What a run changed in its copy, and for each file whether the project's own file was
+         *     changed meanwhile.
+         */
+        get: operations["run_changes_products_wasifyai_code_code_schedules_runs__run_id__changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/schedules/runs/{run_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard Run
+         * @description Let a run's changes go. The project is as it was.
+         */
+        post: operations["discard_run_products_wasifyai_code_code_schedules_runs__run_id__discard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/schedules/runs/{run_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Run */
+        post: operations["stop_run_products_wasifyai_code_code_schedules_runs__run_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/schedules/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Templates
+         * @description Our short list of starting points for a schedule.
+         */
+        get: operations["list_templates_products_wasifyai_code_code_schedules_templates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/schedules/{schedule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule
+         * @description One schedule with its runs, the newest first.
+         */
+        get: operations["get_schedule_products_wasifyai_code_code_schedules__schedule_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove Schedule
+         * @description Forget a schedule, its history and the copies of its runs. Never the project.
+         */
+        delete: operations["remove_schedule_products_wasifyai_code_code_schedules__schedule_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change Schedule
+         * @description Change what it asks or when it runs, or pause it (`enabled`).
+         */
+        patch: operations["change_schedule_products_wasifyai_code_code_schedules__schedule_id__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/schedules/{schedule_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Schedule Now
+         * @description "Run now": the same run as at its time.
+         */
+        post: operations["run_schedule_now_products_wasifyai_code_code_schedules__schedule_id__run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5610,6 +5798,59 @@ export interface components {
             /** Ts */
             ts?: string;
         };
+        /**
+         * CodeScheduleIn
+         * @description A schedule: what the agent is asked at each run, in which project, and when.
+         */
+        CodeScheduleIn: {
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /** Request */
+            request: string;
+            /** Rule */
+            rule: {
+                [key: string]: unknown;
+            };
+            /**
+             * Run When Missed
+             * @default true
+             */
+            run_when_missed: boolean;
+            /**
+             * Time Zone
+             * @default
+             */
+            time_zone: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** CodeSchedulePatch */
+        CodeSchedulePatch: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Model */
+            model?: string | null;
+            /** Request */
+            request?: string | null;
+            /** Rule */
+            rule?: {
+                [key: string]: unknown;
+            } | null;
+            /** Run When Missed */
+            run_when_missed?: boolean | null;
+            /** Time Zone */
+            time_zone?: string | null;
+            /** Title */
+            title?: string | null;
+        };
         /** CodeSessionIn */
         CodeSessionIn: {
             /**
@@ -9598,6 +9839,39 @@ export interface operations {
             };
         };
     };
+    approve_extension_products_wasifyai_code_code_extensions__extension_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                extension_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     switch_extension_products_wasifyai_code_code_extensions__extension_id__on_put: {
         parameters: {
             query?: never;
@@ -9672,6 +9946,349 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_schedules_products_wasifyai_code_code_schedules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    add_schedule_products_wasifyai_code_code_schedules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeScheduleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_run_products_wasifyai_code_code_schedules_runs__run_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_changes_products_wasifyai_code_code_schedules_runs__run_id__changes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_run_products_wasifyai_code_code_schedules_runs__run_id__discard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_run_products_wasifyai_code_code_schedules_runs__run_id__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_products_wasifyai_code_code_schedules_templates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    get_schedule_products_wasifyai_code_code_schedules__schedule_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_schedule_products_wasifyai_code_code_schedules__schedule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_schedule_products_wasifyai_code_code_schedules__schedule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeSchedulePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_schedule_now_products_wasifyai_code_code_schedules__schedule_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

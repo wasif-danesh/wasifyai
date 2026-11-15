@@ -499,6 +499,8 @@ async def _shared(
         r.background.append(asyncio.create_task(sweep_forever(s.uploads, store)))
     s.engine = db
     s.storage = store
+    if desktop and not injected:
+        _start_code_timer(s)  # scheduled coding runs, when a schedule is on
     if not desktop and store is not None:  # the styles an admin adds for everyone (ADR-0091 S5)
         s.service_styles = ServiceStyles(settings_store, store.backing)
     s.heartbeat_s = given.heartbeat_s
@@ -1006,6 +1008,21 @@ def _desktop_coding(s: ApiServices, desktop: Desktop) -> None:
         return
     # opened at the start, so that a turn a closed app left in the middle is closed in words
     s.code_store = CodeStore.in_folder(Path(settings.desktop_data_dir) / "code")
+
+
+def _start_code_timer(s: ApiServices) -> None:
+    """Scheduled runs (ADR-0105): when a schedule is on, its timer serves from the app's start.
+    With none, nothing is started; making the first schedule starts it."""
+    if s.code_store is None or s.coding_server is None or s.coding_gateway is None:
+        return
+    try:
+        if not s.code_store.schedules_on():
+            return
+        from wasifyai_code.runtime import scheduled_for
+
+        scheduled_for(s).start()
+    except Exception:  # noqa: BLE001  (a fault here must never keep the app from starting)
+        log.warning("the timer for scheduled coding runs could not be started", exc_info=True)
 
 
 def _loopback(public_url: str) -> str:

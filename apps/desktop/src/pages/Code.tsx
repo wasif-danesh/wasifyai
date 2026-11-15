@@ -2,8 +2,9 @@
 // Code (ADR-0101): the shared screens on this window's engine, with the computer's own folder window. A
 // session has an address of its own (`#/code/<id>`), so it is still open after a reload and Back leaves it.
 import { open } from "@tauri-apps/plugin-dialog";
-import { Code, Extensions } from "@wasifyai/ui";
+import { Code, Extensions, Scheduled } from "@wasifyai/ui";
 import { useEffect, useState } from "react";
+import { browserHost, stayOpen } from "../browser-host";
 import { code } from "../code";
 import { type Route, codePath, parseCodeSession } from "../router";
 
@@ -28,6 +29,7 @@ export function CodePage({ go }: { go: (r: Route) => void }) {
     <Code
       api={code}
       pickFolder={pickFolder}
+      browser={browserHost}
       onOpenSetup={() => go("settings")}
       onOpenKeys={() => go("settings")}
       openId={openId}
@@ -41,4 +43,18 @@ export function CodePage({ go }: { go: (r: Route) => void }) {
 /** Extensions (ADR-0104): the skills a project's agent is taught. */
 export function ExtensionsPage({ go }: { go: (r: Route) => void }) {
   return <Extensions api={code} pickFolder={pickFolder} onOpenProjects={() => go("code")} />;
+}
+
+/** Scheduled (ADR-0105): work the agent does by itself at set times, each run on a copy of the project. */
+export function ScheduledPage({ go }: { go: (r: Route) => void }) {
+  return (
+    <Scheduled
+      api={code}
+      stayOpen={stayOpen}
+      onOpenProjects={() => go("code")}
+      onOpenSession={(id) => {
+        window.location.hash = codePath(id);
+      }}
+    />
+  );
 }

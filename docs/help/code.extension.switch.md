@@ -29,6 +29,7 @@ You can also ask the assistant in the chat.
 - A change holds from a session's next message. A turn that is running keeps the skills it started with.
 - When the skills of a project change, the agent begins a new conversation with the next message and is given the last answer to go on from.
 - A skill is text. It can steer how the agent works; it cannot widen what the agent may do.
+- A plugin that brings a hook or a tool connection cannot be switched on until you have approved it: open its details in **Code › Extensions**, read what it brings, and choose "Approve what it brings".
 
 ## Needs
 

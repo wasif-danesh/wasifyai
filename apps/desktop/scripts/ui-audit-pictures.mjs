@@ -63,6 +63,12 @@
 //                                                               skill added from a folder whose rule the answer
 //                                                               follows, and its removal. A throwaway
 //                                                               DESKTOP_DATA_DIR with the coding engine
+//   WASIFYAI_AUDIT_FOLDER=<an empty folder> apps/desktop/scripts/ui-audit.sh light code-scheduled
+//                                                               Scheduled (C6) and a plugin (X3): a schedule from a
+//                                                               template, Run now on a copy with the project read
+//                                                               back untouched, the changes applied; a plugin with
+//                                                               a hook that stays off until approved, then runs. A
+//                                                               throwaway DESKTOP_DATA_DIR with the coding engine
 //   apps/desktop/scripts/ui-audit.sh light u11-make             Settings (what this computer can do, the groups, a
 //                                                                search, the theme, a setting saved as it changes),
 //                                                                the Models page and the picker with their dots
@@ -143,6 +149,8 @@ window.__TAURI_INTERNALS__ = {
       case "update_check": return { state: "not_configured" };
       case "component_status": return { state: "installed", version: "", accelerator: "mps" };
       case "plugin:event|listen": return 1;
+      case "stay_open_get": return { supported: true, on: window.__wasifyStays === true };
+      case "stay_open_set": window.__wasifyStays = !window.__wasifyStays; return { supported: true, on: window.__wasifyStays };
       case "plugin:dialog|open": return window.__wasifyAuditFolder ?? ${JSON.stringify(process.env.WASIFYAI_AUDIT_FOLDER ?? null)};
       default: return null;
     }
@@ -2004,8 +2012,10 @@ for (const scheme of ["light", "dark"]) {
       if (!env().includes("CLOSED_ON=Monday"))
         throw new Error(".env was not changed once the kind was allowed");
       if ((await card.count()) !== cards) throw new Error("a card came though the kind is allowed");
+      // the closed line of the turn's steps says it (the same words on each step are inside, folded away)
       await page
-        .getByText(/· (1 )?allowed for this project/)
+        .locator("summary")
+        .filter({ hasText: /· (1 )?allowed for this project/ })
         .last()
         .waitFor();
       await shot(page, "code-edit-allowed", 1400);
@@ -2629,6 +2639,231 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(500);
       await shot(page, "code-extensions-small");
       await page.setViewportSize({ width: 1440, height: 900 });
+    });
+  }
+  // stage C6 with X3 of the coding agent: Scheduled and a plugin, with a real model. WASIFYAI_AUDIT_FOLDER
+  // is an empty throwaway folder; the walk makes a small project with a failing check and a plugin with a
+  // hook in it. A schedule is made from a template and run now: the run works on a copy, the project is
+  // read back from disk untouched, and the change arrives only with "Apply to the project".
+  if (scheme === "light" && names.has("code-scheduled")) {
+    await attempt("code-scheduled", async () => {
+      const { mkdirSync, writeFileSync, readFileSync, existsSync } = await import("node:fs");
+      const top = process.env.WASIFYAI_AUDIT_FOLDER ?? "";
+      const project = join(top, "bakery-site");
+      const plugin = join(top, "work-log");
+      mkdirSync(project, { recursive: true });
+      mkdirSync(join(plugin, ".plugin"), { recursive: true });
+      mkdirSync(join(plugin, "hooks"), { recursive: true });
+      mkdirSync(join(plugin, "skills", "log-style"), { recursive: true });
+      const BUG = "def total(xs):\n    return sum(xs) if xs else None\n";
+      writeFileSync(join(project, "prices.py"), BUG);
+      writeFileSync(
+        join(project, "check.py"),
+        "import prices\nassert prices.total([]) == 0, 'total of nothing must be 0'\nprint('all good')\n",
+      );
+      writeFileSync(join(project, "notes.txt"), "to do: the tax\n");
+      writeFileSync(
+        join(plugin, ".plugin", "plugin.json"),
+        JSON.stringify(
+          {
+            name: "work-log",
+            version: "1.0.0",
+            description: "Keeps a log of the agent's steps in the project.",
+          },
+          null,
+          2,
+        ),
+      );
+      writeFileSync(
+        join(plugin, "hooks", "hooks.json"),
+        JSON.stringify({
+          hooks: {
+            UserPromptSubmit: [
+              { hooks: [{ type: "command", command: "echo asked >> work-log.txt" }] },
+            ],
+          },
+        }),
+      );
+      writeFileSync(
+        join(plugin, "skills", "log-style", "SKILL.md"),
+        "---\nname: log-style\ndescription: How the work log is worded.\ntriggers:\n  - work log\n---\n\nKeep log lines short.\n",
+      );
+      const pick = (folder) =>
+        page.evaluate((f) => {
+          window.__wasifyAuditFolder = f;
+        }, folder);
+      const secs = (began) => ((Date.now() - began) / 1000).toFixed(1);
+      const read = (name) => readFileSync(join(project, name), "utf8");
+      // a project with a check that fails for an old bug
+      await open(page, "/code");
+      await pick(project);
+      await page.getByRole("button", { name: "Choose a folder" }).first().click();
+      const box = page.getByRole("textbox", { name: "Ask about this project" });
+      await box.waitFor();
+      const sessionHash = await page.evaluate(() => window.location.hash);
+      const word = page.getByRole("button", { name: /^The check: / });
+      await word.click();
+      const dialog = page.getByRole("dialog", { name: /^The check for / });
+      await dialog.getByLabel("Command").fill("python3 -B check.py");
+      await dialog.getByRole("button", { name: "Save the check" }).click();
+      await dialog.waitFor({ state: "detached" });
+      // 1. the empty list
+      await open(page, "/scheduled");
+      await page.getByRole("heading", { name: "Scheduled" }).waitFor();
+      await page.getByText("No schedules yet").waitFor({ timeout: 30_000 });
+      await shot(page, "code-scheduled-empty", 1000);
+      // 2. a schedule from a template
+      await page.getByRole("button", { name: "New schedule" }).click();
+      await page.getByRole("heading", { name: "New schedule" }).waitFor();
+      await page.getByRole("button", { name: "Check it every night" }).waitFor({ timeout: 30_000 });
+      const chips = await page
+        .getByText("Or start from a template:")
+        .locator("..")
+        .getByRole("button")
+        .allInnerTexts();
+      console.log(`code-scheduled: templates offered: ${chips.join(" | ")}`);
+      await page.getByRole("button", { name: "Check it every night" }).click();
+      const asked = await page.getByLabel("What should be done").inputValue();
+      console.log(`code-scheduled: the template's request: ${asked.slice(0, 120)}…`);
+      await shot(page, "code-scheduled-new", 1900);
+      await page.getByRole("button", { name: "Save the schedule" }).click();
+      await page
+        .getByRole("button", { name: "Run Check it every night now" })
+        .waitFor({ timeout: 30_000 });
+      const row = (await page.getByRole("listitem").first().innerText()).replace(/\s+/g, " ");
+      console.log(`code-scheduled: the list says: ${row.slice(0, 220)}`);
+      await shot(page, "code-scheduled-list", 1000);
+      // 3. Run now: a real run on a copy
+      const before = [read("prices.py"), read("check.py"), read("notes.txt")];
+      let began = Date.now();
+      await page.getByRole("button", { name: "Run Check it every night now" }).click();
+      await page.getByText("Running now").waitFor({ timeout: 60_000 });
+      await shot(page, "code-scheduled-running", 1000);
+      await page.getByText("Running now").waitFor({ state: "detached", timeout: 1_500_000 });
+      const after = (await page.getByRole("listitem").first().innerText()).replace(/\s+/g, " ");
+      console.log(`code-scheduled: the run ended after ${secs(began)} s: ${after.slice(0, 260)}`);
+      if (
+        read("prices.py") !== before[0] ||
+        read("check.py") !== before[1] ||
+        read("notes.txt") !== before[2]
+      )
+        throw new Error("the run changed the project itself");
+      console.log("code-scheduled: the project's files are byte for byte what they were");
+      await shot(page, "code-scheduled-ran", 1000);
+      // 4. its history, the changes, and applying them
+      await page.getByRole("button", { name: "History of Check it every night" }).click();
+      await page.getByText(/Your project has not been touched/).waitFor({ timeout: 30_000 });
+      await shot(page, "code-scheduled-history", 1200);
+      await page.getByRole("button", { name: "Look at the changes" }).click();
+      const changes = page.getByRole("dialog", { name: "What the run changed" });
+      await changes.getByText("prices.py").waitFor();
+      console.log(
+        `code-scheduled: the run changed: ${(await changes.getByRole("listitem").allInnerTexts()).map((t) => t.replace(/\s+/g, " ")).join(" | ")}`,
+      );
+      await shot(page, "code-scheduled-changes", 1200);
+      await changes.getByRole("button", { name: "Apply to the project" }).click();
+      await page.getByText(/written into the project/).waitFor({ timeout: 60_000 });
+      const fixed = read("prices.py");
+      console.log(`code-scheduled: applied; prices.py is now: ${fixed.replace(/\n/g, " ⏎ ")}`);
+      if (fixed === BUG) throw new Error("applying did not write the change into the project");
+      if (read("check.py") !== before[1]) throw new Error("the check file was changed");
+      await shot(page, "code-scheduled-applied", 1200);
+      // 5. paused: no next time
+      await page.getByRole("switch", { name: "Check it every night: on" }).click();
+      await page.getByText("Off. It will not run.").waitFor({ timeout: 30_000 });
+      // 6. a plugin with a hook: refused until approved
+      await open(page, "/extensions");
+      await page.getByRole("button", { name: "Add from a folder" }).waitFor();
+      await pick(plugin);
+      await page.getByRole("button", { name: "Add from a folder" }).click();
+      const add = page.getByRole("dialog", { name: "Add an extension from a folder" });
+      await add.getByText(/Found a plugin: “Work log”/).waitFor();
+      await add.getByText("It stays off until you approve it").waitFor();
+      await shot(page, "code-plugin-add", 1400);
+      await add.getByRole("button", { name: "Add the plugin" }).click();
+      await page.getByRole("button", { name: "Look and switch on" }).waitFor({ timeout: 30_000 });
+      if (await page.getByRole("switch", { name: /^Work log/ }).count())
+        throw new Error("a plugin that is not approved has a switch");
+      await shot(page, "code-plugin-list", 1100);
+      // not approved: a message runs no hook
+      await page.evaluate((h) => {
+        window.location.hash = h;
+      }, sessionHash);
+      await box.waitFor();
+      const chat = page.getByRole("region", { name: "Chat" });
+      const ask = async (text) => {
+        await box.fill(text);
+        await box.press("Enter");
+        await chat
+          .getByRole("button", { name: "Stop", exact: true })
+          .waitFor({ timeout: 60_000 })
+          .catch(() => {});
+        await chat
+          .getByRole("button", { name: "Stop", exact: true })
+          .waitFor({ state: "detached", timeout: 900_000 });
+      };
+      // (the session is in "Ask me", as a project opened here starts: a session that only reads, in Plan,
+      // is given no hook at all)
+      began = Date.now();
+      await ask("In one sentence: what does prices.py do? Change nothing.");
+      if (existsSync(join(project, "work-log.txt")))
+        throw new Error("a hook ran before the plugin was approved");
+      console.log(
+        `code-scheduled: plugin not approved, a turn ran (${secs(began)} s) and no hook did`,
+      );
+      // approved and switched on: the hook runs
+      await open(page, "/extensions");
+      await page.getByRole("button", { name: "Look and switch on" }).click();
+      const detail = page.getByRole("dialog", { name: "Work log" });
+      await detail.getByText("This plugin brings more than text").waitFor();
+      await shot(page, "code-plugin-approve", 1500);
+      await detail.getByRole("button", { name: "Approve what it brings" }).click();
+      await detail.getByText("You approved what it brings.").waitFor({ timeout: 30_000 });
+      await detail.getByRole("switch", { name: "Work log: off for bakery-site" }).first().click();
+      await detail.getByRole("switch", { name: "Work log: on for bakery-site" }).first().waitFor();
+      await shot(page, "code-plugin-approved", 1500);
+      await detail.getByRole("button", { name: "Done" }).click();
+      await page.evaluate((h) => {
+        window.location.hash = h;
+      }, sessionHash);
+      await box.waitFor();
+      began = Date.now();
+      await ask("In one sentence: what does check.py check? Change nothing.");
+      const log = existsSync(join(project, "work-log.txt")) ? read("work-log.txt") : "";
+      console.log(
+        `code-scheduled: plugin approved and on, a turn ran (${secs(began)} s); work-log.txt holds: ${JSON.stringify(log)}`,
+      );
+      if (!log.includes("asked")) throw new Error("the approved plugin's hook did not run");
+      await page.setViewportSize({ width: 720, height: 700 });
+      await open(page, "/scheduled");
+      await page.getByRole("heading", { name: "Scheduled" }).waitFor();
+      await page.waitForTimeout(800);
+      await shot(page, "code-scheduled-small");
+      await page.setViewportSize({ width: 1440, height: 900 });
+    });
+  }
+  // the Browser tab's own bar and the stay-open switch, as far as a browser can show them: the pages
+  // themselves are a second webview of the real shell, which this walk does not have (the shell tests that
+  // itself: WASIFYAI_BROWSER_TEST and WASIFYAI_STAY_TEST, docs/spikes/coding-browser.md)
+  if (scheme === "light" && names.has("code-browser")) {
+    await attempt("code-browser", async () => {
+      await open(page, "/code");
+      await page.getByRole("button", { name: "Choose a folder" }).first().click();
+      await page.getByRole("textbox", { name: "Ask about this project" }).waitFor();
+      const tabs = page.getByRole("tablist", { name: "Beside the chat" });
+      await tabs.getByRole("tab", { name: "Browser" }).click();
+      const pane = page.getByRole("region", { name: "Browser" });
+      await pane.getByText("A browser of your own").waitFor();
+      await pane.getByLabel("An address, or words to search for").fill("date getDay javascript");
+      await shot(page, "code-browser-tab", 1000);
+      await open(page, "/scheduled");
+      const stays = page.getByRole("switch", {
+        name: "Open Wasify AI when I log in, and keep it in the menu bar",
+      });
+      await stays.waitFor({ timeout: 30_000 });
+      await stays.click();
+      await page.getByText(/Quit it from its item in the menu bar/).waitFor();
+      await shot(page, "code-scheduled-stays", 1000);
     });
   }
   if (scheme === "light" && names.has("u11-make")) {

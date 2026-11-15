@@ -277,6 +277,15 @@ concepts:
       - { lang: en, text: "the skill I added that tells the coding agent how our shop's pages are written" }
       - { lang: de, text: "die Regeln für den Programmier-Agenten, wie die Seiten unseres Ladens formuliert werden" }
       - { lang: fr, text: "la compétence qui explique à l'agent de code comment rédiger les pages de la boutique" }
+  - id: nightly-check-coding-schedule
+    items:
+      - { kind: code_schedule, lang: en, text: "Check it every night. A scheduled run of the coding agent. bakery-site. Every day at 02:00. Run the project's check. If it fails, find the cause and fix it with the smallest change" }
+      - { kind: transcript, lang: de, text: "Jede Nacht um zwei Uhr kontrolliert der Bäcker den Ofen und den Teig für den nächsten Morgen" }
+      - { kind: image, lang: fr, text: "Une horloge murale dans une boulangerie vide, la nuit, à deux heures" }
+    queries:
+      - { lang: en, text: "the schedule that has the coding agent run the tests on the bakery site every night" }
+      - { lang: es, text: "la tarea programada que revisa el proyecto de la panadería cada noche y arregla los fallos" }
+      - { lang: de, text: "der Zeitplan, bei dem der Programmier-Agent jede Nacht die Prüfung des Projekts ausführt" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

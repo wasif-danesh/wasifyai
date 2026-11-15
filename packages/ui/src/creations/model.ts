@@ -1,6 +1,7 @@
 import type {
   BuilderProject,
   CodeExtension,
+  CodeSchedule,
   CodeSession,
   CreativeProject,
   ImageSummary,
@@ -30,6 +31,7 @@ export type Entry =
   | { kind: "creative_project"; id: string; createdAt: string; project: CreativeProject }
   | { kind: "code_session"; id: string; createdAt: string; session: CodeSession }
   | { kind: "code_extension"; id: string; createdAt: string; extension: CodeExtension }
+  | { kind: "code_schedule"; id: string; createdAt: string; schedule: CodeSchedule }
   | { kind: "notebook"; id: string; createdAt: string; notebook: NotebookSummary }
   | { kind: "taught"; id: string; createdAt: string; taught: TrainedModel };
 
@@ -46,6 +48,7 @@ export type Filter =
   | "creativeProjects"
   | "codeSessions"
   | "codeExtensions"
+  | "codeSchedules"
   | "notebooks"
   | "taught";
 
@@ -70,6 +73,7 @@ export function kindOf(filter: Filter): string | undefined {
     creativeProjects: "creative_project",
     codeSessions: "code_session",
     codeExtensions: "code_extension",
+    codeSchedules: "code_schedule",
     notebooks: "notebook",
     taught: "taught",
   } as const;
@@ -90,6 +94,7 @@ export const FILTER_KIND: Record<Filter, Entry["kind"] | null> = {
   creativeProjects: "creative_project",
   codeSessions: "code_session",
   codeExtensions: "code_extension",
+  codeSchedules: "code_schedule",
   notebooks: "notebook",
   taught: "taught",
 };
@@ -107,6 +112,7 @@ export const KIND_LABEL: Record<Entry["kind"], string> = {
   creative_project: "Creative Studio",
   code_session: "Coding session",
   code_extension: "Coding skill",
+  code_schedule: "Coding schedule",
   notebook: "Notebook",
   taught: "Taught model",
 };
@@ -220,6 +226,14 @@ export function toRow(entry: Entry): Row {
         title: entry.extension.title || entry.extension.name,
         detail: entry.extension.description,
         status: "done",
+      };
+    case "code_schedule":
+      return {
+        ...base,
+        kindLabel: KIND_LABEL.code_schedule,
+        title: entry.schedule.title,
+        detail: `${entry.schedule.project} · ${entry.schedule.rule_words}`,
+        status: entry.schedule.running ? "working" : "done",
       };
     case "creative_project":
       return {

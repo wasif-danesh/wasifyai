@@ -253,12 +253,6 @@ async def test_a_skill_is_looked_at_copied_in_switched_on_and_removed(world, tmp
         with pytest.raises(Refused) as no:
             await live.add_extension(ME, str(folder))
         assert no.value.code == code
-    plugin = a_skill(tmp_path / "a-plugin")
-    (plugin / ".plugin").mkdir()
-    (plugin / ".plugin" / "plugin.json").write_text("{}")
-    with pytest.raises(Refused) as no:
-        live.look_at_folder(str(plugin))
-    assert no.value.code == "is_plugin"
     with pytest.raises(Refused) as no:
         await live.remove_extension(ME, "own:explain-in-plain-words")
     assert no.value.code == "not_yours"
@@ -293,3 +287,119 @@ def test_what_the_engine_is_given_holds_the_text_and_never_a_path_it_cannot_read
     # shown again with one of them off: its folder is removed, the other is left as it is
     again = extensions.show_to_sandbox([plain], tmp_path / "fixed")
     assert again["added:2"] == shown["added:2"] and not shown["added:1"].exists()
+
+
+# ---- plugins (stage X3) --------------------------------------------------------------------------
+
+
+def a_plugin(folder: Path, *, hooks: dict | None = None, connections: dict | None = None) -> Path:
+    (folder / ".plugin").mkdir(parents=True)
+    (folder / ".plugin" / "plugin.json").write_text(
+        json.dumps(
+            {"name": folder.name, "version": "1.0.0", "description": "Keeps a log of the work."}
+        )
+    )
+    a_skill(folder / "skills" / "log-style", HOUSE.replace("house-style", "log-style"))
+    if hooks is not None:
+        (folder / "hooks").mkdir()
+        (folder / "hooks" / "hooks.json").write_text(json.dumps({"hooks": hooks}))
+    if connections is not None:
+        (folder / ".mcp.json").write_text(json.dumps({"mcpServers": connections}))
+    return folder
+
+
+LOGS = {
+    "PostToolUse": [
+        {
+            "matcher": "terminal",
+            "hooks": [{"type": "command", "command": "sh ${PLUGIN_ROOT}/log.sh", "timeout": 30}],
+        }
+    ]
+}
+
+
+def test_a_plugin_is_read_with_what_it_brings_or_refused_in_words(tmp_path):
+    folder = a_plugin(
+        tmp_path / "work-log", hooks=LOGS,
+        connections={"tracker": {"command": "npx", "env": {"TOKEN": "s3cret"}}},
+    )  # fmt: skip
+    seen = extensions.look(folder)
+    assert (seen["kind"], seen["name"], seen["needs_approval"]) == ("plugin", "work-log", True)
+    assert seen["brings"] == {
+        "skills": [
+            {"name": "log-style", "description": "How this shop's pages are worded and laid out."}
+        ],
+        "hooks": [
+            {"when": "after each step", "on": "terminal", "command": "sh ${PLUGIN_ROOT}/log.sh"}
+        ],
+        "connections": [{"name": "tracker", "to": "npx"}],
+    }
+    assert "s3cret" not in json.dumps(seen)  # what a connection is given is never read back out
+    # a plugin that brings text only needs no approval
+    assert extensions.look(a_plugin(tmp_path / "only-text"))["needs_approval"] is False
+    for name, hooks, code in (
+        (
+            "asks-a-model",
+            {"Stop": [{"hooks": [{"type": "prompt", "prompt": "Is it done?"}]}]},
+            "bad_hook",
+        ),
+        ("runs-on", {"Stop": [{"hooks": [{"command": "sleep 99", "async": True}]}]}, "bad_hook"),
+        ("unknown-time", {"OnTuesday": [{"hooks": [{"command": "true"}]}]}, "bad_hook"),
+    ):
+        with pytest.raises(extensions.ExtensionError) as no:
+            extensions.look(a_plugin(tmp_path / name, hooks=hooks))
+        assert no.value.code == code
+    empty = tmp_path / "empty"
+    (empty / ".plugin").mkdir(parents=True)
+    (empty / ".plugin" / "plugin.json").write_text('{"name": "empty", "description": "Nothing."}')
+    with pytest.raises(extensions.ExtensionError) as no:
+        extensions.look(empty)
+    assert no.value.code == "no_text"
+
+
+async def test_a_plugin_with_a_hook_is_refused_until_approved_and_then_its_hook_is_given(
+    world, tmp_path
+):
+    live, place = sessions(world, answers)
+    session = await start(live, world, mode="ask")
+    (project,) = live.workspaces(ME)
+    added = await live.add_extension(
+        ME, str(a_plugin(tmp_path / "work-log", hooks=LOGS)), project["id"]
+    )
+    # added, and off: it brings a hook, and nobody has approved it
+    assert (added["kind"], added["on"], added["needs_approval"]) == ("plugin", False, True)
+    with pytest.raises(Refused) as no:
+        await live.switch_extension(ME, added["id"], project["id"], True)
+    assert no.value.code == "needs_approval"
+    await turn_of(live, session, "Go on.")
+    spec = [c for c in place.calls if c[0] == "start"][-1][2]
+    assert spec.hooks is None and "log-style" not in [s["name"] for s in spec.skills]
+    # a switch written straight into the store does not get round the approval
+    live.store.set_switch(ME, project["id"], added["id"], True)
+    assert live.hooks_for(ME, project["id"]) is None
+    assert "log-style" not in [s["name"] for s in live.skills_for(ME, project["id"])]
+    with pytest.raises(Refused) as no:
+        live.approve_extension(ME, "own:explain-in-plain-words")
+    assert no.value.code == "not_a_plugin"
+    # approved once, then switched on: its skill and its hook, with one second and no more
+    approved = live.approve_extension(ME, added["id"])
+    assert approved["approved"] is True and approved["needs_approval"] is False
+    await live.switch_extension(ME, added["id"], project["id"], True)
+    await turn_of(live, session, "Go on.")
+    spec = [c for c in place.calls if c[0] == "start"][-1][2]
+    assert "log-style" in [s["name"] for s in spec.skills]
+    (after,) = spec.hooks["post_tool_use"]
+    (hook,) = after["hooks"]
+    assert after["matcher"] == "terminal" and hook["command"] == "sh ${PLUGIN_ROOT}/log.sh"
+    assert hook["timeout"] == 1 and hook["type"] == "command"
+    root = Path(hook["plugin_root"])
+    assert world.data / "coding-fixed" / "skills" in root.parents and (root / ".plugin").is_dir()
+    source = next(s for s in spec.skills if s["name"] == "log-style")["source"]
+    assert Path(source).is_file() and root in Path(source).parents
+    # a session that only reads is given no hook
+    planned = await start(live, world, mode="plan")
+    await turn_of(live, planned, "Look.")
+    assert [c for c in place.calls if c[0] == "start"][-1][2].read_only is True
+    # removed: gone from what the next session is given
+    assert await live.remove_extension(ME, added["id"]) is True
+    assert live.hooks_for(ME, project["id"]) is None

@@ -524,8 +524,10 @@ async def test_a_model_without_its_key_and_an_unknown_model_are_refused_in_words
     assert r.status_code == 422
     models = (await box.http.get(f"{BASE}/models")).json()["items"]
     assert [(m["id"], m["ready"]) for m in models] == [
-        ("claude-sonnet-5-5", False), ("qwen-27b-ollama", True),
-    ]  # fmt: skip
+        ("claude-sonnet-5-5", False),
+        ("claude-haiku-5-5", False),
+        ("qwen-27b-ollama", True),
+    ]  # fmt: skip  (both cloud models wait for the one key)
 
 
 async def test_another_persons_session_is_not_there(box):
@@ -617,7 +619,9 @@ def test_the_desktop_engine_serves_the_coding_product_and_opens_its_store(data_d
         assert c.get(f"{BASE}/sessions").status_code == 401
         assert c.get(f"{BASE}/sessions", headers=auth()).json() == {"items": []}
         models = c.get(f"{BASE}/models", headers=auth()).json()["items"]
-        assert [m["id"] for m in models] == ["claude-sonnet-5-5", "qwen-27b-ollama"]
+        assert [m["id"] for m in models] == [
+            "claude-sonnet-5-5", "claude-haiku-5-5", "qwen-27b-ollama",
+        ]  # fmt: skip
         assert models[0]["default"] is True and models[0]["ready"] is False  # no key is saved
         # the gateway's door is there; a person's own token opens nothing at it, nor does no token
         for headers in ({}, auth(), {"x-api-key": "wcg-made-up"}):

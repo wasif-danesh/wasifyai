@@ -96,6 +96,15 @@ class ModelRoute:
     secret: str
     price: dict[str, float]
     engine_settings: dict[str, Any]
+    # a model that costs more for a long prompt: over how many prompt tokens, and that price
+    long_over: int = 0
+    long_price: dict[str, float] = field(default_factory=dict)
+
+    def price_for(self, usage: dict[str, int]) -> dict[str, float]:
+        """The price of one call: the long-prompt price when its prompt (what was sent, read
+        from the cache and written to it) is over the model's mark. Each call by itself."""
+        prompt = usage.get("input", 0) + usage.get("cache_read", 0) + usage.get("cache_write", 0)
+        return self.long_price if self.long_over and prompt > self.long_over else self.price
 
 
 def load_models(
@@ -122,6 +131,10 @@ def load_models(
             secret=str(m.get("secret") or ""),
             price={k: float(v) for k, v in (m.get("price") or {}).items()},
             engine_settings=dict(m.get("engine_settings") or {}),
+            long_over=int((m.get("long_prompt") or {}).get("over") or 0),
+            long_price={
+                k: float(v) for k, v in ((m.get("long_prompt") or {}).get("price") or {}).items()
+            },
         )
     default = str(data["default"])
     if default not in models:
@@ -641,7 +654,7 @@ class CodingGateway:
     ) -> None:
         """Add one call to its session and write its usage events."""
         route = session.route
-        usd = cost_of(usage, route.price)
+        usd = cost_of(usage, route.price_for(usage))
         cache_read, cache_write = usage.get("cache_read", 0), usage.get("cache_write", 0)
         prompt = usage.get("input", 0) + cache_read + cache_write
         output = usage.get("output", 0)

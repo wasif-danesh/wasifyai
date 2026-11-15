@@ -434,3 +434,33 @@ def test_the_shipped_list_names_sonnet_first_and_the_local_model_second():
     local = models["qwen-27b-ollama"]
     assert local.shape == OPENAI and local.secret == "" and local.price == {}
     assert local.upstream == "http://127.0.0.1:11434/v1"
+    # the order a person is shown them in: Sonnet, the cheaper Haiku, the local one
+    assert list(models) == ["claude-sonnet-5-5", "claude-haiku-5-5", "qwen-27b-ollama"]
+    assert first.long_over == 0 and first.price_for({"input": 500_000}) is first.price
+
+
+def test_haiku_is_offered_with_the_same_key_and_costs_five_times_as_much_for_a_long_prompt():
+    _default, models = load_models(ollama_url="")
+    haiku = models["claude-haiku-5-5"]
+    assert (haiku.shape, haiku.secret) == (ANTHROPIC, "keys.chat.anthropic")
+    assert (haiku.provider_model, haiku.upstream) == (
+        "claude-haiku-5-5",
+        "https://api.anthropic.com",
+    )
+    assert haiku.price == {
+        "input": 0.10, "output": 0.50, "cache_read": 0.01, "cache_write": 0.125,
+        "cache_write_1h": 0.20,
+    }  # fmt: skip
+    assert haiku.long_over == 100_000
+    assert haiku.long_price == {k: v * 5 for k, v in haiku.price.items()}
+    # a call is priced by itself, by its whole prompt: what was sent, read from the cache and
+    # written to it. Exactly 100,000 is still the lower price
+    short = {"input": 20_000, "cache_read": 70_000, "cache_write": 10_000, "output": 1_000}
+    long = {**short, "input": 20_001}
+    assert haiku.price_for(short) is haiku.price and haiku.price_for(long) is haiku.long_price
+    assert cost_of(short, haiku.price_for(short)) == pytest.approx(
+        (20_000 * 0.10 + 70_000 * 0.01 + 10_000 * 0.125 + 1_000 * 0.50) / 1e6
+    )
+    assert cost_of(long, haiku.price_for(long)) == pytest.approx(
+        (20_001 * 0.50 + 70_000 * 0.05 + 10_000 * 0.625 + 1_000 * 2.50) / 1e6
+    )

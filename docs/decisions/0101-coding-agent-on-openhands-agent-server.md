@@ -133,3 +133,17 @@ on a coding session's stream.
    (`starters.py`, `starters/web/`). The first one is a small web app with no build step and nothing to
    install; its check (`npm test`) and its preview (`npm run dev`) are set with it, because they are part of
    what was made.
+
+## Amendment (2026-11-15, owner): Claude Haiku 5.5 is a model a coding session can choose
+
+Decision 7 named two models, Claude Sonnet 5.5 first and the local Qwen 27B second. The owner asked for
+Claude Haiku 5.5 to be measured and then said "Yes, add Haiku".
+
+1. **Claude Haiku 5.5 is the second entry of `coding_models.yaml`**, on the same key as Sonnet (Settings ›
+   Your keys, Anthropic). Sonnet stays the first choice.
+2. **Why:** on the 36 evaluation tasks it passed 35 and 36 in two runs, with every change undone exactly, at
+   about a thirteenth of Sonnet's counted cost. It takes about a third more steps (`docs/spikes/coding-haiku.md`).
+3. **Its long-prompt price is counted.** A call whose prompt is over 100,000 tokens costs five times as much.
+   The gateway prices each call by itself, so a session's cost and its limit stay true in a long session.
+
+Nothing else of the decision changes.

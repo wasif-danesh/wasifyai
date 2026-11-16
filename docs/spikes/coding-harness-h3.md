@@ -59,9 +59,35 @@ A smoke run of one task (`bug-paginate`) went first on each program: Claude Code
 - `apps/desktop/src/choices/code-choices.test.ts`: the "Tested for coding here" words.
 - All of `products/wasifyai-code/tests` passed (352, 17 skipped), as did the desktop choices (57); ruff and pyright are clean.
 
+## 2026-11-16: more measured, a walk in the real window, and four faults fixed
+
+**More models measured** (the same command, the owner's Claude plan):
+
+| | Claude Code, Sonnet | Claude Code, Opus |
+|---|---|---|
+| Passed | **36 of 36** | **36 of 36** |
+| Undone exactly / brought back exactly | 36 of 36 / 36 of 36 | 36 of 36 / 36 of 36 |
+| Time | 9 min 53 s; median 14 s a task, longest 58 s | 15 min 36 s; median 19 s a task, longest 102 s |
+| Cost as the program reported it, on the plan | $2.84 | $6.62 |
+
+**The walk in the real window**, `ui-audit.sh light code-agent-scheduled`, on a fresh data folder:
+- **Claude Code (Haiku):** a session on the program made it the project's model. A schedule's Run now ran on Claude Code on a copy in 16.4 s and passed, with 1 file changed. The project stayed byte for byte unchanged until "Apply to the project" wrote the fix. The run's conversation was found on Claude Code's own sandboxed server, working in the copy.
+- **Codex (GPT-5.6 Terra):** the free plan's limit was still reached. The run said "Stopped: your plan's limit was reached. Codex said: “You've hit your usage limit…”", changed nothing, and left the project untouched.
+
+**Faults found and fixed:**
+1. **A new session could start on the wrong model.** The model button told Code its choice only after saving it. Also, Code's own rows could have been read while a program was still starting, without that program's models. In both cases, a quick "Choose a folder" started the session on the local model with no note. The button now tells Code at once and hands it the chosen row (`ModelSelect`, `Code.tsx`), with a test.
+2. **A run stopped by a plan's limit said "Nothing needed changing"**, followed by the protocol's raw error. It now says what happened in plain words (`program_said` in `runtime.py`, used by `scheduled.py`). The screen no longer adds "Nothing needed changing" to a stopped run. Both sides have tests.
+3. **`main` did not pass CI after the merge:**
+   - the Settings redesign and the Code group met, so the "code" group had no line or icon and was not in `SettingsGroupId`;
+   - two H1 tests failed pyright on a value that may be `None`.
+   Both are fixed.
+4. **The walk itself:** its wait for the program's label also matched an older session row in Projects. It now waits for the model button's own label.
+
+**Installs inside a session on a program are not built**, by choice. The program's sandbox holds the person's sign-in, so letting it reach a package index would let a hostile package publish that sign-in. A safe design (Wasify AI runs the project's own install in its own sandbox) is in the mockup `docs/spikes/coding-harness-h4-mockup.html`, with the question for the owner.
+
 ## Not done
 
 - The 17 Codex tasks that the free plan's limit stopped.
-- Other program models: Claude Code's Sonnet and Opus, and Codex's other models. Each says "Not tested for coding here" until it is run.
-- A Scheduled screen that names the program a schedule runs on, and choosing one there. A schedule follows the project's newest session (or its own model).
-- A real scheduled run on a program in the real window. The run itself is the same session as the evaluation's, and is covered on the pretended place.
+- Codex's other models, and Claude Code's own choice (`default`). Each says "Not tested for coding here" until it is run.
+- A Scheduled screen that names the program a schedule runs on, and choosing one there (mocked up in `coding-harness-h4-mockup.html`). A schedule follows the project's newest session (or its own model).
+- Installs inside a session on a program (the owner's choice, in the H4 mockup).

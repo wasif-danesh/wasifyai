@@ -2056,6 +2056,9 @@ describe("Scheduled", () => {
       "1 file changed, applied by you",
     );
     expect(moreOf(run({ changed: 0 }))).toBe("Nothing needed changing");
+    // a run the person's own program stopped did not look at anything
+    const stopped = "Stopped: your plan's limit was reached. Codex said: “Try again later.”";
+    expect(moreOf(run({ changed: 0, note: stopped }))).toBe(stopped);
     expect(moreOf(run({ state: "missed", note: "the app was not open", stands_for: 3 }))).toBe(
       "the app was not open. stands for 3 missed times",
     );
@@ -2679,6 +2682,89 @@ describe("a session on the person's own agent program (ADR-0107, stage H2)", () 
     };
     render(<Code api={api({ start, harnesses })} {...props} choices={choices} />);
     await userEvent.click(await screen.findByRole("button", { name: /Claude Sonnet 5.5/ }));
+    await userEvent.click(screen.getByRole("tab", { name: "Your agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Haiku/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Choose a folder/ }));
+    const note = await screen.findByRole("dialog", {
+      name: "Claude Code works a little differently",
+    });
+    await userEvent.click(within(note).getByRole("button", { name: "Start the session" }));
+    await waitFor(() =>
+      expect(start).toHaveBeenCalledWith({
+        folder: FOLDER,
+        model: "claude-code:haiku",
+        mode: "plan",
+      }),
+    );
+  });
+
+  it("starts on a program's model chosen in the panel even when Code's own rows had none yet", async () => {
+    window.localStorage.clear();
+    const start = vi.fn(async () => onClaude({ mode: "plan" }));
+    const base: ModelChoice = {
+      id: "qwen",
+      title: "Qwen 27B",
+      plain: "",
+      tier: "recommended",
+      state: "ready",
+      chosen: true,
+      downloadBytes: 0,
+      engineBytes: 0,
+      engineName: null,
+      fit: null,
+      fitReason: null,
+      source: "server",
+      place: "cloud",
+    };
+    const haiku: ModelChoice = {
+      ...base,
+      id: "claude-code:haiku",
+      title: "Haiku",
+      tier: "also",
+      chosen: false,
+      place: "agent",
+      provider: "claude-code",
+      providerTitle: "Claude Code",
+    };
+    // the program was still starting when Code read the rows: its models came later
+    let started = false;
+    const choices: ChoicesApi = {
+      list: async () => ({
+        choices: started ? [base, haiku] : [base],
+        diskFreeBytes: null,
+        memoryBytes: null,
+      }),
+      choose: async () => {},
+      get: async () => {},
+      agents: {
+        programs: async () => ({
+          setup: { state: "installed", version: "1", bytes: 0 },
+          programs: [
+            {
+              id: "claude-code",
+              title: "Claude Code",
+              payer: "Your Claude plan",
+              account: "Claude",
+              signedIn: true,
+              plan: "Max",
+              signingIn: false,
+              page: "",
+            },
+          ],
+        }),
+        setUp: async () => {},
+        remove: async () => {},
+        signIn: async () => {},
+        cancelSignIn: async () => {},
+      },
+    };
+    render(<Code api={api({ start, harnesses })} {...props} choices={choices} />);
+    const button = await screen.findByRole("button", { name: /Qwen 27B/ });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Choose a folder/ })).toBeTruthy(),
+    );
+    started = true;
+    await userEvent.click(button);
     await userEvent.click(screen.getByRole("tab", { name: "Your agent" }));
     await userEvent.click(await screen.findByRole("button", { name: /Haiku/ }));
     await userEvent.click(screen.getByRole("button", { name: /Choose a folder/ }));

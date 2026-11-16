@@ -36,7 +36,7 @@ from typing import Any
 from wasifyai_code import schedules as rules
 from wasifyai_code import store as rows
 from wasifyai_code.checkpoints import CheckpointError
-from wasifyai_code.runtime import Refused
+from wasifyai_code.runtime import Refused, program_said
 from wasifyai_code.schedules import BadRule, RunResult, Timer
 from wasifyai_code.store import Owner
 
@@ -313,11 +313,12 @@ class Scheduled:
         gateway = sessions.state.coding_gateway
         chosen = schedule["model"] or self._model_of(owner, project["id"])
         on_harness = sessions.harness_of(chosen) if chosen else None
+        program = ""
         if on_harness is not None:
             # the person's own agent program, on their plan (ADR-0107, stage H3): it must be set
             # up and signed in when the run comes due; its words say what to do when it is not
             try:
-                await sessions._harness_ready(on_harness[0])
+                program = await sessions._harness_ready(on_harness[0])
             except Refused as e:
                 raise RuntimeError(e.message) from None
             model_id = f"{on_harness[0]}:{on_harness[1] or 'default'}"
@@ -366,6 +367,8 @@ class Scheduled:
                 "step_limit": "The agent used every step one turn allows.",
                 "refused": "The model declined this request.",
             }.get(closed["why"], (closed["notes"] or ["The coding engine reported an error."])[-1])
+            if program and closed["why"] not in ("stopped", "step_limit", "refused"):
+                note = program_said(program, note)  # a plan's limit, an ended sign-in
         refused = [n for n in closed["notes"] if n.startswith("Refused, nobody to ask")]
         if refused and not note:
             were = "s were" if len(refused) != 1 else " was"

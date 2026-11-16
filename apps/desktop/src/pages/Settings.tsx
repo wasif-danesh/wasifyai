@@ -14,6 +14,7 @@ import {
   useTheme,
 } from "@wasifyai/ui";
 import {
+  Code,
   Cpu,
   KeyRound,
   LifeBuoy,
@@ -489,6 +490,8 @@ const GROUPS: Group[] = [
   {
     id: "code",
     title: "Code",
+    line: "Run coding sessions on your own Claude Code or Codex, on your plan, with no key.",
+    icon: Code,
     items: [
       {
         // the person's own agent programs (ADR-0107, stage H2): their sign-in, and the part that holds them

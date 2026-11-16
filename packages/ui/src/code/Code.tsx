@@ -47,7 +47,7 @@ import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { ModelSelect } from "../models/ModelSelect";
-import type { ChoicesApi } from "../models/types";
+import type { ChoicesApi, ModelChoice } from "../models/types";
 import { useModelChoices } from "../models/use-model-choices";
 import { PageHeader } from "../window-bar";
 import { AskCard, MODES, MayDialog, ModePill } from "./Asking";
@@ -254,9 +254,11 @@ export function Code({
   // the model button's choice may be a model of the person's own agent program (its Your agent tab)
   // what the button chose just now: the picker's rows are read again a moment later, and a session started
   // before that must still start on the model the button shows
-  const [justChosen, setJustChosen] = useState<string | null>(null);
+  // (the row itself is kept too: these rows may have been read before the panel's, while a program was still
+  // starting, and not have it yet)
+  const [justChosen, setJustChosen] = useState<{ id: string; row?: ModelChoice } | null>(null);
   const shownRow = justChosen
-    ? (picker.list?.choices.find((c) => c.id === justChosen) ?? picker.chosen)
+    ? (picker.list?.choices.find((c) => c.id === justChosen.id) ?? justChosen.row ?? picker.chosen)
     : picker.chosen;
   const onAgent = choices && shownRow?.place === "agent" ? shownRow : null;
   const agent = onAgent ? agentOf(onAgent.provider, state.harnesses) : null;
@@ -389,7 +391,11 @@ export function Code({
         // the model button is at the top of the screen, as on the chat and image screens (ADR-0086)
         <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
           <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">
-            <ModelSelect group="code" api={choices} onChanged={setJustChosen} />
+            <ModelSelect
+              group="code"
+              api={choices}
+              onChanged={(id, row) => setJustChosen(id ? { id, row } : null)}
+            />
             <span className="hidden text-muted-foreground md:inline">for a new session</span>
           </div>
         </PageHeader>

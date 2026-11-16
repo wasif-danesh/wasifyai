@@ -1,6 +1,13 @@
 // Which Settings group to show: another screen (a picker's "Set up a key", the engine smoke check) asks for one before
 // it opens Settings, and the page shows it when it mounts or, already open, at once.
-export type SettingsGroupId = "general" | "keys" | "computer" | "privacy" | "apps" | "help";
+export type SettingsGroupId =
+  | "general"
+  | "keys"
+  | "computer"
+  | "privacy"
+  | "apps"
+  | "code"
+  | "help";
 
 const EVENT = "wasify:settings-group";
 let wanted: SettingsGroupId | null = null;

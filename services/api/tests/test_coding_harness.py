@@ -133,9 +133,8 @@ def test_a_sign_in_page_is_shown_only_when_it_is_the_providers():
     assert page_of(CLAUDE, "Open https://claude.ai/oauth/authorize?code=true&x=1 to sign in") == (
         "https://claude.ai/oauth/authorize?code=true&x=1"
     )
-    assert page_of(CODEX, "go to https://auth.openai.com/oauth/authorize?a=b").startswith(
-        "https://auth.openai.com/"
-    )
+    codex_page = page_of(CODEX, "go to https://auth.openai.com/oauth/authorize?a=b")
+    assert codex_page is not None and codex_page.startswith("https://auth.openai.com/")
     assert page_of(CLAUDE, "see https://evil.example/claude.ai") is None
     assert page_of(CODEX, "https://claude.ai/x") is None
     assert page_of(CLAUDE, "no address here") is None

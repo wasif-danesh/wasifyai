@@ -92,7 +92,8 @@ async def test_it_installs_from_the_lock_with_no_install_script_and_checks_each_
     found = find_harness_install(tmp_path)
     assert found is not None
     assert set(found.adapters) == {"claude-code", "codex"}
-    assert found.adapter(HARNESSES["codex"]).is_file()
+    adapter = found.adapter(HARNESSES["codex"])
+    assert adapter is not None and adapter.is_file()
     assert part.uninstall() >= 0 and find_harness_install(tmp_path) is None
 
 

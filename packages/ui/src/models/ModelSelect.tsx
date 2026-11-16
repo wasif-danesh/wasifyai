@@ -98,7 +98,8 @@ export function ModelSelect({
   /** the screen's own choice, when it keeps one: it is the one shown in use */
   value?: string | null;
   /** a model was chosen (the screen can reload what depends on it) */
-  onChanged?: (id: string | null) => void;
+  /** `choice` is the row chosen, for a screen whose own rows may not have it yet */
+  onChanged?: (id: string | null, choice?: ModelChoice) => void;
   className?: string;
 }) {
   const g = groupOf(group);
@@ -180,8 +181,9 @@ export function ModelSelect({
 
   async function pick(c: ModelChoice) {
     if (c.state === "ready") {
+      // the screen hears it first: a click on it straight after must already use this model
+      onChanged?.(c.engineId ?? c.id, c);
       await m.choose(c.id);
-      onChanged?.(c.engineId ?? c.id);
       changed();
       setOpen(false);
     } else if (c.state === "needs_download" && c.foundIn && c.engineBytes === 0) {

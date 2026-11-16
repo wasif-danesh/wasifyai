@@ -37,7 +37,8 @@ def test_features_made_a_chunk_at_a_time_equal_the_whole_recordings():
     whole = _whole(x)
     assert whole.shape == (sf.frame_count(len(x)), sf.NMELS)
     for a, b in [(0, sf.STRIDE), (sf.STRIDE, 2 * sf.STRIDE), (len(whole) - 300, len(whole))]:
-        assert np.array_equal(sf.log_mel(x, a, b), whole[a:b])
+        # equal up to float rounding: the FFT may sum in another order for another length (Linux CI)
+        assert np.allclose(sf.log_mel(x, a, b), whole[a:b], rtol=0, atol=1e-4)
 
 
 def test_int16_samples_read_from_disk_are_scaled_as_floats():

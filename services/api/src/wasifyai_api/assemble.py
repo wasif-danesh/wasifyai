@@ -1152,7 +1152,11 @@ async def _close(
         await s.engine_workers.close()
     if not desktop:
         for kept in (
-            s.model3d_store, s.training_store, s.builder_store, s.creative_store, s.meetings_store
+            s.model3d_store,
+            s.training_store,
+            s.builder_store,
+            s.creative_store,
+            s.meetings_store,
         ):
             close_kept = getattr(kept, "close", None)
             if close_kept is not None:

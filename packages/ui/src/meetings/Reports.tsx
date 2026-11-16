@@ -1,3 +1,5 @@
+"use client";
+
 // Reports of a meeting (ADR-0108 decision 15, stage MT4): a summary, minutes, action items and the
 // rest, written from a template by the person's chosen chat model; and templates of their own.
 import type { Meeting, MeetingReport, MeetingsApi, ReportTemplate } from "@wasifyai/client";

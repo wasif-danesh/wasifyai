@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scheduled and installs: mockup</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(20% 0.014 255));
+    --surface-2: light-dark(oklch(95.5% 0.006 250), oklch(25% 0.016 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(32% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 12%, transparent);
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --ok: light-dark(oklch(52% 0.13 155), oklch(74% 0.14 155));
+    --warn: light-dark(oklch(55% 0.13 70), oklch(80% 0.13 80));
+    --warn-soft: color-mix(in oklch, var(--warn) 14%, transparent);
+    --plan: light-dark(oklch(50% 0.14 300), oklch(78% 0.11 300));
+    --plan-soft: color-mix(in oklch, var(--plan) 13%, transparent);
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
+  .note { max-width: 1120px; margin: 18px auto 0; padding: 0 16px; color: var(--muted); font-size: 13px; }
+  .note b { color: var(--text); }
+  .tabs { max-width: 1120px; margin: 10px auto 0; padding: 0 16px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tabs button, .theme button { border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .tabs button[aria-selected="true"], .theme button[aria-pressed="true"] { background: var(--accent);
+    border-color: var(--accent); color: var(--on-accent); }
+  .theme { display: flex; gap: 6px; margin-left: auto; }
+  .what { max-width: 1120px; margin: 10px auto 0; padding: 0 16px; font-size: 13px; color: var(--muted); }
+  .what b { color: var(--text); }
+
+  /* the window */
+  .win { max-width: 1120px; margin: 10px auto 24px; border: 1px solid var(--border); border-radius: 14px;
+         background: var(--bg); display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 640px;
+         overflow: hidden; }
+  @media (max-width: 760px) { .win { grid-template-columns: minmax(0, 1fr); } .side { display: none; } }
+  .side { background: var(--surface-2); border-right: 1px solid var(--border); padding: 14px 10px; display: grid;
+          align-content: start; gap: 2px; font-size: 13.5px; }
+  .side .brand { font-weight: 700; font-size: 16px; padding: 4px 10px 12px; }
+  .side .it { padding: 6px 10px; border-radius: 8px; color: var(--text); }
+  .side .sub { padding-left: 26px; }
+  .side .on { background: var(--accent-soft); }
+  .side .dim { color: var(--muted); }
+  .app { display: grid; grid-template-rows: 48px minmax(0, 1fr); min-width: 0; position: relative; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border);
+         background: var(--surface); min-width: 0; white-space: nowrap; overflow: hidden; font-size: 13px; }
+  .bar .crumb { color: var(--muted); } .bar b { font-weight: 600; }
+  .bar .ask { color: var(--muted); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .bar .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px;
+          padding: 1px 9px; font-size: 12.5px; background: var(--surface); color: var(--text); font-family: inherit;
+          cursor: pointer; white-space: nowrap; }
+  .pill.plan { border-color: color-mix(in oklch, var(--plan) 45%, var(--border)); background: var(--plan-soft); }
+  .pill.money { background: var(--accent-soft); border-color: transparent; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.plan { background: var(--plan); } .dot.warn { background: var(--warn); }
+  .mb { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 10px;
+        padding: 4px 12px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600;
+        cursor: pointer; }
+  main { min-width: 0; overflow: hidden; }
+  .pad { padding: 22px 28px; display: grid; gap: 16px; align-content: start; }
+  h1 { margin: 0; font-size: 20px; } h2 { margin: 0; font-size: 15px; }
+  .lead { margin: 0; color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+         padding: 5px 12px; font: inherit; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 0; }
+  .btn.small { padding: 2px 9px; font-size: 12.5px; }
+  .btn:focus-visible, .item:focus-visible, .tabs button:focus-visible, .pill:focus-visible, .mb:focus-visible,
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  /* the model panel */
+  .panel { position: absolute; z-index: 5; top: 44px; left: 52px; width: min(470px, calc(100% - 24px));
+           background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px;
+           box-shadow: 0 14px 36px rgb(0 0 0 / .25); }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 999px;
+         padding: 4px; gap: 2px; }
+  .seg button { border: 0; background: none; color: var(--muted); border-radius: 999px; padding: 6px 6px;
+                font: inherit; font-size: 13px; cursor: pointer; line-height: 1.2; }
+  .seg button[aria-selected="true"] { background: var(--surface-2); color: var(--text); }
+  .list { display: grid; gap: 2px; margin-top: 6px; max-height: 470px; overflow: auto; }
+  .gh { font-size: 12px; color: var(--muted); font-weight: 600; padding: 10px 12px 2px; display: flex; gap: 8px;
+        align-items: center; justify-content: space-between; }
+  .item { display: grid; gap: 1px; text-align: left; border: 0; background: none; color: var(--text); font: inherit;
+          padding: 8px 12px; border-radius: 10px; cursor: pointer; width: 100%; }
+  .item:hover, .item[aria-current="true"] { background: var(--surface-2); }
+  .item[aria-current="true"] { background: var(--accent-soft); }
+  .item .t { font-weight: 500; display: flex; justify-content: space-between; gap: 8px; }
+  .item .d { color: var(--muted); font-size: 13px; }
+  .item .s { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--plan); }
+  .badge { font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; font-weight: 500;
+           color: var(--muted); }
+  .prog { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin: 4px 2px 8px; display: grid;
+          gap: 8px; }
+  .prog .head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .prog .state { font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
+  .prog .state.ok { color: var(--ok); }
+  .meter { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--accent); width: 40%; }
+
+  /* the session */
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr); height: 100%; }
+  @media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); } .files { display: none; } }
+  .chat { display: grid; grid-template-rows: minmax(0, 1fr) auto; border-right: 1px solid var(--border);
+          min-height: 592px; }
+  .thread { padding: 18px; display: grid; gap: 12px; align-content: start; }
+  .me { justify-self: end; background: var(--accent-soft); border-radius: 14px; padding: 8px 13px; max-width: 85%; }
+  .steps { border: 1px solid var(--border); border-radius: 12px; padding: 7px 12px; color: var(--muted);
+           font-size: 13px; display: grid; gap: 3px; }
+  .steps .l { display: flex; gap: 8px; } .steps code { font-family: var(--mono); font-size: 12px; }
+  .card { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px;
+          background: var(--surface); }
+  .card.good { border-color: color-mix(in oklch, var(--ok) 40%, var(--border)); }
+  .card.warn { border-color: color-mix(in oklch, var(--warn) 50%, var(--border)); background: var(--warn-soft); }
+  .card.plan { border-color: color-mix(in oklch, var(--plan) 40%, var(--border)); background: var(--plan-soft); }
+  .card h3 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .card p { margin: 0; }
+  .box { margin: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
+         padding: 10px 12px; display: grid; gap: 10px; position: relative; }
+  .box .ph { color: var(--muted); padding: 2px 4px; }
+  .box .row { justify-content: space-between; }
+  .send { width: 30px; height: 30px; border-radius: 8px; border: 0; background: var(--accent); color: var(--on-accent);
+          font-size: 15px; }
+  .files { padding: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  .ftabs { display: flex; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .ftabs span { padding: 3px 10px; border-radius: 8px; color: var(--muted); }
+  .ftabs span:first-child { background: var(--surface-2); color: var(--text); font-weight: 600; }
+  .tree { padding: 10px 14px; font-size: 13px; display: grid; gap: 5px; align-content: start; color: var(--text); }
+  .tree .ch { color: var(--ok); font-size: 11.5px; }
+
+  /* popovers */
+  .pop { position: absolute; z-index: 6; background: var(--surface); border: 1px solid var(--border);
+         border-radius: 14px; padding: 12px 14px; box-shadow: 0 14px 36px rgb(0 0 0 / .25); display: grid; gap: 8px;
+         font-size: 13px; }
+  .pop table { border-collapse: collapse; width: 100%; } .pop td { padding: 2px 0; }
+  .pop td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .menu { width: 330px; padding: 6px; gap: 0; }
+  .mi { display: grid; grid-template-columns: 22px minmax(0, 1fr) 16px; gap: 4px; padding: 8px 8px; border-radius: 10px; }
+  .mi:hover { background: var(--surface-2); }
+  .mi .d { color: var(--muted); font-size: 12.5px; } .mi.off { opacity: .55; }
+  .mi.off:hover { background: none; }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 4px 0; }
+
+  /* settings and lists */
+  .rows { display: grid; border-top: 1px solid var(--border); }
+  .r { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 12px 4px;
+       border-bottom: 1px solid var(--border); align-items: center; }
+  .r .t { font-weight: 600; } .r .d { color: var(--muted); font-size: 13px; }
+  .r .s { font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; }
+  .proj { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px 14px;
+          display: grid; gap: 8px; }
+  .sess { display: flex; gap: 10px; align-items: center; font-size: 13.5px; }
+  .sess .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sess .m { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .scrim { position: absolute; inset: 0; background: rgb(0 0 0 / .32); display: grid; place-items: center; z-index: 8; }
+  .dialog { width: min(470px, calc(100% - 32px)); background: var(--surface); border: 1px solid var(--border);
+            border-radius: 16px; padding: 18px 20px; display: grid; gap: 12px; }
+  .dialog ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  .changes { max-width: 1120px; margin: 0 auto 40px; padding: 0 16px; color: var(--muted); font-size: 13px; }
+  .changes h3 { color: var(--text); font-size: 14px; margin: 16px 0 6px; }
+  .changes ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+  .changes b { color: var(--text); }
+  .field { display: grid; gap: 5px; }
+  .field label { font-weight: 600; font-size: 13px; }
+  .input { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; background: var(--surface);
+           color: var(--text); font: inherit; min-height: 34px; display: flex; align-items: center; }
+  .input.area { min-height: 64px; align-items: start; }
+  .sched { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px 14px;
+           display: grid; gap: 6px; }
+  .sched .top { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .sched .grow { flex: 1; min-width: 0; font-weight: 600; }
+  .sched .m { color: var(--muted); font-size: 13px; }
+  .runs { display: grid; gap: 8px; }
+  pre.out { margin: 0; font: 12px/1.45 var(--mono); background: var(--surface-2); border-radius: 8px; padding: 8px 10px;
+            white-space: pre-wrap; color: var(--muted); }
+</style>
+</head>
+<body>
+<p class="note"><b>Mockup (not built), 2026-11-16, stage H4 of ADR-0107.</b> Two things left from H3: the
+<b>Scheduled</b> screen saying which agent a schedule runs on (and letting you choose), and <b>installing packages</b>
+in a session on Claude Code or Codex. The example project is <code>bakery-site</code>.</p>
+
+<div class="tabs" role="tablist" aria-label="Screens in this mockup" id="tabs"></div>
+<p class="what" id="what"></p>
+
+<div class="win">
+  <nav class="side" aria-label="Menu">
+    <div class="brand">Wasify AI</div>
+    <div class="it dim">New chat</div><div class="it dim">Images</div><div class="it dim">Video</div>
+    <div class="it">Code</div>
+    <div class="it sub" id="nav-projects">Projects</div>
+    <div class="it sub" id="nav-sched">Scheduled</div>
+    <div class="it sub dim">Extensions</div>
+    <div class="it dim">Library</div><div class="it dim">Model hub</div>
+    <div class="it dim" style="margin-top:12px">Settings</div>
+  </nav>
+  <div class="app" id="app"></div>
+</div>
+
+<div class="changes">
+  <h3>What changes from today's screens</h3>
+  <ul>
+    <li><b>Each schedule says what it runs on</b>: "Claude Code · Haiku · your Claude plan" or
+      "Claude Sonnet 5.5 · your key". Today a schedule silently follows the project's newest session.</li>
+    <li><b>The New schedule dialog gets a "Runs on" row</b> with the same model button as Code, including the Your agent
+      tab. It starts on "Same as the project's last session", which is what happens today.</li>
+    <li><b>A run that the plan stopped</b> shows the program's own words in its history, says the project was not
+      touched, and offers "Run again" or "Run it on another agent". A signed-out program says "Sign in to …" with the
+      button.</li>
+    <li><b>Installing packages in a session on a program.</b> Claude Code or Codex cannot reach a package index, and this
+      mockup keeps it that way (see the question below). When it needs packages, a card offers <b>"Install what the
+      project lists"</b>: Wasify AI runs <code>npm install</code> or <code>pip install -r requirements.txt</code> itself, in
+      Wasify AI's own sandbox, where your Claude or ChatGPT sign-in is out of reach. Then the program carries on.</li>
+  </ul>
+  <h3>The question for the owner: how packages are installed</h3>
+  <ul>
+    <li><b>A (recommended): installs run outside the program</b>, as above. The program's sandbox never reaches a
+      package index. Safe: a hostile package's install script cannot see your sign-in.</li>
+    <li><b>B: let the program reach the package indexes</b> (npm, PyPI) itself. Simplest, and it works without asking.
+      But the program's sandbox can read your sign-in, and a hostile package can carry its own publishing key and
+      publish your sign-in as a package. The indexes are on our list because no key is inside the sandbox; with a
+      program, one is.</li>
+    <li><b>C: nothing new</b>: you run installs yourself in the Terminal tab (works today).</li>
+  </ul>
+</div>
+
+<script>
+const SCREENS = [
+  ["list", "Scheduled",
+   "The list of schedules. Each row says which agent it runs on, and how that is paid."],
+  ["new", "New schedule",
+   "The dialog gains \"Runs on\", the same model button as Code. It starts on the project's last session."],
+  ["pick", "Choosing what it runs on",
+   "\"Runs on\" opened: the first row follows the project; the tabs are the same as in Code."],
+  ["limit", "A run the plan stopped",
+   "The history of a run on Codex after the ChatGPT plan's limit: the program's own words, nothing touched, two ways on."],
+  ["signedout", "Signed out",
+   "A run that could not start because Claude Code is signed out."],
+  ["install", "It needs packages",
+   "A session on Claude Code: the program could not fetch packages. A card offers to install what the project lists."],
+  ["installing", "Installing",
+   "After \"Install them\": Wasify AI runs the project's own install in its own sandbox, then tells the program."],
+];
+let screen = new URLSearchParams(location.search).get("s") || "list";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+function bar(title, extra = "") {
+  return `<div class="bar"><b>${esc(title)}</b>${extra}<span class="right"><span class="pill"><span class="dot"></span>Idle</span></span></div>`;
+}
+
+function sched(title, rule, runs, last, on = true) {
+  return `<div class="sched"><div class="top"><span class="grow">${esc(title)}</span>
+      <span class="pill">${on ? "On" : "Off"}</span>
+      <button class="btn small">Run now</button><button class="btn small">History</button></div>
+    <div class="m">${esc(rule)} · bakery-site</div>
+    <div class="m"><span class="dot ${runs.startsWith("Claude Code") || runs.startsWith("Codex") ? "plan" : "ok"}"></span> Runs on <b>${esc(runs)}</b></div>
+    <div class="m">${last}</div></div>`;
+}
+
+function dialog(open) {
+  return `<div class="scrim"><div class="dialog" role="dialog" aria-label="New schedule" style="width:min(540px,calc(100% - 32px));position:relative">
+    <h2>New schedule</h2>
+    <div class="field"><label>Project</label><div class="input">bakery-site ▾</div></div>
+    <div class="field"><label>What should be done</label><div class="input area">Run the check. If it fails, fix the cause with the smallest change.</div></div>
+    <div class="field"><label>When</label><div class="input">Every day at 02:00 ▾</div></div>
+    <div class="field"><label>Runs on</label>
+      <div class="row"><button class="mb" aria-haspopup="dialog" aria-expanded="${open}"><span class="dot plan"></span>Same as the last session: Claude Code · Haiku ▾</button></div>
+      <p class="hint">On your Claude plan. The run works on a copy; you apply its changes. If the plan's limit is reached, the run stops and says so.</p></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn">Cancel</button><button class="btn primary">Save the schedule</button></div>
+    ${open ? picker() : ""}</div></div>`;
+}
+
+function picker() {
+  return `<div class="panel" role="dialog" aria-label="What the schedule runs on" style="top:auto;bottom:70px;left:20px">
+    <button class="item" aria-current="true"><span class="t">Same as the project's last session</span>
+      <span class="d">Now Claude Code · Haiku. Follows the project if you switch later.</span></button>
+    <div class="seg" role="tablist" style="margin-top:6px">${["Recommended", "On this computer", "Cloud", "Your agent"].map((l, i) =>
+      `<button role="tab" aria-selected="${i === 3}">${l}</button>`).join("")}</div>
+    <div class="list">
+      <div class="gh"><span>Claude Code · signed in · Max plan</span><span class="dot ok"></span></div>
+      <button class="item"><span class="t">Its own choice</span><span class="d">Not tested for coding here.</span></button>
+      <button class="item"><span class="t">Haiku</span><span class="d">Tested for coding here: 36 of 36 tasks passed.</span></button>
+      <button class="item"><span class="t">Sonnet</span><span class="d">Tested for coding here.</span></button>
+      <div class="gh"><span>Codex · signed in · plan limit reached</span><span class="dot warn"></span></div>
+      <button class="item"><span class="t">GPT-5.6 Terra</span><span class="d">Tested for coding here: 19 of 19 tasks passed before the plan's limit.</span></button>
+    </div></div>`;
+}
+
+function session(card) {
+  return bar("bakery-site", `<span class="crumb">· Add a date picker to the booking form</span><span class="crumb">Claude Code · Sonnet</span>
+      <span class="pill">Work on its own</span><button class="pill plan">Your Claude plan</button>`) +
+    `<main><div class="split"><div class="chat"><div class="thread">
+      <div class="me">Add a date picker to the booking form. Use a small library if it helps.</div>
+      <div class="steps"><div class="l">✓ Read <code>booking.html</code>, <code>package.json</code></div>
+        <div class="l">✓ Added <code>"flatpickr": "^4.6.13"</code> to <code>package.json</code></div>
+        <div class="l">✗ <code>npm install</code>: refused — Claude Code cannot reach package indexes from its sandbox</div></div>
+      ${card}
+    </div><div class="box"><div class="ph">Ask about this project</div><div class="row"><span class="hint">+</span><button class="send">↑</button></div></div></div>
+    <div class="files"><div class="ftabs"><span>Changes</span><span>Files</span><span>Terminal</span></div>
+      <div class="tree"><div>package.json <span class="ch">changed</span></div><div>booking.html</div><div>styles.css</div></div></div></div></main>`;
+}
+
+function main() {
+  switch (screen) {
+    case "list":
+      return bar("Scheduled") + `<main><div class="pad"><div class="row" style="justify-content:space-between"><div><h1>Scheduled</h1>
+        <p class="lead">Runs work on a copy of the project, at the time you set. You apply what it changed.</p></div>
+        <button class="btn primary">New schedule</button></div>
+        <div class="runs">
+        ${sched("Check it every night", "Every day at 02:00", "Claude Code · Haiku · your Claude plan", "Last run 02:00 · passed · 1 file changed · <button class=\"btn link\">Look at the changes</button>")}
+        ${sched("Update the dependencies", "Mondays at 07:00", "Codex · GPT-5.6 Terra · your ChatGPT plan", "<span class=\"dot warn\"></span> Last run stopped: the ChatGPT plan's limit was reached. Nothing was touched.")}
+        ${sched("Write the week's notes", "Fridays at 17:00", "Claude Sonnet 5.5 · your key", "Last run Friday · passed · $0.06")}
+        </div></div></main>`;
+    case "new":
+      return bar("Scheduled") + `<main></main>` + dialog(false);
+    case "pick":
+      return bar("Scheduled") + `<main></main>` + dialog(true);
+    case "limit":
+      return bar("Scheduled") + `<main><div class="pad"><div><h1>Update the dependencies</h1>
+        <p class="lead">Mondays at 07:00 · bakery-site · runs on Codex · GPT-5.6 Terra · your ChatGPT plan</p></div>
+        <div class="card warn"><h3><span class="dot warn"></span>Stopped: the plan's limit was reached</h3>
+          <p>Codex said:</p><pre class="out">You've hit your usage limit. Upgrade to Plus to continue using Codex, or try again at Dec 15th, 2026 6:46 PM.</pre>
+          <p class="hint">Your project was not touched. Nothing waits to be applied.</p>
+          <div class="row"><button class="btn primary">Run again</button><button class="btn">Run it on another agent</button></div></div>
+        <div class="card good"><h3><span class="dot ok"></span>Monday 10 Nov, 07:00 · passed</h3><p class="hint">2 files changed · applied</p></div>
+        </div></main>`;
+    case "signedout":
+      return bar("Scheduled") + `<main><div class="pad"><div><h1>Check it every night</h1>
+        <p class="lead">Every day at 02:00 · bakery-site · runs on Claude Code · Haiku · your Claude plan</p></div>
+        <div class="card warn"><h3><span class="dot warn"></span>Did not start: Claude Code is signed out</h3>
+          <p>Sign in to Claude Code first. It opens its own page in your browser; Wasify AI never sees the password.</p>
+          <p class="hint">Your project was not touched. The next run is tomorrow at 02:00.</p>
+          <div class="row"><button class="btn primary">Sign in to Claude Code</button><button class="btn">Run it on another agent</button></div></div>
+        </div></main>`;
+    case "install":
+      return session(`<div class="card plan"><h3>📦 Claude Code needs packages</h3>
+        <p>It added <b>flatpickr</b> to <code>package.json</code> but cannot fetch it: Claude Code's sandbox holds your
+          Claude sign-in, so it cannot reach package indexes. Wasify AI can install what the project lists, in its own
+          sandbox, where your sign-in is out of reach.</p>
+        <pre class="out">npm install    (from package.json and package-lock.json)</pre>
+        <div class="row"><button class="btn primary">Install them</button><button class="btn">Not now</button>
+          <span class="hint">Or run it yourself in the Terminal tab.</span></div></div>`);
+    case "installing":
+      return session(`<div class="card good"><h3><span class="dot ok"></span>Installed: 1 package added</h3>
+        <pre class="out">added 1 package, and audited 2 packages in 3s
+found 0 vulnerabilities</pre>
+        <p class="hint">Run in Wasify AI's own sandbox, through the install proxy. Claude Code has been told, and carries on.</p></div>
+        <div class="steps"><div class="l">✓ Imported flatpickr in <code>booking.js</code></div><div class="l">✓ The check passed</div></div>`);
+  }
+}
+
+function render() {
+  document.getElementById("tabs").innerHTML = SCREENS.map(([id, label]) =>
+    `<button role="tab" aria-selected="${id === screen}" data-s="${id}">${esc(label)}</button>`).join("") +
+    `<span class="theme"><button data-theme="light">Light</button><button data-theme="dark">Dark</button></span>`;
+  const s = SCREENS.find((x) => x[0] === screen);
+  document.getElementById("what").innerHTML = `<b>${esc(s[1])}.</b> ${esc(s[2])}`;
+  document.getElementById("app").innerHTML = main();
+  const navOn = screen.startsWith("install") ? "nav-projects" : "nav-sched";
+  document.querySelectorAll(".side .it").forEach((n) => n.classList.toggle("on", n.id === navOn));
+  const t = document.documentElement.dataset.theme || "";
+  document.querySelectorAll(".theme button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.theme === t)));
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.s) { screen = b.dataset.s; render(); }
+  else if (b.dataset.theme) { document.documentElement.dataset.theme = b.dataset.theme; render(); }
+});
+document.addEventListener("keydown", (e) => {
+  const i = SCREENS.findIndex((s) => s[0] === screen);
+  if (e.key === "ArrowRight") { screen = SCREENS[(i + 1) % SCREENS.length][0]; render(); }
+  if (e.key === "ArrowLeft") { screen = SCREENS[(i - 1 + SCREENS.length) % SCREENS.length][0]; render(); }
+});
+const th = new URLSearchParams(location.search).get("theme"); if (th) document.documentElement.dataset.theme = th;
+render();
+</script>
+</body>
+</html>

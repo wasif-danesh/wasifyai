@@ -90,6 +90,16 @@ class SessionSpec:
     hooks: dict[str, Any] | None = None
 
 
+def harness_model(model: str, known: "tuple[str, ...] | list[str]") -> tuple[str, str] | None:
+    """A model of a harness (ADR-0107) is named `<harness>:<the program's model>`, and
+    `<harness>:default` is the program's own choice. Gives (harness, model) with "" for the
+    program's own choice, or None for a model of the Wasify AI harness."""
+    name, sep, rest = (model or "").partition(":")
+    if not sep or name not in known:
+        return None
+    return name, "" if rest in ("", "default") else rest
+
+
 @dataclass(frozen=True)
 class PlaceEvent:
     id: str

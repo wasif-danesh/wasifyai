@@ -142,3 +142,19 @@ The decisions above stand. What was settled while building, under the owner's st
    does that).
 
 Measured in `docs/spikes/coding-c6.md`.
+
+## Amendment (2026-11-15, owner; accepted with ADR-0107): which sessions Extensions serve
+
+The owner: "Our Extensions can be used for local models only."
+This amendment holds from 2026-11-15, the day ADR-0107 was accepted.
+
+1. **Extensions serve sessions on the Wasify AI harness.** A session on the person's own agent program
+   (ADR-0107) is given no skill, plugin, hook or tool connection of ours. Each program has extensions of its own,
+   managed in the program.
+2. **The Extensions screen says so** where a project's sessions run on another harness.
+3. **Read with care:** the owner's words name "local models". Today Extensions also work in a session on a key
+   (Claude, by the gateway), since that is the same harness. This amendment keeps that, and takes the owner's
+   words to mean "not on a harness of the person's own". If the owner means that sessions on a key should lose
+   Extensions too, that is one more line here and a change in the product.
+
+Nothing else of the decision changes.

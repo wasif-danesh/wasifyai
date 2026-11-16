@@ -34,6 +34,13 @@ Without `EXTENSIONS_PATH` the server copies its catalogue from GitHub at run tim
 allowed (ADR-0104); it is always set to the pinned copy, and there is no start without one.
 
 The window never talks to this server and never sees its key (ADR-0101, decision 4).
+
+**A harness has a server of its own** (ADR-0107; stage H1): `for_harness(id)` gives it, started
+the same way with a profile opened further for that one program: its own sign-in folders in the
+person's home (read and write), the keychain (read), the installed programs (read), and the proxy
+under the harness's own name, which lets it reach its provider's hosts and nothing else. A sandbox
+profile cannot change while its process runs, so the Wasify AI harness's server never has any of
+this open.
 """
 
 import asyncio
@@ -57,6 +64,13 @@ from typing import Any
 
 import httpx
 
+from wasifyai_api.coding_harness import (
+    HARNESSES,
+    Harness,
+    acp_command,
+    find_harness_install,
+    real_home,
+)
 from wasifyai_api.components.node import find_node
 
 log = logging.getLogger(__name__)
@@ -195,6 +209,19 @@ def _rules(kind: str, paths: Sequence[Path]) -> str:
     return "\n".join(f"  ({kind} {_quoted(p)})" for p in paths)
 
 
+_SPECIAL = set(".^$*+?()[]{}|\\")
+
+
+def _starting(paths: Sequence[Path]) -> str:
+    """Rules for every file whose path begins with one of `paths` (`~/.claude.json.backup`)."""
+    out = []
+    for path in paths:
+        _quoted(path)  # refuses a character a rule cannot hold
+        text = "".join("\\" + c if c in _SPECIAL else c for c in str(path))
+        out.append(f'  (regex #"^{text}")')
+    return "\n".join(out)
+
+
 def _on_the_way(paths: Sequence[Path]) -> list[Path]:
     """Every folder above `paths`, once: their names must be readable to reach what is open."""
     found: dict[Path, None] = {}
@@ -212,19 +239,22 @@ def fill_profile(
     read_only: Sequence[Path],
     closed: Sequence[Path],
     no_write: Sequence[Path] = (),
+    write_starting: Sequence[Path] = (),
 ) -> str:
     """The profile for one start. `write` may be written and read; `read_only` may be read;
     `closed` is closed to reading except for those; `no_write` are folders inside `write` that
-    may not be written after all. Every path must already be resolved (the sandbox compares
-    real paths: `/private/tmp`, never `/tmp`)."""
+    may not be written after all; `write_starting` are files beside them that may be written,
+    by how their path begins. Every path must already be resolved (the sandbox compares real
+    paths: `/private/tmp`, never `/tmp`)."""
     opened = [*write, *read_only]
     # an empty list must give no rule at all: a deny with nothing named would deny every write
     refused = f"(deny file-write*\n{_rules('subpath', no_write)})" if no_write else ""
+    starting = ("\n" + _starting(write_starting)) if write_starting else ""
     filled = (
-        template.replace("{{WRITE}}", _rules("subpath", write))
+        template.replace("{{WRITE}}", _rules("subpath", write) + starting)
         .replace("{{NO_WRITE}}", refused)
         .replace("{{CLOSED}}", _rules("subpath", closed))
-        .replace("{{OPEN}}", _rules("subpath", opened))
+        .replace("{{OPEN}}", _rules("subpath", opened) + starting)
         .replace("{{WAY}}", _rules("literal", _on_the_way(opened)))
     )
     if "{{" in filled:
@@ -307,11 +337,18 @@ class CodingServer:
         *,
         sandbox_exec: str | None = SANDBOX_EXEC,
         proxy: Any = None,
+        harness: Harness | None = None,
+        home: Path | None = None,
     ) -> None:
         """`files` is the build's `services/coding-engine` folder (the sandbox profile).
         `proxy` is the engine's install proxy.
         `sandbox_exec` is None only in unit tests that run the fake server, which starts no
-        command; the engine never passes it."""
+        command; the engine never passes it.
+        `harness` makes this the server of one harness (ADR-0107); `home` is where the person's
+        own home is, for tests (the real one by default)."""
+        self.harness = harness
+        self._home = home
+        self._children: dict[str, CodingServer] = {}
         self._data_dir = data_dir
         self._files = files
         self._timeout = startup_timeout_s
@@ -334,8 +371,59 @@ class CodingServer:
     @property
     def run_dir(self) -> Path:
         """What the server may write: its home, its state, its temp folder, the default
-        workspace. It is the person's coding work, so removing the part leaves it."""
+        workspace. It is the person's coding work, so removing the part leaves it. A harness's
+        server has a folder of its own beside it."""
+        if self.harness is not None:
+            return self._data_dir / "coding" / "harness" / self.harness.id
         return self._data_dir / "coding"
+
+    @property
+    def home(self) -> Path:
+        """The person's own home folder, where a harness's program keeps its sign-in."""
+        return Path(os.path.realpath(self._home or real_home()))
+
+    def for_harness(self, harness_id: str) -> "CodingServer":
+        """The server of one harness: made the first time it is asked for, stopped with this one."""
+        if self.harness is not None:
+            raise CodingError("bad_harness", "A harness has no harness of its own.")
+        if harness_id not in HARNESSES:
+            raise CodingError("no_such_harness", "There is no such agent program.")
+        if harness_id not in self._children:
+            self._children[harness_id] = CodingServer(
+                self._data_dir, self._files, self._timeout, sandbox_exec=self._sandbox_exec,
+                proxy=self._proxy, harness=HARNESSES[harness_id], home=self._home,
+            )  # fmt: skip
+        return self._children[harness_id]
+
+    @property
+    def harness_ids(self) -> tuple[str, ...]:
+        """The harnesses there are (ADR-0107), for the coding product."""
+        return tuple(HARNESSES)
+
+    @property
+    def harness_servers(self) -> dict[str, "CodingServer"]:
+        return dict(self._children)
+
+    def acp_command(self) -> list[str]:
+        """How this harness's server starts its program (`coding_harness.acp_command`)."""
+        harness = self.harness
+        found = find_harness_install(self._data_dir)
+        node = find_node(self._data_dir)
+        if harness is None or found is None or node is None:
+            raise CodingError(
+                "harness_not_installed",
+                "The agent programs are not set up yet. Set them up in Settings, under Optional "
+                "parts.",
+            )
+        adapter = found.adapter(harness)
+        if adapter is None or not adapter.is_file():
+            raise CodingError(
+                "harness_not_installed",
+                f"{harness.title} is not in the agent programs that are set up. Repair them in "
+                "Settings, under Optional parts.",
+            )
+        tmp = Path(os.path.realpath(self.run_dir)) / "tmp"
+        return acp_command(harness, found, Path(os.path.realpath(node)) / "node", tmp, self.home)
 
     @property
     def plan_file(self) -> Path:
@@ -397,13 +485,16 @@ class CodingServer:
             "workspaces": [str(w) for w in self._workspaces] if self.running else [],
             "read_only": [str(w) for w in self._read_only] if self.running else [],
             "start_seconds": self._start_seconds if self.running else None,
+            "harnesses": {k: c.running for k, c in self._children.items()},
         }
 
     async def memory_bytes(self) -> int:
         """What the server and everything under it hold in memory now."""
-        if (pid := self.pid) is None:
+        pids = [p for p in (self.pid, *(c.pid for c in self._children.values())) if p]
+        if not pids:
             return 0
-        return await asyncio.to_thread(process_rss_bytes, await _tree(pid))
+        trees = [pid for root in pids for pid in await _tree(root)]
+        return await asyncio.to_thread(process_rss_bytes, trees)
 
     # ---- calling it --------------------------------------------------------------------------
 
@@ -510,13 +601,22 @@ class CodingServer:
         python_home = Path(os.path.realpath(found.python)).parents[1]  # the Python it was made with
         data = Path(os.path.realpath(self._data_dir))
         profile = run / "engine.sb"
+        own_write, own_read, own_starting = self._harness_paths()
         try:
             profile.write_text(
                 fill_profile(
                     template,
-                    write=[run, *workspaces, terminal],
-                    read_only=[root, python_home, plan.parent, *self._node_root(), *read_only],
+                    write=[run, *workspaces, terminal, *own_write],
+                    read_only=[
+                        root,
+                        python_home,
+                        plan.parent,
+                        *self._node_root(),
+                        *own_read,
+                        *read_only,
+                    ],
                     closed=[*(Path(c) for c in CLOSED), data],
+                    write_starting=own_starting,
                 )
             )
             profile.chmod(0o600)
@@ -546,6 +646,22 @@ class CodingServer:
             "env": env, "profile": profile, "terminal": terminal, "cwd": state,
             "python": venv_bin / found.python.name, "fixed": plan.parent,
         }  # fmt: skip
+
+    def _harness_paths(self) -> tuple[list[Path], list[Path], list[Path]]:
+        """What a harness's profile opens besides the usual (ADR-0102's amendment for ADR-0107):
+        the program's own sign-in folders to write, the keychain and the installed programs to
+        read, and the files beside its folders by how their path begins. Nothing for the Wasify
+        AI harness."""
+        harness = self.harness
+        if harness is None:
+            return [], [], []
+        home = self.home
+        found = find_harness_install(self._data_dir)
+        programs = [Path(os.path.realpath(found.root))] if found else []
+        # a folder that is not there yet is named as it is: the program makes it on its first run
+        write = [Path(os.path.realpath(p)) for p in harness.write_paths(home)]
+        read = [Path(os.path.realpath(p)) for p in harness.read_paths(home)] + programs
+        return write, read, [Path(os.path.realpath(home)) / p.name for p in harness.prefixes(home)]
 
     def _environment(self, found: CodingInstall, home: Path, tmp: Path) -> dict[str, str]:
         """What a program inside the sandbox is given: a home and a temp folder under the
@@ -583,7 +699,7 @@ class CodingServer:
             "OPENHANDS_SUPPRESS_BANNER": "1",
             "LOG_JSON": "true",  # one line per record in logs/coding-server.log
         }
-        env.update(self.install_env("agent"))
+        env.update(self.install_env(self.harness.id if self.harness is not None else "agent"))
         return env
 
     def _node_root(self) -> list[Path]:
@@ -788,14 +904,19 @@ class CodingServer:
         shutil.rmtree(self.run_dir / "tmp", ignore_errors=True)
 
     async def stop(self) -> bool:
-        """Stop the server and everything it started. Returns whether one was running."""
+        """Stop the server and everything it started, and the harnesses' servers. Returns whether
+        one was running."""
+        was = False
+        for child in self._children.values():
+            was = await child.stop() or was
         async with self._lock:
-            was = self.running
+            was = self.running or was
             await self._terminate()
             return was
 
     def stop_now(self) -> bool:
         """End it at once, without waiting (for code that cannot wait: removing the part)."""
+        children = [child.stop_now() for child in self._children.values()]
         proc, guard, terminal = self._proc, self._guard, self._terminal
         self._proc = self._url = self._key = self._guard = self._terminal = None
         self._workspaces, self._read_only = (), ()
@@ -810,10 +931,12 @@ class CodingServer:
             with contextlib.suppress(OSError):
                 os.close(guard)
         self._clean(terminal)
-        return was
+        return was or any(children)
 
     async def close(self) -> None:
         await self.stop()
+        for child in self._children.values():
+            await child._http.aclose()
         if self._proxy is not None:
             await self._proxy.close()
         await self._http.aclose()

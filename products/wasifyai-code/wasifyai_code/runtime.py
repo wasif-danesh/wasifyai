@@ -39,6 +39,7 @@ import contextlib
 import difflib
 import logging
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import AsyncIterator
@@ -56,7 +57,14 @@ from wasifyai_code import store as rows
 from wasifyai_code.checkpoints import CheckpointError, CheckpointStore
 from wasifyai_code.checks import is_test_file
 from wasifyai_code.loop import CUT_OFF, Hooks, Loop, TurnRunning
-from wasifyai_code.place import Account, Place, PlaceError, PlaceEvent, SessionSpec
+from wasifyai_code.place import (
+    Account,
+    Place,
+    PlaceError,
+    PlaceEvent,
+    SessionSpec,
+    harness_model,
+)
 from wasifyai_code.store import CodeStore, Owner
 from wasifyai_code.terminal import Terminal, TerminalError, Terminals
 
@@ -94,6 +102,10 @@ CHECKPOINTS_DIR = "checkpoints"
 MAX_SHOWN_BYTES = 400_000  # of one side of a changed file, in the Changes tab
 MAX_SHOWN_LINES = 4000
 RECAP_CHARS = 6000
+ASK_NOT_ON_HARNESS = (
+    "Ask me is not offered on your own agent program: it does not wait for a yes or no. Choose "
+    "Plan, or Work on its own (every turn can be undone)."
+)
 APP_RESTARTED = (
     "The app was started again since this session's last message, so the agent begins from "
     "this message and does not know the earlier ones."
@@ -120,6 +132,45 @@ def _outward(turn: dict[str, Any]) -> dict[str, Any]:
 
 class NotAvailable(Exception):
     """This deployment has no coding engine."""
+
+
+# The person's own agent programs' models that were run through the coding evaluation's 36 tasks
+# (`evals/run_eval.py --model <harness>:<model>`; ADR-0107, stage H3), by the program's own name for
+# the model (a part of its id), with what was measured. Results: docs/spikes/coding-harness-h3.md.
+HARNESS_TESTED: dict[tuple[str, str], str] = {
+    ("claude-code", "haiku"): "36 of 36 tasks passed (2026-11-15)",
+    ("claude-code", "sonnet"): "36 of 36 tasks passed (2026-11-16)",
+    ("claude-code", "opus"): "36 of 36 tasks passed (2026-11-16)",
+    ("codex", "gpt-5.6-terra"): (
+        "19 of 19 tasks passed before the plan's limit stopped the run (2026-11-15)"
+    ),
+}
+
+
+# what an agent program says when the person's plan has run out, or its sign-in has ended
+# (ADR-0107); the window's cards read the same words (`PLAN_LIMIT`, `SIGNED_OUT` in
+# packages/ui/src/code/Code.tsx)
+PLAN_LIMIT = re.compile(
+    r"usage limit|rate limit|limit (is |was )?reached|reached your|quota|\b429\b"
+    r"|too many requests|out of credits",
+    re.IGNORECASE,
+)
+SIGNED_OUT = re.compile(
+    r"not (logged|signed) in|log ?in again|sign ?in again|authenticat|unauthori[sz]ed|\b401\b"
+    r"|token (has )?expired|session expired|invalid (api key|credentials|token)",
+    re.IGNORECASE,
+)
+
+
+def program_said(title: str, said: str) -> str:
+    """A stop of the person's own agent program in plain words, with what it said (without the
+    protocol's error code)."""
+    clean = re.sub(r"^\s*\[-?\d+\]\s*(internal error:\s*)?", "", said, flags=re.IGNORECASE).strip()
+    if PLAN_LIMIT.search(said):
+        return f"Stopped: your plan's limit was reached. {title} said: \u201c{clean}\u201d"
+    if SIGNED_OUT.search(said):
+        return f"Stopped: {title} is not signed in any more. Sign in to {title}, then run it again."
+    return f"{title} said: \u201c{clean}\u201d"
 
 
 class Refused(Exception):
@@ -280,14 +331,16 @@ class _Hooks(Hooks):
         self, owner: Owner, session: dict[str, Any], workspace: dict[str, Any], unattended: bool
     ) -> SessionSpec:
         reads = session["mode"] == rows.PLAN
+        # a harness is given no skill, plugin or hook of ours (ADR-0104's amendment for ADR-0107)
+        own = self.s.harness_of(session["model"]) is None
         return SessionSpec(
             Path(workspace["path"]),
             model=session["model"],
             step_limit=STEP_LIMIT if reads else RUN_STEP_LIMIT,
             unattended=unattended,
             read_only=reads,
-            skills=tuple(self.s.skills_for(owner, workspace["id"])),
-            hooks=self.s.hooks_for(owner, workspace["id"]),
+            skills=tuple(self.s.skills_for(owner, workspace["id"])) if own else (),
+            hooks=self.s.hooks_for(owner, workspace["id"]) if own else None,
             account=Account(
                 owner.tenant_id, owner.product_id, owner.user_id, session["id"],
                 spent_usd=float(session["cost_usd"]), limit_usd=float(session["cost_limit_usd"]),
@@ -407,6 +460,88 @@ class Sessions:
     async def models(self) -> list[dict[str, Any]]:
         return await self.state.coding_gateway.list_models()
 
+    # ---- harnesses: the person's own agent programs (ADR-0107) --------------------------------
+
+    def harness_of(self, model: str) -> tuple[str, str] | None:
+        """(harness, the program's model) for a model of a harness; None for Wasify AI's own."""
+        known = tuple(getattr(self.state.coding_server, "harness_ids", ()) or ())
+        return harness_model(model, known)
+
+    def _accounts(self) -> Any:
+        accounts = getattr(self.state, "coding_harnesses", None)
+        if accounts is None:
+            raise Refused("no_harness", "The agent programs are not available here.")
+        return accounts
+
+    def _harness_id(self, harness: str) -> str:
+        if harness not in (getattr(self.state.coding_server, "harness_ids", ()) or ()):
+            raise Refused("not_found", "There is no such agent program.")
+        return harness
+
+    async def harnesses(self) -> list[dict[str, Any]]:
+        """Each agent program: set up or not, signed in or not, how, and the plan's name. Never an
+        email or a token: the program keeps those."""
+        return await self._accounts().statuses()
+
+    async def sign_in(self, harness: str) -> dict[str, Any]:
+        """Start the program's own sign-in, in the person's browser."""
+        try:
+            return await self._accounts().sign_in(self._harness_id(harness))
+        except LookupError as e:
+            raise Refused("harness_not_installed", str(e)) from None
+
+    async def cancel_sign_in(self, harness: str) -> dict[str, Any]:
+        accounts = self._accounts()
+        await accounts.cancel(self._harness_id(harness))
+        return await accounts.status(harness)
+
+    @staticmethod
+    def harness_tested(harness: str, program_model: str) -> str:
+        """What the coding evaluation measured for a program's model (ADR-0107, stage H3), in
+        words; empty for one that was not run through it."""
+        said = program_model.lower()
+        for (h, name), words in HARNESS_TESTED.items():
+            if h == harness and name and name in said:
+                return words
+        return ""
+
+    async def harness_models(self, harness: str) -> dict[str, Any]:
+        """The models the program offers on the person's plan, as it says."""
+        self._harness_id(harness)
+        listed = getattr(self.place, "harness_models", None)
+        if listed is None:
+            raise Refused("no_harness", "The agent programs are not available here.")
+        try:
+            found = await listed(harness)
+        except PlaceError as e:
+            raise Refused("model_not_ready", str(e)) from None
+        return {
+            **found,
+            "models": [
+                {
+                    **m,
+                    "id": f"{harness}:{m['id']}",
+                    "program_model": m["id"],
+                    "tested": self.harness_tested(harness, m["id"]),
+                }
+                for m in found["models"]
+            ],
+        }
+
+    async def _harness_ready(self, harness: str) -> str:
+        """A session may start on a harness that is set up and signed in. Gives its name."""
+        state = await self._accounts().status(harness)
+        title = state.get("title") or harness
+        if not state.get("installed"):
+            raise Refused(
+                "harness_not_installed",
+                f"{title} is not set up yet. Set up the agent programs in Settings, under "
+                "Optional parts.",
+            )
+        if not state.get("signed_in"):
+            raise Refused("not_signed_in", f"Sign in to {title} first.")
+        return str(title)
+
     async def start(
         self,
         owner: Owner,
@@ -421,13 +556,21 @@ class Sessions:
         if mode not in rows.MODES:
             raise Refused("no_such_mode", "Choose Plan, Ask me or Work on its own.")
         path = check_folder(folder, data_dir=self.state.desktop_dir)
-        gateway = self.state.coding_gateway
-        try:
-            route = gateway.model(model or None)
-        except Exception as e:
-            raise Refused("no_such_model", str(getattr(e, "message", e))) from None
-        if (why := await gateway.ready(route.id)) is not None:
-            raise Refused("model_not_ready", why)
+        on_harness = self.harness_of(model)
+        if on_harness is not None:
+            if mode == rows.ASK:
+                raise Refused("no_such_mode", ASK_NOT_ON_HARNESS)
+            await self._harness_ready(on_harness[0])
+            model_id = f"{on_harness[0]}:{on_harness[1] or 'default'}"
+        else:
+            gateway = self.state.coding_gateway
+            try:
+                route = gateway.model(model or None)
+            except Exception as e:
+                raise Refused("no_such_model", str(getattr(e, "message", e))) from None
+            if (why := await gateway.ready(route.id)) is not None:
+                raise Refused("model_not_ready", why)
+            model_id = route.id
         workspace = await asyncio.to_thread(self.store.find_workspace, owner, str(path))
         if workspace is None:
             workspace = await asyncio.to_thread(
@@ -438,7 +581,7 @@ class Sessions:
             owner,
             workspace["id"],
             title=title.strip() or path.name,
-            model=route.id,
+            model=model_id,
             mode=mode,
             cost_limit_usd=cost_limit_usd,
         )
@@ -503,6 +646,8 @@ class Sessions:
         if mode not in rows.MODES:
             raise Refused("no_such_mode", "Choose Plan, Ask me or Work on its own.")
         session = self._session(owner, session_id)
+        if mode == rows.ASK and self.harness_of(session["model"]) is not None:
+            raise Refused("no_such_mode", ASK_NOT_ON_HARNESS)
         if session["mode"] == mode:
             return self.view(owner, session_id)
         if (session["mode"] == rows.PLAN) != (mode == rows.PLAN):
@@ -1163,6 +1308,8 @@ class Sessions:
             "project": workspace["name"],
             "mode": session["mode"],
             "model": session["model"],
+            # the person's own agent program it runs on, or "" for Wasify AI's own (ADR-0107)
+            "harness": (self.harness_of(session["model"]) or ("", ""))[0],
             "state": last["state"] if last else "new",
             "working": self.running(session_id),
             "checking": session_id in self._checking
@@ -1203,6 +1350,8 @@ class Sessions:
         return int(getattr(self.state.coding_gateway, "default_limit_tokens", 0) or 0)
 
     def _counted_in(self, model: str) -> str:
+        if self.harness_of(model) is not None:
+            return "plan"  # paid by the person's own plan; the program's report is shown
         try:
             route = self.state.coding_gateway.model(model or None)
         except Exception:

@@ -4,8 +4,18 @@
 // own" it also changes files, asks first where a rule says so, and every turn can be undone in the Changes
 // tab. It also runs commands inside the project's protected area; after a turn that changed files the app runs
 // the project's check and sends a failure back to it. The person has a terminal of their own in the Terminal
-// tab. The window calls the coding product's routes and never the coding engine.
-import type { CodeAnswer, CodeApi, CodeMode, CodeModel, CodeSession } from "@wasifyai/client";
+// tab. The window calls the coding product's routes and never the coding engine. A session can also run on the
+// person's own Claude Code or Codex, on their own plan (ADR-0107, stage H2; mockup in
+// docs/spikes/coding-harness-mockup.html): it has two modes, its cost is what the program reported, and a stop
+// the plan caused is shown in the program's own words.
+import type {
+  CodeAnswer,
+  CodeApi,
+  CodeHarness,
+  CodeMode,
+  CodeModel,
+  CodeSession,
+} from "@wasifyai/client";
 import {
   ArrowUp,
   Check,
@@ -31,13 +41,13 @@ import { Markdown } from "../chat/thread/markdown/Markdown";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Chip } from "../components/chip";
-import { ConfirmDialog } from "../components/dialog";
+import { ConfirmDialog, Modal } from "../components/dialog";
 import { EmptyState } from "../components/empty-state";
 import { Notice } from "../components/notice";
 import { Spinner } from "../components/spinner";
 import { Textarea } from "../components/textarea";
 import { ModelSelect } from "../models/ModelSelect";
-import type { ChoicesApi } from "../models/types";
+import type { ChoicesApi, ModelChoice } from "../models/types";
 import { useModelChoices } from "../models/use-model-choices";
 import { PageHeader } from "../window-bar";
 import { AskCard, MODES, MayDialog, ModePill } from "./Asking";
@@ -91,6 +101,124 @@ const STARTERS = [
 export const CARRY_OUT = "Carry out this plan.";
 
 const dollars = (n: number) => `$${n.toFixed(2)}`;
+
+// ---- the person's own agent programs (ADR-0107) ------------------------------------------------
+
+/** Whose servers each program reaches: the only place it may send anything. */
+const PROVIDER: Record<string, string> = { "claude-code": "Anthropic", codex: "OpenAI" };
+/** The account each program signs in with. */
+const ACCOUNT: Record<string, string> = { "claude-code": "Claude", codex: "ChatGPT" };
+
+export type Agent = {
+  id: string;
+  title: string;
+  provider: string;
+  /** "Your Claude plan", and the same in a sentence: "your Claude plan" */
+  payer: string;
+  payerInText: string;
+  plan: string;
+};
+
+export function agentOf(id: string | undefined, harnesses: CodeHarness[]): Agent | null {
+  if (!id) return null;
+  const h = harnesses.find((x) => x.id === id);
+  const title = h?.title ?? id;
+  const words = h?.plan_words || `your ${ACCOUNT[id] ?? title} plan`;
+  return {
+    id,
+    title,
+    provider: PROVIDER[id] ?? "its provider",
+    payer: words[0]?.toUpperCase() + words.slice(1),
+    payerInText: words[0]?.toLowerCase() + words.slice(1),
+    // the plan's name, unless it only repeats who pays ("ChatGPT" on "your ChatGPT plan")
+    plan:
+      h?.plan && !words.toLowerCase().includes(h.plan.toLowerCase())
+        ? h.plan[0]?.toUpperCase() + h.plan.slice(1)
+        : "",
+  };
+}
+
+/** A program's model as a person reads it: "sonnet" is Sonnet, "gpt-5.6-terra" is GPT-5.6 Terra. */
+export function programModelTitle(model: string): string {
+  if (!model || model === "default") return "Its own choice";
+  const gpt = /^gpt-/i.test(model);
+  const rest = gpt ? model.slice(4) : model;
+  const [first = "", ...more] = rest.split("-");
+  const words = [first, ...more].map((w) => (/^\d/.test(w) ? w : w[0]?.toUpperCase() + w.slice(1)));
+  return gpt ? `GPT-${words.join(" ")}` : words.join(" ");
+}
+
+/** What a session runs on, in the bar and on Projects: "Claude Code · Sonnet", "Claude Sonnet 5.5 · your key". */
+export function runsOn(s: CodeSession, models: CodeModel[], harnesses: CodeHarness[]): string {
+  if (s.harness) {
+    const agent = agentOf(s.harness, harnesses);
+    return `${agent?.title} · ${programModelTitle(s.model.slice(s.harness.length + 1))}`;
+  }
+  const m = models.find((x) => x.id === s.model);
+  if (!m) return s.model;
+  return m.where === "cloud" ? `${m.title} · your key` : m.title;
+}
+
+const NOTE_KEY = (id: string) => `wasifyai.code.agent-note.${id}`;
+function noteSeen(id: string): boolean {
+  try {
+    return window.localStorage.getItem(NOTE_KEY(id)) === "1";
+  } catch {
+    return false;
+  }
+}
+function markNoteSeen(id: string) {
+  try {
+    window.localStorage.setItem(NOTE_KEY(id), "1");
+  } catch {
+    // not kept: the note is shown again next time
+  }
+}
+
+/** Once, before the first session on a program: how it differs from Wasify AI's own agent, in four lines. */
+function AgentNote({
+  agent,
+  onCancel,
+  onGo,
+}: {
+  agent: Agent;
+  onCancel: () => void;
+  onGo: () => void;
+}) {
+  return (
+    <Modal label={`${agent.title} works a little differently`} onClose={onCancel}>
+      <div className="grid gap-3 text-sm">
+        <h2 className="m-0 text-base font-semibold">{agent.title} works a little differently</h2>
+        <ul className="m-0 grid gap-1.5 ps-5">
+          <li>
+            <strong>It does not ask during a turn.</strong> Plan only reads; Work on its own changes
+            files and runs commands without asking. “Ask me” is for Wasify AI's own agent.
+          </li>
+          <li>
+            <strong>It stays in this folder.</strong> It reaches only {agent.provider}, cannot read
+            the rest of your home folder, and cannot install packages.
+          </li>
+          <li>
+            <strong>Every turn can be undone</strong>, and the check runs after each turn, as with
+            any session.
+          </li>
+          <li>
+            <strong>It runs on {agent.payerInText}.</strong> Its use counts against your plan's
+            limits, not a key.
+          </li>
+        </ul>
+      </div>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={onGo} autoFocus>
+          Start the session
+        </Button>
+      </div>
+    </Modal>
+  );
+}
 const tokens = (n: number) => `${Math.round(n).toLocaleString("en-US")} tokens`;
 /** The least and the most a session's limit in tokens may be set to here. */
 const TOKEN_LIMITS = [100_000, 200_000_000] as const;
@@ -121,20 +249,49 @@ export function Code({
     else if (id) void code.open(id);
     else code.close();
   };
-  const begin = async (folder: string, model?: string) => {
-    const made = await code.start(folder, model);
-    if (made) onOpenChange?.(made.id);
-  };
   const [model, setModel] = useState<string>("");
   const ready = state.models.filter((m) => m.ready);
+  // the model button's choice may be a model of the person's own agent program (its Your agent tab)
+  // what the button chose just now: the picker's rows are read again a moment later, and a session started
+  // before that must still start on the model the button shows
+  // (the row itself is kept too: these rows may have been read before the panel's, while a program was still
+  // starting, and not have it yet)
+  const [justChosen, setJustChosen] = useState<{ id: string; row?: ModelChoice } | null>(null);
+  const shownRow = justChosen
+    ? (picker.list?.choices.find((c) => c.id === justChosen.id) ?? justChosen.row ?? picker.chosen)
+    : picker.chosen;
+  const onAgent = choices && shownRow?.place === "agent" ? shownRow : null;
+  const agent = onAgent ? agentOf(onAgent.provider, state.harnesses) : null;
   // with the model button, its choice is the model of a new session; the small list is for where there is none
-  const picked = choices ? picker.chosen?.id : model;
-  const chosen = ready.find((m) => m.id === picked) ?? ready.find((m) => m.default) ?? ready[0];
-
-  const choose = async () => {
-    const folder = await pickFolder();
-    if (folder) await begin(folder, chosen?.id);
+  const picked = choices ? shownRow?.id : model;
+  const chosen: CodeModel | undefined = onAgent
+    ? {
+        id: onAgent.id,
+        title: `${onAgent.providerTitle} · ${onAgent.title}`,
+        where: "cloud",
+        default: false,
+        ready: true,
+      }
+    : (ready.find((m) => m.id === picked) ?? ready.find((m) => m.default) ?? ready[0]);
+  const begin = async (folder: string, model?: string) => {
+    // the person's own program does not stop to ask during a turn: its sessions start in Plan
+    const made = await code.start(folder, model, agent ? "plan" : "ask");
+    if (made) onOpenChange?.(made.id);
   };
+  // the note before the first session on a program, then what was asked for
+  const [note, setNote] = useState<(() => void) | null>(null);
+  const gate = (run: () => void) => {
+    if (agent && !noteSeen(agent.id)) setNote(() => run);
+    else run();
+  };
+
+  const choose = () =>
+    gate(() => {
+      void (async () => {
+        const folder = await pickFolder();
+        if (folder) await begin(folder, chosen?.id);
+      })();
+    });
   const [fresh, setFresh] = useState(false);
   const newProject = fresh ? (
     <NewProject
@@ -163,6 +320,8 @@ export function Code({
         api={api}
         session={state.session}
         models={state.models}
+        harnesses={state.harnesses}
+        onSignIn={code.signIn}
         thread={buildThread(state.turns, state.events, state.checks)}
         busy={state.busy}
         error={state.error}
@@ -218,7 +377,7 @@ export function Code({
       action={
         state.sessions.length ? (
           <span className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setFresh(true)} disabled={!chosen}>
+            <Button variant="outline" onClick={() => gate(() => setFresh(true))} disabled={!chosen}>
               <FolderPlus /> Start in a new, empty folder
             </Button>
             <Button onClick={choose} disabled={!chosen}>
@@ -232,7 +391,11 @@ export function Code({
         // the model button is at the top of the screen, as on the chat and image screens (ADR-0086)
         <PageHeader className="flex h-14 shrink-0 items-center gap-4 border-b px-6 pt-1">
           <div className="flex min-w-0 items-center gap-2 ps-2 text-sm">
-            <ModelSelect group="code" api={choices} />
+            <ModelSelect
+              group="code"
+              api={choices}
+              onChanged={(id, row) => setJustChosen(id ? { id, row } : null)}
+            />
             <span className="hidden text-muted-foreground md:inline">for a new session</span>
           </div>
         </PageHeader>
@@ -242,7 +405,7 @@ export function Code({
           {state.error}
         </Notice>
       ) : null}
-      {ready.length === 0 ? (
+      {ready.length === 0 && !agent ? (
         <Notice
           tone="warn"
           title="No model is ready for coding"
@@ -262,7 +425,7 @@ export function Code({
             <Button onClick={choose} disabled={!chosen}>
               <FolderOpen /> Choose a folder
             </Button>
-            <Button variant="outline" onClick={() => setFresh(true)} disabled={!chosen}>
+            <Button variant="outline" onClick={() => gate(() => setFresh(true))} disabled={!chosen}>
               <FolderPlus /> Start in a new, empty folder
             </Button>
           </div>
@@ -273,8 +436,9 @@ export function Code({
       ) : (
         <Projects
           sessions={state.sessions}
+          runsOn={(s) => runsOn(s, state.models, state.harnesses)}
           onOpen={show}
-          onNew={(folder) => void begin(folder, chosen?.id)}
+          onNew={(folder) => gate(() => void begin(folder, chosen?.id))}
           onRemove={code.remove}
           canStart={Boolean(chosen)}
         />
@@ -296,8 +460,20 @@ export function Code({
         </label>
       ) : null}
       <Rules />
-      <Leaves model={chosen} />
+      <Leaves model={chosen} agent={agent} />
       {newProject}
+      {note && agent ? (
+        <AgentNote
+          agent={agent}
+          onCancel={() => setNote(null)}
+          onGo={() => {
+            markNoteSeen(agent.id);
+            const run = note;
+            setNote(null);
+            run();
+          }}
+        />
+      ) : null}
     </Page>
   );
 }
@@ -372,25 +548,30 @@ function Rules() {
   );
 }
 
-function Leaves({ model }: { model: CodeModel | undefined }) {
+function Leaves({ model, agent }: { model: CodeModel | undefined; agent: Agent | null }) {
   if (!model) return null;
   return (
     <Notice title="What leaves this computer">
-      {model.where === "cloud"
-        ? `The parts of files the agent reads are sent to the model you chose: ${model.title}, with your own key.`
-        : `Nothing. ${model.title} runs on this computer.`}
+      {agent
+        ? `The parts of files the agent reads are sent to ${agent.provider} by ${agent.title}, on ${agent.payerInText}.`
+        : model.where === "cloud"
+          ? `The parts of files the agent reads are sent to the model you chose: ${model.title}, with your own key.`
+          : `Nothing. ${model.title} runs on this computer.`}
     </Notice>
   );
 }
 
 function Projects({
   sessions,
+  runsOn,
   onOpen,
   onNew,
   onRemove,
   canStart,
 }: {
   sessions: CodeSession[];
+  /** what a session runs on, in words */
+  runsOn: (s: CodeSession) => string;
   onOpen: (id: string) => void;
   onNew: (folder: string) => void;
   onRemove: (id: string) => void;
@@ -432,6 +613,9 @@ function Projects({
                     <CircleDashed aria-hidden="true" className="size-4 text-muted-foreground" />
                   )}
                   <span className="truncate font-medium">{s.title}</span>
+                  <span className="hidden shrink-0 truncate text-xs text-muted-foreground sm:inline">
+                    {runsOn(s)}
+                  </span>
                   <span
                     className={cn(
                       "ms-auto shrink-0 text-xs text-muted-foreground",
@@ -507,6 +691,8 @@ function Session({
   api,
   session,
   models,
+  harnesses,
+  onSignIn,
   thread,
   busy,
   error,
@@ -531,6 +717,9 @@ function Session({
   browser?: BrowserHost;
   session: CodeSession;
   models: CodeModel[];
+  harnesses: CodeHarness[];
+  /** start the program's own sign-in again */
+  onSignIn: (harness: string) => void;
   thread: TurnView[];
   busy: "sending" | "stopping" | null;
   error: string | null;
@@ -575,8 +764,11 @@ function Session({
   };
   const working = session.working || busy === "sending";
   const waiting = thread.some((t) => t.parts.some((p) => p.kind === "ask" && p.open));
+  // the person's own agent program, when the session runs on one
+  const agent = agentOf(session.harness, harnesses);
   const carryOut = async () => {
-    if (await onSetMode("ask")) onSend(CARRY_OUT);
+    // the person's own program does not stop to ask: it carries a plan out on its own
+    if (await onSetMode(agent ? "own" : "ask")) onSend(CARRY_OUT);
   };
   const model = models.find((m) => m.id === session.model);
   const end = useRef<HTMLDivElement | null>(null);
@@ -611,7 +803,7 @@ function Session({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-          <span className="hidden md:inline">{model?.title ?? session.model}</span>
+          <span className="hidden md:inline">{runsOn(session, models, harnesses)}</span>
           <output className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-foreground">
             {working ? <Spinner className="size-3" /> : null}
             {chipFor(session, thread, busy, waiting)}
@@ -623,7 +815,11 @@ function Session({
               onOpen={() => setCheck(true)}
             />
           )}
-          <Cost session={session} model={model} onSetLimit={onSetLimit} />
+          {agent ? (
+            <PlanCost session={session} agent={agent} />
+          ) : (
+            <Cost session={session} model={model} onSetLimit={onSetLimit} />
+          )}
         </div>
       </PageHeader>
       <div
@@ -678,6 +874,10 @@ function Session({
                   key={turn.id}
                   turn={turn}
                   mode={session.mode}
+                  agent={agent}
+                  onSignIn={() => agent && onSignIn(agent.id)}
+                  onResend={(words) => onSend(words)}
+                  onOtherAgent={onBack}
                   last={n === thread.length - 1}
                   idle={!working}
                   onAnswer={onAnswer}
@@ -722,9 +922,11 @@ function Session({
               <Textarea
                 aria-label="Ask about this project"
                 placeholder={
-                  session.mode === "plan"
-                    ? `Ask about ${session.project}, or ask for a plan`
-                    : "Ask for a change, or ask a question"
+                  agent
+                    ? `Ask ${agent.title} about ${session.project}, or for a change`
+                    : session.mode === "plan"
+                      ? `Ask about ${session.project}, or ask for a plan`
+                      : "Ask for a change, or ask a question"
                 }
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -739,6 +941,7 @@ function Session({
               <div className="flex items-center justify-between gap-2">
                 <ModePill
                   mode={session.mode}
+                  agent={agent}
                   disabled={working}
                   onChange={(mode) => void onSetMode(mode)}
                   onOpenMay={() => setMay(true)}
@@ -982,8 +1185,90 @@ function Cost({
   );
 }
 
+/** On the person's own plan: the pill names the plan, and opens to what the program reported. No limit of ours. */
+function PlanCost({ session, agent }: { session: CodeSession; agent: Agent }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onDown = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [open]);
+  const count = (n: number) => Math.round(n).toLocaleString("en-US");
+  // what the program reported can be a fraction of a cent: three places
+  const reported = session.cost_usd > 0 ? `$${session.cost_usd.toFixed(3)}` : "Not reported";
+  return (
+    <span className="relative" ref={box}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
+        {agent.payer}
+      </button>
+      {open ? (
+        <div
+          // biome-ignore lint/a11y/useSemanticElements: a small window under its button, not a modal
+          role="dialog"
+          aria-label="This session so far"
+          className="absolute end-0 top-full z-20 mt-1.5 grid w-72 gap-2.5 rounded-lg border bg-surface p-3.5 text-sm text-foreground shadow-card"
+        >
+          <strong>This session so far</strong>
+          <dl className="m-0 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
+            <dt className="text-muted-foreground">Tokens in</dt>
+            <dd className="m-0 tabular-nums">{count(session.tokens_in)}</dd>
+            <dt className="text-muted-foreground">Tokens out</dt>
+            <dd className="m-0 tabular-nums">{count(session.tokens_out)}</dd>
+            <dt className="text-muted-foreground">Cost {agent.title} reported</dt>
+            <dd className="m-0 tabular-nums">{reported}</dd>
+            <dt className="text-muted-foreground">Asked</dt>
+            <dd className="m-0 tabular-nums">{session.turns}</dd>
+          </dl>
+          <p className="m-0 text-xs text-muted-foreground">
+            On {agent.payerInText}
+            {agent.plan ? ` (${agent.plan})` : ""}, signed in by {agent.title} itself. There is no
+            limit of ours: your plan's own limits apply, and {agent.title} says when one is reached.
+          </p>
+        </div>
+      ) : null}
+    </span>
+  );
+}
+
+/** A stop the person's own program reported: its sign-in ended, or the plan's limit was reached. */
+const SIGNED_OUT =
+  /not (logged|signed) in|log ?in again|sign ?in again|authenticat|unauthori[sz]ed|\b401\b|token (has )?expired|session expired|invalid (api key|credentials|token)/i;
+const PLAN_LIMIT =
+  /usage limit|rate limit|limit (is |was )?reached|reached your|quota|\b429\b|too many requests|out of credits/i;
+
+export function agentStop(detail: string): "signed_out" | "limit" | null {
+  if (SIGNED_OUT.test(detail)) return "signed_out";
+  if (PLAN_LIMIT.test(detail)) return "limit";
+  return null;
+}
+
 type TurnActions = {
   mode: CodeMode;
+  /** the person's own agent program the session runs on */
+  agent: Agent | null;
+  onSignIn: () => void;
+  /** ask the same again */
+  onResend: (words: string) => void;
+  /** back to the projects, to start a session on another agent */
+  onOtherAgent: () => void;
   /** it is the session's newest turn */
   last: boolean;
   /** the agent is not working */
@@ -1302,7 +1587,9 @@ function Ending({ turn, ...actions }: { turn: TurnView } & TurnActions) {
         </h3>
         <p className="m-0 text-muted-foreground">
           In Plan the agent reads files and changes none.
-          {actions.last ? " Carrying the plan out switches this session to “Ask me”." : ""}
+          {actions.last
+            ? ` Carrying the plan out switches this session to “${actions.agent ? "Work on its own" : "Ask me"}”.`
+            : ""}
         </p>
         {actions.last && actions.idle ? (
           <div>
@@ -1327,6 +1614,62 @@ function Ending({ turn, ...actions }: { turn: TurnView } & TurnActions) {
       <>
         <Notice tone="warn" title="The agent stopped at its step limit">
           It used every step one turn allows.{nothing} Ask it to go on, or ask a narrower question.
+        </Notice>
+        {card}
+      </>
+    );
+  }
+  const stop = turn.ended === "error" && actions.agent ? agentStop(turn.detail) : null;
+  if (stop && actions.agent) {
+    const who = actions.agent.title;
+    const act = actions.last && actions.idle;
+    if (stop === "signed_out") {
+      return (
+        <>
+          <Notice
+            tone="warn"
+            title={`${who} is not signed in any more`}
+            actions={
+              act ? (
+                <Button size="sm" onClick={actions.onSignIn}>
+                  Sign in to {who}
+                </Button>
+              ) : null
+            }
+          >
+            The sign-in ended or was removed in {who}. What you asked is kept: sign in, then ask
+            again.{nothing}
+          </Notice>
+          {card}
+        </>
+      );
+    }
+    return (
+      <>
+        <Notice
+          tone="warn"
+          title={`${who} stopped: your plan's limit is reached`}
+          actions={
+            act ? (
+              <span className="flex flex-wrap gap-2">
+                {turn.request ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => actions.onResend(turn.request)}
+                  >
+                    Try again
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="ghost" onClick={actions.onOtherAgent}>
+                  New session on another agent
+                </Button>
+              </span>
+            ) : null
+          }
+        >
+          {who} says: “{turn.detail}”{nothing} You can wait, or start a new session on another
+          agent: the project, its changes and its check stay.
         </Notice>
         {card}
       </>

@@ -7,6 +7,7 @@ import type {
   CodeCheck,
   CodeEngine,
   CodeEvent,
+  CodeHarness,
   CodeMode,
   CodeModel,
   CodeSession,
@@ -20,6 +21,8 @@ const say = (e: unknown, fallback: string) =>
 export type CodeState = {
   engine: CodeEngine | null;
   models: CodeModel[];
+  /** the person's own agent programs (ADR-0107): their names and sign-in, for the sessions that run on them */
+  harnesses: CodeHarness[];
   sessions: CodeSession[];
   loading: boolean;
   error: string | null;
@@ -41,6 +44,7 @@ export function useCode(api: CodeApi) {
   const [state, setState] = useState<CodeState>({
     engine: null,
     models: [],
+    harnesses: [],
     sessions: [],
     loading: true,
     error: null,
@@ -74,8 +78,15 @@ export function useCode(api: CodeApi) {
         patch({ engine, loading: false, error: null });
         return;
       }
-      const [models, sessions] = await Promise.all([api.models(), api.sessions()]);
-      patch({ engine, models, sessions, loading: false, error: null });
+      const [models, sessions, harnesses] = await Promise.all([
+        api.models(),
+        api.sessions(),
+        // where there are no agent programs the list is empty
+        Promise.resolve()
+          .then(() => api.harnesses())
+          .catch(() => [] as CodeHarness[]),
+      ]);
+      patch({ engine, models, sessions, harnesses, loading: false, error: null });
     } catch (e) {
       patch({ loading: false, error: say(e, "The coding sessions could not be read.") });
     }
@@ -305,6 +316,23 @@ export function useCode(api: CodeApi) {
     }
   }, [api, openId, patch]);
 
+  /** Start a program's own sign-in again (its sign-in ended during a session): its page opens in the browser. */
+  const signIn = useCallback(
+    async (harness: string) => {
+      try {
+        const now = await api.signIn(harness);
+        setState((s) => ({
+          ...s,
+          error: null,
+          harnesses: s.harnesses.map((h) => (h.id === now.id ? now : h)),
+        }));
+      } catch (e) {
+        patch({ error: say(e, "The sign-in could not start.") });
+      }
+    },
+    [api, patch],
+  );
+
   const setLimit = useCallback(
     async (most: number, unit: "usd" | "tokens" = "usd") => {
       if (!openId) return;
@@ -339,5 +367,6 @@ export function useCode(api: CodeApi) {
     reload,
     runCheck,
     tryAgain,
+    signIn,
   };
 }

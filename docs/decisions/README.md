@@ -106,6 +106,7 @@
 | [0104](0104-extensions-pinned-catalogue-our-module.md) | Extensions: OpenHands' catalogue as a pinned copy, the module that manages it is ours | Accepted (2026-11-14) |
 | [0105](0105-scheduler-of-our-own.md) | Scheduled runs on a scheduler of our own, not on OpenHands' automation service (the owner's choice, 2026-11-14) | Accepted (2026-11-14) |
 | [0106](0106-website-capture-with-sign-in-by-the-person.md) | Capturing a website's screens: a tool of the Wasify engine, with sign-in done by the person | Proposed (2026-11-14) |
+| [0107](0107-harnesses-the-persons-own-agent-program.md) | Harnesses: a coding session can run on the person's own agent program (Claude Code, Codex, Gemini CLI) and its plan, through the ACP agent OpenHands already has; the sandbox of such a session is opened to its provider and its own sign-in; Extensions serve the Wasify AI harness only | Accepted (2026-11-15) |
 | [0108](0108-meetings-record-tell-speakers-apart-report-and-ask.md) | Meetings: record a meeting, tell the speakers apart with Sortformer on ONNX Runtime on every platform, write reports from templates and ask through notebooks; its own menu group | Accepted (2026-11-16) |
 
 New ADRs: run `/new-adr <title>` in Claude Code, or copy the structure of ADR-0001. Accepted ADRs are not edited; supersede them.

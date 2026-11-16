@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import {
+  AgentPrograms,
   Button,
   Checkbox,
   ComputerCanDo,
@@ -13,6 +14,7 @@ import {
   useTheme,
 } from "@wasifyai/ui";
 import {
+  Code,
   Cpu,
   KeyRound,
   LifeBuoy,
@@ -26,12 +28,15 @@ import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 
 import { ComponentsPanel } from "../ComponentsPanel";
 import {
   assistantApi,
+  componentsApi,
   connectionsApi,
   discoveryApi,
   externalApi,
   hubApi,
   ownKeysApi,
 } from "../api";
+import { agentsApi } from "../choices/agents";
+import { code } from "../code";
 import { saveDiagnostics } from "../diagnostics";
 import { engineRepair, engineRestart } from "../engine";
 import { ImageEngineCard, LanguageEngineCard, UpdateBanner } from "../parts";
@@ -390,6 +395,8 @@ type Group = {
   items: Item[];
 };
 
+const agents = agentsApi({ code, parts: componentsApi });
+
 const GROUPS: Group[] = [
   {
     id: "general",
@@ -477,6 +484,21 @@ const GROUPS: Group[] = [
             <HubToken />
           </div>
         ),
+      },
+    ],
+  },
+  {
+    id: "code",
+    title: "Code",
+    line: "Run coding sessions on your own Claude Code or Codex, on your plan, with no key.",
+    icon: Code,
+    items: [
+      {
+        // the person's own agent programs (ADR-0107, stage H2): their sign-in, and the part that holds them
+        id: "agent-programs",
+        title: "Your agent programs",
+        words: "claude code codex agent program plan sign in subscription harness",
+        body: <AgentPrograms api={agents} />,
       },
     ],
   },

@@ -219,3 +219,31 @@ standing yes of 2026-11-15:
    zoom; pictures of a page for the agent; the same on Windows and Linux (the code is there, it was not run).
 
 Measured in `docs/spikes/coding-browser.md`.
+
+## Amendment (2026-11-15, owner; accepted with ADR-0107): the sandbox of a harness session
+
+The owner: "This 'Harness' feature is an absolute requirement for us. It's okay to change the sandbox rules."
+This amendment holds from 2026-11-15, the day ADR-0107 was accepted.
+
+A session on the person's own agent program (ADR-0107) cannot live under decisions 3 and 4 as they stand: the
+program must reach its provider, and it holds its own sign-in.
+
+1. **Decisions 3 and 4 stand for the Wasify AI harness**, unchanged: no internet, no credential inside, model
+   calls through the gateway.
+2. **A harness session has a profile of its own**, made from the same template:
+   - the network is open to that harness's provider only, through the proxy of our own
+     (`wasifyai_api/coding_proxy.py`) with a list of hosts per harness. No other host is reachable;
+   - the program's own settings and sign-in folder can be read and written by it, and the keychain item the
+     program made for itself can be read by it;
+   - it writes only in the project and in that folder; the rest of the home folder, the app's data and the app's
+     keys stay closed; signals and opening apps outside stay refused.
+3. **Decision 4 does not hold for a harness session, by the owner's word.** The program's own login is inside its
+   sandbox. Wasify AI still never reads, stores or sends it, and the model gateway is not used.
+4. **Decision 6 and the approval cards do not hold for a harness session.** OpenHands' ACP agent says yes to every
+   permission the program asks for, so nothing is asked in the middle of a turn. "Ask me" is offered on the Wasify
+   AI harness only. The sandbox, the checkpoint before every turn and undo are what guard a harness session.
+5. **The hostile tests are run against each harness's profile** (`make test-coding`), with what the profile opens
+   listed beside them. A profile is changed only together with its tests.
+6. **What the profile must open is measured first** (spike H0 of ADR-0107), not written from the programs' papers.
+
+Nothing else of the decision changes.

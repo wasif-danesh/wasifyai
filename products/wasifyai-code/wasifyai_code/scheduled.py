@@ -36,6 +36,7 @@ from typing import Any
 from wasifyai_code import schedules as rules
 from wasifyai_code import store as rows
 from wasifyai_code.checkpoints import CheckpointError
+from wasifyai_code.runtime import Refused, program_said
 from wasifyai_code.schedules import BadRule, RunResult, Timer
 from wasifyai_code.store import Owner
 
@@ -286,6 +287,9 @@ class Scheduled:
     def _model(self, model: str) -> None:
         if not model:
             return
+        if self.sessions.harness_of(model) is not None:
+            # the person's own agent program (ADR-0107): whether it is signed in is asked at the run
+            return
         try:
             self.sessions.state.coding_gateway.model(model)
         except Exception as e:  # noqa: BLE001  (the gateway's own, sayable refusal)
@@ -307,13 +311,25 @@ class Scheduled:
         if not await asyncio.to_thread(folder.is_dir):
             raise RuntimeError(f"The project's folder is not there any more: {folder}")
         gateway = sessions.state.coding_gateway
-        try:
-            chosen = schedule["model"] or self._model_of(owner, project["id"])
-            route = gateway.model(chosen or None)
-        except Exception as e:
-            raise RuntimeError(str(getattr(e, "message", e))) from None
-        if (why := await gateway.ready(route.id)) is not None:
-            raise RuntimeError(why)
+        chosen = schedule["model"] or self._model_of(owner, project["id"])
+        on_harness = sessions.harness_of(chosen) if chosen else None
+        program = ""
+        if on_harness is not None:
+            # the person's own agent program, on their plan (ADR-0107, stage H3): it must be set
+            # up and signed in when the run comes due; its words say what to do when it is not
+            try:
+                program = await sessions._harness_ready(on_harness[0])
+            except Refused as e:
+                raise RuntimeError(e.message) from None
+            model_id = f"{on_harness[0]}:{on_harness[1] or 'default'}"
+        else:
+            try:
+                route = gateway.model(chosen or None)
+            except Exception as e:
+                raise RuntimeError(str(getattr(e, "message", e))) from None
+            if (why := await gateway.ready(route.id)) is not None:
+                raise RuntimeError(why)
+            model_id = route.id
         cps = sessions._cps(project)
         if cps is None:
             raise RuntimeError("Scheduled runs are not available here.")
@@ -333,7 +349,7 @@ class Scheduled:
             self.store.set_switch(owner, copy["id"], extension_id, on)  # the project's skills
         self.store.set_run_copy(run["id"], copy_workspace=copy["id"], base_commit=base.id)
         session = self.store.add_session(
-            owner, copy["id"], title=self.view(owner, schedule)["title"], model=route.id,
+            owner, copy["id"], title=self.view(owner, schedule)["title"], model=model_id,
             mode=rows.OWN,
         )  # fmt: skip
         await sessions.send(owner, session["id"], schedule["request"], unattended=True)
@@ -351,6 +367,8 @@ class Scheduled:
                 "step_limit": "The agent used every step one turn allows.",
                 "refused": "The model declined this request.",
             }.get(closed["why"], (closed["notes"] or ["The coding engine reported an error."])[-1])
+            if program and closed["why"] not in ("stopped", "step_limit", "refused"):
+                note = program_said(program, note)  # a plan's limit, an ended sign-in
         refused = [n for n in closed["notes"] if n.startswith("Refused, nobody to ask")]
         if refused and not note:
             were = "s were" if len(refused) != 1 else " was"

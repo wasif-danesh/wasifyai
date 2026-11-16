@@ -4553,6 +4553,22 @@
         "title": "ProviderView",
         "type": "object"
       },
+      "Question": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "Question",
+        "type": "object"
+      },
       "ReadAloudRequest": {
         "additionalProperties": false,
         "description": "A chat reply, as the model wrote it, and which passage of it to speak (0 is the first).",
@@ -5650,6 +5666,37 @@
           "title"
         ],
         "title": "Title",
+        "type": "object"
+      },
+      "ToNotebook": {
+        "additionalProperties": false,
+        "properties": {
+          "notebook_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notebook Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ToNotebook",
         "type": "object"
       },
       "TokenEvent": {
@@ -9400,6 +9447,164 @@
           }
         },
         "summary": "Switch Extension",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/harnesses": {
+      "get": {
+        "description": "The person's own agent programs (ADR-0107): set up or not, signed in or not, how and\non which plan. Never an email or a token.",
+        "operationId": "list_harnesses_products_wasifyai_code_code_harnesses_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Harnesses Products Wasifyai Code Code Harnesses Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Harnesses",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/harnesses/{harness}/models": {
+      "get": {
+        "description": "The models the program offers on the person's plan, named for a session's `model`.",
+        "operationId": "harness_models_products_wasifyai_code_code_harnesses__harness__models_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "harness",
+            "required": true,
+            "schema": {
+              "title": "Harness",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Harness Models Products Wasifyai Code Code Harnesses  Harness  Models Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Harness Models",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/harnesses/{harness}/sign-in": {
+      "post": {
+        "description": "Start the program's own sign-in: its page opens in the person's browser.",
+        "operationId": "sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "harness",
+            "required": true,
+            "schema": {
+              "title": "Harness",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Sign In Harness Products Wasifyai Code Code Harnesses  Harness  Sign In Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign In Harness",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
+    "/products/wasifyai-code/code/harnesses/{harness}/sign-in/cancel": {
+      "post": {
+        "operationId": "cancel_sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "harness",
+            "required": true,
+            "schema": {
+              "title": "Harness",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Cancel Sign In Harness Products Wasifyai Code Code Harnesses  Harness  Sign In Cancel Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Sign In Harness",
         "tags": [
           "wasifyai-code"
         ]
@@ -14106,6 +14311,116 @@
         ]
       }
     },
+    "/products/wasifyai-meetings/meetings/{item}/notebook": {
+      "post": {
+        "description": "Add the meeting to a notebook as a source (a new one when no notebook is given).",
+        "operationId": "add_to_notebook_products_wasifyai_meetings_meetings__item__notebook_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToNotebook"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add To Notebook Products Wasifyai Meetings Meetings  Item  Notebook Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add To Notebook",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/questions": {
+      "post": {
+        "description": "Ask about the meeting, answered in the background by a notebook it is in; follow it\nwith GET /questions/{id} (or the meeting).",
+        "operationId": "ask_products_wasifyai_meetings_meetings__item__questions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Question"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ask Products Wasifyai Meetings Meetings  Item  Questions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
     "/products/wasifyai-meetings/meetings/{item}/reports": {
       "post": {
         "description": "Write a report of the meeting from a template, in the background; follow it with\nGET /reports/{id} (or the meeting).",
@@ -14333,6 +14648,30 @@
         ]
       }
     },
+    "/products/wasifyai-meetings/notebooks": {
+      "get": {
+        "description": "The person's notebooks, to add a meeting to.",
+        "operationId": "list_notebooks_products_wasifyai_meetings_notebooks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Notebooks Products Wasifyai Meetings Notebooks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Notebooks",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
     "/products/wasifyai-meetings/people": {
       "get": {
         "operationId": "list_people_products_wasifyai_meetings_people_get",
@@ -14440,6 +14779,127 @@
           }
         },
         "summary": "Rename Person",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/questions/{qid}": {
+      "delete": {
+        "operationId": "delete_question_products_wasifyai_meetings_questions__qid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "qid",
+            "required": true,
+            "schema": {
+              "title": "Qid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Question",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      },
+      "get": {
+        "operationId": "get_question_products_wasifyai_meetings_questions__qid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "qid",
+            "required": true,
+            "schema": {
+              "title": "Qid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Question Products Wasifyai Meetings Questions  Qid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Question",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/questions/{qid}/stop": {
+      "post": {
+        "operationId": "stop_question_products_wasifyai_meetings_questions__qid__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "qid",
+            "required": true,
+            "schema": {
+              "title": "Qid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Question Products Wasifyai Meetings Questions  Qid  Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop Question",
         "tags": [
           "wasifyai-meetings"
         ]

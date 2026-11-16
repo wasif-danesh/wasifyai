@@ -11,6 +11,7 @@ import type {
   CodeCheckInfo,
   CodeEvent,
   CodeExtension,
+  CodeHarness,
   CodePreview,
   CodePreviewRun,
   CodeProject,
@@ -20,10 +21,10 @@ import type {
   CodeTurn,
 } from "@wasifyai/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ChoicesApi } from "../models/types";
+import type { ChoicesApi, ModelChoice } from "../models/types";
 import { type BrowserHost, pageForChat } from "./Browser";
 import { whyNot } from "./Checks";
-import { CARRY_OUT, Code } from "./Code";
+import { CARRY_OUT, Code, agentStop, programModelTitle } from "./Code";
 import { Extensions, bringsWords } from "./Extensions";
 import { Scheduled, moreOf, outcomeOf, ruleOf } from "./Scheduled";
 import { buildThread, stepLine } from "./thread";
@@ -2055,6 +2056,9 @@ describe("Scheduled", () => {
       "1 file changed, applied by you",
     );
     expect(moreOf(run({ changed: 0 }))).toBe("Nothing needed changing");
+    // a run the person's own program stopped did not look at anything
+    const stopped = "Stopped: your plan's limit was reached. Codex said: “Try again later.”";
+    expect(moreOf(run({ changed: 0, note: stopped }))).toBe(stopped);
     expect(moreOf(run({ state: "missed", note: "the app was not open", stands_for: 3 }))).toBe(
       "the app was not open. stands for 3 missed times",
     );
@@ -2428,5 +2432,361 @@ describe("the model of a new session, on the model button", () => {
     await userEvent.click(within(box).getByRole("button", { name: "Change" }));
     expect(setTokenLimit).toHaveBeenCalledWith(open.id, 5_000_000);
     expect(await within(box).findByText("5,000,000 tokens")).toBeTruthy();
+  });
+});
+
+describe("a session on the person's own agent program (ADR-0107, stage H2)", () => {
+  const CLAUDE: CodeHarness = {
+    id: "claude-code",
+    title: "Claude Code",
+    plan_words: "your Claude plan",
+    installed: true,
+    signed_in: true,
+    how: "plan",
+    plan: "Max",
+    signing_in: false,
+    page: "",
+  };
+  const onClaude = (over: Partial<CodeSession> = {}) =>
+    session({
+      harness: "claude-code",
+      model: "claude-code:sonnet",
+      counted_in: "plan",
+      mode: "own",
+      cost_usd: 0.004119,
+      tokens_in: 73_448,
+      tokens_out: 818,
+      turns: 1,
+      state: "done",
+      ...over,
+    });
+  const harnesses = async () => [CLAUDE];
+
+  it("names the program in the bar, and its pill opens to what the program reported, with no limit of ours", async () => {
+    const open = onClaude();
+    render(
+      <Code
+        api={api({ session: async () => open, sessions: async () => [open], harnesses })}
+        {...props}
+        openId={open.id}
+      />,
+    );
+    expect(await screen.findByText("Claude Code · Sonnet")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /Your Claude plan/ }));
+    const box = screen.getByRole("dialog", { name: "This session so far" });
+    expect(within(box).getByText("73,448")).toBeTruthy();
+    expect(within(box).getByText("$0.004")).toBeTruthy();
+    expect(within(box).getByText("Cost Claude Code reported")).toBeTruthy();
+    expect(within(box).getByText(/There is no limit of ours/)).toBeTruthy();
+    expect(within(box).queryByText("Limit for this session")).toBeNull();
+  });
+
+  it("has two modes: “Ask me” is greyed and says why", async () => {
+    const open = onClaude({ mode: "plan" });
+    render(
+      <Code
+        api={api({ session: async () => open, sessions: async () => [open], harnesses })}
+        {...props}
+        openId={open.id}
+      />,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /How much the agent asks/ }));
+    const ask = screen.getByRole("menuitemradio", { name: /Ask me/ });
+    expect(ask).toBeDisabled();
+    expect(within(ask).getByText(/Not with Claude Code/)).toBeTruthy();
+    const plan = screen.getByRole("menuitemradio", { name: /Plan/ });
+    expect(within(plan).getByText(/opened for reading only/)).toBeTruthy();
+  });
+
+  it("carries a plan out on its own, since the program does not stop to ask", async () => {
+    const planned = onClaude({ mode: "plan" });
+    const setMode = vi.fn(async (_id: string, mode: CodeSession["mode"]) => onClaude({ mode }));
+    const send = vi.fn(async () => onClaude({ working: true, state: "working" }));
+    render(
+      <Code
+        api={api({
+          sessions: async () => [planned],
+          session: async () => planned,
+          turns: async () => [turn()],
+          setMode,
+          send,
+          harnesses,
+        })}
+        {...props}
+        openId={planned.id}
+      />,
+    );
+    const plan = await screen.findByRole("region", { name: "A plan" });
+    expect(within(plan).getByText(/switches this session to “Work on its own”/)).toBeTruthy();
+    await userEvent.click(within(plan).getByRole("button", { name: "Carry out this plan" }));
+    expect(setMode).toHaveBeenCalledWith("s1", "own");
+    await waitFor(() => expect(send).toHaveBeenCalledWith("s1", CARRY_OUT));
+  });
+
+  it("shows a reached limit in the program's own words, with Try again and another agent", async () => {
+    const open = onClaude();
+    const send = vi.fn(async () => onClaude({ working: true, state: "working" }));
+    const said = "You've reached your usage limit. Your limit resets at 4 pm.";
+    render(
+      <Code
+        api={api({
+          session: async () => open,
+          sessions: async () => [open],
+          turns: async () => [turn({ why: "error", answer: "", notes: [said] })],
+          send,
+          harnesses,
+        })}
+        {...props}
+        openId={open.id}
+      />,
+    );
+    expect(
+      await screen.findByText("Claude Code stopped: your plan's limit is reached"),
+    ).toBeTruthy();
+    expect(screen.getByText(new RegExp(`Claude Code says: “${said}”`))).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New session on another agent" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(send).toHaveBeenCalledWith("s1", turn().request);
+  });
+
+  it("offers the program's own sign-in when its sign-in ended", async () => {
+    const open = onClaude();
+    const signIn = vi.fn(async () => ({ ...CLAUDE, signing_in: true }));
+    render(
+      <Code
+        api={api({
+          session: async () => open,
+          sessions: async () => [open],
+          turns: async () => [
+            turn({ why: "error", answer: "", notes: ["Not logged in · Please run /login"] }),
+          ],
+          signIn,
+          harnesses,
+        })}
+        {...props}
+        openId={open.id}
+      />,
+    );
+    expect(await screen.findByText("Claude Code is not signed in any more")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Sign in to Claude Code" }));
+    expect(signIn).toHaveBeenCalledWith("claude-code");
+  });
+
+  it("says on Projects which agent each session ran on", async () => {
+    const sessions = async () => [
+      onClaude({ id: "s1", title: "Closed on Mondays" }),
+      session({ id: "s2", title: "Explain this project" }),
+    ];
+    render(<Code api={api({ sessions, harnesses })} {...props} />);
+    expect(await screen.findByText("Claude Code · Sonnet")).toBeTruthy();
+    expect(screen.getByText("Claude Sonnet 5.5 · your key")).toBeTruthy();
+  });
+
+  it("says once, before the first session on the program, how it differs, then starts it in Plan", async () => {
+    window.localStorage.clear();
+    const start = vi.fn(async () => onClaude({ mode: "plan" }));
+    const sonnet: ModelChoice = {
+      id: "claude-code:sonnet",
+      title: "Sonnet",
+      plain: "",
+      tier: "also",
+      state: "ready",
+      chosen: true,
+      downloadBytes: 0,
+      engineBytes: 0,
+      engineName: null,
+      fit: null,
+      fitReason: null,
+      source: "server",
+      place: "agent",
+      provider: "claude-code",
+      providerTitle: "Claude Code",
+    };
+    const choices: ChoicesApi = {
+      list: async () => ({ choices: [sonnet], diskFreeBytes: null, memoryBytes: null }),
+      choose: async () => {},
+      get: async () => {},
+    };
+    render(<Code api={api({ start, harnesses })} {...props} choices={choices} />);
+    expect(await screen.findByRole("button", { name: /Claude Code · Sonnet/ })).toBeTruthy();
+    expect(screen.getByText(/sent to Anthropic by Claude Code, on your Claude plan/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: /Choose a folder/ }));
+    const note = await screen.findByRole("dialog", {
+      name: "Claude Code works a little differently",
+    });
+    expect(within(note).getByText(/It does not ask during a turn/)).toBeTruthy();
+    expect(start).not.toHaveBeenCalled();
+    await userEvent.click(within(note).getByRole("button", { name: "Start the session" }));
+    await waitFor(() =>
+      expect(start).toHaveBeenCalledWith({
+        folder: FOLDER,
+        model: "claude-code:sonnet",
+        mode: "plan",
+      }),
+    );
+  });
+
+  it("starts on the model just chosen on the button, before the rows are read again", async () => {
+    window.localStorage.clear();
+    const start = vi.fn(async () => onClaude({ mode: "plan" }));
+    const row = (over: Partial<ModelChoice>): ModelChoice => ({
+      id: "claude-sonnet-5-5",
+      title: "Claude Sonnet 5.5",
+      plain: "",
+      tier: "also",
+      state: "ready",
+      chosen: true,
+      downloadBytes: 0,
+      engineBytes: 0,
+      engineName: null,
+      fit: null,
+      fitReason: null,
+      source: "server",
+      place: "cloud",
+      ...over,
+    });
+    const haiku = row({
+      id: "claude-code:haiku",
+      title: "Haiku",
+      chosen: false,
+      place: "agent",
+      provider: "claude-code",
+      providerTitle: "Claude Code",
+    });
+    // the rows never change here: as if they had not been read again yet
+    const choices: ChoicesApi = {
+      list: async () => ({ choices: [row({}), haiku], diskFreeBytes: null, memoryBytes: null }),
+      choose: async () => {},
+      get: async () => {},
+      agents: {
+        programs: async () => ({
+          setup: { state: "installed", version: "1", bytes: 0 },
+          programs: [
+            {
+              id: "claude-code",
+              title: "Claude Code",
+              payer: "Your Claude plan",
+              account: "Claude",
+              signedIn: true,
+              plan: "Max",
+              signingIn: false,
+              page: "",
+            },
+          ],
+        }),
+        setUp: async () => {},
+        remove: async () => {},
+        signIn: async () => {},
+        cancelSignIn: async () => {},
+      },
+    };
+    render(<Code api={api({ start, harnesses })} {...props} choices={choices} />);
+    await userEvent.click(await screen.findByRole("button", { name: /Claude Sonnet 5.5/ }));
+    await userEvent.click(screen.getByRole("tab", { name: "Your agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Haiku/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Choose a folder/ }));
+    const note = await screen.findByRole("dialog", {
+      name: "Claude Code works a little differently",
+    });
+    await userEvent.click(within(note).getByRole("button", { name: "Start the session" }));
+    await waitFor(() =>
+      expect(start).toHaveBeenCalledWith({
+        folder: FOLDER,
+        model: "claude-code:haiku",
+        mode: "plan",
+      }),
+    );
+  });
+
+  it("starts on a program's model chosen in the panel even when Code's own rows had none yet", async () => {
+    window.localStorage.clear();
+    const start = vi.fn(async () => onClaude({ mode: "plan" }));
+    const base: ModelChoice = {
+      id: "qwen",
+      title: "Qwen 27B",
+      plain: "",
+      tier: "recommended",
+      state: "ready",
+      chosen: true,
+      downloadBytes: 0,
+      engineBytes: 0,
+      engineName: null,
+      fit: null,
+      fitReason: null,
+      source: "server",
+      place: "cloud",
+    };
+    const haiku: ModelChoice = {
+      ...base,
+      id: "claude-code:haiku",
+      title: "Haiku",
+      tier: "also",
+      chosen: false,
+      place: "agent",
+      provider: "claude-code",
+      providerTitle: "Claude Code",
+    };
+    // the program was still starting when Code read the rows: its models came later
+    let started = false;
+    const choices: ChoicesApi = {
+      list: async () => ({
+        choices: started ? [base, haiku] : [base],
+        diskFreeBytes: null,
+        memoryBytes: null,
+      }),
+      choose: async () => {},
+      get: async () => {},
+      agents: {
+        programs: async () => ({
+          setup: { state: "installed", version: "1", bytes: 0 },
+          programs: [
+            {
+              id: "claude-code",
+              title: "Claude Code",
+              payer: "Your Claude plan",
+              account: "Claude",
+              signedIn: true,
+              plan: "Max",
+              signingIn: false,
+              page: "",
+            },
+          ],
+        }),
+        setUp: async () => {},
+        remove: async () => {},
+        signIn: async () => {},
+        cancelSignIn: async () => {},
+      },
+    };
+    render(<Code api={api({ start, harnesses })} {...props} choices={choices} />);
+    const button = await screen.findByRole("button", { name: /Qwen 27B/ });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Choose a folder/ })).toBeTruthy(),
+    );
+    started = true;
+    await userEvent.click(button);
+    await userEvent.click(screen.getByRole("tab", { name: "Your agent" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Haiku/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Choose a folder/ }));
+    const note = await screen.findByRole("dialog", {
+      name: "Claude Code works a little differently",
+    });
+    await userEvent.click(within(note).getByRole("button", { name: "Start the session" }));
+    await waitFor(() =>
+      expect(start).toHaveBeenCalledWith({
+        folder: FOLDER,
+        model: "claude-code:haiku",
+        mode: "plan",
+      }),
+    );
+  });
+
+  it("reads a program's model and a stop the way a person would", () => {
+    expect(programModelTitle("default")).toBe("Its own choice");
+    expect(programModelTitle("sonnet")).toBe("Sonnet");
+    expect(programModelTitle("gpt-5.6-terra")).toBe("GPT-5.6 Terra");
+    expect(agentStop("Error: 429 Too Many Requests")).toBe("limit");
+    expect(agentStop("Authentication failed: please log in again")).toBe("signed_out");
+    expect(agentStop("The coding engine reported an error.")).toBeNull();
   });
 });

@@ -2,7 +2,15 @@
 // The model picker's source for this window (ADR-0086): for each group, the rows and the work, composed from the
 // engine routes the Models page already used. Nothing here is a new engine route.
 import type { ChoicesApi, ChoicesSource, GroupId } from "@wasifyai/ui";
-import { discoveryApi, hubApi, languageApi, modelsApi, ownKeysApi, voiceApi } from "../api";
+import {
+  componentsApi,
+  discoveryApi,
+  hubApi,
+  languageApi,
+  modelsApi,
+  ownKeysApi,
+  voiceApi,
+} from "../api";
 import { code } from "../code";
 import { model3d } from "../model3d";
 import { remembered } from "../remember";
@@ -42,7 +50,7 @@ export function createChoicesSource(engines = createEngines()): ChoicesSource {
           CATALOGUE_GROUPS[group],
         );
       case "code":
-        return codeChoices({ code, memory: remembered });
+        return codeChoices({ code, memory: remembered, parts: componentsApi });
       case "three_d":
         return model3dChoices(model3d, ownKeysApi);
       case "train":

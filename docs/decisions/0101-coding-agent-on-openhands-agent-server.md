@@ -172,3 +172,18 @@ session for now").
    vendor's OpenAI-compatible address, which is tested against a pretended provider only.
 
 Nothing else of the decision changes.
+
+## Amendment (2026-11-15, owner; accepted with ADR-0107): a session's harness
+
+The owner: "This 'Harness' feature is an absolute requirement for us. It's okay to change the sandbox rules."
+This amendment holds from 2026-11-15, the day ADR-0107 was accepted.
+
+1. **A coding session has a harness** (ADR-0107). "Wasify AI" is OpenHands' own agent, as decided here. The
+   others are the person's own agent programs (Claude Code, Codex, Gemini CLI), run by the same Agent Server
+   through its ACP agent (`agent_kind: "acp"`).
+2. **Decision 1 stands and is what makes this possible:** the Agent Server is still the only engine, and
+   `client.py` the only file that knows it. No engine of ours is written and no other harness project is taken.
+3. **Decision 7 and its two amendments on models speak of the Wasify AI harness.** A harness of the person's own
+   has the models its program offers, asked from the program.
+
+Nothing else of the decision changes.

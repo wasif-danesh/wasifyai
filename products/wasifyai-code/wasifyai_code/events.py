@@ -19,6 +19,15 @@ file changes, and the contract test and pyright say so before a screen does.
     StreamingDeltaEvent            -> piece (words as they are written; never kept)
     ConversationErrorEvent         -> remembered as why the turn ended
 
+A session on a harness (ADR-0107) is an `acp` conversation; its program's steps come as
+
+    ACPToolCallEvent               -> step when it begins (or first shows), result when it is
+                                      completed or failed; the kind of tool is said in our
+                                      tools' names (a command is `terminal`, an edit or a look
+                                      at a file is `file_editor`)
+    ConversationStateUpdateEvent   -> "stats": what the program reports it used so far, kept
+                                      for `take_usage`
+
 A turn's end is not an event of the Agent Server. `Reader.end` works it out from the state the
 conversation came to rest in, the last error, and what the model gateway saw (a refusal by the
 model, a call refused at the cost limit), and gives one of the five endings of `place.py`.
@@ -96,6 +105,11 @@ class Reader:
     _tools: dict[str, str] = field(default_factory=dict)  # a tool call's id -> its tool
     # the steps said and not yet answered by a result: what waits when the conversation waits
     _open: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # a harness's steps that were said: their tool call's id -> what was said
+    _acp: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # what a harness's program reported it used in the whole conversation, and what was given
+    _used: dict[str, Any] = field(default_factory=dict)
+    _given: dict[str, float] = field(default_factory=dict)
 
     def read(self, event: Mapping[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         """One event of the Agent Server as zero or more of ours: (kind, data)."""
@@ -118,6 +132,8 @@ class Reader:
             return [(kind, {**data, "refused": True})]
         if kind == "StreamingDeltaEvent":
             return self._piece(cast(StreamingDeltaEvent, event))
+        if kind == "ACPToolCallEvent":
+            return self._acp_call(event)
         if kind == "ConversationErrorEvent":
             c = cast(ConversationErrorEvent, event)
             self.last_error = (str(c.get("code") or ""), str(c.get("detail") or ""))
@@ -131,6 +147,9 @@ class Reader:
 
     def _state(self, event: ConversationStateUpdateEvent) -> list[tuple[str, dict[str, Any]]]:
         key, value = event.get("key"), event.get("value")
+        if key == "stats" and isinstance(value, Mapping):
+            self._stats(value)
+            return []
         if key == "full_state" and isinstance(value, Mapping):
             # the whole state, sent when a listener connects: only where the conversation is
             status = value.get("execution_status")
@@ -206,6 +225,66 @@ class Reader:
             {"id": call, "tool": name, "ok": ok, "text": _cut(str(text or ""), MAX_TEXT)},
         )
 
+    # ---- a harness's program (ADR-0107) --------------------------------------------------------
+
+    def _acp_call(self, event: Mapping[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+        call = str(event.get("tool_call_id") or event.get("id") or "")
+        status = str(event.get("status") or "")
+        out: list[tuple[str, dict[str, Any]]] = []
+        if call not in self._acp:
+            data = acp_step(event)
+            data["id"] = call
+            self._acp[call] = data
+            self._tools[call] = data["tool"]
+            self._open[call] = data
+            self.steps += 1
+            out.append((places.STEP, data))
+        if status in ("completed", "failed"):
+            failed = status == "failed" or bool(event.get("is_error"))
+            out.append(self._result(call, self._acp[call]["tool"], not failed, acp_text(event)))
+        return out
+
+    def _stats(self, value: Mapping[str, Any]) -> None:
+        """The program's own report, summed over what it names (one entry, usually)."""
+        metrics = value.get("usage_to_metrics")
+        if not isinstance(metrics, Mapping):
+            return
+        usd = tokens_in = tokens_out = 0.0
+        model = ""
+        for entry in metrics.values():
+            if not isinstance(entry, Mapping):
+                continue
+            usd += float(entry.get("accumulated_cost") or 0)
+            used = entry.get("accumulated_token_usage") or {}
+            if isinstance(used, Mapping):
+                tokens_in += sum(
+                    float(used.get(k) or 0)
+                    for k in ("prompt_tokens", "cache_read_tokens", "cache_write_tokens")
+                )
+                tokens_out += float(used.get("completion_tokens") or 0)
+            named = str(entry.get("model_name") or "")
+            if named and named != "acp-managed":
+                model = named
+        self._used = {"usd": usd, "tokens_in": tokens_in, "tokens_out": tokens_out, "model": model}
+
+    def take_usage(self) -> dict[str, Any] | None:
+        """What the program used since this was last asked, or None when nothing new."""
+        if not self._used:
+            return None
+        delta = {
+            k: max(0.0, float(self._used[k]) - self._given.get(k, 0.0))
+            for k in ("usd", "tokens_in", "tokens_out")
+        }
+        if not any(delta.values()):
+            return None
+        self._given = {k: float(self._used[k]) for k in ("usd", "tokens_in", "tokens_out")}
+        return {
+            "usd": round(delta["usd"], 6),
+            "tokens_in": int(delta["tokens_in"]),
+            "tokens_out": int(delta["tokens_out"]),
+            "model": self._used.get("model", ""),
+        }
+
     def _piece(self, event: StreamingDeltaEvent) -> list[tuple[str, dict[str, Any]]]:
         out: list[tuple[str, dict[str, Any]]] = []
         if event.get("reasoning_content"):
@@ -238,3 +317,62 @@ class Reader:
         else:
             why, said = places.ERROR, detail or "The coding engine reported an error."
         return {"why": why, "detail": _cut(said, MAX_TEXT), "steps": self.steps}
+
+
+# ---- a harness's tool calls, in our tools' words -----------------------------------------------
+
+# the ACP protocol's kinds of tool call -> the name our screens know
+ACP_TOOLS = {
+    "execute": "terminal",
+    "edit": "file_editor",
+    "delete": "file_editor",
+    "move": "file_editor",
+    "read": "file_editor",
+    "search": "grep",
+    "fetch": "fetch",
+    "think": "think",
+}
+
+
+def acp_step(event: Mapping[str, Any]) -> dict[str, Any]:
+    """What one of a harness's tool calls is, in the shape of our steps."""
+    kind = str(event.get("tool_kind") or "other")
+    title = str(event.get("title") or "").strip()
+    raw = event.get("raw_input")
+    raw = raw if isinstance(raw, Mapping) else {}
+    data: dict[str, Any] = {"tool": ACP_TOOLS.get(kind, kind or "other")}
+    if kind == "execute":
+        data["command"] = _cut(str(raw.get("command") or title), MAX_ARG)
+    elif kind in ("edit", "delete", "move", "read"):
+        path = raw.get("file_path") or raw.get("path") or _first_path(event.get("content"))
+        if path:
+            data["path"] = _cut(str(path), MAX_ARG)
+        data["command"] = "view" if kind == "read" else kind
+    if title:
+        data["summary"] = _cut(title, MAX_ARG)
+    return data
+
+
+def _first_path(content: Any) -> str:
+    if isinstance(content, list):
+        for part in content:
+            if isinstance(part, Mapping) and part.get("path"):
+                return str(part["path"])
+    return ""
+
+
+def acp_text(event: Mapping[str, Any]) -> str:
+    """The words a harness's tool call gave back, where it gives any (a command's output stays
+    in the program's own terminal and is not sent)."""
+    parts = []
+    for part in event.get("content") or []:
+        if not isinstance(part, Mapping):
+            continue
+        inner = part.get("content")
+        if isinstance(inner, Mapping) and inner.get("text"):
+            parts.append(str(inner["text"]))
+        elif part.get("text"):
+            parts.append(str(part["text"]))
+    if not parts and event.get("status") == "failed":
+        return "It did not work."
+    return _cut("\n".join(parts), MAX_TEXT)

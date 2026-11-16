@@ -46,6 +46,7 @@ from wasifyai_platform_sdk.sqlite import (
 )
 
 from wasifyai_api.audio_runtime import AudioEngine, AudioInstaller, AudioServer
+from wasifyai_api.coding_harness import harness_hosts
 from wasifyai_api.coding_proxy import InstallProxy
 from wasifyai_api.coding_server import CodingServer
 from wasifyai_api.comfy_music import ComfyMusic
@@ -313,7 +314,11 @@ def open_desktop(settings: Settings) -> DesktopBackends:
         discovery=discovery,
         styles=StylesService(settings.models_dir / "loras", SqliteSettingsStore(engine)),
         llama=llama,
-        coding=CodingServer(settings.desktop_dir, coding_files(products), proxy=InstallProxy()),
+        coding=CodingServer(
+            settings.desktop_dir,
+            coding_files(products),
+            proxy=InstallProxy(harness_hosts=harness_hosts()),
+        ),
         audio=audio,
         video_builder=VideoBuilderService(settings.desktop_dir),
         model3d=Model3dService(settings.desktop_dir),

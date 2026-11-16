@@ -31,6 +31,12 @@ A session that changes files waits before each change, and somebody must say yes
 (`wasifyai_code/rules.py`). Here nobody is there: a change to a file is let through, as in "Work
 on its own", and any other question is refused.
 
+**On the person's own agent program** (ADR-0107, stage H3): `--model claude-code:<model>` or
+`codex:<model>` (`<harness>:default` lets the program choose) runs each task on that program, signed
+in with the person's own plan, on the harness's own sandboxed server. The parts "Agent programs"
+must be set up in `--data`. What a task cost is what the program reported; it counts against the
+person's plan, not a key, and needs no `--app-keys`.
+
 The hidden check is run the way the product runs any check (`wasifyai_code.checks`): in its own
 process group, with a time limit, and behind an optional wrapper, which is where the sandbox goes.
 """
@@ -55,6 +61,7 @@ from wasifyai_code import rules
 from wasifyai_code.checkpoints import CheckpointError, CheckpointStore
 from wasifyai_code.checks import Check
 from wasifyai_code.place import Account, Place, SessionSpec
+from wasifyai_code.runtime import PLAN_LIMIT
 
 TASKS = Path(__file__).with_name("tasks.json")
 ENGINE_FILES = Path(__file__).resolve().parents[3] / "services" / "coding-engine"
@@ -279,6 +286,12 @@ async def run_task(
     }
 
 
+def plan_ran_out(result: dict[str, Any]) -> bool:
+    """A task that never ran because the program's plan reached its limit: not the agent's
+    failure, so it is not counted, and the tasks after it are not run either."""
+    return result.get("status") == "error" and bool(PLAN_LIMIT.search(result.get("detail", "")))
+
+
 async def run_all(
     place: Place,
     tasks: Sequence[dict[str, Any]],
@@ -291,9 +304,11 @@ async def run_all(
 ) -> dict[str, Any]:
     """Every task, one new session each, one after another. With `limit_usd` and `spent` (what
     a session has cost so far, by its id) the run stops before the task that would begin at or
-    over the limit, and no single task may cost more than what is left."""
+    over the limit, and no single task may cost more than what is left. A task stopped by the
+    plan's limit ends the run (`stopped`), and it and the rest are `not_run`."""
     results = []
     total = 0.0
+    stopped = ""
     for task in tasks:
         if limit_usd and spent is not None:
             left = limit_usd - total
@@ -305,6 +320,9 @@ async def run_all(
         if spent is not None and "account" not in more:
             more["account"] = Account("-", "wasifyai-code", "-", f"eval-{task['id']}")
         result = await run_task(place, task, folder, spent=spent, **more)
+        if plan_ran_out(result):
+            stopped = result["detail"]
+            break
         if spent is not None:
             result.setdefault("cost_usd", 0.0)
             total += result["cost_usd"]
@@ -314,14 +332,31 @@ async def run_all(
             on_result(result)
     out = summary(results)
     out["not_run"] = [t["id"] for t in tasks[len(results) :]]
+    if stopped:
+        out["stopped"] = stopped
     if spent is not None:
         out["cost_usd"] = round(total, 4)
     return out
 
 
+def harness_of(model: str) -> str:
+    """The person's own agent program a model names (`claude-code:haiku`); "" for a model of
+    Wasify AI's own agent."""
+    from wasifyai_api.coding_harness import HARNESSES
+    from wasifyai_code.place import harness_model
+
+    found = harness_model(model, tuple(HARNESSES))
+    return found[0] if found else ""
+
+
 @contextlib.asynccontextmanager
 async def real_place(
-    data: Path, folder: Path | None = None, *, ollama_url: str = "", app_keys: bool = False
+    data: Path,
+    folder: Path | None = None,
+    *,
+    ollama_url: str = "",
+    app_keys: bool = False,
+    reported: dict[str, float] | None = None,
 ) -> AsyncIterator[tuple[Any, Any]]:
     """This computer as the place, and the gateway that counts its model calls: the coding
     engine set up in `data`, in its sandbox. With `folder` the engine is started once and may
@@ -331,7 +366,9 @@ async def real_place(
 
     The engine's own parts are used as they are (imported here, not by the product): the
     supervisor that starts the sandboxed server, and the gateway, served on a port of its own.
-    Without `app_keys` the secret store is empty, so only a model on this computer can run."""
+    Without `app_keys` the secret store is empty, so only a model on this computer can run.
+    `reported` collects what each session's agent program reported it cost, by the session's
+    account (a session on the person's own program)."""
     from wasifyai_api.coding_gateway import CodingGateway, known_in_catalogue, serve_alone
     from wasifyai_api.coding_server import CodingServer
     from wasifyai_code.client import ThisComputer
@@ -348,8 +385,18 @@ async def real_place(
         settings = Settings(deployment_profile="desktop", desktop_secret_store="keychain")
         box = SecretBox(await asyncio.to_thread(load_or_create_key, data / "secrets.key"))
         secrets = make_secret_store(data, settings, box)
-    server = CodingServer(data, ENGINE_FILES)
+    from wasifyai_api.coding_harness import harness_hosts
+    from wasifyai_api.coding_proxy import InstallProxy
+
+    # the proxy also lets each harness reach its own provider, and nothing else (ADR-0107)
+    server = CodingServer(data, ENGINE_FILES, proxy=InstallProxy(harness_hosts=harness_hosts()))
     address = [""]
+
+    def on_call(call: Any) -> None:
+        if reported is not None and getattr(call, "harness", ""):
+            who = str(call.session_id)
+            reported[who] = reported.get(who, 0.0) + float(call.usd or 0.0)
+
     gateway = CodingGateway(
         secrets=secrets,
         usage=InMemoryUsageRecorder(),
@@ -360,7 +407,7 @@ async def real_place(
     try:
         async with serve_alone(gateway) as url:
             address[0] = url
-            place = ThisComputer(server, gateway)
+            place = ThisComputer(server, gateway, on_call=on_call)
             if folder is not None:
                 await place.open_folder(folder, write=True)  # one start for every task's folder
             yield place, gateway
@@ -467,14 +514,19 @@ async def _run_for_real(
 
     # under the app's data: where the sandbox lets the coding engine neither read nor write
     stores = args.data.resolve() / "code" / "eval-checkpoints" / folder.name
+    harness = harness_of(args.model)
+    reported: dict[str, float] = {}
     try:
         async with real_place(
             args.data,
             ollama_url=os.environ.get("CODING_OLLAMA_URL", ""),
             app_keys=args.app_keys,
+            reported=reported,
         ) as (place, gateway):
 
             def spent(session: str) -> float:
+                if harness:  # what the person's own program reported, on their plan
+                    return reported.get(session, 0.0)
                 try:
                     return float(gateway.spent(session)["usd"])
                 except Exception:  # noqa: BLE001  (a session that made no call is not known)
@@ -484,7 +536,9 @@ async def _run_for_real(
                 place, tasks, folder, model=args.model, on_result=show, checkpoints=stores,
                 spent=spent, limit_usd=args.limit_usd,
             )  # fmt: skip
-            result["model"] = gateway.model(args.model or None).id
+            result["model"] = args.model if harness else gateway.model(args.model or None).id
+            if harness:
+                result["counted_in"] = "plan"
     finally:
         shutil.rmtree(stores, ignore_errors=True)
     result["seconds"] = round(time.monotonic() - started, 1)
@@ -493,8 +547,15 @@ async def _run_for_real(
     u = result["undo"]
     print(f"== {result['passed']} of {result['of']} passed in {result['seconds']} s")
     if result.get("not_run"):
-        print(f"== not run, the cost limit was reached: {', '.join(result['not_run'])}")
-    print(f"== counted cost: ${result.get('cost_usd', 0):.2f}")
+        why = "the plan's limit" if result.get("stopped") else "the cost limit"
+        why += " was reached"
+        print(f"== not run, {why}: {', '.join(result['not_run'])}")
+    if result.get("stopped"):
+        print(f"== the program said: {result['stopped']}")
+    if harness:
+        print(f"== cost as the program reported it (on the plan): ${result.get('cost_usd', 0):.3f}")
+    else:
+        print(f"== counted cost: ${result.get('cost_usd', 0):.2f}")
     print(
         f"== undo: {u['undone_exactly']} of {u['measured']} undone exactly, "
         f"{u['brought_back_exactly']} brought back exactly; {u['changed_files']} changed files"

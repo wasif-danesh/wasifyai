@@ -176,6 +176,9 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "taken": 409,
             "needs_approval": 409,
             "no_copy": 409,
+            "not_signed_in": 409,
+            "harness_not_installed": 409,
+            "no_harness": 404,
         }.get(  # fmt: skip
             e.code, 422
         )
@@ -185,6 +188,40 @@ def build_routes(deps: RouteDeps) -> APIRouter:
     async def list_models(_: Identity = Depends(deps.identity)) -> dict[str, Any]:
         """The models a session can run on, and whether each is ready (never a key)."""
         return {"items": await sessions().models()}
+
+    @router.get("/harnesses")
+    async def list_harnesses(_: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """The person's own agent programs (ADR-0107): set up or not, signed in or not, how and
+        on which plan. Never an email or a token."""
+        try:
+            return {"items": await sessions().harnesses()}
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/harnesses/{harness}/sign-in")
+    async def sign_in_harness(harness: str, _: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """Start the program's own sign-in: its page opens in the person's browser."""
+        try:
+            return await sessions().sign_in(harness)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.post("/harnesses/{harness}/sign-in/cancel")
+    async def cancel_sign_in_harness(
+        harness: str, _: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        try:
+            return await sessions().cancel_sign_in(harness)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.get("/harnesses/{harness}/models")
+    async def harness_models(harness: str, _: Identity = Depends(deps.identity)) -> dict[str, Any]:
+        """The models the program offers on the person's plan, named for a session's `model`."""
+        try:
+            return await sessions().harness_models(harness)
+        except Refused as e:
+            raise refuse(e) from None
 
     @router.post("/sessions", status_code=201)
     async def start_session(

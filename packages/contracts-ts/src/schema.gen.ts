@@ -1167,6 +1167,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/harnesses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Harnesses
+         * @description The person's own agent programs (ADR-0107): set up or not, signed in or not, how and
+         *     on which plan. Never an email or a token.
+         */
+        get: operations["list_harnesses_products_wasifyai_code_code_harnesses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/harnesses/{harness}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Harness Models
+         * @description The models the program offers on the person's plan, named for a session's `model`.
+         */
+        get: operations["harness_models_products_wasifyai_code_code_harnesses__harness__models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/harnesses/{harness}/sign-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign In Harness
+         * @description Start the program's own sign-in: its page opens in the person's browser.
+         */
+        post: operations["sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-code/code/harnesses/{harness}/sign-in/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Sign In Harness */
+        post: operations["cancel_sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/models": {
         parameters: {
             query?: never;
@@ -2720,6 +2798,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-meetings/meetings/{item}/notebook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add To Notebook
+         * @description Add the meeting to a notebook as a source (a new one when no notebook is given).
+         */
+        post: operations["add_to_notebook_products_wasifyai_meetings_meetings__item__notebook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-meetings/meetings/{item}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description Ask about the meeting, answered in the background by a notebook it is in; follow it
+         *     with GET /questions/{id} (or the meeting).
+         */
+        post: operations["ask_products_wasifyai_meetings_meetings__item__questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-meetings/meetings/{item}/reports": {
         parameters: {
             query?: never;
@@ -2799,6 +2918,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-meetings/notebooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notebooks
+         * @description The person's notebooks, to add a meeting to.
+         */
+        get: operations["list_notebooks_products_wasifyai_meetings_notebooks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-meetings/people": {
         parameters: {
             query?: never;
@@ -2838,6 +2977,41 @@ export interface paths {
          * @description A new name for a person, in every meeting they were named in.
          */
         patch: operations["rename_person_products_wasifyai_meetings_people__pid__patch"];
+        trace?: never;
+    };
+    "/products/wasifyai-meetings/questions/{qid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Question */
+        get: operations["get_question_products_wasifyai_meetings_questions__qid__get"];
+        put?: never;
+        post?: never;
+        /** Delete Question */
+        delete: operations["delete_question_products_wasifyai_meetings_questions__qid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/wasifyai-meetings/questions/{qid}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Question */
+        post: operations["stop_question_products_wasifyai_meetings_questions__qid__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/products/wasifyai-meetings/recordings/{name}": {
@@ -7449,6 +7623,11 @@ export interface components {
             /** Needs Key */
             needs_key: boolean;
         };
+        /** Question */
+        Question: {
+            /** Question */
+            question: string;
+        };
         /**
          * ReadAloudRequest
          * @description A chat reply, as the model wrote it, and which passage of it to speak (0 is the first).
@@ -7838,6 +8017,13 @@ export interface components {
         Title: {
             /** Title */
             title: string;
+        };
+        /** ToNotebook */
+        ToNotebook: {
+            /** Notebook Id */
+            notebook_id?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /** TokenEvent */
         TokenEvent: {
@@ -10317,6 +10503,127 @@ export interface operations {
                 "application/json": components["schemas"]["CodeSwitchIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_harnesses_products_wasifyai_code_code_harnesses_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    harness_models_products_wasifyai_code_code_harnesses__harness__models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_sign_in_harness_products_wasifyai_code_code_harnesses__harness__sign_in_cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -13547,6 +13854,80 @@ export interface operations {
             };
         };
     };
+    add_to_notebook_products_wasifyai_meetings_meetings__item__notebook_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToNotebook"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_products_wasifyai_meetings_meetings__item__questions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Question"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     write_report_products_wasifyai_meetings_meetings__item__reports_post: {
         parameters: {
             query?: never;
@@ -13693,6 +14074,28 @@ export interface operations {
             };
         };
     };
+    list_notebooks_products_wasifyai_meetings_notebooks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     list_people_products_wasifyai_meetings_people_get: {
         parameters: {
             query?: never;
@@ -13758,6 +14161,101 @@ export interface operations {
                 "application/json": components["schemas"]["PersonName"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_question_products_wasifyai_meetings_questions__qid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                qid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_question_products_wasifyai_meetings_questions__qid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                qid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_question_products_wasifyai_meetings_questions__qid__stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                qid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

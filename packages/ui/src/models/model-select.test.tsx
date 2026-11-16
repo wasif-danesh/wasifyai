@@ -94,7 +94,7 @@ describe("the model picker button and panel", () => {
     await user.click(await screen.findByRole("button", { name: /Select transcription model/ }));
     await user.click(await screen.findByRole("button", { name: /Parakeet TDT 0.6B v3/ }));
     expect(api.choose).toHaveBeenCalledWith("m1");
-    expect(changed).toHaveBeenCalledWith("m1");
+    expect(changed).toHaveBeenCalledWith("m1", expect.objectContaining({ id: "m1" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: /Select/ })).toBeNull());
     expect(screen.getByRole("button", { name: /Parakeet TDT 0.6B v3/ })).toBeInTheDocument();
   });
@@ -304,7 +304,10 @@ describe("choosing a model that is not on the computer", () => {
     expect(within(ws).getByText(/Key not working/)).toBeTruthy();
     await user.click(within(fal).getByRole("button", { name: /InfiniteTalk/ }));
     expect(api.choose).toHaveBeenCalledWith("cloud:fal:b");
-    expect(changed).toHaveBeenCalledWith("key:lipsync");
+    expect(changed).toHaveBeenCalledWith(
+      "key:lipsync",
+      expect.objectContaining({ id: "cloud:fal:b" }),
+    );
   });
 
   it("names the provider on the button and opens on Cloud while a cloud model is in use", async () => {

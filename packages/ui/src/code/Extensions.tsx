@@ -188,6 +188,10 @@ export function Extensions({
             Skills and plugins that teach the agent a way of working. Each is switched on or off for
             one project.
           </p>
+          <p className="m-0 max-w-[60ch] text-sm text-muted-foreground">
+            For Wasify AI's own agent only. Sessions on Claude Code or Codex use the extensions set
+            up in those programs, not these.
+          </p>
         </div>
         <Button variant="outline" onClick={() => void choose()}>
           <FolderOpen /> Add from a folder

@@ -94,7 +94,9 @@ export function moreOf(run: CodeScheduleRun): string {
     if (run.applied_at) parts.push(`${files}, applied by you`);
     else if (run.discarded_at && run.changed) parts.push(`${files}, let go`);
     else if (run.open && run.changed) parts.push(`${files}, waiting for you`);
-    else if (!run.changed) parts.push("Nothing needed changing");
+    // a run its agent program stopped (a plan's limit, an ended sign-in) did not look at anything
+    else if (!run.changed && !run.note?.startsWith("Stopped:"))
+      parts.push("Nothing needed changing");
   }
   if (run.note) parts.push(run.note === "run now" ? "Started with Run now" : run.note);
   if (run.stands_for > 1) parts.push(`stands for ${run.stands_for} missed times`);

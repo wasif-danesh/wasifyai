@@ -39,6 +39,7 @@ import contextlib
 import difflib
 import logging
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import AsyncIterator
@@ -138,10 +139,38 @@ class NotAvailable(Exception):
 # the model (a part of its id), with what was measured. Results: docs/spikes/coding-harness-h3.md.
 HARNESS_TESTED: dict[tuple[str, str], str] = {
     ("claude-code", "haiku"): "36 of 36 tasks passed (2026-11-15)",
+    ("claude-code", "sonnet"): "36 of 36 tasks passed (2026-11-16)",
+    ("claude-code", "opus"): "36 of 36 tasks passed (2026-11-16)",
     ("codex", "gpt-5.6-terra"): (
         "19 of 19 tasks passed before the plan's limit stopped the run (2026-11-15)"
     ),
 }
+
+
+# what an agent program says when the person's plan has run out, or its sign-in has ended
+# (ADR-0107); the window's cards read the same words (`PLAN_LIMIT`, `SIGNED_OUT` in
+# packages/ui/src/code/Code.tsx)
+PLAN_LIMIT = re.compile(
+    r"usage limit|rate limit|limit (is |was )?reached|reached your|quota|\b429\b"
+    r"|too many requests|out of credits",
+    re.IGNORECASE,
+)
+SIGNED_OUT = re.compile(
+    r"not (logged|signed) in|log ?in again|sign ?in again|authenticat|unauthori[sz]ed|\b401\b"
+    r"|token (has )?expired|session expired|invalid (api key|credentials|token)",
+    re.IGNORECASE,
+)
+
+
+def program_said(title: str, said: str) -> str:
+    """A stop of the person's own agent program in plain words, with what it said (without the
+    protocol's error code)."""
+    clean = re.sub(r"^\s*\[-?\d+\]\s*(internal error:\s*)?", "", said, flags=re.IGNORECASE).strip()
+    if PLAN_LIMIT.search(said):
+        return f"Stopped: your plan's limit was reached. {title} said: \u201c{clean}\u201d"
+    if SIGNED_OUT.search(said):
+        return f"Stopped: {title} is not signed in any more. Sign in to {title}, then run it again."
+    return f"{title} said: \u201c{clean}\u201d"
 
 
 class Refused(Exception):
@@ -499,8 +528,8 @@ class Sessions:
             ],
         }
 
-    async def _harness_ready(self, harness: str) -> None:
-        """A session may start on a harness that is set up and signed in."""
+    async def _harness_ready(self, harness: str) -> str:
+        """A session may start on a harness that is set up and signed in. Gives its name."""
         state = await self._accounts().status(harness)
         title = state.get("title") or harness
         if not state.get("installed"):
@@ -511,6 +540,7 @@ class Sessions:
             )
         if not state.get("signed_in"):
             raise Refused("not_signed_in", f"Sign in to {title} first.")
+        return str(title)
 
     async def start(
         self,

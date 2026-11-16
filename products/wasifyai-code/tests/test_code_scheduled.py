@@ -347,3 +347,40 @@ async def test_a_schedule_on_a_program_that_is_signed_out_fails_in_words(world):
     assert run["state"] == "failed", run
     assert "Sign in to Claude Code first" in run["note"]
     assert not run["open"]
+
+
+async def test_a_run_stopped_by_the_programs_plan_says_so_in_plain_words(world):
+    said = "[-32603] Internal error: You’ve hit your usage limit. Try again at Dec 15th."
+
+    async def out_of_plan(turn: FakeTurn) -> None:
+        raise RuntimeError(said)
+
+    made, clock, more = rig(world, out_of_plan)
+    world.state.coding_server.harness_ids = ("claude-code", "codex")
+    world.state.coding_harnesses = Accounts()
+    live = more["live"]
+    await live.start(ME, folder=str(world.project), model="claude-code:haiku", mode=rows.PLAN)
+    (project,) = live.workspaces(ME)
+    schedule = made.add(
+        ME, workspace_id=project["id"], request="Tidy.", rule=DAILY, time_zone="UTC"
+    )
+    made.start()
+    try:
+        await clock.advance(61 * 60)  # 09:01
+        run = await until_done(made, schedule["id"], clock)
+    finally:
+        await made.close()
+    assert run["note"] == (
+        "Stopped: your plan's limit was reached. Claude Code said: "
+        "“You’ve hit your usage limit. Try again at Dec 15th.”"
+    ), run
+    assert run["changed"] == 0 and "[-32603]" not in run["note"]
+
+
+def test_a_programs_stop_is_said_in_plain_words():
+    from wasifyai_code.runtime import program_said
+
+    assert program_said("Codex", "Error: 401 Unauthorized") == (
+        "Stopped: Codex is not signed in any more. Sign in to Codex, then run it again."
+    )
+    assert program_said("Codex", "[-32000] the tool crashed") == "Codex said: “the tool crashed”"

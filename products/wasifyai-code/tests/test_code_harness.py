@@ -134,7 +134,12 @@ async def test_the_programs_list_their_sign_in_and_their_models(world):
     assert raised.value.code == "not_found"
     models = await s.harness_models("claude-code")
     assert models["models"] == [
-        {"id": "claude-code:opus", "name": "Opus", "program_model": "opus", "tested": ""}
+        {
+            "id": "claude-code:opus",
+            "name": "Opus",
+            "program_model": "opus",
+            "tested": Sessions.harness_tested("claude-code", "opus"),
+        }
     ]
 
 

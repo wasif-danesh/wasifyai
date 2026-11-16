@@ -46,7 +46,6 @@ import asyncio
 import contextlib
 import json
 import os
-import re
 import shlex
 import shutil
 import stat
@@ -62,6 +61,7 @@ from wasifyai_code import rules
 from wasifyai_code.checkpoints import CheckpointError, CheckpointStore
 from wasifyai_code.checks import Check
 from wasifyai_code.place import Account, Place, SessionSpec
+from wasifyai_code.runtime import PLAN_LIMIT
 
 TASKS = Path(__file__).with_name("tasks.json")
 ENGINE_FILES = Path(__file__).resolve().parents[3] / "services" / "coding-engine"
@@ -284,15 +284,6 @@ async def run_task(
         "undo": undo,
         **({} if cost is None else {"cost_usd": round(cost, 4)}),
     }
-
-
-# what an agent program says when the person's plan has run out (ADR-0107); the window's card
-# for a reached limit reads the same words (`PLAN_LIMIT` in packages/ui/src/code/Code.tsx)
-PLAN_LIMIT = re.compile(
-    r"usage limit|rate limit|limit (is |was )?reached|reached your|quota|\b429\b"
-    r"|too many requests|out of credits",
-    re.IGNORECASE,
-)
 
 
 def plan_ran_out(result: dict[str, Any]) -> bool:

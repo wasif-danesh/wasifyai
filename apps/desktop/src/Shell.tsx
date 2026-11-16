@@ -33,12 +33,14 @@ import { Sidebar } from "./Sidebar";
 import { client, connectionsApi, creationsApi, externalApi, voiceApi } from "./api";
 import { useItemsTheModelCannotDo } from "./engine-hooks";
 import { runningJobs } from "./jobs";
+import { onStoppedFromMenu } from "./meetings";
 import { resolveItem, titleFor } from "./menu";
 import { CodePage, ExtensionsPage, ScheduledPage } from "./pages/Code";
 import { CreatePage } from "./pages/Create";
 import { CreationsPage, navFor, toolFor } from "./pages/Creations";
 import { CreativePage } from "./pages/Creative";
 import { HomePage } from "./pages/Home";
+import { MeetingsPage, PeoplePage, RecordPage } from "./pages/Meetings";
 import { Model3dPage } from "./pages/Model3d";
 import { ModelsPage } from "./pages/Models";
 import { NotebookPage } from "./pages/Notebook";
@@ -182,6 +184,8 @@ export function Shell() {
     },
     [go],
   );
+  // Stop in the menu bar while a meeting records: Record opens and makes the meeting (ADR-0108, MT2)
+  useEffect(() => onStoppedFromMenu(() => go("record")), [go]);
   // a notebook has three panes: on a window too narrow for them and the menu, the menu steps aside
   // (until the person opens it; this is not remembered)
   const stepped = useRef(false);
@@ -375,6 +379,9 @@ export function Shell() {
               {route === "code" ? <CodePage go={go} /> : null}
               {route === "extensions" ? <ExtensionsPage go={go} /> : null}
               {route === "scheduled" ? <ScheduledPage go={go} /> : null}
+              {route === "meetings" ? <MeetingsPage go={go} /> : null}
+              {route === "record" ? <RecordPage go={go} /> : null}
+              {route === "people" ? <PeoplePage go={go} /> : null}
               {route === "train" ? (
                 <TrainPage
                   go={go}

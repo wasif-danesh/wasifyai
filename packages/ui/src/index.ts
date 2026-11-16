@@ -222,6 +222,15 @@ export type {
   MakePanelMakers,
 } from "./creative/MakePanel";
 export { Model3d, type Model3dProps } from "./model3d/Model3d";
+export { Meetings, type MeetingsProps } from "./meetings/Meetings";
+export { People, type PeopleProps } from "./meetings/People";
+export {
+  type MeetingRecorder,
+  RecordMeeting,
+  type RecordMeetingProps,
+  type RecordState,
+  type RecordedMeeting,
+} from "./meetings/RecordMeeting";
 export { Code, type CodeProps } from "./code/Code";
 export { Extensions } from "./code/Extensions";
 export { Scheduled } from "./code/Scheduled";

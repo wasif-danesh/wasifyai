@@ -102,6 +102,11 @@ class EngineServices:
     creative_jobs: Any = None
     code_sessions: Any = None  # wasifyai_code.runtime.Sessions: the coding sessions in flight
     model3d_notices: Any = None
+    meetings_store: Any = None  # wasifyai_meetings' rows (ADR-0108)
+    meetings_jobs: Any = None
+    meetings_reports: Any = None  # the one report being written (MT4)
+    meetings_asking: Any = None  # questions about meetings, through notebooks (MT5)
+    meetings_web: Any = None  # the web's meetings: Postgres and object storage (MT6)
     training_runs: Any = None
     training_captions: Any = None
     video_runs: Any = None

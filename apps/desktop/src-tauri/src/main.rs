@@ -17,6 +17,7 @@ mod loopback_http;
 mod manifest;
 mod memory;
 mod provision;
+mod recorder;
 mod session;
 mod stay_open;
 mod updater;
@@ -191,6 +192,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(engine.clone())
         .manage(stay_open::StayOpen::default())
+        .manage(recorder::Recorder::default())
         .invoke_handler(tauri::generate_handler![
             engine_status,
             engine_session,
@@ -208,7 +210,10 @@ fn main() {
             browser::browser_go,
             browser::browser_text,
             stay_open::stay_open_get,
-            stay_open::stay_open_set
+            stay_open::stay_open_set,
+            recorder::meeting_record_state,
+            recorder::meeting_record_start,
+            recorder::meeting_record_stop
         ])
         .setup(move |app| {
             // WASIFYAI_DATA_DIR: a different app data folder, for tests and for trying the installer
@@ -218,6 +223,7 @@ fn main() {
                 None => app.path().app_data_dir()?,
             };
             std::fs::create_dir_all(&data_dir)?;
+            app.state::<recorder::Recorder>().set_dir(&data_dir);
             let input = engine::Input {
                 data_dir,
                 resource_dir: app.path().resource_dir().ok(),
@@ -232,6 +238,7 @@ fn main() {
             quit_on_signals(app.handle().clone());
             browser::self_test(app.handle().clone());
             stay_open::self_test(app.handle().clone());
+            recorder::self_test(app.handle().clone());
             Ok(())
         });
     // Only a build with a signing key and a feed registers the updater (see updater.rs).
@@ -244,6 +251,8 @@ fn main() {
 
     app.run(|handle, event| match event {
         RunEvent::Exit => {
+            // a meeting being recorded is finished, so it is there to be made into a meeting
+            recorder::finish_on_exit(handle);
             // Quitting must not leave the engine behind.
             let engine = handle.state::<Engine>();
             tauri::async_runtime::block_on(engine.stop());

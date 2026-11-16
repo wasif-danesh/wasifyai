@@ -76,6 +76,7 @@ export function MyCreations({
     !recent.others?.codeSessions.length &&
     !recent.others?.codeExtensions.length &&
     !recent.others?.codeSchedules.length &&
+    !recent.others?.meetings.length &&
     !recent.others?.notebooks.length &&
     !recent.others?.taught.length;
 

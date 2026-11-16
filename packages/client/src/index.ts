@@ -511,3 +511,22 @@ export {
   CODE_PRODUCT_ID,
   createCodeApi,
 } from "./code";
+export {
+  type Meeting,
+  type MeetingCitation,
+  type MeetingInNotebook,
+  type MeetingLine,
+  type MeetingPerson,
+  type MeetingQuestion,
+  type MeetingReport,
+  type MeetingSpeaker,
+  type MeetingState,
+  type MeetingSummary,
+  type MeetingsApi,
+  type MeetingsStatus,
+  type ReportTemplate,
+  type SpeakerSuggestion,
+  type WaitingRecording,
+  MEETINGS_PRODUCT_ID,
+  createMeetingsApi,
+} from "./meetings";

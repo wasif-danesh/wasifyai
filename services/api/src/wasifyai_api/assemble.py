@@ -712,6 +712,8 @@ async def _web_services(s: ApiServices, settings: Settings, r: _Running, given: 
         await _web_voice(s, settings, queue)
     if (pdir / "wasifyai-notebooks").is_dir():
         _web_notebooks(s, settings)
+    if (pdir / "wasifyai-meetings").is_dir():
+        await _web_meetings(s, settings)
     if queue is None:
         return
     if (pdir / "wasifyai-model3d").is_dir():
@@ -792,6 +794,23 @@ def _web_notebooks(s: ApiServices, settings: Settings) -> None:
         embed_model=settings.notebooks_embed_model,
         embed_dimension=settings.notebooks_embed_dimension,
     )
+
+
+async def _web_meetings(s: ApiServices, settings: Settings) -> None:
+    try:
+        from wasifyai_meetings.runtime import STALE_MIN, WebMeetings
+        from wasifyai_meetings.store import MeetingStore
+    except ImportError:  # meetings are not part of this build
+        log.warning("the meetings product is not installed: no meetings on the web")
+        return
+    assert s.storage is not None
+    # meetings (ADR-0108 decisions 7 and 13): from a file only, written down with speakers by the
+    # cloud model on the key; the rows in Postgres, the recordings in storage
+    store = await asyncio.to_thread(MeetingStore.on_postgres, settings.database_url, "meetings")
+    s.meetings_store = store
+    s.meetings_web = WebMeetings(Path(tempfile.gettempdir()) / "meetings", s.storage.backing)
+    # work a gone replica left going: failed, to make again
+    await asyncio.to_thread(store.fail_stale, STALE_MIN)
 
 
 async def _web_model3d(s: ApiServices, settings: Settings, queue: Callable[[], EngineQueue]):
@@ -1121,7 +1140,9 @@ async def _close(
     if s.engine_workers is not None:
         await s.engine_workers.close()
     if not desktop:
-        for kept in (s.model3d_store, s.training_store, s.builder_store, s.creative_store):
+        for kept in (
+            s.model3d_store, s.training_store, s.builder_store, s.creative_store, s.meetings_store
+        ):
             close_kept = getattr(kept, "close", None)
             if close_kept is not None:
                 await asyncio.to_thread(close_kept)

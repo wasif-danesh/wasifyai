@@ -44,7 +44,8 @@ export function LanguageField({
   detect = false,
   label = "Language",
 }: {
-  models: VoiceModelInfo[];
+  /** the models whose languages are offered first: those ready now */
+  models: readonly Pick<VoiceModelInfo, "state" | "languages">[];
   value: string;
   onChange: (code: string) => void;
   disabled?: boolean;

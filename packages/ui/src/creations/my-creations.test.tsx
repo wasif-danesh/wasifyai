@@ -22,6 +22,7 @@ const NONE = {
   codeSessions: [],
   codeExtensions: [],
   codeSchedules: [],
+  meetings: [],
   notebooks: [],
   taught: [],
 };
@@ -363,6 +364,42 @@ describe("the Library", () => {
     await user.click(screen.getByRole("button", { name: /Coding schedules/ }));
     expect(screen.queryByRole("link", { name: /Rainy day/ })).toBeNull();
     expect(screen.getByText(/bakery-site · Every day at 02:00/)).toBeInTheDocument();
+  });
+
+  it("lists a meeting with its length and speakers, under its own filter", async () => {
+    const user = userEvent.setup();
+    const others = {
+      ...NONE,
+      meetings: [
+        {
+          id: "m1",
+          title: "Budget call",
+          source_name: "budget.m4a",
+          source: "file" as const,
+          status: "done" as const,
+          stage: "",
+          progress: 1,
+          error: null,
+          language: "",
+          model_id: "parakeet",
+          seconds: 1050,
+          speakers: [
+            { key: "S1", default: "Speaker 1", name: "Asha", seconds: 600 },
+            { key: "S2", default: "Speaker 2", name: "Speaker 2", seconds: 450 },
+          ],
+          text: "Good morning",
+          elapsed_s: 30,
+          created_at: when,
+          finished_at: when,
+          live: false,
+        },
+      ],
+    };
+    render(<MyCreations api={api(Promise.resolve(recent({ others })))} nav={nav()} />);
+    expect(await screen.findByRole("link", { name: /Budget call/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Meetings/ }));
+    expect(screen.queryByRole("link", { name: /Rainy day/ })).toBeNull();
+    expect(screen.getByText(/17:30 · 2 speakers/)).toBeInTheDocument();
   });
 
   it("lists the tools' own kinds with a filter once there is one", async () => {

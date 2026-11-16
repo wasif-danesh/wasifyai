@@ -40,6 +40,13 @@ describe("where My creations opens on the web", () => {
     );
   });
 
+  it("opens a meeting on the meetings page, as a link from search does", () => {
+    const meeting = { id: "m 1", title: "Call", created_at: when } as never;
+    expect(hrefOf({ kind: "meeting", id: "m 1", createdAt: when, meeting })).toBe(
+      "/meetings?open=m%201",
+    );
+  });
+
   it("hands a picture, a clip and a track to the tools the same way the make screens do", () => {
     const pushed: string[] = [];
     const nav = webCreationsNav((h) => pushed.push(h));

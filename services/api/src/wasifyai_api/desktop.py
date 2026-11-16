@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncEngine
 from wasifyai_platform_sdk import (
     EnvSecretStore,
@@ -520,13 +521,14 @@ async def get_file(key: str, e: int, s: str, request: Request) -> Response:
     files: LocalFileStorage = services_of(request).local_files
     if not files.verify(key, e, s):
         raise HTTPException(403, "this link is not valid or has expired")
-    try:
-        data = await files.get(key)
-    except FileNotFoundError:
-        raise HTTPException(404, "file not found") from None
+    path = files.path_of(key)
+    if not path.is_file():
+        raise HTTPException(404, "file not found")
     ctype = mimetypes.guess_type(key)[0] or "application/octet-stream"
-    return Response(
-        data,
+    # read from disk as it is sent, and in ranges: an hour of a meeting's recording is about 115 MB,
+    # and a player asks for the part it plays
+    return FileResponse(
+        path,
         media_type=ctype,
         headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"},
     )

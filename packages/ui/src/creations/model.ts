@@ -6,6 +6,7 @@ import type {
   CreativeProject,
   ImageSummary,
   LipSyncCard,
+  MeetingSummary,
   Model3d,
   NotebookSummary,
   Recent,
@@ -32,6 +33,7 @@ export type Entry =
   | { kind: "code_session"; id: string; createdAt: string; session: CodeSession }
   | { kind: "code_extension"; id: string; createdAt: string; extension: CodeExtension }
   | { kind: "code_schedule"; id: string; createdAt: string; schedule: CodeSchedule }
+  | { kind: "meeting"; id: string; createdAt: string; meeting: MeetingSummary }
   | { kind: "notebook"; id: string; createdAt: string; notebook: NotebookSummary }
   | { kind: "taught"; id: string; createdAt: string; taught: TrainedModel };
 
@@ -49,6 +51,7 @@ export type Filter =
   | "codeSessions"
   | "codeExtensions"
   | "codeSchedules"
+  | "meetings"
   | "notebooks"
   | "taught";
 
@@ -74,6 +77,7 @@ export function kindOf(filter: Filter): string | undefined {
     codeSessions: "code_session",
     codeExtensions: "code_extension",
     codeSchedules: "code_schedule",
+    meetings: "meeting",
     notebooks: "notebook",
     taught: "taught",
   } as const;
@@ -95,6 +99,7 @@ export const FILTER_KIND: Record<Filter, Entry["kind"] | null> = {
   codeSessions: "code_session",
   codeExtensions: "code_extension",
   codeSchedules: "code_schedule",
+  meetings: "meeting",
   notebooks: "notebook",
   taught: "taught",
 };
@@ -113,6 +118,7 @@ export const KIND_LABEL: Record<Entry["kind"], string> = {
   code_session: "Coding session",
   code_extension: "Coding skill",
   code_schedule: "Coding schedule",
+  meeting: "Meeting",
   notebook: "Notebook",
   taught: "Taught model",
 };
@@ -245,6 +251,26 @@ export function toRow(entry: Entry): Row {
           entry.project.status === "planned"
             ? "done"
             : entry.project.status === "planning"
+              ? "working"
+              : "failed",
+      };
+    case "meeting":
+      return {
+        ...base,
+        kindLabel: KIND_LABEL.meeting,
+        title: entry.meeting.title || entry.meeting.source_name || "Meeting",
+        detail: [
+          entry.meeting.seconds ? clock(entry.meeting.seconds) : "",
+          entry.meeting.speakers.length
+            ? `${entry.meeting.speakers.length} ${entry.meeting.speakers.length === 1 ? "speaker" : "speakers"}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        status:
+          entry.meeting.status === "done"
+            ? "done"
+            : entry.meeting.status === "working"
               ? "working"
               : "failed",
       };

@@ -297,3 +297,36 @@ def test_every_elevenlabs_voice_is_one_both_providers_know():
     for provider, field in (("wavespeed", "voice_id"), ("fal", "voice")):
         body = speak_request("elevenlabs-v4", provider, "e", "Hi", None, None)
         assert body[field] == "Aria"
+
+
+def test_meetings_ask_the_cloud_model_to_tell_the_speakers_apart():
+    from wasifyai_api.own_keys_voice import diarizes, transcribe_request
+
+    assert transcribe_request("scribe-v2", "fal", "u", None, diarize=True)["diarize"] is True
+    assert transcribe_request("scribe-v2", "wavespeed", "u", "en", diarize=True) == {
+        "audio": "u", "diarize": True, "language_code": "en"
+    }  # fmt: skip
+    fal = transcribe_request("whisper", "fal", "u", None, diarize=True)
+    assert fal["diarize"] is True and fal["audio_url"] == "u"
+    # Whisper elsewhere has no speakers, so it is not asked for them
+    assert "diarize" not in transcribe_request("whisper", "runware", "u", None, diarize=True)
+    assert diarizes("scribe-v2", "runware") and not diarizes("whisper", "wavespeed")
+
+
+def test_who_said_each_word_is_read_from_scribe_and_whisper():
+    from wasifyai_api.own_keys_voice import words_of
+
+    scribe = {"words": [
+        {"text": "Hi", "start": 0.1, "end": 0.4, "type": "word", "speaker_id": "speaker_0"},
+        {"text": " ", "start": 0.4, "end": 0.5, "type": "spacing", "speaker_id": "speaker_0"},
+        {"text": "there", "start": 0.5, "end": 0.9, "type": "word", "speaker_id": "speaker_1"},
+    ]}  # fmt: skip
+    assert [(w.text, w.speaker) for w in words_of(scribe)] == [
+        ("Hi", "speaker_0"), ("there", "speaker_1")
+    ]  # fmt: skip
+    whisper = {"chunks": [{"text": " Hello.", "timestamp": [0.0, 1.5], "speaker": "SPEAKER_00"}]}
+    got = words_of(whisper)
+    said = [(w.start, w.end, w.text, w.speaker) for w in got]
+    assert said == [(0.0, 1.5, "Hello.", "SPEAKER_00")]
+    # no speakers in the answer: no words for Meetings to place
+    assert words_of({"words": [{"text": "Hi", "start": 0, "end": 1}]}) == ()

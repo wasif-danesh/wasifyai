@@ -52,7 +52,7 @@ ALLOWED_FOLDERS = frozenset(
     {
         "checkpoints", "diffusion_models", "unet", "text_encoders", "clip", "vae", "loras",
         "controlnet", "upscale_models", "latent_upscale_models", "embeddings", "audio",
-        "lipsync", "indic",
+        "lipsync", "indic", "meetings",
     }
 )  # fmt: skip
 

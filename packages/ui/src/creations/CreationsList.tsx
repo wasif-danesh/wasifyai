@@ -57,6 +57,7 @@ const FILTERS: { value: Filter; label: string; whenAny?: boolean }[] = [
   { value: "codeSessions", label: "Coding sessions", whenAny: true },
   { value: "codeExtensions", label: "Coding skills", whenAny: true },
   { value: "codeSchedules", label: "Coding schedules", whenAny: true },
+  { value: "meetings", label: "Meetings", whenAny: true },
   { value: "notebooks", label: "Notebooks", whenAny: true },
   { value: "taught", label: "Taught models", whenAny: true },
 ];
@@ -183,6 +184,12 @@ export function CreationsList({
         id: schedule.id,
         createdAt: schedule.created_at,
         schedule,
+      })),
+      ...(others?.meetings ?? []).map((meeting) => ({
+        kind: "meeting" as const,
+        id: meeting.id,
+        createdAt: meeting.created_at,
+        meeting,
       })),
       ...(others?.creativeProjects ?? []).map((project) => ({
         kind: "creative_project" as const,

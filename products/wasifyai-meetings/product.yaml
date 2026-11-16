@@ -1,0 +1,7 @@
+id: wasifyai-meetings
+# Meetings (ADR-0108): a recording, its transcript, its speakers and its reports are one meeting. The
+# speaker and voiceprint models run in this product on ONNX Runtime; transcription is the voice product's
+# chosen model, reached through the engine's speech runtime. Reports (stage MT4) are written by the
+# chat model: on the desktop the person's chosen model (local, or on their key) serves every text binding.
+capabilities:
+  text.chat: { provider: litellm, model: default-chat }

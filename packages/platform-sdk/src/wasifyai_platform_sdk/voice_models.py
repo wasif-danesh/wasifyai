@@ -959,6 +959,9 @@ class TranscriptSegment:
     start: float
     end: float
     text: str
+    # who said it, where a cloud model told the speakers apart ("speaker_0" ...; Meetings on the
+    # web, ADR-0108 decision 13); None otherwise
+    speaker: str | None = None
 
 
 @dataclass(frozen=True)
@@ -969,6 +972,9 @@ class TranscriptResult:
     model_id: str
     elapsed_s: float
     displaced: str | None = None  # whose model was unloaded to make room (dictation, ADR-0083)
+    # each word with its time, when the model gives them (Parakeet does): Meetings gives each word
+    # to whoever spoke at that moment (ADR-0108)
+    words: tuple[TranscriptSegment, ...] = ()
 
 
 class SpeechEngine(Protocol):

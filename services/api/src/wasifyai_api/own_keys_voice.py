@@ -231,17 +231,24 @@ def made_voice(result: dict[str, Any], asked: str) -> str:
 # ---- write down speech -------------------------------------------------------------------------
 
 
-def transcribe_request(model_id: str, provider: str, audio: str, language: str | None):
+def transcribe_request(
+    model_id: str, provider: str, audio: str, language: str | None, diarize: bool = False
+):
+    """`diarize`: the model also tells the speakers apart (Meetings on the web, ADR-0108 decision
+    13): Scribe on every provider, Whisper on fal.ai (its pyannote option)."""
     if model_id == "scribe-v2":
         if provider == "wavespeed":  # field names checked in CP13
-            body: dict[str, Any] = {"audio": audio, "diarize": False}
+            body: dict[str, Any] = {"audio": audio, "diarize": diarize}
         else:
-            body = {"audio_url": audio, "diarize": False, "tag_audio_events": False}
+            body = {"audio_url": audio, "diarize": diarize, "tag_audio_events": False}
         if language:
             body["language_code"] = language
         return body
     if model_id == "whisper":
         out: dict[str, Any] = {"audio": audio, "task": "transcribe", "enable_timestamps": True}
+        if diarize and provider == "fal":
+            out = {"audio_url": audio, "task": "transcribe", "chunk_level": "segment",
+                   "diarize": True}  # fmt: skip
         if language:
             out["language"] = language
         return out
@@ -301,6 +308,46 @@ def transcript_of(result: dict[str, Any]) -> tuple[str, tuple[TranscriptSegment,
     if not segments:
         segments = [TranscriptSegment(0.0, seconds, text)]
     return text, tuple(segments), seconds
+
+
+def diarizes(model_id: str, provider: str) -> bool:
+    """Whether this transcription model tells the speakers apart on this provider."""
+    return model_id == "scribe-v2" or (model_id == "whisper" and provider == "fal")
+
+
+def words_of(result: dict[str, Any]) -> tuple[TranscriptSegment, ...]:
+    """Each word with its time and who said it (Scribe's `words` with `speaker_id`), or each piece
+    with its speaker (Whisper's `chunks` with `speaker`), when the answer has speakers; else
+    none."""
+    out = result
+    outputs = result.get("outputs")
+    if isinstance(outputs, list) and outputs and isinstance(outputs[0], dict):
+        out = outputs[0]
+    said: list[TranscriptSegment] = []
+    for w in out.get("words") or []:
+        if not isinstance(w, dict) or w.get("type", "word") != "word":
+            continue
+        who = w.get("speaker_id") or w.get("speaker")
+        text = str(w.get("text", "")).strip()
+        if who is None or not text:
+            continue
+        start = float(w.get("start") or 0.0)
+        said.append(TranscriptSegment(start, float(w.get("end") or start), text, str(who)))
+    if said:
+        return tuple(said)
+    for c in out.get("chunks") or out.get("segments") or []:
+        if not isinstance(c, dict) or c.get("speaker") is None:
+            continue
+        text = str(c.get("text", "")).strip()
+        ts = c.get("timestamp")
+        pair = (
+            ts if isinstance(ts, list | tuple) and len(ts) == 2 else (c.get("start"), c.get("end"))
+        )
+        if not text or pair[0] is None:
+            continue
+        start = float(pair[0])
+        said.append(TranscriptSegment(start, float(pair[1] or start), text, str(c["speaker"])))
+    return tuple(said)
 
 
 # ---- change a voice ----------------------------------------------------------------------------

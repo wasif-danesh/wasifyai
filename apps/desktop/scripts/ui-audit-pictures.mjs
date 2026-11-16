@@ -10,6 +10,10 @@
 //                                                                the stage while it is made and when it is done)
 //   apps/desktop/scripts/ui-audit.sh light video-make           a real clip from the newest picture: Animate this on
 //                                                                Images, the clip made on the stage, then Extend this
+//   apps/desktop/scripts/ui-audit.sh light meetings-make        a real meeting made in the window from the recording
+//                                                                WASIFYAI_AUDIT_MEETING, while it is made and when done
+//   apps/desktop/scripts/ui-audit.sh light meetings-page        the newest finished meeting: its speakers and lines,
+//                                                                naming a speaker (ADR-0108, MT1; light and dark)
 //   apps/desktop/scripts/ui-audit.sh light speech-make          a real speech with its waveform, then a real transcript
 //                                                                of it on Speech to text
 //   apps/desktop/scripts/ui-audit.sh light studio-make          a real dub of the newest speech (into English, or
@@ -214,6 +218,7 @@ const SCREENS = [
   ["train", "/train"],
   ["models", "/models"],
   ["settings", "/settings"],
+  ["meetings", "/meetings"],
 ].filter(([, path]) => path);
 // screens longer than a window: a second picture in a tall window shows the whole of them
 const TALL = new Set([
@@ -240,6 +245,7 @@ const DARK = new Set([
   "train",
   "models",
   "settings",
+  "meetings",
 ]);
 
 async function open(page, path) {
@@ -1554,6 +1560,49 @@ for (const scheme of ["light", "dark"]) {
       await page.getByText("Extend a video").first().waitFor();
       await page.waitForTimeout(1500);
       await shot(page, "video-extend-chosen");
+    });
+  }
+  if (scheme === "light" && names.has("meetings-make")) {
+    // Meetings (ADR-0108, MT1): a real meeting made in the window from WASIFYAI_AUDIT_MEETING (a recording),
+    // pictured while it is made and when it is done
+    await attempt("meetings-make", async () => {
+      const file = process.env.WASIFYAI_AUDIT_MEETING;
+      if (!file) throw new Error("set WASIFYAI_AUDIT_MEETING to a recording");
+      await open(page, "/meetings");
+      await page.getByLabel("Recording of a meeting").setInputFiles(file);
+      await page.getByRole("button", { name: "Stop" }).waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "meetings-make-working");
+      await page.getByRole("region", { name: "Speakers" }).waitFor({ timeout: 600_000 });
+      await page.waitForTimeout(1200);
+      await shot(page, "meetings-make-done");
+    });
+  }
+  if (names.has("meetings-page")) {
+    // Meetings (ADR-0108, MT1): the newest finished meeting, its speakers and who said what, and naming one
+    await attempt("meetings-page", async () => {
+      const done = ((await engine("/products/wasifyai-meetings/meetings"))?.items ?? []).find(
+        (m) => m.status === "done",
+      );
+      if (!done) throw new Error("no finished meeting: make one from a file first");
+      await open(page, "/meetings");
+      await page
+        .getByRole("button", { name: new RegExp(done.title) })
+        .first()
+        .click();
+      await page.getByRole("region", { name: "Speakers" }).waitFor();
+      await page.waitForTimeout(1200);
+      await shot(page, `meetings-page${suffix}`);
+      if (scheme === "light") {
+        await shot(page, "meetings-page-tall", 2000);
+        await page
+          .getByRole("button", { name: /^Name / })
+          .first()
+          .click();
+        await page.getByRole("dialog").waitFor();
+        await shot(page, "meetings-name-speaker");
+        await page.keyboard.press("Escape");
+      }
     });
   }
   if (scheme === "light" && names.has("speech-make")) {

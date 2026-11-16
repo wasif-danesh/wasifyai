@@ -11,6 +11,7 @@ import {
   CalendarClock,
   Clapperboard,
   CodeXml,
+  Contact,
   FilePlus2,
   FileText,
   Film,
@@ -23,6 +24,7 @@ import {
   type LucideIcon,
   Maximize2,
   Mic,
+  MicVocal,
   Music,
   Paintbrush,
   Pencil,
@@ -49,6 +51,18 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     items: [
       { id: "notebook.create", label: "Create", icon: FilePlus2 },
       { id: "notebook.list", label: "View notebooks", icon: BookOpen },
+    ],
+  },
+  {
+    // a recording, its transcript, its speakers and its reports as one meeting (ADR-0108): a workspace
+    // the person comes back to, like Notebook, so its own group and not under Voice
+    id: "meetings",
+    label: "Meetings",
+    icon: Users,
+    items: [
+      { id: "meetings.record", label: "Record", icon: MicVocal },
+      { id: "meetings.list", label: "View meetings", icon: Users },
+      { id: "meetings.people", label: "People", icon: Contact },
     ],
   },
   {

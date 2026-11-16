@@ -15,8 +15,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/apps/desktop/engine-bundle}"
-PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d wasifyai-creative wasifyai-code"
-PRODUCTS="wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d wasifyai-creative wasifyai-code"
+PACKAGES="wasifyai-contracts wasifyai-platform-sdk wasifyai-api wasifyai-media-worker wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d wasifyai-creative wasifyai-code wasifyai-meetings"
+PRODUCTS="wasifyai-image wasifyai-video wasifyai-assistant wasifyai-notebooks wasifyai-voice wasifyai-training wasifyai-model3d wasifyai-creative wasifyai-code wasifyai-meetings"
 
 cd "$ROOT"
 rm -rf "$OUT"

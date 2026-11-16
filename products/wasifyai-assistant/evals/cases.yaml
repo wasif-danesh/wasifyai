@@ -216,6 +216,20 @@ cases:
     then:
       guide: [notebook.ask, notebook.create, notebook.search, notebook.add_source]
       answer: [notebook]
+  - id: guide-meeting-ask
+    kind: guide
+    say: "What did we agree in yesterday's meeting? Can it tell me from the recording?"
+    expect: [how_to, app_status, search_creations]
+    then:
+      guide: [meetings.ask, meetings.make, meetings.add_to_notebook]
+      answer: [meeting]
+  - id: guide-meeting-notebook
+    kind: guide
+    say: "How do I ask about all my client meetings together?"
+    expect: [how_to, app_status]
+    then:
+      guide: [meetings.add_to_notebook, notebook.ask]
+      answer: [notebook]
   - id: guide-captions
     kind: guide
     say: "How do I get the words out of a recording as text?"

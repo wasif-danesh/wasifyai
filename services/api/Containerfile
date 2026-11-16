@@ -8,6 +8,6 @@ COPY pyproject.toml uv.lock* ./
 COPY services ./services
 COPY packages ./packages
 COPY products ./products
-RUN uv sync --frozen --no-dev --package wasifyai-api --package wasifyai-image --package wasifyai-video --package wasifyai-assistant --package wasifyai-notebooks --package wasifyai-voice --package wasifyai-model3d || uv sync --no-dev --package wasifyai-api --package wasifyai-image --package wasifyai-video --package wasifyai-assistant --package wasifyai-notebooks --package wasifyai-voice --package wasifyai-model3d
+RUN uv sync --frozen --no-dev --package wasifyai-api --package wasifyai-image --package wasifyai-video --package wasifyai-assistant --package wasifyai-notebooks --package wasifyai-voice --package wasifyai-model3d --package wasifyai-meetings || uv sync --no-dev --package wasifyai-api --package wasifyai-image --package wasifyai-video --package wasifyai-assistant --package wasifyai-notebooks --package wasifyai-voice --package wasifyai-model3d --package wasifyai-meetings
 ENV PATH="/app/.venv/bin:$PATH"
 CMD ["uvicorn", "wasifyai_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

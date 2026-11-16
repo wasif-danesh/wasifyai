@@ -4,10 +4,12 @@ import {
   NEW_NOTEBOOK,
   chatPath,
   codePath,
+  meetingPath,
   notebookPath,
   parseCodeSession,
   parseConversation,
   parseHash,
+  parseMeeting,
   parseNotebook,
   routePath,
   visit,
@@ -75,6 +77,13 @@ describe("router", () => {
     expect(parseCodeSession("#/code")).toBeNull();
     expect(parseCodeSession("#/code/../x")).toBeNull();
     expect(parseHash(`#${codePath("abc")}`)).toBe("code");
+    // a meeting has an address of its own, which the Library opens
+    const met = "0b7c1f9e000040008000000000000000";
+    expect(parseMeeting(`#${meetingPath(met)}`)).toBe(met);
+    expect(parseMeeting("#/meetings")).toBeNull();
+    expect(parseMeeting("#/meetings/../x")).toBeNull();
+    expect(parseHash(`#${meetingPath(met)}`)).toBe("meetings");
+    expect(parseHash(`#${meetingPath(null)}`)).toBe("meetings");
     expect(parseHash(`#${codePath(null)}`)).toBe("code");
     expect(parseHash("#/notebooks/9f3c")).toBe("notebook");
     expect(parseHash("#/notebooks")).toBe("notebooks");

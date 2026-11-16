@@ -578,6 +578,56 @@
         "title": "Body_import_video_products_wasifyai_video_videos_import_post",
         "type": "object"
       },
+      "Body_make_from_file_products_wasifyai_meetings_meetings_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_make_from_file_products_wasifyai_meetings_meetings_post",
+        "type": "object"
+      },
       "Body_set_brand_logo_products_wasifyai_video_builder_brand_logo_post": {
         "properties": {
           "file": {
@@ -4081,6 +4131,29 @@
         "title": "NewProject",
         "type": "object"
       },
+      "NewTemplate": {
+        "additionalProperties": false,
+        "properties": {
+          "instructions": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Instructions",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "instructions"
+        ],
+        "title": "NewTemplate",
+        "type": "object"
+      },
       "NodeEvent": {
         "properties": {
           "event": {
@@ -4133,6 +4206,22 @@
           "status"
         ],
         "title": "NodeEvent",
+        "type": "object"
+      },
+      "NotPerson": {
+        "additionalProperties": false,
+        "properties": {
+          "person_id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Person Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "person_id"
+        ],
+        "title": "NotPerson",
         "type": "object"
       },
       "NotebookOut": {
@@ -4301,6 +4390,22 @@
         "title": "Person",
         "type": "object"
       },
+      "PersonName": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PersonName",
+        "type": "object"
+      },
       "PlanBook": {
         "additionalProperties": false,
         "properties": {
@@ -4448,6 +4553,22 @@
         "title": "ProviderView",
         "type": "object"
       },
+      "Question": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "Question",
+        "type": "object"
+      },
       "ReadAloudRequest": {
         "additionalProperties": false,
         "description": "A chat reply, as the model wrote it, and which passage of it to speak (0 is the first).",
@@ -4518,6 +4639,46 @@
         "title": "ReasoningEvent",
         "type": "object"
       },
+      "Recorded": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 5,
+            "title": "Name",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "Recorded",
+        "type": "object"
+      },
       "RedoShot": {
         "additionalProperties": false,
         "properties": {
@@ -4556,6 +4717,34 @@
           }
         },
         "title": "RenderIn",
+        "type": "object"
+      },
+      "ReportAsk": {
+        "additionalProperties": false,
+        "properties": {
+          "template": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Template",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "template"
+        ],
+        "title": "ReportAsk",
         "type": "object"
       },
       "ResumeRequest": {
@@ -4776,7 +4965,8 @@
               "model3d",
               "lora",
               "creative_project",
-              "code_session"
+              "code_session",
+              "meeting"
             ],
             "title": "Kind",
             "type": "string"
@@ -5324,6 +5514,31 @@
         "title": "SortIn",
         "type": "object"
       },
+      "SpeakerName": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Name",
+            "type": "string"
+          },
+          "person_id": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Id"
+          }
+        },
+        "title": "SpeakerName",
+        "type": "object"
+      },
       "SseEvent": {
         "discriminator": {
           "mapping": {
@@ -5451,6 +5666,37 @@
           "title"
         ],
         "title": "Title",
+        "type": "object"
+      },
+      "ToNotebook": {
+        "additionalProperties": false,
+        "properties": {
+          "notebook_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notebook Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ToNotebook",
         "type": "object"
       },
       "TokenEvent": {
@@ -7776,7 +8022,8 @@
                     "model3d",
                     "lora",
                     "creative_project",
-                    "code_session"
+                    "code_session",
+                    "meeting"
                   ],
                   "type": "string"
                 },
@@ -13654,6 +13901,1327 @@
         "tags": [
           "wasifyai-image",
           "wasifyai-image"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings": {
+      "get": {
+        "operationId": "list_meetings_products_wasifyai_meetings_meetings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 4000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Meetings Products Wasifyai Meetings Meetings Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Meetings",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      },
+      "post": {
+        "description": "A meeting from a recording (any sound or video file FFmpeg reads). The work goes on in\nthe background; follow it with GET /meetings/{id}.",
+        "operationId": "make_from_file_products_wasifyai_meetings_meetings_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_make_from_file_products_wasifyai_meetings_meetings_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make From File Products Wasifyai Meetings Meetings Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make From File",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/recorded": {
+      "post": {
+        "description": "A meeting from a recording the app made (two channels: the microphone is \"You\", the\ncomputer's sound is everyone else), by the name the shell gave it in the meetings folder.",
+        "operationId": "make_from_recording_products_wasifyai_meetings_meetings_recorded_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Recorded"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Make From Recording Products Wasifyai Meetings Meetings Recorded Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make From Recording",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}": {
+      "delete": {
+        "operationId": "remove_meeting_products_wasifyai_meetings_meetings__item__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Meeting",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      },
+      "get": {
+        "description": "A meeting; its speakers' voiceprints are made first if they are not yet (a meeting\nmade before the voiceprint model was fetched).",
+        "operationId": "get_meeting_products_wasifyai_meetings_meetings__item__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Meeting Products Wasifyai Meetings Meetings  Item  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Meeting",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_meeting_products_wasifyai_meetings_meetings__item__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Title"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rename Meeting Products Wasifyai Meetings Meetings  Item  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Meeting",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/audio": {
+      "get": {
+        "description": "The meeting's recording as it was heard (one channel, 16 kHz WAV), for playing back.",
+        "operationId": "meeting_audio_products_wasifyai_meetings_meetings__item__audio_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Meeting Audio",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/audio-link": {
+      "get": {
+        "description": "A signed link to the recording, for a player that reads it in ranges as it plays (the\ndesktop's file storage); the route above is the whole file, for where there is none.",
+        "operationId": "meeting_audio_link_products_wasifyai_meetings_meetings__item__audio_link_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Meeting Audio Link Products Wasifyai Meetings Meetings  Item  Audio Link Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Meeting Audio Link",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/export": {
+      "get": {
+        "description": "The transcript as text: a line per turn with the speaker's name and the time.",
+        "operationId": "export_meeting_products_wasifyai_meetings_meetings__item__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Meeting",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/notebook": {
+      "post": {
+        "description": "Add the meeting to a notebook as a source (a new one when no notebook is given).",
+        "operationId": "add_to_notebook_products_wasifyai_meetings_meetings__item__notebook_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToNotebook"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add To Notebook Products Wasifyai Meetings Meetings  Item  Notebook Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add To Notebook",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/questions": {
+      "post": {
+        "description": "Ask about the meeting, answered in the background by a notebook it is in; follow it\nwith GET /questions/{id} (or the meeting).",
+        "operationId": "ask_products_wasifyai_meetings_meetings__item__questions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Question"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ask Products Wasifyai Meetings Meetings  Item  Questions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/reports": {
+      "post": {
+        "description": "Write a report of the meeting from a template, in the background; follow it with\nGET /reports/{id} (or the meeting).",
+        "operationId": "write_report_products_wasifyai_meetings_meetings__item__reports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Write Report Products Wasifyai Meetings Meetings  Item  Reports Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write Report",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/speakers/{key}": {
+      "patch": {
+        "description": "Name one speaker of this meeting: they become that person of People, and their voice is\nkept for later meetings (an empty name gives back \"Speaker N\").",
+        "operationId": "name_speaker_products_wasifyai_meetings_meetings__item__speakers__key__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeakerName"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Name Speaker Products Wasifyai Meetings Meetings  Item  Speakers  Key  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Name Speaker",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/speakers/{key}/not": {
+      "post": {
+        "description": "\"No\" to a suggestion: this speaker is not that person.",
+        "operationId": "not_this_person_products_wasifyai_meetings_meetings__item__speakers__key__not_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotPerson"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Not This Person Products Wasifyai Meetings Meetings  Item  Speakers  Key  Not Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Not This Person",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/meetings/{item}/stop": {
+      "post": {
+        "operationId": "stop_meeting_products_wasifyai_meetings_meetings__item__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "title": "Item",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Meeting Products Wasifyai Meetings Meetings  Item  Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop Meeting",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/notebooks": {
+      "get": {
+        "description": "The person's notebooks, to add a meeting to.",
+        "operationId": "list_notebooks_products_wasifyai_meetings_notebooks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Notebooks Products Wasifyai Meetings Notebooks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Notebooks",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/people": {
+      "get": {
+        "operationId": "list_people_products_wasifyai_meetings_people_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List People Products Wasifyai Meetings People Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List People",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/people/{pid}": {
+      "delete": {
+        "description": "Delete a person with every voiceprint of them (the meetings keep the name as words).",
+        "operationId": "forget_person_products_wasifyai_meetings_people__pid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pid",
+            "required": true,
+            "schema": {
+              "title": "Pid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forget Person",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      },
+      "patch": {
+        "description": "A new name for a person, in every meeting they were named in.",
+        "operationId": "rename_person_products_wasifyai_meetings_people__pid__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pid",
+            "required": true,
+            "schema": {
+              "title": "Pid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonName"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rename Person Products Wasifyai Meetings People  Pid  Patch",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename Person",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/questions/{qid}": {
+      "delete": {
+        "operationId": "delete_question_products_wasifyai_meetings_questions__qid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "qid",
+            "required": true,
+            "schema": {
+              "title": "Qid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Question",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      },
+      "get": {
+        "operationId": "get_question_products_wasifyai_meetings_questions__qid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "qid",
+            "required": true,
+            "schema": {
+              "title": "Qid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Question Products Wasifyai Meetings Questions  Qid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Question",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/questions/{qid}/stop": {
+      "post": {
+        "operationId": "stop_question_products_wasifyai_meetings_questions__qid__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "qid",
+            "required": true,
+            "schema": {
+              "title": "Qid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Question Products Wasifyai Meetings Questions  Qid  Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop Question",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/recordings/{name}": {
+      "delete": {
+        "description": "Throw away a recording that was not made into a meeting.",
+        "operationId": "discard_recording_products_wasifyai_meetings_recordings__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discard Recording",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/reports/{rid}": {
+      "delete": {
+        "operationId": "delete_report_products_wasifyai_meetings_reports__rid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Report",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      },
+      "get": {
+        "operationId": "get_report_products_wasifyai_meetings_reports__rid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Report Products Wasifyai Meetings Reports  Rid  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Report",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/reports/{rid}/export": {
+      "get": {
+        "description": "The report as a Markdown file.",
+        "operationId": "export_report_products_wasifyai_meetings_reports__rid__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Report",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/reports/{rid}/stop": {
+      "post": {
+        "operationId": "stop_report_products_wasifyai_meetings_reports__rid__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rid",
+            "required": true,
+            "schema": {
+              "title": "Rid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Stop Report Products Wasifyai Meetings Reports  Rid  Stop Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stop Report",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/status": {
+      "get": {
+        "operationId": "status_products_wasifyai_meetings_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Status Products Wasifyai Meetings Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/templates": {
+      "get": {
+        "operationId": "list_templates_products_wasifyai_meetings_templates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Templates Products Wasifyai Meetings Templates Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Templates",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      },
+      "post": {
+        "operationId": "add_template_products_wasifyai_meetings_templates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTemplate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Add Template Products Wasifyai Meetings Templates Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Template",
+        "tags": [
+          "wasifyai-meetings"
+        ]
+      }
+    },
+    "/products/wasifyai-meetings/templates/{tid}": {
+      "delete": {
+        "operationId": "delete_template_products_wasifyai_meetings_templates__tid__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tid",
+            "required": true,
+            "schema": {
+              "title": "Tid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Template",
+        "tags": [
+          "wasifyai-meetings"
         ]
       }
     },

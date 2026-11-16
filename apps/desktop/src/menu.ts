@@ -20,6 +20,9 @@ export const ROUTES: Record<string, Route> = {
   "code.projects": "code",
   "code.extensions": "extensions",
   "code.scheduled": "scheduled",
+  "meetings.record": "record",
+  "meetings.list": "meetings",
+  "meetings.people": "people",
   "voice.speak": "speak",
   "voice.transcribe": "transcribe",
   "voice.lipsync": "lipsync",
@@ -38,7 +41,8 @@ export const ROUTES: Record<string, Route> = {
 };
 
 /** Menu items the window has no screen for yet. */
-const NOT_BUILT: ReadonlySet<string> = new Set([]);
+// every Meetings item is built (Record MT2, People MT3); kept for the next item that is not
+const NOT_BUILT: ReadonlySet<string> = new Set<string>();
 
 /** What the window's menu does for each item, given where the person is. */
 export function resolveItem(

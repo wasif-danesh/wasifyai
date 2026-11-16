@@ -5,6 +5,9 @@
 	<!-- Shown once by macOS when the person first presses Mic in the chat box (ADR-0083, decision 5). Tauri merges this file into the
 	     app's Info.plist, and embeds it in a development build; Cargo does not watch it, so after editing it run `touch build.rs`. -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Wasify AI listens only while you press Mic in the chat box, to write down what you say. The sound is turned into text on this computer and is not kept.</string>
+	<string>Wasify AI listens while you press Mic in the chat box, to write down what you say, and while you record a meeting in Meetings. The sound is turned into text on this computer.</string>
+	<!-- Shown by macOS the first time a meeting is recorded with the computer's sound (ADR-0108, MT2): the Core Audio tap. -->
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Wasify AI records the computer's sound while you record a meeting in Meetings, so the other people on a call are in the recording. It is written down on this computer.</string>
 </dict>
 </plist>

@@ -79,6 +79,13 @@ jobs:
         env:
           GUARD_LOG: ${{ runner.temp }}/resources.txt
         run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-model3d 2>&1 | tee "$RUNNER_TEMP/pytest-4.log"
+      - name: Tests, meetings
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-meetings 2>&1 | tee "$RUNNER_TEMP/pytest-4b.log"
       - name: Tests, notebooks
         if: ${{ !cancelled() }}
         timeout-minutes: 6

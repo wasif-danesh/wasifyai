@@ -217,6 +217,24 @@ class ApiToolHost:
                     ui="model3d",
                 )
             return Readiness.ready()
+        if need.kind == "runtime" and need.name == "meetings":
+            try:
+                from wasifyai_meetings.runtime import speaker_model_path
+            except ImportError:
+                return Readiness.unavailable("Meetings are not part of this build.")
+            if not state.desktop_dir:
+                # the web (ADR-0108 decision 7): from a file, written down in the cloud; whether
+                # an admin chose a cloud model is said when one is made
+                if state.meetings_store is None:
+                    return Readiness.unavailable("Meetings are not set up on this server.")
+                return Readiness.ready()
+            if speaker_model_path(state) is None:
+                return Readiness.needs_setup(
+                    "Get the speaker model first, in Models "
+                    "(about 490 MB, shown before it starts).",
+                    ui="models",
+                )
+            return Readiness.ready()
         if need.kind == "runtime" and need.name == "coding":
             server, gateway = state.coding_server, state.coding_gateway
             if server is None or gateway is None or not server.supported:

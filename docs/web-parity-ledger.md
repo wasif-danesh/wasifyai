@@ -83,6 +83,9 @@ web job's test step fail without one. The desktop's actions are held to the same
 | `music.lyrics` | live | shown when a ready model can do it |  |
 | `music.separate` | live | shown when a ready model can do it |  |
 | `code.projects` | desktop-only | the coding agent works in a folder of the person's computer, inside the macOS sandbox | owner, 2026-11-13: desktop and Mac first; the web version of coding is not in v1 (ADR-0101, decision 8) |
+| `meetings.list` | live | the shared Meetings screen (ADR-0108, MT6): from a file, written down with speakers by the cloud transcription model an admin chose; rows in Postgres, recordings in storage; questions through the person's notebooks |  |
+| `meetings.people` | live | the shared People screen: names only, since no voiceprints are kept on the web |  |
+| `meetings.record` | desktop-only | recording the microphone and the computer's sound needs the desktop app | ADR-0108 decision 7 (Accepted 2026-11-16): v1 on the web takes a file only |
 | `code.scheduled` | desktop-only | scheduled coding runs (ADR-0105); not built on the desktop yet either | owner, 2026-11-13: desktop and Mac first (ADR-0101, decision 8) |
 | `code.extensions` | desktop-only | the coding agent's extensions (ADR-0104); not built on the desktop yet either | owner, 2026-11-13: desktop and Mac first (ADR-0101, decision 8) |
 <!-- parity:end -->

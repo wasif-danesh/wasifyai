@@ -132,7 +132,7 @@ class Settings(BaseSettings):
                 self.products_enabled = (
                     "wasifyai-image,wasifyai-video,wasifyai-assistant,wasifyai-notebooks,"
                     "wasifyai-voice,wasifyai-model3d,wasifyai-training,wasifyai-creative,"
-                    "wasifyai-code"
+                    "wasifyai-code,wasifyai-meetings"
                 )
         return self
 

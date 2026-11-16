@@ -11,6 +11,7 @@ import {
   Mic,
   Puzzle,
   Shapes,
+  Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../cn";
@@ -89,6 +90,7 @@ const ICON: Partial<Record<Entry["kind"], LucideIcon>> = {
   code_session: CodeXml,
   code_extension: Puzzle,
   code_schedule: CalendarClock,
+  meeting: Users,
   notebook: BookOpen,
   taught: GraduationCap,
 };

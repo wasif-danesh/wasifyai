@@ -12,6 +12,7 @@ describe("the menu definition", () => {
   it("has the groups in order, each with its items", () => {
     expect(MENU_GROUPS.map((g) => g.label)).toEqual([
       "Notebook",
+      "Meetings",
       "Images",
       "Video",
       "Voice",
@@ -20,6 +21,8 @@ describe("the menu definition", () => {
     ]);
     const items = (id: string) => MENU_GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
     expect(items("notebook")).toEqual(["Create", "View notebooks"]);
+    // its own group, not under Voice (ADR-0108)
+    expect(items("meetings")).toEqual(["Record", "View meetings", "People"]);
     // the "Your …" pages are the one Library now (ADR-0093, U8)
     // Lip sync makes a video, so it is with video (owner, 2026-11-12)
     expect(items("video")).toEqual(["Create", "Animate an image", "Lip sync", "Extend video"]);

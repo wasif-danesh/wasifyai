@@ -28,6 +28,7 @@ CreationKind = Literal[
     "lora",
     "creative_project",
     "code_session",
+    "meeting",
 ]
 KINDS: tuple[str, ...] = (
     "song",
@@ -44,6 +45,7 @@ KINDS: tuple[str, ...] = (
     "model3d",  # a 3D model (ADR-0080)
     "lora",  # a model the person taught the app from their pictures (ADR-0073, ADR-0076)
     "code_session",  # a coding session: its project, its title and what was asked (ADR-0101)
+    "meeting",  # a meeting: its title, its speakers' names and what was said (ADR-0108)
 )
 MAX_TEXT_CHARS = 6000  # what is embedded: more adds cost, not meaning
 

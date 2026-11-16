@@ -5112,7 +5112,8 @@
               "composition",
               "model3d",
               "lora",
-              "creative_project"
+              "creative_project",
+              "meeting"
             ],
             "title": "Kind",
             "type": "string"
@@ -5198,7 +5199,8 @@
               "composition",
               "model3d",
               "lora",
-              "creative_project"
+              "creative_project",
+              "meeting"
             ],
             "title": "Kind",
             "type": "string"
@@ -5298,7 +5300,8 @@
               "composition",
               "model3d",
               "lora",
-              "creative_project"
+              "creative_project",
+              "meeting"
             ],
             "title": "Kind",
             "type": "string"
@@ -5421,7 +5424,8 @@
               "composition",
               "model3d",
               "lora",
-              "creative_project"
+              "creative_project",
+              "meeting"
             ],
             "title": "Kind",
             "type": "string"
@@ -5546,7 +5550,8 @@
               "composition",
               "model3d",
               "lora",
-              "creative_project"
+              "creative_project",
+              "meeting"
             ],
             "title": "Kind",
             "type": "string"
@@ -5995,6 +6000,1086 @@
       ],
       "consent": "",
       "help": "docs/help/lipsync.make.md"
+    },
+    {
+      "id": "meetings.add_template",
+      "title": "Keep a report template",
+      "summary": "Keep a report template of your own for meetings.",
+      "description": "Keep a template of the person's own for meeting reports: a name and what the report says, in plain words. Then write a report with it (meetings.write_report with the template id this returns).",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "description": "The template's name.",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "instructions": {
+            "description": "What the report says, in plain words.",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Instructions",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "instructions"
+        ],
+        "title": "TemplateIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "template_id": {
+            "title": "Template Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_id",
+          "title"
+        ],
+        "title": "TemplateOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "title": "Client update",
+          "instructions": "What the client asked for, what we promised and by when."
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.add_template.md"
+    },
+    {
+      "id": "meetings.add_to_notebook",
+      "title": "Add a meeting to a notebook",
+      "summary": "Make a meeting a source of a notebook, to ask across many.",
+      "description": "Add a meeting (its speakers, transcript and reports) to a notebook as a source, or to a new notebook. Then it can be asked about there with the notebook's other sources, with citations (notebook.ask).",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "meeting_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "notebook_id": {
+            "default": "",
+            "description": "The notebook to add it to (notebook.list gives ids); empty makes a new one.",
+            "maxLength": 64,
+            "title": "Notebook Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "The new notebook's name; empty uses the meeting's title.",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "meeting_id"
+        ],
+        "title": "ToNotebookIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "meeting_id": {
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "notebook_id": {
+            "title": "Notebook Id",
+            "type": "string"
+          },
+          "notebook_title": {
+            "title": "Notebook Title",
+            "type": "string"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "meeting_id",
+          "notebook_id",
+          "notebook_title",
+          "document_id"
+        ],
+        "title": "ToNotebookOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "meeting_id": "00000000000000000000000000000000"
+        },
+        {
+          "meeting_id": "00000000000000000000000000000000",
+          "notebook_id": "n1"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        },
+        {
+          "kind": "notebooks",
+          "name": ""
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.add_to_notebook.md"
+    },
+    {
+      "id": "meetings.ask",
+      "title": "Ask about a meeting",
+      "summary": "Ask a question that one meeting's transcript answers.",
+      "description": "Ask about one meeting: who said what, what was decided, what someone asked for. The answer is written from the meeting's transcript only, with [n] labels that point at its lines, by a notebook the meeting is in (a new notebook named after it when it is in none). Use notebook.ask to ask across many meetings.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "meeting_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "question": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "meeting_id",
+          "question"
+        ],
+        "title": "AskIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "meeting_id": {
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "question_id": {
+            "title": "Question Id",
+            "type": "string"
+          },
+          "reply": {
+            "title": "Reply",
+            "type": "string"
+          },
+          "citations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "notebook_id": {
+            "title": "Notebook Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "meeting_id",
+          "question_id",
+          "reply",
+          "notebook_id"
+        ],
+        "title": "AskOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "meeting_id": "00000000000000000000000000000000",
+          "question": "What did Asha agree to do?"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        },
+        {
+          "kind": "notebooks",
+          "name": ""
+        },
+        {
+          "kind": "chat",
+          "name": ""
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.ask.md"
+    },
+    {
+      "id": "meetings.delete_report",
+      "title": "Delete a report of a meeting",
+      "summary": "Delete one report of a meeting.",
+      "description": "Delete one report of a meeting; the meeting stays. Always asks the person.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "report_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Report Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "DeleteReportIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "DeleteReportOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "report_id": "00000000000000000000000000000000"
+        }
+      ],
+      "effect": "destroy",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.delete_report.md"
+    },
+    {
+      "id": "meetings.forget_person",
+      "title": "Forget a person",
+      "summary": "Delete a person and every voiceprint of them.",
+      "description": "Delete a person from People with every voiceprint of them and all that was learnt of their voice. Meetings keep their name as words. Always asks the person.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "person_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Person Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "person_id"
+        ],
+        "title": "ForgetIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "forgotten": {
+            "title": "Forgotten",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "forgotten"
+        ],
+        "title": "ForgetOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "person_id": "00000000000000000000000000000000"
+        }
+      ],
+      "effect": "destroy",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.people",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.forget_person.md"
+    },
+    {
+      "id": "meetings.make",
+      "title": "Make a meeting from a recording",
+      "summary": "Write down a recording and tell its speakers apart, as a meeting.",
+      "description": "Make a meeting from a recording of the library (a track or a speech): it is written down with the chosen speech-to-text model and its speakers are told apart on this computer (up to 4 in one recording), then kept in Meetings and in search. It takes about a minute for every 20 minutes of recording. The speakers are called Speaker 1, Speaker 2 ... until a person names them (meetings.name_speaker). Returns the speakers, how long each spoke, and the start of the transcript.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "source_kind": {
+            "default": "track",
+            "description": "Whether the recording is a track (an imported or made sound) or a speech.",
+            "enum": [
+              "track",
+              "speech"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_id": {
+            "description": "The id of the recording.",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "A name for the meeting.",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          },
+          "language": {
+            "default": "",
+            "description": "The language spoken (en, bn, hi ...), when the chosen speech model needs it.",
+            "maxLength": 20,
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "title": "MakeIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "SpeakerOut": {
+            "properties": {
+              "key": {
+                "title": "Key",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "seconds": {
+                "title": "Seconds",
+                "type": "number"
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "seconds"
+            ],
+            "title": "SpeakerOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "meeting_id": {
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "speakers": {
+            "items": {
+              "$ref": "#/$defs/SpeakerOut"
+            },
+            "title": "Speakers",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "meeting_id",
+          "uri",
+          "title",
+          "seconds",
+          "speakers",
+          "text"
+        ],
+        "title": "MeetingOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "source_kind": "track",
+          "source_id": "5d1c0e7a-0000-4000-8000-000000000000"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        },
+        {
+          "kind": "model",
+          "name": "transcribe"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.make.md"
+    },
+    {
+      "id": "meetings.make_recorded",
+      "title": "Make a meeting from a recording made in the app",
+      "summary": "Make a meeting from a recording of Meetings › Record that is waiting.",
+      "description": "Make a meeting from a recording made in Meetings › Record that was not made into one yet (the window was closed, or the speaker model was missing). The person starts and stops recording themselves in the app; this cannot record. The microphone is the speaker You and the computer's sound is split into Speaker 2, 3 ... Without a name the newest waiting recording is used. Returns the speakers and the start of the transcript.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "default": "",
+            "description": "The recording's name (rec-....wav); empty takes the newest one waiting.",
+            "maxLength": 80,
+            "title": "Name",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "A name for the meeting.",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          },
+          "language": {
+            "default": "",
+            "description": "The language spoken (en, de ...), when the chosen speech model needs it.",
+            "maxLength": 20,
+            "title": "Language",
+            "type": "string"
+          }
+        },
+        "title": "RecordedIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "SpeakerOut": {
+            "properties": {
+              "key": {
+                "title": "Key",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "seconds": {
+                "title": "Seconds",
+                "type": "number"
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "seconds"
+            ],
+            "title": "SpeakerOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "meeting_id": {
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "speakers": {
+            "items": {
+              "$ref": "#/$defs/SpeakerOut"
+            },
+            "title": "Speakers",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "meeting_id",
+          "uri",
+          "title",
+          "seconds",
+          "speakers",
+          "text"
+        ],
+        "title": "MeetingOut",
+        "type": "object"
+      },
+      "examples": [
+        {},
+        {
+          "name": "rec-1763300000-0a1b2c3d.wav",
+          "title": "Stand-up"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        },
+        {
+          "kind": "model",
+          "name": "transcribe"
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.record",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.make_recorded.md"
+    },
+    {
+      "id": "meetings.name_speaker",
+      "title": "Name a speaker",
+      "summary": "Give a speaker of a meeting a name.",
+      "description": "Give one speaker of a meeting their name. They become that person in People (one already there with the name, or a new one) and their voice is kept, so later meetings suggest them. Use it when the person says who a speaker is; never guess a name from what was said. An empty name gives back Speaker N.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "meeting_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "speaker": {
+            "description": "The speaker's key in the meeting: \"S1\", \"S2\" ...",
+            "maxLength": 4,
+            "minLength": 2,
+            "title": "Speaker",
+            "type": "string"
+          },
+          "name": {
+            "description": "Their name; empty gives back Speaker N.",
+            "maxLength": 80,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "meeting_id",
+          "speaker",
+          "name"
+        ],
+        "title": "NameIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "SpeakerOut": {
+            "properties": {
+              "key": {
+                "title": "Key",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "seconds": {
+                "title": "Seconds",
+                "type": "number"
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "seconds"
+            ],
+            "title": "SpeakerOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "meeting_id": {
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "speakers": {
+            "items": {
+              "$ref": "#/$defs/SpeakerOut"
+            },
+            "title": "Speakers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "meeting_id",
+          "speakers"
+        ],
+        "title": "NameOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "meeting_id": "00000000000000000000000000000000",
+          "speaker": "S1",
+          "name": "Asha"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.name_speaker.md"
+    },
+    {
+      "id": "meetings.people",
+      "title": "List the people of meetings",
+      "summary": "The people Meetings knows by voice.",
+      "description": "The people named in meetings: each with how many meetings they were named in and how many voiceprints of them are kept. A speaker of a later meeting is suggested as one of them; the person confirms.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "PersonOut": {
+            "properties": {
+              "person_id": {
+                "title": "Person Id",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "meetings": {
+                "title": "Meetings",
+                "type": "integer"
+              },
+              "voices": {
+                "title": "Voices",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "person_id",
+              "name",
+              "meetings",
+              "voices"
+            ],
+            "title": "PersonOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/$defs/PersonOut"
+            },
+            "title": "People",
+            "type": "array"
+          }
+        },
+        "required": [
+          "people"
+        ],
+        "title": "PeopleOut",
+        "type": "object"
+      },
+      "examples": [
+        {}
+      ],
+      "effect": "read",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.people",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.people.md"
+    },
+    {
+      "id": "meetings.rename_person",
+      "title": "Rename a person",
+      "summary": "Give a person of People a new name, in every meeting.",
+      "description": "Change a person's name in People and in every meeting they were named in (meetings.people gives their id).",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "person_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Person Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "person_id",
+          "name"
+        ],
+        "title": "RenamePersonIn",
+        "type": "object"
+      },
+      "output": {
+        "$defs": {
+          "PersonOut": {
+            "properties": {
+              "person_id": {
+                "title": "Person Id",
+                "type": "string"
+              },
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "meetings": {
+                "title": "Meetings",
+                "type": "integer"
+              },
+              "voices": {
+                "title": "Voices",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "person_id",
+              "name",
+              "meetings",
+              "voices"
+            ],
+            "title": "PersonOut",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/$defs/PersonOut"
+            },
+            "title": "People",
+            "type": "array"
+          }
+        },
+        "required": [
+          "people"
+        ],
+        "title": "PeopleOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "person_id": "00000000000000000000000000000000",
+          "name": "Asha Rahman"
+        }
+      ],
+      "effect": "change",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        }
+      ],
+      "long": false,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.people",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.rename_person.md"
+    },
+    {
+      "id": "meetings.write_report",
+      "title": "Write a report of a meeting",
+      "summary": "A summary, minutes, action items or another report of a meeting.",
+      "description": "Write a report of a meeting from a template with the chosen chat model: summary, minutes, actions (action items), decisions, standup, sales (a sales call), or the person's own template. It uses only what was said, in the meeting's language. A long meeting is read in parts first. The report is kept on the meeting's page and found by search. Returns the report.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "meeting_id": {
+            "maxLength": 32,
+            "minLength": 32,
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "template": {
+            "default": "summary",
+            "description": "Which report: summary, minutes, actions, decisions, standup, sales, or the id of the person's own template (own-...).",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Template",
+            "type": "string"
+          }
+        },
+        "required": [
+          "meeting_id"
+        ],
+        "title": "ReportIn",
+        "type": "object"
+      },
+      "output": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "meeting_id": {
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id",
+          "meeting_id",
+          "title",
+          "text"
+        ],
+        "title": "ReportOut",
+        "type": "object"
+      },
+      "examples": [
+        {
+          "meeting_id": "00000000000000000000000000000000"
+        },
+        {
+          "meeting_id": "00000000000000000000000000000000",
+          "template": "actions"
+        }
+      ],
+      "effect": "make",
+      "flags": [],
+      "requires": [
+        {
+          "kind": "product",
+          "name": "wasifyai-meetings"
+        },
+        {
+          "kind": "runtime",
+          "name": "meetings"
+        },
+        {
+          "kind": "chat",
+          "name": ""
+        }
+      ],
+      "long": true,
+      "product": "wasifyai-meetings",
+      "ui": "meetings.list",
+      "ui_exempt": "",
+      "surfaces": [
+        "assistant",
+        "mcp"
+      ],
+      "consent": "",
+      "help": "docs/help/meetings.write_report.md"
     },
     {
       "id": "model3d.generate",

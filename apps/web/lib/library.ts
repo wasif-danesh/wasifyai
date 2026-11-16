@@ -5,6 +5,7 @@ import {
   createCreationsApi,
   createCreativeApi,
   createImagesApi,
+  createMeetingsApi,
   createModel3dApi,
   createModelsInUseApi,
   createNotebooksApi,
@@ -30,6 +31,8 @@ export const webModel3d = createModel3dApi(transport, { hosted: true });
 /** Motion graphics is drawn by an engine worker (ADR-0087): nothing to set up from the page. */
 export const webVideoBuilder = createVideoBuilderApi(transport, { hosted: true });
 export const webNotebooks = createNotebooksApi(transport);
+// meetings from a file, written down in the cloud (ADR-0108)
+export const webMeetings = createMeetingsApi(transport);
 /** Train models: the teaching runs on an engine worker (docs/train-web-plan.md); an admin sets the trainers up there. */
 export const webTraining = createTrainingApi(transport);
 /** Speech on the web is served by hosted models: always ready, nothing to set up. */

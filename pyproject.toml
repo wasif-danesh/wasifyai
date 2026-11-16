@@ -25,6 +25,7 @@ wasifyai-model3d = { workspace = true }
 wasifyai-creative = { workspace = true }
 wasifyai-training = { workspace = true }
 wasifyai-code = { workspace = true }
+wasifyai-meetings = { workspace = true }
 
 [tool.ruff]
 line-length = 100
@@ -50,7 +51,7 @@ exclude = ["services/api/src/wasifyai_api/lipsync_server", "services/api/src/was
 typeCheckingMode = "standard"
 # Test helper modules (conftest, fake_comfyui) are imported by name; pytest puts their folders on
 # sys.path, so tell pyright too.
-extraPaths = ["products/wasifyai-image/tests", "products/wasifyai-video/tests", "products/wasifyai-model3d/tests", "products/wasifyai-creative/tests", "products/wasifyai-training/tests", "products/wasifyai-assistant/tests", "products/wasifyai-notebooks/tests", "products/wasifyai-voice/tests", "products/wasifyai-code/tests", "services/media-worker/tests", "services/engine-worker/tests"]
+extraPaths = ["products/wasifyai-image/tests", "products/wasifyai-video/tests", "products/wasifyai-model3d/tests", "products/wasifyai-creative/tests", "products/wasifyai-training/tests", "products/wasifyai-assistant/tests", "products/wasifyai-notebooks/tests", "products/wasifyai-voice/tests", "products/wasifyai-code/tests", "products/wasifyai-meetings/tests", "services/media-worker/tests", "services/engine-worker/tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

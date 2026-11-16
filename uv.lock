@@ -17,6 +17,7 @@ members = [
     "wasifyai-engine-worker",
     "wasifyai-image",
     "wasifyai-media-worker",
+    "wasifyai-meetings",
     "wasifyai-model3d",
     "wasifyai-notebooks",
     "wasifyai-platform-sdk",
@@ -3288,6 +3289,7 @@ desktop = [
     { name = "wasifyai-code" },
     { name = "wasifyai-creative" },
     { name = "wasifyai-media-worker" },
+    { name = "wasifyai-meetings" },
     { name = "wasifyai-model3d" },
     { name = "wasifyai-notebooks" },
     { name = "wasifyai-training" },
@@ -3319,6 +3321,7 @@ requires-dist = [
     { name = "wasifyai-contracts", editable = "packages/contracts" },
     { name = "wasifyai-creative", marker = "extra == 'desktop'", editable = "products/wasifyai-creative" },
     { name = "wasifyai-media-worker", marker = "extra == 'desktop'", editable = "services/media-worker" },
+    { name = "wasifyai-meetings", marker = "extra == 'desktop'", editable = "products/wasifyai-meetings" },
     { name = "wasifyai-model3d", marker = "extra == 'desktop'", editable = "products/wasifyai-model3d" },
     { name = "wasifyai-notebooks", marker = "extra == 'desktop'", editable = "products/wasifyai-notebooks" },
     { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
@@ -3465,6 +3468,29 @@ requires-dist = [
     { name = "wasifyai-contracts", editable = "packages/contracts" },
     { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
     { name = "websockets", specifier = ">=16.1.1" },
+]
+
+[[package]]
+name = "wasifyai-meetings"
+version = "0.0.0"
+source = { editable = "products/wasifyai-meetings" }
+dependencies = [
+    { name = "imageio-ffmpeg" },
+    { name = "langgraph" },
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "pydantic" },
+    { name = "wasifyai-platform-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "imageio-ffmpeg", specifier = ">=0.5" },
+    { name = "langgraph", specifier = ">=0.6" },
+    { name = "numpy", specifier = ">=2" },
+    { name = "onnxruntime", specifier = ">=1.20" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "wasifyai-platform-sdk", editable = "packages/platform-sdk" },
 ]
 
 [[package]]

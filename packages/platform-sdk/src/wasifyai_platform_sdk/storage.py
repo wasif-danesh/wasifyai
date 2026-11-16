@@ -94,6 +94,7 @@ class LocalFileStorage(Storage):
     def __init__(self, root: Path, public_base_url: str, secret: str):
         root.mkdir(parents=True, exist_ok=True)
         super().__init__(LocalStore(str(root)), scheme_hint="file")
+        self._root = root
         self._base = public_base_url.rstrip("/")
         self._secret = secret.encode()
 
@@ -110,6 +111,12 @@ class LocalFileStorage(Storage):
         expires_at = int(time.time() + expires.total_seconds())
         sig = self._signature(key, expires_at)
         return f"{self._base}/files/{quote(key, safe='/')}?e={expires_at}&s={sig}"
+
+    def path_of(self, key: str) -> Path:
+        """Where a key's file is on disk (it may not be there): for a file written in place, and for
+        serving one in ranges."""
+        _check(key.split("/"))
+        return self._root / key
 
     def verify(self, key: str, expires_at: int, signature: str, now: float | None = None) -> bool:
         """Whether a link for `key` is genuine and not expired."""

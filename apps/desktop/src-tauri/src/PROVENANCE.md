@@ -33,3 +33,39 @@ backend's login route, and the browser panel, none of which wasifyai has. Import
 assumptions. The installer and the updater skeleton above were written for wasifyai after reading them.
 `staged_update.rs` (downloading an update while the app runs and applying it on the next start) may be worth
 adapting when the updater is switched on; this file is updated when it is.
+
+## Meetily (MIT): the meeting recorder
+
+Source: Meetily, <https://github.com/Zackriya-Solutions/meetily>, commit `2166bc6`, file
+`frontend/src-tauri/src/audio/capture/core_audio.rs`. Licence: MIT. Read for ADR-0108 and adapted
+on 2026-11-16 (stage MT2).
+
+| File here | What was taken |
+|---|---|
+| `recorder.rs` (`mod system`, macOS) | How the computer's sound is captured on a Mac: a Core Audio process tap on all output (`cidre`, at Meetily's pinned `cidre` commit `a9587fa`), put in a private aggregate device whose input is read. The tap's set-up and the aggregate device's description follow Meetily's; the rest of `recorder.rs` (two channels on one clock, the WAV writer, the tray, the commands) is written for Wasify AI. |
+
+The MIT notice of the adapted code:
+
+```
+MIT License
+
+Copyright (c) 2024 Zackriya Solutions
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

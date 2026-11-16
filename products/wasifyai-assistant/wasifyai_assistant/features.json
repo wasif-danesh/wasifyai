@@ -28,6 +28,52 @@
     ]
   },
   {
+    "screen": "meetings.record",
+    "where": "Meetings › Record",
+    "actions": [
+      "meetings.make_recorded"
+    ],
+    "does": [
+      "Make a meeting from a recording made in the app"
+    ]
+  },
+  {
+    "screen": "meetings.list",
+    "where": "Meetings › View meetings",
+    "actions": [
+      "meetings.add_template",
+      "meetings.add_to_notebook",
+      "meetings.ask",
+      "meetings.delete_report",
+      "meetings.make",
+      "meetings.name_speaker",
+      "meetings.write_report"
+    ],
+    "does": [
+      "Keep a report template",
+      "Add a meeting to a notebook",
+      "Ask about a meeting",
+      "Delete a report of a meeting",
+      "Make a meeting from a recording",
+      "Name a speaker",
+      "Write a report of a meeting"
+    ]
+  },
+  {
+    "screen": "meetings.people",
+    "where": "Meetings › People",
+    "actions": [
+      "meetings.forget_person",
+      "meetings.people",
+      "meetings.rename_person"
+    ],
+    "does": [
+      "Forget a person",
+      "List the people of meetings",
+      "Rename a person"
+    ]
+  },
+  {
     "screen": "images.create",
     "where": "Images › Create",
     "actions": [

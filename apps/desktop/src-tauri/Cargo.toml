@@ -31,11 +31,17 @@ base64 = "0.23"
 rand = "0.10"
 log = "0.4"
 env_logger = "0.11"
+# recording a meeting (ADR-0108, MT2): the microphone everywhere, the computer's sound on Windows
+# (WASAPI loopback), and the two channels written as a WAV
+cpal = "0.15"
+hound = "3.5"
 
 # the menu bar item that keeps the app open for scheduled runs: a Mac only, like the switch itself
 # (elsewhere it would need system packages the builds do not have)
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
+# the computer's sound through a Core Audio process tap (ADR-0108), at the commit Meetily pins
+cidre = { git = "https://github.com/yury/cidre", rev = "a9587fa", features = ["av"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -35,6 +35,9 @@ export type Route =
   | "code"
   | "extensions"
   | "scheduled"
+  | "meetings"
+  | "record"
+  | "people"
   | "train"
   | "creations"
   | "videos";
@@ -72,6 +75,9 @@ const PATHS: Record<Route, string> = {
   code: "/code",
   extensions: "/extensions",
   scheduled: "/scheduled",
+  meetings: "/meetings",
+  record: "/meetings/record",
+  people: "/meetings/people",
   train: "/train",
   videos: "/video/library",
 };
@@ -101,6 +107,17 @@ export function codePath(id: string | null): string {
   return id ? `/code/${id}` : "/code";
 }
 
+/** The meeting a hash opens (`#/meetings/<id>`), or null: the list. */
+export function parseMeeting(hash: string): string | null {
+  const path = hash.replace(/^#/, "").split("?")[0] ?? "";
+  const m = /^\/meetings\/([0-9a-f]{32})$/.exec(path);
+  return m?.[1] ?? null;
+}
+
+export function meetingPath(id: string | null): string {
+  return id ? `/meetings/${id}` : "/meetings";
+}
+
 export function routePath(route: Route): string {
   return PATHS[route];
 }
@@ -123,6 +140,7 @@ export function parseHash(hash: string): Route {
   if (parseConversation(hash)) return "home";
   if (parseNotebook(hash)) return "notebook";
   if (parseCodeSession(hash)) return "code";
+  if (parseMeeting(hash)) return "meetings";
   const found = (Object.keys(PATHS) as Route[]).find((r) => PATHS[r] === path);
   return found ?? "home";
 }

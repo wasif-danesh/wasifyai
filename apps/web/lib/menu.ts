@@ -75,6 +75,13 @@ export function resolveWebItem(
         return page("/train");
       case "creative":
         return page("/creative");
+      case "meetings.list":
+        return page("/meetings");
+      case "meetings.people":
+        return page("/meetings/people");
+      case "meetings.record":
+        // v1 on the web takes a file only: a recording is made in the desktop app (ADR-0108)
+        return { hidden: true };
       case "library":
         // the one Library, whichever kind it shows, and the page of one picture or clip in it (ADR-0093, U8)
         return {

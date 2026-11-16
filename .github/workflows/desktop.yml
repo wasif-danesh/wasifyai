@@ -4,7 +4,9 @@ name: desktop
 # No signing and no installer in Phase 1.
 on:
   workflow_dispatch:
+  # A branch is tested through its pull request; a push runs only on main.
   push:
+    branches: [main]
     paths:
       - apps/desktop/**
       - apps/web/**

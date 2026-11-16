@@ -59,7 +59,9 @@ class FakeSpeech:
             TranscriptSegment(5.2, 8.6, "Yes, the budget first."),
             TranscriptSegment(9.0, 11.5, "Fine by me."),
         ]
-        return TranscriptResult(" ".join(s.text for s in segs), segs, 12.0, model.id, 0.1, None)
+        return TranscriptResult(
+            " ".join(s.text for s in segs), tuple(segs), 12.0, model.id, 0.1, None
+        )
 
 
 class FakeSortformer:
@@ -315,14 +317,16 @@ def test_the_assistant_makes_a_meeting_from_the_newest_waiting_recording(ready):
                 "meetings.make_recorded", params, "window", actor=Identity("local", "me")
             )
 
-        made = c.portal.call(go, {"title": "Weekly sync"})
+        portal = c.portal
+        assert portal is not None
+        made = portal.call(go, {"title": "Weekly sync"})
         assert made.status == "ok", made
         assert made.output["title"] == "Weekly sync"
         assert made.output["speakers"][0]["name"] == "You"
         assert not newest.exists() and (folder / "rec-old.wav").exists()
 
-        assert c.portal.call(go, {"name": "rec-gone.wav"}).status == "refused"
-        assert c.portal.call(go, {"name": "../meetings.db"}).status == "refused"
+        assert portal.call(go, {"name": "rec-gone.wav"}).status == "refused"
+        assert portal.call(go, {"name": "../meetings.db"}).status == "refused"
 
 
 class FakeVoices:
@@ -429,6 +433,7 @@ def test_a_report_is_written_kept_found_saved_and_deleted(ready):
         r = c.post(url, json={"template": "summary"}, headers=auth())
         assert r.status_code == 201, r.text
         rid = r.json()["id"]
+        got: dict = {}
         for _ in range(100):
             got = c.get(f"{PRODUCT}/reports/{rid}", headers=auth()).json()
             if got["status"] != "working":
@@ -506,6 +511,7 @@ def test_a_meeting_is_added_to_a_notebook_and_asked_about_on_its_page(ready, mon
         r = c.post(f"{url}/questions", json={"question": "What comes first?"}, headers=auth())
         assert r.status_code == 201, r.text
         qid = r.json()["id"]
+        got: dict = {}
         for _ in range(100):
             got = c.get(f"{PRODUCT}/questions/{qid}", headers=auth()).json()
             if got["status"] != "working":
@@ -547,7 +553,9 @@ class FakeCloudSpeech:
             TranscriptSegment(9.0, 11.5, "Fine.", "speaker_0"),
         ]
         segs = [TranscriptSegment(0.3, 11.5, "Good morning. Budget. Fine.")]
-        return TranscriptResult(segs[0].text, segs, 12.0, model.id, 0.1, None, words=tuple(words))
+        return TranscriptResult(
+            segs[0].text, tuple(segs), 12.0, model.id, 0.1, None, words=tuple(words)
+        )
 
 
 class FakeStorage:

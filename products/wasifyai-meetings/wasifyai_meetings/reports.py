@@ -152,6 +152,8 @@ class ReportJobs:
         self._on_done = on_done  # (identity, meeting id) -> awaitable: search sees the report
         self._per_person = per_person
         self._jobs: dict[tuple[str, str], tuple[str, asyncio.Task[None]]] = {}
+        # reports already written whose task is still adding them to search: not busy any more
+        self._written: set[str] = set()
 
     def _slot(self, identity: Identity | None) -> tuple[str, str]:
         if not self._per_person or identity is None:
@@ -160,7 +162,7 @@ class ReportJobs:
 
     def busy(self, identity: Identity | None = None) -> bool:
         job = self._jobs.get(self._slot(identity))
-        return job is not None and not job[1].done()
+        return job is not None and not job[1].done() and job[0] not in self._written
 
     def _job_of(self, rid: str) -> asyncio.Task[None] | None:
         for got, task in self._jobs.values():
@@ -190,6 +192,7 @@ class ReportJobs:
             try:
                 await self._write(identity, row, report["id"], template)
             finally:
+                self._written.discard(report["id"])
                 reset_context(token)
 
         self._jobs[self._slot(identity)] = (report["id"], asyncio.create_task(run()))
@@ -253,6 +256,7 @@ class ReportJobs:
             if not text:
                 raise RunError("empty_reply", "The chat model wrote nothing. Try again.")
             store.finish_report(rid, text)
+            self._written.add(rid)  # a next report may start while this one is indexed
             caps = self._deps.state.caps[self._product]
             await caps.record_usage("meetings.report", 1, "reports", template=template.id[:16])
             await self._on_done(identity, row["id"])

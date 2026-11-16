@@ -141,6 +141,30 @@ def test_one_report_at_a_time_and_none_for_a_meeting_not_made(tmp_path):
     asyncio.run(go())
 
 
+def test_a_written_report_is_not_busy_while_it_is_added_to_search(tmp_path):
+    store, row, jobs, _, _, _ = setup(tmp_path, 5)
+    reached, indexing = asyncio.Event(), asyncio.Event()
+
+    async def slow_search(identity, item):  # noqa: ANN001, ANN202
+        reached.set()
+        await indexing.wait()
+
+    jobs._on_done = slow_search
+
+    async def go():  # noqa: ANN202
+        r = jobs.start(ME, row["id"], reports.BY_ID["summary"])
+        await reached.wait()
+        assert store.report("t", "u", r["id"])["status"] == "done"
+        assert not jobs.busy(ME)  # done on the page, so the next report may start
+        nxt = jobs.start(ME, row["id"], reports.BY_ID["minutes"])
+        indexing.set()
+        await jobs.wait(r["id"])
+        await jobs.wait(nxt["id"])
+        return store.report("t", "u", nxt["id"])
+
+    assert asyncio.run(go())["status"] == "done"
+
+
 def test_own_templates_are_kept_per_person(tmp_path):
     store = MeetingStore.in_folder(tmp_path)
     t = store.add_template("t", "u", "Client update", "What the client asked for.")

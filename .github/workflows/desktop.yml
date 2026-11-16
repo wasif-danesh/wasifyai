@@ -116,7 +116,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
-            libayatana-appindicator3-dev libssl-dev patchelf
+            libayatana-appindicator3-dev libssl-dev libasound2-dev patchelf
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: apps/desktop/src-tauri }
@@ -142,7 +142,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
-            libayatana-appindicator3-dev libssl-dev patchelf xvfb
+            libayatana-appindicator3-dev libssl-dev libasound2-dev patchelf xvfb
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: apps/desktop/src-tauri }
@@ -183,7 +183,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
-            libayatana-appindicator3-dev libssl-dev patchelf xvfb
+            libayatana-appindicator3-dev libssl-dev libasound2-dev patchelf xvfb
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: apps/desktop/src-tauri }
@@ -245,7 +245,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
-            libayatana-appindicator3-dev libssl-dev patchelf xvfb
+            libayatana-appindicator3-dev libssl-dev libasound2-dev patchelf xvfb
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: apps/desktop/src-tauri }

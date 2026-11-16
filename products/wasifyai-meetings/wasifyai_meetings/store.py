@@ -283,7 +283,12 @@ class MeetingStore:
         )
         if gone:
             for table in (
-                "speaker_prints", "prints_made", "evidence", "reports", "in_notebooks", "questions"
+                "speaker_prints",
+                "prints_made",
+                "evidence",
+                "reports",
+                "in_notebooks",
+                "questions",
             ):
                 self.db.exec(
                     f"DELETE FROM {table} WHERE meeting_id = ? AND tenant_id = ? AND user_id = ?",

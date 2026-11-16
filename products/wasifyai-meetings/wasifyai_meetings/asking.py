@@ -37,6 +37,7 @@ def note_of(row: dict[str, Any], reports: list[dict[str, Any]]) -> str:
     """The meeting as a notebook source: what a question about it may need, in plain text."""
     when = (row.get("created_at") or "")[:10]
     minutes = round(float(row.get("seconds") or 0) / 60)
+
     def spoke(s: dict[str, Any]) -> str:
         m = round(float(s.get("seconds") or 0) / 60)
         return f"{s['name']} ({m} min)" if m else s["name"]

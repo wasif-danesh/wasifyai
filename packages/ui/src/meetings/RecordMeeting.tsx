@@ -1,3 +1,5 @@
+"use client";
+
 // Record a meeting (ADR-0108, MT2): the microphone is recorded as "You" and the computer's sound (the
 // call) as "Others", in one file with two channels. The window's shell records (the screen knows no
 // sound device); this screen starts it, shows the time and how loud each side is, stops it, and hands

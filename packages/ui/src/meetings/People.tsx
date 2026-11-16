@@ -1,3 +1,5 @@
+"use client";
+
 // People (ADR-0108 decisions 11 and 12, stage MT3): everyone named in a meeting, with how many
 // meetings and voiceprints of them are kept; rename them, or forget them with every voiceprint.
 import type { MeetingPerson, MeetingsApi } from "@wasifyai/client";

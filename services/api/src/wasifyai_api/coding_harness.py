@@ -25,8 +25,8 @@ import contextlib
 import json
 import logging
 import os
-import pwd
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -43,7 +43,12 @@ URL = re.compile(r"https://[^\s\"'<>]+")
 
 def real_home() -> Path:
     """The person's own home folder, from the system's record of this user: not `$HOME`, which
-    a test or a launcher may have changed."""
+    a test or a launcher may have changed. Windows keeps no such record: there it is the profile
+    folder."""
+    if sys.platform == "win32":
+        return Path(os.environ.get("USERPROFILE") or Path.home())
+    import pwd  # noqa: PLC0415  (Unix only)
+
     return Path(pwd.getpwuid(os.getuid()).pw_dir)
 
 

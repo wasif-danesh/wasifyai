@@ -334,7 +334,7 @@ class FalRunner:
         if what:
             raise _not_here(
                 f"{what} is not done with your key yet. Run it on this computer: Settings › "
-                "Your keys."
+                "Cloud keys."
             )
         if job.inputs.get("loras"):
             raise _not_here("Styles and looks made on this computer cannot be used with your key.")
@@ -385,7 +385,7 @@ class FalRunner:
         if found is None:
             raise _not_here(
                 f"{what} needs a model fal.ai can do it with; {self._model} cannot. Choose "
-                "another model, or run it on this computer: Settings › Your keys."
+                "another model, or run it on this computer: Settings › Cloud keys."
             )
         return found
 

@@ -158,7 +158,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const require = createRequire(join(ROOT, "apps", "web", "package.json"));
 const { chromium } = require("@playwright/test");
-const OUT = join(ROOT, "docs", "ui-audit", "desktop");
+const OUT = process.env.WASIFYAI_AUDIT_OUT ?? join(ROOT, "docs", "ui-audit", "desktop");
 const BASE = process.env.WASIFYAI_AUDIT_BASE ?? "http://127.0.0.1:8765";
 const TOKEN = process.env.WASIFYAI_AUDIT_TOKEN ?? "";
 const WINDOW = process.env.WASIFYAI_AUDIT_WINDOW ?? "http://localhost:1420";
@@ -3501,6 +3501,90 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(800);
       await shot(page, "home-recent-opened");
     });
+  }
+  if (scheme === "light" && names.has("readme")) {
+    // The README's pictures of the desktop window (docs/images/screens/desktop). They show this computer's own
+    // models and creations, so look at each one before committing it:
+    //
+    //   WASIFYAI_AUDIT_OUT=docs/images/screens/desktop apps/desktop/scripts/ui-audit.sh light readme
+    // the Recent strip under the home's quick starts shows the person's own creations: left out of the pictures
+    const top = async (name) => {
+      await page.screenshot({
+        path: join(OUT, `${name}.png`),
+        clip: { x: 0, y: 0, width: 1440, height: 792 },
+      });
+      console.log("wrote", name);
+    };
+    await attempt("home", async () => {
+      await open(page, "/");
+      await page.getByRole("navigation", { name: "Quick starts" }).waitFor();
+      await page.waitForTimeout(1500);
+      await top("home");
+    });
+    await attempt("model-picker", async () => {
+      await open(page, "/");
+      await page.locator('button[aria-haspopup="dialog"]').first().click();
+      const tabs = page.getByRole("dialog").getByRole("tab");
+      for (const [name, tab] of [
+        ["model-picker", "Recommended"],
+        ["model-picker-local", "On this computer"],
+      ]) {
+        await tabs.filter({ hasText: tab }).click();
+        await page.waitForTimeout(1200);
+        await top(name);
+      }
+      await page.keyboard.press("Escape");
+    });
+    await attempt("model-hub", async () => {
+      await open(page, "/models");
+      await shot(page, "model-hub");
+      await page.getByRole("tab", { name: "Images" }).click();
+      await page.waitForTimeout(1500);
+      await shot(page, "model-hub-images");
+    });
+    const group = async (title) => {
+      await page
+        .getByRole("navigation", { name: "Settings groups" })
+        .getByRole("button", { name: title })
+        .click();
+      await page.getByRole("heading", { level: 1, name: title }).waitFor();
+      await page.waitForTimeout(800);
+    };
+    await attempt("settings-computer", async () => {
+      await open(page, "/settings");
+      await group("On this computer");
+      await page.getByRole("heading", { name: "What this computer can do" }).waitFor();
+      // each job reads its list; Chat's is the slowest
+      await page
+        .getByText(/^Chat$/)
+        .first()
+        .waitFor({ timeout: 90_000 });
+      await page.waitForTimeout(3000);
+      await shot(page, "settings-computer");
+    });
+    await attempt("settings-keys", async () => {
+      await group("Cloud keys");
+      await page.getByRole("region", { name: "Media" }).waitFor();
+      await shot(page, "settings-keys", 1300);
+    });
+    await attempt("settings-privacy", async () => {
+      await group("Privacy");
+      await shot(page, "settings-privacy", 1100);
+    });
+    for (const [name, path] of [
+      ["images", "/images/create"],
+      ["video", "/video/create"],
+      ["speech", "/voice/speak"],
+      ["music", "/music/create"],
+      ["motion", "/video/builder"],
+      ["train", "/train"],
+    ]) {
+      // not Notebooks, Meetings, Creative Studio, Library or Code: they list the person's own work and folders
+      await attempt(name, async () => {
+        await open(page, path);
+        await shot(page, name);
+      });
+    }
   }
   if (scheme === "light" && names.size === 0) {
     for (const [name, path] of [

@@ -353,7 +353,7 @@ describe("choosing a model that is not on the computer", () => {
     await user.click(await screen.findByRole("button", { name: /Parakeet/ }));
     await user.click(screen.getByRole("tab", { name: "Cloud" }));
     expect(screen.getByText(/Save a provider key for Lip sync/)).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Open Your keys" }));
+    await user.click(screen.getByRole("button", { name: "Open Cloud keys" }));
     expect(setUp).toHaveBeenCalled();
   });
 

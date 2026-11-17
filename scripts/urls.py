@@ -18,7 +18,7 @@ import urllib.request
 SERVICES = [
     (
         "Web app",
-        "every product, the Library, admin",
+        "every product, My creations, admin",
         "http://localhost:3000",
         None,
         "http://localhost:3000",
@@ -58,19 +58,11 @@ SERVICES = [
     ),
     (
         "Embedder",
-        "bge-m3 for search (llama.cpp, on the CPU)",
+        "bge-m3 for search, on the CPU",
         "http://localhost:8090",
         "kubectl -n wasifyai port-forward svc/wasifyai-embedder 8090:8080",
         "http://localhost:8090",
-        "the one model the web runs itself",
-    ),
-    (
-        "Ollama",
-        "optional: only for a model an admin binds to it",
-        "http://localhost:11434",
-        None,
-        None,
-        "native on the host; no default model uses it",
+        "the web's one model of its own",
     ),
     (
         "Postgres",

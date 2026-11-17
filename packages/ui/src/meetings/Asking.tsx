@@ -1,3 +1,5 @@
+"use client";
+
 // Asking about a meeting (ADR-0108 decision 16, stage MT5): questions answered by a notebook the
 // meeting is in, with the lines they came from; and "Add to a notebook", to ask across many.
 import type { Meeting, MeetingQuestion, MeetingsApi } from "@wasifyai/client";

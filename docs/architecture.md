@@ -1,63 +1,122 @@
 # Architecture
 
-Status: **Draft**, October 2026. Decisions referenced here are recorded in
-[`decisions/`](decisions/README.md).
+Status: current as of November 2026. Decisions referenced here are recorded in [`decisions/`](decisions/README.md).
 
 ## Goals
 
 - Launch new AI products quickly by reusing one platform core.
-- Run identical container images on a MacBook (dev), a home lab k3s cluster (staging) and
-  managed Kubernetes on AWS, GCP or Azure (prod).
-- Prefer open-source components; keep every AI model swappable.
-- Defer auth, billing and observability without making them expensive to add later.
+- One engine for the desktop app and the web app ([ADR-0056](decisions/0056-desktop-app-and-web-share-one-engine.md)).
+- Let each person choose where a model runs: on their computer, in the cloud on their own keys, or on a
+  subscription they already pay for.
+- Run identical container images for the web on a laptop (dev), a home lab k3s cluster (staging) and managed
+  Kubernetes (prod).
+- Keep every model swappable; build multi-tenancy and usage records in from the start.
 
-## Three layers
+## One engine, two profiles
+
+The engine (`services/api`, FastAPI and LangGraph, with `packages/platform-sdk` and the products) runs under a
+**deployment profile**. The profile swaps the services behind the same interfaces. Product code never asks which
+profile it runs in ([desktop profile](desktop-profile.md)).
+
+| | Desktop | Web |
+|---|---|---|
+| Shell | Tauri window; the engine on `127.0.0.1` with a token per launch | Next.js app; its route handlers sign a short-lived token and proxy to the API |
+| Records, run state | SQLite | Postgres with pgvector |
+| Job queue | `SqliteJobQueue`, a worker inside the engine | Redis streams and a separate media worker |
+| Files | a folder; links signed by the engine | object storage (SeaweedFS, S3, GCS, Azure Blob); presigned links |
+| Secrets | the system keychain (an encrypted file where there is none) | the `secrets` table, encrypted, per tenant |
+| Models | local, your keys, or your subscription (below) | cloud only, on the keys an admin set |
+| People | one person | many tenants and users, sign-in with Auth.js |
+
+The screens live in `packages/ui` and talk to the engine through `packages/client`, so the window and the web app
+draw the same screens.
+
+## Where models run
+
+There are three ways to reach a model. Each product chooses one in the model button
+([ADR-0086](decisions/0086-one-simple-model-picker.md)).
+
+### 1. Local (desktop)
+
+The engine starts each program on demand and stops it when the engine ends. Each one is an optional part,
+downloaded only after the person has seen its size.
+
+| Work | Program |
+|---|---|
+| Chat, the assistant, Notebooks answers | llama.cpp (`llama-server`, with `--mmproj` to read pictures), or a model in Ollama or LM Studio |
+| Images, video | ComfyUI, managed by the engine, with pinned workflows (FLUX.2 klein, Z-Image, LTX-Video, Wan 2.2 and others) |
+| Speech, music, dubbing | audio.cpp (Kokoro, Parakeet, Whisper, ACE-Step) |
+| Lip sync, 3D | MuseTalk; Pixal3D through pixal3d.cpp |
+| Meetings | Sortformer and ERes2Net on ONNX Runtime |
+| Training | AI Toolkit (pictures, video), mlx-lm (writing), PyTorch (decisions) |
+| Documents | the notebooks' document reader, a separate process |
+
+The engine also finds models that other tools have already downloaded
+([ADR-0063](decisions/0063-self-sufficient-desktop-discovers-existing-models-and-tools.md)).
+
+### 2. Cloud on the person's own keys (desktop and web)
+
+[ADR-0100](decisions/0100-haiku-text-and-cheapest-media-provider.md):
+
+- **Text** runs on Claude Haiku 5.5 by default, bought directly from Anthropic. The person can choose a model from
+  Anthropic, OpenAI, Google Gemini, DeepSeek, Z.ai or OpenRouter, each with its own key.
+- **Media** runs on Runware, WaveSpeed and fal.ai. Each media line in the catalogue (`own_keys_catalogue.py`) lists
+  the providers that offer the model, with their prices.
+  - At Make, the router (`wasifyai_platform_sdk/offers.py`) prices the job on every offer that has a key and can do
+    what was asked, and runs the cheapest one.
+  - It moves to the next offer only if the first is refused before it starts running, so a paid job is never sent
+    twice.
+  - Each job writes a `cloud.cost` usage event.
+- **On the desktop**, the person adds the keys in the model button's Cloud tab.
+- **On the web**, an admin adds the service's keys in Admin › Models (text) and Admin › Media (media). Text goes
+  through LiteLLM. A media job carries the name its key is kept under, never the key itself, and the media worker
+  (`COMFYUI_MODE=cloud`) runs it.
+
+### 3. Cloud on the person's subscription (desktop, Code)
+
+A coding session can run on the person's own Claude Code or Codex, signed in with their Claude or ChatGPT plan
+([ADR-0107](decisions/0107-harnesses-the-persons-own-agent-program.md)).
+
+- **How it is started:** through the ACP agent of the OpenHands Agent Server that the coding engine already runs.
+- **Sign-in:** the program signs in through the provider's own page. Nothing of ours reads or keeps the login.
+- **Sandbox:** the session gets a sandbox of its own kind, opened only to that provider's hosts and the program's
+  sign-in files.
+- **What stays the same:** the check loop, undo, Changes, Preview and Scheduled runs belong to the Wasify engine
+  ([ADR-0103](decisions/0103-check-loop-and-undo-belong-to-the-wasify-engine.md)).
+
+## The web deployment
 
 ```mermaid
-flowchart TB
-  subgraph L3["Platform and products (identical everywhere)"]
-    WEB[Next.js apps] --> API[FastAPI + LangGraph]
-    API --> GW[LiteLLM gateway]
-    API --> PG[(Postgres + pgvector)]
-    API --> RD[(Redis)]
-    RD --> MW[Media workers] --> CUI[ComfyUI]
-    API --> OBJ[(Object storage)]
-    MW --> OBJ
-  end
-  subgraph L2["Cluster add-ons (portable, configured per cloud)"]
-    GWAPI[Gateway API] --- CM[cert-manager] --- EDNS[ExternalDNS]
-    ESO[External Secrets] --- GPUOP[NVIDIA GPU Operator] --- KEDA[KEDA] --- ARGO[Argo CD]
-  end
-  subgraph L1["Infrastructure (per environment, OpenTofu)"]
-    DEV[Dev: MacBook, Podman, native Metal]
-    STG[Staging: home lab k3s, 24 GB GPU]
-    PRD[Prod: EKS / GKE / AKS]
-  end
-  L3 --> L2 --> L1
+flowchart LR
+  B[Browser] --> N[Next.js: UI, sign-in, BFF]
+  N --> A[FastAPI + LangGraph]
+  A --> L[LiteLLM] --> V[Anthropic, OpenAI, Gemini, DeepSeek, Z.ai, OpenRouter]
+  A --> PG[(Postgres + pgvector)]
+  A --> R[(Redis)] --> MW[Media worker] --> P[Runware, WaveSpeed, fal.ai]
+  A --> E[Embedder: bge-m3 on llama.cpp, CPU]
+  A --> NW[Notebooks worker: document reader]
+  A --> EW[Engine workers: tools such as song analysis and motion render]
+  A --> O[(Object storage)]
+  MW --> O
 ```
 
-1. **Infrastructure** is the only cloud-aware layer. One OpenTofu module per target, each
-   exposing the same outputs: cluster, CPU node pool, GPU node pool, Postgres, Redis, bucket,
-   DNS.
-2. **Cluster add-ons** are the same tools everywhere, with per-cloud settings.
-3. **Platform and products** are identical Helm charts and images. Values overlay as
-   `base` → `env` (staging, prod) → `cloud` (homelab, aws, gcp, azure).
-
-## Components
+The web has **no GPU and runs one model of its own**: bge-m3 for search, on the CPU. Everything else runs on cloud
+models ([environments](environments.md)). Tools that are not models, such as reading documents, analysing songs and
+rendering motion graphics, run on CPU workers ([ADR-0087](decisions/0087-engine-workers-run-the-desktops-capabilities-for-the-web.md)).
 
 | Component | Responsibility | Scales on |
 |---|---|---|
-| Next.js app | Product UI; route handlers act as the backend-for-frontend (BFF) and proxy to the API. The browser never calls FastAPI directly. | CPU, stateless |
-| FastAPI + LangGraph | Runs product graphs; streams SSE; owns tenant context, identity, usage events, job callbacks | CPU, stateless |
-| LiteLLM | One OpenAI-compatible API in front of every LLM backend; model aliases; spend tracking | CPU, stateless |
-| Ollama / vLLM | LLM inference: Ollama in dev and staging, vLLM or hosted APIs in prod | GPU |
-| Media worker | Consumes Redis jobs, drives ComfyUI, uploads outputs, publishes progress, resumes graphs | Queue depth (KEDA) |
-| ComfyUI | Image, music and video generation from versioned JSON workflows | GPU |
-| Postgres + pgvector | App data, LangGraph checkpoints, job records, usage events, RAG vectors | Managed in prod |
-| Redis | Job queue; pub/sub fan-out of progress events to any API replica | Managed in prod |
-| Object storage | Generated media and uploads. SeaweedFS (S3 API) in dev/staging; S3, GCS or Azure Blob in prod | Managed |
+| Next.js app | UI. Its route handlers act as the BFF and proxy to the API; the browser never calls FastAPI directly | CPU, stateless |
+| FastAPI + LangGraph | Runs product graphs, streams SSE, owns identity, tenant context, usage events and job callbacks | CPU, stateless |
+| LiteLLM | One OpenAI-compatible gateway for every text and embedding call; model aliases (`model_defaults.yaml`) | CPU, stateless |
+| Media worker | Takes Redis jobs and runs them on the cheapest keyed cloud offer, uploads the outputs and resumes the graph | Queue depth |
+| Embedder | bge-m3 for search, served by llama.cpp | CPU |
+| Notebooks worker | Reads the sources people add and makes Studio outputs | Queue depth |
+| Postgres + pgvector | App data, LangGraph checkpoints, jobs, usage events, search vectors, encrypted keys | Managed in prod |
+| Redis | Job queue; pub/sub of progress to any API replica | Managed in prod |
+| Object storage | Uploads and everything made | Managed |
 
-## Request flow (generic)
+### Request flow
 
 ```mermaid
 sequenceDiagram
@@ -67,21 +126,18 @@ sequenceDiagram
   participant L as LiteLLM
   participant R as Redis
   participant W as Media worker
-  participant C as ComfyUI
+  participant P as Cloud provider
   participant S as Object storage
-  B->>N: POST /api/runs (idea)
-  N->>A: POST /runs (identity, tenant)
+  B->>N: POST /api/products/{id}/runs
+  N->>A: POST /products/{id}/runs (signed identity)
   A-->>B: SSE: node, token...
-  A->>L: chat completion (structured output)
-  L-->>A: JSON
-  A->>R: enqueue job (job_id saved in graph state)
+  A->>L: chat completion
+  L-->>A: reply
+  A->>R: enqueue job with its priced offers
   A-->>B: SSE: job_progress (queued)
   W->>R: dequeue
-  W->>C: POST /prompt (workflow + mapped inputs)
-  C-->>W: WebSocket progress
-  W->>R: publish progress
-  R-->>A: progress
-  A-->>B: SSE: job_progress
+  W->>P: run on the cheapest offer
+  P-->>W: result
   W->>S: upload output
   W->>A: job callback (resume graph)
   A-->>B: SSE: done (asset URLs)
@@ -89,96 +145,88 @@ sequenceDiagram
 
 Key properties:
 
-- **Graph state lives in Postgres**, so any API replica can resume any run. No sticky
-  sessions.
-- **Progress fans out via Redis pub/sub**, so the replica holding a browser's SSE connection
-  receives events produced anywhere.
-- **GPU work is never awaited inline.** Nodes enqueue and the graph resumes on callback.
-- **Outputs are URLs**, never bytes in the stream.
+- **Graph state lives in the database**, so any API replica can resume any run. No sticky sessions are needed.
+- **Progress fans out through Redis pub/sub**, so the replica holding a browser's SSE connection receives events
+  produced anywhere.
+- **Slow work is never awaited inline.** Nodes enqueue a job, and the graph resumes on its callback.
+- **Outputs are URLs**, never bytes in the stream ([SSE contract](contracts/sse-events.md)).
 
-## Platform core vs products
+## Platform core and products
 
 A product is a folder under `products/` containing:
 
-- `product.yaml`: ID, capability bindings, uploads, Enhance kinds, settings
-- `graphs/`: LangGraph graphs, registered with the API at startup
-- `prompts/`: versioned prompt templates
-- `workflows/`: ComfyUI API-format workflow JSON plus `*.map.yaml` input/output maps
+- `product.yaml`: the ID, its models and capability bindings, uploads and settings.
+- `graphs/` and the product's own routes and store.
+- `prompts/` and, for local media, `workflows/` (ComfyUI JSON with input and output maps).
 
-Adding a product adds no endpoints for running it: the API's graph registry exposes registered
-graphs through generic `/products/{product_id}/runs` routes (ADR-0003). A product may add
-authenticated read routes for its own data under `/products/{product_id}/` (ADR-0023). Product UIs
-live in one shared Next.js app, `apps/web` (ADR-0014). Controls and data grids use shadcn/ui and TanStack Table
-(ADR-0045), and inside a product the user navigates with a side panel while the home page keeps its cards (ADR-0046);
-the side panel and the shadcn/ui components are built for the product screens; other screens migrate as they are touched.
+Today there are ten products: assistant, image, video, voice, creative, notebooks, meetings, model3d, training and
+code.
 
-What a product's routes and graphs may reach is the engine's services: one typed `EngineServices` object
-(`wasifyai_platform_sdk.services`), `deps.state` in a route and `caps.extras["app_state"]` in a graph, with a field for each
-service and `None` where this deployment has none (stage F1). The engine builds it, with its own services added
-(`ApiServices`), in `wasifyai_api/assemble.py`: what both deployments share first, then the web's or the desktop's builder.
-`app.state.services` is the only attribute of the app; an engine route reads it with `services_of(request)`.
+- **No new endpoints are needed to run a product.** The graph registry exposes registered graphs through the generic
+  `/products/{product_id}/runs` routes (ADR-0003). A product may add authenticated routes for its own data (ADR-0023).
+- **What a product can reach.** Its routes and graphs reach the engine's services through one typed `EngineServices`
+  object (`wasifyai_platform_sdk.services`), built in `wasifyai_api/assemble.py`. A service this deployment does not
+  have is `None`.
+- **Product tables.** A product with tables of its own has one store class over `StoreDb`: a SQLite file on the
+  desktop, or its own schema in Postgres on the web. The SQL is written once.
+- **Capabilities, not models.** Graphs ask for capabilities (`text.chat`, `image.generate`, `video.generate`). The
+  chosen model, and on the cloud its offers, decide what answers. Swapping a model is a configuration change
+  ([configuration.md](configuration.md), ADR-0010, ADR-0097).
 
-A product that keeps its own tables (notebooks, 3D, training, voice, Motion graphics) has one store class over a
-`StoreDb` (`wasifyai_platform_sdk.sqlstore`, stage J2): a SQLite file on the desktop (`Store.in_folder(...)`) or its
-own schema in the deployment's Postgres on the web (`Store.on_postgres(...)`). The SQL is written once, with `?`
-parameters and types both databases read alike; what really differs (the notebooks' keyword and vector index) is a
-branch on `db.dialect` inside the product.
+## Every feature is an action
 
-## Capabilities
+Anything a person or an agent can ask the app to do is an action in one catalogue
+([ADR-0068](decisions/0068-one-action-catalogue.md), [docs/actions.md](actions.md)). Each action has a help file and a
+place in the menu. The executor runs actions for:
 
-Graphs request **capabilities** (`text.<name>`, `image.generate`, `video.generate`), never specific models. `product.yaml` binds each capability to a
-provider (`litellm`, `comfyui`, later `http`). Swapping a model is a config change.
-Details: [configuration.md](configuration.md), ADR-0010.
+- the window;
+- the assistant, which asks before it makes or changes something;
+- other apps, through the MCP server ([desktop/connections.md](desktop/connections.md)).
 
-## GPU strategy
-
-| | Dev (Mac) | Staging (home lab) | Prod (cloud) |
-|---|---|---|---|
-| Hardware | Apple Silicon unified memory | One 24 GB NVIDIA card (RTX 4090 preferred, 3090 budget) | 24 GB L4 / A10-class nodes |
-| LLM | Ollama, native (Metal) | Ollama in a pod | vLLM per GPU, or hosted APIs via LiteLLM |
-| Media | ComfyUI native, or remote home lab ComfyUI over Tailscale | ComfyUI pod | ComfyUI pool scaled on queue depth, to zero when idle |
-| Sharing | Unload LLM before generation | GPU Operator time-slicing; worker unloads LLM before generation | One workload per GPU |
-
-Docker/Podman on macOS cannot reach the Metal GPU, so GPU services run natively on the Mac.
-
-## Desktop app and assistant (proposed)
-
-A desktop application (Tauri shell, Mac first) and an assistant home screen are proposed on top of this platform:
-the same engine runs under a `desktop` profile (SQLite, in-process queue, local files) next to the `web` profile
-described above. Nothing here changes until the ADRs are accepted. Start with
-[ADR-0056](decisions/0056-desktop-app-and-web-share-one-engine.md) (the shape) and
-[ADR-0062](decisions/0062-reuse-matrix-engines-per-capability.md) (the engine per capability, with measurements in
-[`spikes/unsloth-phase0.md`](spikes/unsloth-phase0.md)); then
-[0057](decisions/0057-ai-assistant-chat-first-shell.md) (assistant),
-[0058](decisions/0058-desktop-link-runner-and-remote-ui.md) (web to desktop link),
-[0059](decisions/0059-comfyui-managed-sidecar-image-engine.md) (image engine),
-[0060](decisions/0060-documents-local-first-rag.md) (documents) and
-[0061](decisions/0061-how-unsloth-code-enters-wasifyai.md) (how Unsloth code is imported). v1 is desktop first,
-Mac first, image first, English only.
+`make contracts` writes the catalogue to `docs/contracts/actions.json`.
 
 ## Everything a user makes is searchable
 
-My creations (`/creations`, ADR-0040) is one library with one search (ADR-0041): a per-user index of the words
-of every song, image and video, with a multilingual embedding (`bge-m3`) and an exact-word check. **A new product
-or kind of creation is not finished until it is indexed**: text to index, `caps.index_creation` on save,
-`deps.unindex` on delete, a registered `IndexSource`, an `ids=` filter on its list route and a card in the
-library. The checklist is in ADR-0041 ("A rule for everything built later").
+My creations (ADR-0040) is one library with one search (ADR-0041): a per-user index of the words of everything a
+person makes, with a multilingual embedding (`bge-m3`) and an exact-word check. **A new product or kind of creation is
+not finished until it is indexed.** That means:
+
+- text to index;
+- `caps.index_creation` on save and `deps.unindex` on delete;
+- a registered `IndexSource`;
+- an `ids=` filter on its list route;
+- a card in the library.
+
+## Infrastructure (web)
+
+1. **Infrastructure** is the only cloud-aware layer, with one OpenTofu module per target.
+2. **Cluster add-ons** are the same everywhere: Gateway API, cert-manager, ExternalDNS, External Secrets, KEDA and
+   Argo CD.
+3. **The platform** is one Helm chart (`deploy/helm/wasifyai`), with values layered `base` → `env` (staging, prod) →
+   `cloud` (homelab, aws, gcp, azure).
+
+Monitoring uses Prometheus, Alertmanager, Grafana and Loki, with alerts to Telegram and an outside heartbeat
+([ADR-0048](decisions/0048-monitoring-and-alerting.md), [runbook](runbooks/monitoring.md)).
 
 ## Seams for later features
 
 | Feature | Seam built now |
 |---|---|
-| Multi-tenancy | `tenant_id` and `product_id` on every table, job and object key |
-| Auth | Identity resolved on every request (stub in dev); Auth.js in Next.js, the BFF signs a short-lived JWT that FastAPI validates (ADR-0030); optional central OIDC (Keycloak / Authentik) later |
-| Billing | `usage_events` table: tokens, GPU seconds, jobs per tenant and user |
-| Observability | OpenTelemetry instrumentation, structured JSON logs with trace IDs; Langfuse for LLM traces; Prometheus / Grafana / Loki later |
-| Usage | Usage events (no per-person limits, ADR-0094) |
+| Multi-tenancy | `tenant_id` and `product_id` on every table, job and object key; keys per tenant |
+| Auth | Identity resolved on every request. Auth.js in Next.js; the BFF signs a short-lived JWT that FastAPI checks (ADR-0030) |
+| Billing | `usage_events`: tokens, jobs, and the cloud cost of each job, with its provider |
+| Observability | OpenTelemetry, structured JSON logs with trace IDs, Langfuse for LLM traces |
+| Limits | None per person in v1 (ADR-0094); one job per person across everything is decided, not built (ADR-0088) |
 
 ## Security baseline
 
-- Ollama and ComfyUI have no authentication. Bind to localhost or the cluster network only;
-  never expose publicly. Remote access via Tailscale.
-- Pin and review ComfyUI custom nodes; malicious nodes have appeared in community registries.
-- MCP servers and tools run least-privilege (read-only DB users, scoped folders).
-- Workload identity per cloud; no static cloud keys in pods.
-- Rootless containers locally (Podman default).
+- **Desktop engine.** It binds loopback only, and every route except `/health` needs the launch token.
+- **Keys.** They are kept in the keychain or encrypted in the database. They are write-only through the API and are
+  never sent inside a job.
+- **Coding sessions.** They run in a sandbox. The model key stays outside it, behind a gateway on loopback
+  ([ADR-0102](decisions/0102-coding-engine-optional-part-in-a-sandbox.md)).
+- **Subscription sign-in.** It happens only through the provider's own program and page.
+- **Local programs.** ComfyUI, llama.cpp and the other local programs have no authentication of their own; they bind
+  to localhost only. ComfyUI custom nodes are pinned and reviewed.
+- **Cloud and containers.** Workload identity per cloud, with no static cloud keys in pods; rootless containers
+  locally.

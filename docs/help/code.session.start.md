@@ -60,7 +60,7 @@ shows a card first.
 ## Needs
 
 - The coding engine set up: Settings, under Optional parts, "Coding engine (OpenHands)", about 375 MB.
-- For Claude Sonnet 5.5: your own Anthropic key, saved in Settings under Your keys (the key for Chat and
+- For Claude Sonnet 5.5: your own Anthropic key, saved in Settings under Cloud keys (the key for Chat and
   writing is used).
 
 ## Examples
@@ -73,5 +73,5 @@ shows a card first.
 - **There is no folder at that path** Give the whole path of a folder that exists.
 - **Choose one project's folder, not the whole home folder or a disk** Pick the folder of one project.
 - **That folder holds the app's or the system's own files** Pick another folder.
-- **No key is saved for Claude Sonnet 5.5** Save an Anthropic key in Settings, under Your keys.
+- **No key is saved for Claude Sonnet 5.5** Save an Anthropic key in Settings, under Cloud keys.
 - **The coding engine is not set up yet** Set it up in Settings, under Optional parts.

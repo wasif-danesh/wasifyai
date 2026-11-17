@@ -1,67 +1,150 @@
 # Wasify AI
 
-Wasify AI is an AI app you run on your own computer, and a web twin of it. A **chat assistant** is the home
-screen; beside it are **images**, **video**, **voice** (text to speech, speech to text, music, dubbing,
-audiobooks, lip sync) and **notebooks** (chat with your own documents). Everything you make lands in one
-library, **My creations**, searchable by meaning in any language.
+Wasify AI is one app for making things with AI **on your own computer**: you chat with an assistant, and beside
+it make pictures, video, speech, music, 3D models and motion graphics, record meetings, ask your own documents,
+write code with an agent, and teach models your own style. The models run on your machine, so what you make stays
+there. If you want a bigger model, add your own key for a cloud provider and choose it in the same place.
 
-Under it is a reusable **platform core** (the repository is called `wasifyai`): an API with streaming, a
-stateful agent runtime, a model gateway, media workers, storage, auth and monitoring. Each **product** is a
-thin layer on top: a few LangGraph graphs, a config file and a screen.
+It is a desktop app (a window that starts its own engine; macOS first) and a web app that shows the same screens.
+Under both is a reusable **platform core** (the repository is called `wasifyai`): an API with streaming, an agent
+runtime, a model gateway, media workers, storage, sign-in and monitoring. Each product is a thin layer on top.
 
-> **Status (2026-10-20): v1 in progress, desktop first.** The desktop app (a Tauri window that starts the engine on
-> your computer) is the main target: Mac first, image first, English first. The same screens run as a web app
-> against the same engine in containers. This week the chat gained **edit and versions of a message**,
-> **cards that ask before the assistant makes something**, **file attachments** (pictures and documents), **web
-> search**, **Thinking**, **Mic dictation** and **read aloud**, and the **notebook chat** moved onto the same
-> chat engine. These are being tested by hand in the real window before anything new starts; next after that is
-> a simpler way to choose models. See the [roadmap](docs/roadmap.md).
+> **Status (2026-11-17): v1 in progress, desktop first.** Everything on this page is built and runs on an Apple
+> Silicon Mac. There is no installer to download yet: you [build the app from source](#run-the-desktop-app).
+> Windows and Linux builds pass CI but have not been used by hand. See the [roadmap](docs/roadmap.md).
+
+![The home window: the chat box, the model button in the top bar, quick starts for each thing you can make, and the menu on the left](docs/images/screens/desktop/home.png)
 
 ## Contents
 
-- [What it looks like](#what-it-looks-like)
+- [What you can do](#what-you-can-do)
+- [Choosing models](#choosing-models)
+- [Settings worth knowing](#settings-worth-knowing)
+- [What stays on your computer](#what-stays-on-your-computer)
+- [More screens](#more-screens)
 - [What the chat can do](#what-the-chat-can-do)
-- [How it works](#how-it-works)
-- [Products](#products)
+- [What you need](#what-you-need)
 - [Run the desktop app](#run-the-desktop-app)
 - [Run the web app](#run-the-web-app) (including [what to install first](#before-you-start-manual-prerequisites))
+- [How it works](#how-it-works)
+- [Products](#products)
 - [Monitoring](#monitoring)
 - [Using the API](#using-the-api)
 - [Project layout](#project-layout)
 - [Configuration](#configuration)
-- [Development](#development)
+- [Development](#development) (and [troubleshooting](#troubleshooting))
 - [Environments](#environments)
 - [Documentation](#documentation)
 - [Principles](#principles)
 - [Roadmap](#roadmap)
 
-## What it looks like
+## What you can do
 
-The pictures below are the shared screens (the desktop window and the web app draw the same ones), taken from the
-web app against its test engine, so they show sample data. `README_SHOTS=1 pnpm --filter web exec playwright test
-e2e/readme-screens.spec.ts --project=desktop-light` makes them again.
+Each line is an item of the menu on the left of the window.
 
-![Home: the assistant, with the options under the box: Attach, Thinking, Search and Mic](docs/images/screens/home.png)
+| In the menu | What it does |
+|---|---|
+| **New chat** | Ask anything, attach pictures and documents, search the web, dictate, hear answers read aloud. Ask it to make a picture, a song or a video and the result appears in the chat. |
+| **Notebook** | Add your own documents and ask them questions; answers cite the passage they came from. A Studio turns a notebook into reports, study guides and slide decks. |
+| **Meetings** | Record a meeting (your microphone and the computer's sound) or add a recording. It writes down who said what, lets you name the speakers, writes reports from templates and answers questions about the meeting. |
+| **Images** | Create from words, edit a picture, paint over a part of it (inpaint), or combine reference pictures. Add styles (LoRAs) to change the look. |
+| **Video** | A short clip from words or from a picture, lip sync (a face speaks your audio) and extending a clip. |
+| **Voice** | Text to speech, speech to text, your own voices, changing a voice, editing speech, dubbing a recording into another language, audiobooks. |
+| **Music** | Songs, instrumentals and sound effects, lyrics, and splitting a song into its parts. |
+| **Code** | A coding agent that works in a folder you choose: it reads, plans, changes files and checks its work, and every turn can be undone. Scheduled runs and extensions (skills and plugins). It can also run on your own Claude Code or Codex plan. |
+| **Creative Studio** | A song and an idea become a plan of shots, then pictures, clips and a finished video cut on the beat. |
+| **Motion graphics** | Promotion and social videos from scenes: animated titles, charts, captions, with an assistant that edits the scenes for you. |
+| **3D model** | A 3D model from one picture (experimental). |
+| **Library** | Everything you made, in one place, searchable by meaning in any language. |
+| **Train models** | Teach an image model your character or style, a language model your answers, a model to decide (yes or no, a category, a score), or a video model a look or motion. |
+| **Model hub** | Every model the app can use, per job, with its size and whether it is on this computer. |
+
+## Choosing models
+
+You never edit a config file to choose a model. Every screen has a **model button in the top bar**. It opens a
+small list with three tabs:
+
+- **Recommended**: models that suit this computer, with the download size and the memory they need.
+- **On this computer**: what is already here, including models found in Ollama or LM Studio.
+- **Cloud**: the models of the providers you saved a key for (empty until you add one).
+
+A model is downloaded only after you press Get and have seen its size.
+
+| Recommended | On this computer |
+|---|---|
+| ![The model list on its Recommended tab: three chat models with their size and what they need](docs/images/screens/desktop/model-picker.png) | ![The model list on its On this computer tab: models already here](docs/images/screens/desktop/model-picker-local.png) |
+
+The **Model hub** shows the same choices for every job at once: Chat, Code, Images, Video, Voice, Listening,
+Music, Lip sync, Documents, 3D and Training.
+
+| Model hub: chat models | Model hub: image models |
+|---|---|
+| ![The Model hub on its Chat tab](docs/images/screens/desktop/model-hub.png) | ![The Model hub on its Images tab, with sizes and memory needs](docs/images/screens/desktop/model-hub-images.png) |
+
+## Settings worth knowing
+
+Settings (the gear at the bottom of the menu) has seven groups: General, Cloud keys, On this computer, Code,
+Privacy, Other apps, and Help and repair. Three of them matter on the first day.
+
+**On this computer** says what this machine can do right now, job by job, and lists the optional parts (the
+language engine, the image engine, the coding engine and others). A part is added only when you use something
+that needs it, and can be repaired or removed here.
+
+![Settings, On this computer: a list of jobs, each marked ready with the model it uses](docs/images/screens/desktop/settings-computer.png)
+
+**Cloud keys** is where you add your own key for a cloud provider. This is optional: without a key, everything
+runs on this computer's models. For chat and writing, one key from Anthropic, OpenAI, Google Gemini, DeepSeek, Z.ai
+or OpenRouter is enough. For media (images, video, voice, music, lip sync, 3D), add a fal.ai key, or a Runware and
+a WaveSpeed key; with more than one, each job goes to the cheapest. Keys are kept in the computer's keychain and
+are never shown again, and you pay the provider directly.
+
+![Settings, Cloud keys: text providers, media providers, and a table of what each key covers](docs/images/screens/desktop/settings-keys.png)
+
+**Privacy** lists everything that can leave the computer, and each item is your choice. Web search is here too:
+it is off until you allow it, and you choose the search service.
+
+![Settings, Privacy: what leaves this computer, and the web search service](docs/images/screens/desktop/settings-privacy.png)
+
+## What stays on your computer
+
+- What you make, your files and your chats are stored in the app's data folder on your computer (on macOS
+  `~/Library/Application Support/ai.wasifyai.desktop`). There is no account and no sign-in on the desktop.
+- The engine listens only on `127.0.0.1`, and every call carries a token made for that launch.
+- Things leave the computer only when you choose: a cloud model you picked (what you make with it goes to its
+  provider, on your key), a web search you allowed, a model download, and other apps you connected.
+- Nothing you make is moderated, marked or limited per day
+  ([ADR-0094](docs/decisions/0094-no-safeguards-marks-or-licence-data-in-v1.md)).
+
+## More screens
+
+The pictures on this page are of the real desktop window on a Mac with its models installed, so the names and
+sizes are that computer's. `WASIFYAI_AUDIT_OUT=$PWD/docs/images/screens/desktop apps/desktop/scripts/ui-audit.sh light readme`
+takes them again.
+
+| Images | Video |
+|---|---|
+| ![Make a picture: a prompt, aspect ratio, styles, and recent pictures](docs/images/screens/desktop/images.png) | ![Make a video: a prompt, length and shape](docs/images/screens/desktop/video.png) |
+
+| Text to speech | Music |
+|---|---|
+| ![Text to speech: language, words and a list of voices](docs/images/screens/desktop/speech.png) | ![Create music: a description, lyrics and length](docs/images/screens/desktop/music.png) |
+
+| Motion graphics | Train models |
+|---|---|
+| ![Motion graphics: say what you want to promote, or start from a template](docs/images/screens/desktop/motion.png) | ![Train models: four cards for pictures, language, decisions and video](docs/images/screens/desktop/train.png) |
+
+The chat pictures below come from the web app against its test engine, so they show sample data
+(`README_SHOTS=1 pnpm --filter web exec playwright test e2e/readme-screens.spec.ts --project=desktop-light`).
 
 | A chat: a picture and a file attached, sources from the web, two versions of an answer | The assistant asks before it makes something |
 |---|---|
 | ![A chat with attachments, web sources and a version picker](docs/images/screens/chat.png) | ![A card that asks before making a picture](docs/images/screens/card.png) |
 
-| Files waiting in the box | On a phone |
+| Files waiting in the box | On a phone (the web app) |
 |---|---|
 | ![A picture and a PDF waiting to be sent](docs/images/screens/attach.png) | ![A chat on a phone, dark theme](docs/images/screens/phone.png) |
 
-| Notebooks: chat with your sources, citations, a Studio of outputs | Images |
-|---|---|
-| ![A notebook with its chat, citation pills and the Studio](docs/images/screens/notebook-chat.png) | ![Create images](docs/images/screens/images.png) |
-
-| Video | Voice (text to speech) |
-|---|---|
-| ![Make a video](docs/images/screens/video.png) | ![Text to speech](docs/images/screens/voice.png) |
-
-| Music | Notebooks |
-|---|---|
-| ![Create music](docs/images/screens/music.png) | ![Your notebooks](docs/images/screens/notebooks.png) |
+![A notebook with its chat, citation pills and the Studio](docs/images/screens/notebook-chat.png)
 
 ## What the chat can do
 
@@ -82,61 +165,15 @@ The chat is built on assistant-ui (edit, versions, code, maths and diagrams in a
 Design: [ADR-0082](docs/decisions/0082-chat-ui-on-assistant-ui.md) (the chat) and
 [ADR-0083](docs/decisions/0083-composer-options-attach-search-thinking-mic.md) (the options under the box).
 
-## How it works
+## What you need
 
-```
-Browser ─► Next.js (UI + BFF) ─► FastAPI + LangGraph ─► LiteLLM ─► Ollama / vLLM
-                                        │
-                                        ├─► Postgres (pgvector, checkpoints, jobs)
-                                        ├─► Redis (job queue, pub/sub) ─► Media worker ───► ComfyUI (images, video)
-                                        └─► Object storage (SeaweedFS / S3 / GCS / Azure Blob)
-
-Prometheus, Alertmanager, Grafana and Loki watch all of it and alert to Telegram.
-```
-
-That is the **web profile**. The **desktop profile** runs the same engine with the same products and screens, with
-the web's services replaced by local ones behind the same interfaces:
-
-```
-Tauri window (packages/ui) ─► engine on 127.0.0.1 (FastAPI + LangGraph, a token per launch)
-                                   ├─► SQLite (records, checkpoints, run events, job queue)
-                                   ├─► a folder of files (links signed per launch)
-                                   ├─► llama-server (the chat model, `--mmproj` for pictures) or Ollama / LM Studio
-                                   ├─► audio.cpp (speech, music, dubbing) and ComfyUI / the image engine, on demand
-                                   └─► the notebooks' document reader (a separate process), on demand
-```
-
-Product code never asks which profile it runs in ([desktop profile](docs/desktop-profile.md)). The chat screens live
-in `packages/ui` and talk to the engine through `packages/client`, so the web app and the window share them.
-
-1. The browser talks only to the **Next.js** app, which handles sign-in (Auth.js). Its route
-   handlers (the BFF) check the session, attach a short-lived signed token, proxy to the API and
-   pass the event stream through unchanged.
-2. **FastAPI** runs the product's **LangGraph** graph and streams progress to the browser as
-   Server-Sent Events: node status, tokens, interrupts, job progress, and a final result.
-3. Graphs ask for **capabilities** (`text.chat`, `image.generate`, `video.generate`), never for specific models. Config binds each capability to a provider.
-4. Text goes through **LiteLLM**, an OpenAI-compatible gateway that maps aliases to Ollama
-   (dev, staging) or vLLM / hosted APIs (prod).
-5. Slow work (images, video) is never awaited inline. The graph enqueues a job in
-   **Redis**, a **media worker** drives ComfyUI, and the graph resumes when the
-   job finishes.
-6. Graph state is checkpointed in **Postgres**, so a run can pause for user input and resume.
-7. Nothing a person makes is moderated, marked or limited per day
-   ([ADR-0094](docs/decisions/0094-no-safeguards-marks-or-licence-data-in-v1.md)).
-
-## Products
-
-| Product | What it does |
+| | Desktop app |
 |---|---|
-| [`wasifyai-assistant`](products/wasifyai-assistant/) | The chat: conversations with a tree of message versions, tools that make things, cards that ask first, attachments, web search, Thinking |
-| [`wasifyai-image`](products/wasifyai-image/README.md) | Text to image and image to image (FLUX.2 klein 4B on the web; the desktop image engine) |
-| [`wasifyai-video`](products/wasifyai-video/README.md) | Text to video and image to video, 2 or 5 seconds (LTX-Video 2B), made in the background |
-| [`wasifyai-voice`](products/wasifyai-voice/README.md) | Text to speech, speech to text (and Mic dictation), music, audio tools, dubbing, audiobooks, lip sync, read aloud |
-| [`wasifyai-notebooks`](products/wasifyai-notebooks/) | Chat with your own documents: sources, citations, a Studio of outputs |
-
-A product is a folder under `products/` with its `product.yaml`, graphs, prompts and ComfyUI
-workflows. Adding a product adds no API endpoints: the graph registry exposes registered
-graphs through the same generic routes.
+| Computer | A Mac with Apple Silicon is the tested platform. Windows and Linux are built and tested by CI only. |
+| Memory | 8 GB runs a small chat model. 16 GB is comfortable for chat and pictures. Larger image and video models say what they need in the Model hub (24 to 40 GB for the biggest). |
+| Disk | About 15 GB free to start. Each model shows its size before it downloads: a chat model is 0.4 to 5 GB, an image model 11 to 29 GB. |
+| Internet | Only to download models and optional parts, and for cloud models or web search if you turn them on. |
+| Accounts | None. A cloud provider key is optional. |
 
 ## Run the desktop app
 
@@ -146,9 +183,8 @@ network: the engine binds `127.0.0.1` and every call carries a token the shell m
 
 **You need** (macOS is the tested platform): Homebrew, Apple's command line tools (`xcode-select --install`), and
 the Rust toolchain 1.89 or newer ([rustup](https://rustup.rs)). `make setup` installs the rest (`uv`, Node 22,
-`pnpm`) and the Python environment; it does not install Rust. About 15 GB of free disk and 16 GB of memory are
-comfortable for the default chat model (Qwen3.5 9B: about 5.7 GB to get, about 7 GB in memory). Windows and Linux
-are built and tested by CI but have not been used by hand.
+`pnpm`) and the Python environment; it does not install Rust. Memory and disk: see [What you need](#what-you-need).
+Windows and Linux are built and tested by CI but have not been used by hand.
 
 ```bash
 git clone https://github.com/wasif-danesh/wasifyai.git && cd wasifyai
@@ -165,13 +201,16 @@ text from it.) The window can also run on its own against a running engine: `pnp
 
 **The first time**
 
-1. The window opens on the assistant. In **Settings**, set up the **language engine** (it installs the model
-   runner, with the size shown) or, if you use Ollama or LM Studio, pick one of their models.
-2. In **Models**, under *Found on this computer* or *Discover*, choose a chat model. Qwen3.5 9B is the one the
-   assistant is tuned for and the one with a picture reader.
-3. Ask something. Optional extras, each with its size shown and downloaded only when you click: the image engine
-   (Settings), a speech model for Mic and Read aloud, the picture reader (the first time you attach a picture), the
-   document reader for PDF and Office files (the first time you add one to a notebook).
+1. The window opens on the assistant. Press the **model button** in the top bar and choose a chat model. On the
+   Recommended tab the app suggests one for this computer's memory (Qwen3 8B, 5.0 GB, with 16 GB or more; Qwen3 4B,
+   2.5 GB, below that); press Get and it installs the language engine and the model, with the size shown first. If
+   you already use Ollama or LM Studio, their models are on the On this computer tab.
+2. Ask something. The quick starts under the chat box (Picture, Video, Speech, Song and the rest) say "Ready" or
+   "Choose a model"; each opens its screen, where the same model button gets what it needs.
+3. Everything else is optional and fetched only when you use it and agree to its size: the image engine, a speech
+   model for Mic and Read aloud, the picture reader (the first time you attach a picture), the document reader for
+   PDF and Office files, the coding engine, the speaker model for Meetings. **Settings › On this computer** lists
+   them. To use cloud models, add a key in **Settings › Cloud keys**.
 
 Your data (database, files, models you fetched, logs) lives in the app data folder: on macOS
 `~/Library/Application Support/ai.wasifyai.desktop` (`logs/engine.log` is the first place to look when something
@@ -180,26 +219,38 @@ hand:** [desktop window checklist](docs/testing/desktop-window-checklist.md).
 
 ## Run the web app
 
-The same screens as a web app, with the engine in containers (Postgres, Redis, object storage, the model gateway,
-a media worker):
+The same screens as a web app, with the engine in containers: Postgres, Redis, object storage, the model gateway
+(LiteLLM), a small search model, the API, a media worker, the notebooks worker and the web app itself.
 
-Do the [one-time prerequisites](#before-you-start-manual-prerequisites) for your platform, then
-two commands do everything else:
+**The web app runs cloud models only** ([ADR-0099](docs/decisions/0099-fal-only-v1-web-on-cloud-models.md),
+[ADR-0100](docs/decisions/0100-haiku-text-and-cheapest-media-provider.md)). It needs no GPU and downloads no chat,
+image or video model. The one model it runs itself is bge-m3, for search, on the CPU.
+
+Do the [one-time prerequisites](#before-you-start-manual-prerequisites) for your platform, then:
 
 ```bash
 git clone https://github.com/wasif-danesh/wasifyai.git && cd wasifyai
-make setup      # installs missing tools, starts Podman + Ollama, pulls the model, creates .env
+make setup      # installs missing tools, starts Podman, creates .env with random secrets
 make dev        # starts the stack, waits for Postgres, runs migrations, follows logs
 ```
 
-Then open http://localhost:3000, choose a product and make something. GPU media (images, video) are
-placeholders by default; set `COMFYUI_MODE=real` in `.env` and run ComfyUI with the models for real ones (see
-[Hardware notes](#hardware-notes)). Music, speech and lip sync are the voice product: hosted models through the
-gateway, or the models on this machine (`scripts/web-local.sh`, [runbook](docs/runbooks/web-notebooks-voice.md)).
+Then open http://localhost:3000. What works depends on the keys you give it:
 
-Sign-in is off by default (`AUTH_MODE=stub` in `.env.example`: everyone is the dev user). To turn it on,
-set `AUTH_MODE=jwt`, the two secrets and a provider's client id and secret: see
+| You want | Do this |
+|---|---|
+| **Chat, notebooks, the assistant and every text step** | Put an Anthropic key in `.env` as `ANTHROPIC_API_KEY` and run `make dev` again. Every text job runs on Claude Haiku 5.5 by default. To use another vendor (OpenAI, Google Gemini, DeepSeek, Z.ai, OpenRouter), choose it and save its key in **Admin › Models** (`/admin/models`). Without a key, chat answers with an error. |
+| **To look around without paying for media** | Nothing. `COMFYUI_MODE=stub` (the default in `.env`) returns placeholder pictures, clips and audio, so every screen and the whole flow work with no key. |
+| **Real pictures, video, voice, music, lip sync and 3D** | Set `COMFYUI_MODE=cloud` in `.env`, run `make dev` again, and save a fal.ai key, or a Runware and a WaveSpeed key, in **Admin › Media** (`/admin/media`). Each job goes to the cheapest provider that can do it. |
+
+Sign-in is off by default (`AUTH_MODE=stub` in `.env.example`: everyone is the dev user, who is an admin). To turn
+it on, set `AUTH_MODE=jwt`, the two secrets and a provider's client id and secret: see
 [Sign-in in apps/web](apps/web/README.md#sign-in).
+
+**On a Mac that also has the desktop app set up**, `make dev` starts two workers outside the containers
+(`scripts/worker.sh`). They use the desktop app's data folder and its models, and take the place of the stack's own
+media worker, so the web makes pictures, video, speech, music and lip sync with that Mac's models instead of
+placeholders. Quit the desktop app while they run a job; `make down` stops them.
+[Runbook](docs/runbooks/web-notebooks-voice.md).
 
 If `make` is not installed yet (common on a fresh Linux box), run the script directly. It
 installs `make` for you: `./scripts/setup.sh`, then `make dev`.
@@ -211,11 +262,10 @@ administrator rights, a reboot, or are needed to run the setup at all. Do these 
 
 **Every platform**
 
-- An internet connection, and about 15 GB of free disk (the default model is about 10 GB).
-- 8 GB of RAM or more for the default `gemma4:e4b` model (16 GB is more comfortable). With less, switch to a smaller model
-  (see [Hardware notes](#hardware-notes)).
-- A GPU is optional. Apple Silicon (Metal) and NVIDIA GPUs speed up replies; CPU-only works but
-  is slow.
+- An internet connection, and several GB of free disk for the container images (the notebooks worker's image
+  holds a document reader of about 1.5 GB, and the search model is a 635 MB download on the first start).
+- 8 GB of RAM or more (16 GB is more comfortable).
+- No GPU: the models run at the cloud providers.
 
 **macOS**
 
@@ -248,7 +298,7 @@ Details and tips: [docs/windows.md](docs/windows.md).
 | Platform | Status |
 |---|---|
 | macOS (Apple Silicon and Intel) | Supported; Homebrew and Xcode command line tools required first |
-| Linux: Debian, Ubuntu, Kali (apt), Fedora (dnf), Arch (pacman) | Supported; the tool installation is tested in Ubuntu and Fedora containers and in CI. Engine, Ollama and model steps are tested on macOS only |
+| Linux: Debian, Ubuntu, Kali (apt), Fedora (dnf), Arch (pacman) | Supported; the tool installation is tested in Ubuntu and Fedora containers and in CI. The container engine steps are tested on macOS only |
 | Windows 10/11 | Supported **through WSL2** (Ubuntu); see [docs/windows.md](docs/windows.md). Not yet tested on a real Windows machine |
 
 ### What `make setup` does
@@ -265,9 +315,9 @@ and also installs `kind`, `helm` and `kubectl`.
      Node 22, `kind`, `helm` and `kubectl` are downloaded as binaries and **checksum-verified**
      into `~/.local/bin`. pnpm comes from Corepack. No Homebrew or sudo is needed for those.
 2. Creates and starts the Podman VM on macOS, and checks it has enough memory (offers to resize).
-3. Starts Ollama and pulls every model named in `services/api/src/wasifyai_api/model_defaults.yaml`
-   (`gemma4:e4b`, about 10 GB, plus `nomic-embed-text` and the multilingual `bge-m3`, about 1.5 GB together). On Linux it also checks that containers can reach Ollama and
-   offers a fix if not.
+3. Installs and starts Ollama. No default model uses it any more, so nothing is pulled; it is still installed and
+   `make dev` still checks that it answers. It is only used if an admin binds a model to it in Admin › Models. On
+   Linux setup also checks that containers can reach it and offers a fix if not.
 4. Creates `.env` from `.env.example` and generates random secrets. Nothing is printed.
 5. Runs `uv sync --all-packages` and `pnpm install`.
 
@@ -280,20 +330,10 @@ missing and points back to `make setup`.
 
 ### Hardware notes
 
-- `gemma4:e4b` needs about 8 GB of RAM and 15 GB of free disk. Setup warns when a machine is
-  short. To use a smaller or faster model, change the `ollama_chat/...` entries in
-  `services/api/src/wasifyai_api/model_defaults.yaml` (or switch a model at run time in `/admin/models`); setup and
-  preflight read the model names from that file.
-- Text to speech runs on the CPU in containers. English, Spanish, French, Hindi, Italian and Portuguese use
-  Kokoro (small). **Bengali** uses Indic Parler-TTS, which needs about 4.5 GB of memory on its own and runs
-  about five times slower than real time on a CPU, so give the Podman VM about **12 GB** (`podman machine set
-  --memory 12288`). Its model is gated: accept the terms on its Hugging Face page and put a read token in
-  `.env` as `HF_TOKEN`.
-- Lip sync (MuseTalk 1.5) is a desktop component, the one lip sync model on every Mac: about 12 GB of memory and
-  5 seconds of work per second of video; it redraws the mouth and keeps the head still. The web reaches it through an
-  engine worker on such a Mac, or runs a cloud lip sync model.
-- Ollama runs natively on the host so it can use the GPU. On Apple Silicon it uses Metal. On
-  Intel Macs and machines without a supported GPU it runs on CPU, so replies are slow.
+- The stack itself is light: no model runs in it except bge-m3 for search, on the CPU.
+- Lip sync on this computer (MuseTalk 1.5) is a desktop component: about 12 GB of memory and 5 seconds of work per
+  second of video. The web reaches it through the workers on a Mac that has the desktop app set up, or runs a cloud
+  lip sync model.
 - Linux and WSL: Ollama listens on `127.0.0.1` by default, which containers may not reach.
   `make setup` tests this and, with your consent, makes Ollama listen on `0.0.0.0`. Ollama has no
   authentication, so restrict port 11434 with a host firewall.
@@ -305,6 +345,7 @@ missing and points back to `make setup`.
 | Web (Next.js) | http://localhost:3000 |
 | API (FastAPI) | http://localhost:8000 (`/health`, `/docs`) |
 | LiteLLM | http://localhost:4000 |
+| Search model (bge-m3) | http://localhost:8090 |
 | Object storage (S3 API) | http://localhost:8333 |
 | Postgres / Redis | `localhost:5432` / `localhost:6379` |
 
@@ -319,15 +360,13 @@ Runs the same Helm chart used for staging, on a local cluster. `make setup-k8s` 
 make down         # the Compose stack and kind both use localhost:3000
 make kind-up      # builds images, creates the cluster, installs the chart and the monitoring stack
 make kind-test    # smoke test: migrations, every product's pages and APIs, the pods that replace native services
-make kind-e2e     # makes something with each of the six products
+make kind-e2e     # makes something with the image and video products
 make kind-down    # delete the cluster
 ```
 
-The default `KIND_MODE=full` runs **every service as a pod, nothing native**: Ollama with its models and ComfyUI, plus Prometheus, Alertmanager, Grafana and Loki. It needs a
-Podman VM of about 24 GB of memory and 100 GB of disk (`podman machine set --memory 32768 --disk-size 160`) and
-downloads about 20 GB of models on the first start. There is no GPU in the cluster, so GPU media (images,
-video) are placeholders, apart from one model-free ComfyUI graph the smoke test runs for real. `KIND_MODE=light`
-is what CI runs: no models. Home lab setup with k3s and
+No model runs in the cluster: it is the same cloud-only web app, and without keys the media worker makes
+placeholder files. The default `KIND_MODE=full` installs the chart and the monitoring stack (Prometheus,
+Alertmanager, Grafana and Loki); `KIND_MODE=light` is the small cluster CI runs. Home lab setup with k3s and
 Argo CD: [runbook](docs/runbooks/homelab-k3s.md).
 
 ### Where everything is
@@ -337,13 +376,13 @@ Argo CD: [runbook](docs/runbooks/homelab-k3s.md).
 <!-- urls:start -->
 | Service | What it is | Compose (`make dev`) | kind (`make kind-up`) |
 |---|---|---|---|
-| Web app | the six products, My creations, admin | `http://localhost:3000` | `http://localhost:3000` |
+| Web app | every product, the Library, admin | `http://localhost:3000` | `http://localhost:3000` |
 | Admin area | users, models, media backends, audit | `http://localhost:3000/admin` | `http://localhost:3000/admin` |
 | API docs | Swagger UI for the API | `http://localhost:8000/docs` | `kubectl -n wasifyai port-forward svc/wasifyai-api 8000:8000`, then `http://localhost:8000/docs` |
 | LiteLLM | the model gateway | `http://localhost:4000` | `kubectl -n wasifyai port-forward svc/wasifyai-litellm 4000:4000`, then `http://localhost:4000` |
 | Object storage | S3 API (SeaweedFS) | `http://localhost:8333` | `kubectl -n wasifyai port-forward svc/wasifyai-storage 8333:8333`, then `http://localhost:8333` |
-| ComfyUI | images (and video on :8189) | `http://localhost:8188` | `kubectl -n wasifyai port-forward svc/wasifyai-comfyui 8188:8188`, then `http://localhost:8188` |
-| Ollama | the language models | `http://localhost:11434` | `kubectl -n wasifyai port-forward svc/wasifyai-ollama 11434:11434`, then `http://localhost:11434` |
+| Embedder | bge-m3 for search (llama.cpp, on the CPU) | `http://localhost:8090` | `kubectl -n wasifyai port-forward svc/wasifyai-embedder 8090:8080`, then `http://localhost:8090` |
+| Ollama | optional: only for a model an admin binds to it | `http://localhost:11434` | not in the cluster |
 | Postgres | database, checkpoints, usage events | `localhost:5432` | `kubectl -n wasifyai port-forward svc/wasifyai-postgres 5432:5432`, then `localhost:5432` |
 | Redis | job queue and run events | `localhost:6379` | `kubectl -n wasifyai port-forward svc/wasifyai-redis 6379:6379`, then `localhost:6379` |
 | Grafana | dashboards and logs | not installed | `kubectl -n monitoring port-forward svc/monitoring-grafana 3001:80`, then `http://localhost:3001` |
@@ -373,12 +412,73 @@ cluster is down. Everywhere else alerts still show in Alertmanager and Grafana b
 Start only the backing services, then run the API and web app natively:
 
 ```bash
-podman compose up -d postgres redis litellm
+podman compose up -d postgres redis seaweedfs litellm embedder
 DATABASE_URL=postgresql+asyncpg://wasifyai:wasifyai@localhost:5432/wasifyai \
   LITELLM_BASE_URL=http://localhost:4000 \
   uv run uvicorn wasifyai_api.main:app --reload --port 8000
 API_BASE_URL=http://localhost:8000 pnpm --filter web dev      # in another terminal
 ```
+
+## How it works
+
+```
+Browser ─► Next.js (UI + BFF) ─► FastAPI + LangGraph ─► LiteLLM ─► Anthropic and other text vendors
+                                        │                    └────► bge-m3 for search (own CPU)
+                                        ├─► Postgres (pgvector, checkpoints, jobs)
+                                        ├─► Redis (job queue, pub/sub) ─► Media worker ───► Runware / WaveSpeed / fal.ai
+                                        └─► Object storage (SeaweedFS / S3 / GCS / Azure Blob)
+
+Prometheus, Alertmanager, Grafana and Loki watch all of it and alert to Telegram.
+```
+
+That is the **web profile**. The **desktop profile** runs the same engine with the same products and screens, with
+the web's services replaced by local ones behind the same interfaces:
+
+```
+Tauri window (packages/ui) ─► engine on 127.0.0.1 (FastAPI + LangGraph, a token per launch)
+                                   ├─► SQLite (records, checkpoints, run events, job queue)
+                                   ├─► a folder of files (links signed per launch)
+                                   ├─► llama-server (the chat model, `--mmproj` for pictures) or Ollama / LM Studio
+                                   ├─► audio.cpp (speech, music, dubbing) and ComfyUI / the image engine, on demand
+                                   └─► the notebooks' document reader (a separate process), on demand
+```
+
+Product code never asks which profile it runs in ([desktop profile](docs/desktop-profile.md)). The chat screens live
+in `packages/ui` and talk to the engine through `packages/client`, so the web app and the window share them.
+
+1. The browser talks only to the **Next.js** app, which handles sign-in (Auth.js). Its route
+   handlers (the BFF) check the session, attach a short-lived signed token, proxy to the API and
+   pass the event stream through unchanged.
+2. **FastAPI** runs the product's **LangGraph** graph and streams progress to the browser as
+   Server-Sent Events: node status, tokens, interrupts, job progress, and a final result.
+3. Graphs ask for **capabilities** (`text.chat`, `image.generate`, `video.generate`), never for specific models. Config binds each capability to a provider.
+4. Text goes through **LiteLLM**, an OpenAI-compatible gateway that maps aliases to a text vendor (Claude
+   Haiku 5.5 by default; an admin can choose another).
+5. Slow work (images, video) is never awaited inline. The graph enqueues a job in
+   **Redis**, a **media worker** sends it to the cheapest cloud provider that can do it, and the graph resumes
+   when the job finishes.
+6. Graph state is checkpointed in **Postgres**, so a run can pause for user input and resume.
+7. Nothing a person makes is moderated, marked or limited per day
+   ([ADR-0094](docs/decisions/0094-no-safeguards-marks-or-licence-data-in-v1.md)).
+
+## Products
+
+| Product | What it does |
+|---|---|
+| [`wasifyai-assistant`](products/wasifyai-assistant/) | The chat: conversations with a tree of message versions, tools that make things, cards that ask first, attachments, web search, Thinking |
+| [`wasifyai-image`](products/wasifyai-image/README.md) | Create, edit, inpaint and reference pictures, with styles |
+| [`wasifyai-video`](products/wasifyai-video/README.md) | Text to video, image to video, extending a clip, and Motion graphics; made in the background |
+| [`wasifyai-voice`](products/wasifyai-voice/README.md) | Text to speech, speech to text (and Mic dictation), music, audio tools, dubbing, audiobooks, lip sync, read aloud |
+| [`wasifyai-notebooks`](products/wasifyai-notebooks/) | Chat with your own documents: sources, citations, a Studio of outputs |
+| [`wasifyai-meetings`](products/wasifyai-meetings/) | Record or add a meeting, tell the speakers apart, name them, write reports, ask about it |
+| [`wasifyai-code`](products/wasifyai-code/) | The coding agent: projects, sessions, checks, undo, scheduled runs, extensions |
+| [`wasifyai-creative`](products/wasifyai-creative/) | Creative Studio: a song and an idea become a plan of shots, then a video |
+| [`wasifyai-model3d`](products/wasifyai-model3d/) | A 3D model from a picture (experimental) |
+| [`wasifyai-training`](products/wasifyai-training/) | Train models: image, language, decision and video |
+
+A product is a folder under `products/` with its `product.yaml`, graphs, prompts and ComfyUI
+workflows. Adding a product adds no API endpoints: the graph registry exposes registered
+graphs through the same generic routes.
 
 ## Using the API
 
@@ -451,6 +551,11 @@ wasifyai/
 │  ├─ wasifyai-video/           # text to video and image to video
 │  ├─ wasifyai-voice/           # speech, music, audio tools, dubbing, audiobook, lip sync (one graph, one store)
 │  ├─ wasifyai-notebooks/       # source-grounded notebooks
+│  ├─ wasifyai-meetings/        # meetings: speakers, reports, questions
+│  ├─ wasifyai-code/            # the coding agent
+│  ├─ wasifyai-creative/        # Creative Studio
+│  ├─ wasifyai-model3d/         # 3D models
+│  ├─ wasifyai-training/        # Train models
 │  └─ wasifyai-assistant/       # the chat
 ├─ deploy/
 │  ├─ compose/               # LiteLLM config for the local stack
@@ -534,16 +639,15 @@ WASIFYAI_SMOKE=1 cargo run                         # the self-test: make an imag
 
 | Symptom | Fix |
 |---|---|
-| No reply, or an error on the page | Check Ollama is up and lists the model: `curl localhost:11434/api/tags` |
+| Web: chat gives no reply, or an error | The text vendor has no key. Set `ANTHROPIC_API_KEY` in `.env` and run `make dev` again, or save a key in Admin › Models; then look at `podman logs wasifyai-litellm-1` |
 | LiteLLM exits at start | `podman logs wasifyai-litellm-1`. It needs `LITELLM_API_KEY` set in `.env` |
 | Port already in use | `make down`, then try again |
-| Slow first reply | The model loads into memory on first use. CPU-only machines are slower; try `gemma4:e2b` |
-| Empty reply with a small `max_tokens` | Gemma 4 "thinking" uses the token budget. It is off for the chat and lyrics aliases; keep budgets generous for the `moderator` ([ADR-0018](docs/decisions/0018-default-text-model-gemma4-e4b.md)) |
 | Every model call fails with "model not found" right after start | The API seeds the model aliases into LiteLLM when it starts; give it a minute and check `podman logs wasifyai-api-1`. `LITELLM_API_KEY` must match between the API and LiteLLM |
 | "API keys can't be saved yet" in `/admin/media` | `MEDIA_SECRETS_KEY` is missing: run `make setup`, then restart the API and the worker |
 | `make dev` fails with "LITELLM_SALT_KEY" | Run `make setup`; it generates the key. Never change it afterwards: saved provider keys are encrypted with it |
 | `podman compose` cannot connect | Run `podman machine start` |
-| `make dev` says "Not ready" | Run `make setup`; it fixes every item the preflight lists |
+| `make dev` says "Not ready" | Run `make setup`; it fixes every item the preflight lists (Ollama must answer, even though no default model uses it) |
+| Web: pictures and clips are placeholders | That is `COMFYUI_MODE=stub`. Set `COMFYUI_MODE=cloud` and save a media key in Admin › Media |
 | Sign-in page says "No sign-in provider is set up" | Set a provider's `AUTH_<PROVIDER>_ID` and `_SECRET` in `.env`, or `AUTH_MODE=stub` for local work |
 | Sign-in fails with `redirect_uri_mismatch` or "Server error: problem with the server configuration" | Set `AUTH_URL=http://localhost:3000` and register `http://localhost:3000/api/auth/callback/<provider>` with the provider. In a container the server otherwise reports `0.0.0.0` |
 | API refuses to start: "AUTH_MODE=jwt needs API_AUTH_SECRET" | Put the same 32+ byte `API_AUTH_SECRET` (`openssl rand -hex 32`) in the API and web environment, or set `AUTH_MODE=stub` |
@@ -582,6 +686,8 @@ The same container images run everywhere. Only infrastructure and configuration 
 | [kind on Linux](docs/runbooks/linux-kind.md) | Rootless Podman prerequisites for the local cluster |
 | [Monitoring runbook](docs/runbooks/monitoring.md) | The stack, the alerts, where to look, fire drills |
 | [The desktop profile](docs/desktop-profile.md) | How the engine runs on one computer, what is built, how the shell and engine meet |
+| [Desktop, area by area](docs/desktop/) | One page each: assistant, models, images, video, voice, notebooks, meetings, coding, Creative Studio, 3D, connections to other apps |
+| [Help pages](docs/help/) | One short page per thing the app can do |
 | [Desktop window checklist](docs/testing/desktop-window-checklist.md) | What to try by hand in the real window, line by line |
 | [Chat on assistant-ui](docs/chat-ui-migration-plan.md) | The new chat: stages CU0 to CU4 as built, what is left |
 | [Chat box options](docs/composer-options-plan.md) and [spike report](docs/spikes/composer-co0.md) | Attach, Search, Thinking, Mic: what each does, measurements, what is not built |
@@ -604,17 +710,10 @@ The same container images run everywhere. Only infrastructure and configuration 
 
 ## Roadmap
 
-**Where the work is now (2026-10-20).** The desktop app comes first.
-
-| Order | What | State |
-|---|---|---|
-| Now | Try everything that was built in the real desktop window and fix what breaks ([checklist](docs/testing/desktop-window-checklist.md)) | In progress |
-| Next | A simpler way to choose models, for each product and in the Models section, for people who are not technical (the way Unsloth Studio does it) | Next |
-| After | The assistant that guides and executes (action cards on the catalogue), the MCP server and client, agents, training, Video Builder, motion graphics, 3D | On hold; [phase 4 plan](docs/phase4-agent-plan.md), [phase 5 plan](docs/phase5-agent-training-video-builder-plan.md) |
-
-Built and waiting to be tried by hand: edit and versions, approval cards, attachments (and the picture reader), web
-search, Thinking, Mic, read aloud and the notebook chat on the new chat. Not built: best-passages cutting for long
-documents, a live check of DuckDuckGo's reliability, and checks in a signed macOS bundle.
+**Where the work is now (2026-11-17).** The desktop app comes first. Built: the chat, notebooks, meetings, images,
+video, voice, music, the coding agent, Creative Studio, Motion graphics, 3D models, the Library, Train models, the
+Model hub, and cloud models on your own keys. Still to come before v1: a signed installer and an update feed, hand
+testing on Windows and Linux, and the open items in [docs/backlog.md](docs/backlog.md).
 
 **The hosted v1 plan.** v1 is a working, deployable system, not a production launch. Four stages:
 

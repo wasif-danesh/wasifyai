@@ -131,7 +131,7 @@ def the_key(real: bool) -> str:
                 return key
     key = os.environ.get("FAL_KEY", "")
     if not key:
-        sys.exit("No fal.ai key: save one in Settings > Your keys, or set FAL_KEY.")
+        sys.exit("No fal.ai key: save one in Settings > Cloud keys, or set FAL_KEY.")
     return key
 
 

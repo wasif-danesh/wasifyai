@@ -2,16 +2,19 @@
 // The home screen is the assistant (ADR-0057): the shared home (packages/ui) with this window's setup notice.
 import {
   AssistantHome,
+  Bar,
   type CreationEntry,
   ModelSelect,
   type ModelSelectHandle,
+  Notice,
   type QuickStartId,
   handDraft,
   useChoicesFor,
 } from "@wasifyai/ui";
 import { useRef } from "react";
+import { FirstRun, GetStarted, useFirstRun } from "../FirstRun";
+import { useGroups, useRun } from "../SetupGate";
 import { assistantApi, client, creationsApi, externalApi, modelsApi, voiceApi } from "../api";
-import { ChatStart } from "../choices/ChatStart";
 import { images } from "../images";
 import { runningJobs } from "../jobs";
 import { ROUTES } from "../menu";
@@ -43,6 +46,27 @@ export function HomePage({
 }) {
   const choices = useChoicesFor("chat");
   const picker = useRef<ModelSelectHandle>(null);
+  const first = useFirstRun();
+  const chat = useGroups()?.find((g) => g.id === "chat") ?? null;
+  const run = useRun("chat");
+
+  // the first run, once (ADR-0109): one button that sets up chat, and nothing else
+  if (first.show) return <FirstRun onDone={first.done} />;
+
+  // after it, while chat is not set up, the same button on the home
+  const notice =
+    chat && chat.state !== "ready" ? (
+      <Notice tone="info" title="Get a chat model">
+        {run.state === "running" ? (
+          <span className="grid gap-1" aria-live="polite">
+            <Bar value={run.fraction} />
+            <span className="text-sm">{run.label}</span>
+          </span>
+        ) : (
+          <GetStarted group={chat} onKey={() => picker.current?.open()} />
+        )}
+      </Notice>
+    ) : null;
 
   return (
     <AssistantHome
@@ -56,7 +80,7 @@ export function HomePage({
       conversationId={conversationId}
       onAdopt={onAdopt}
       onNewChat={() => openChat(null)}
-      notices={<ChatStart picker={picker} />}
+      notices={notice}
       modelPicker={<ModelSelect group="chat" api={choices} handleRef={picker} />}
       onNeedModel={() => picker.current?.open()}
       onOpenSettings={() => go("settings")}

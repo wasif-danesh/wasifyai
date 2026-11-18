@@ -66,7 +66,7 @@ export function RecentChats({ recents }: { recents: Recents }) {
     <div ref={root}>
       <div className="mt-4 px-3 text-muted-foreground text-sm">{recents.label ?? "Recents"}</div>
       {recents.items.length === 0 ? (
-        <div className="px-3 py-1 text-muted-foreground/80 text-sm">
+        <div className="px-3 py-1 text-muted-foreground text-sm">
           {recents.empty ?? "No chats yet"}
         </div>
       ) : (

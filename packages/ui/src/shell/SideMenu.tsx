@@ -186,6 +186,8 @@ export function SideMenu({
             );
           })}
 
+          {/* the single items below the groups (ADR-0109 decision 11) */}
+          <hr className="my-2 border-sidebar-border" />
           {EXTRA_ITEMS.map((i) => entry(i, false))}
           {(extra ?? []).map((x) => {
             const Icon = x.icon;

@@ -83,9 +83,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     items: [
       { id: "video.create", label: "Create", icon: Sparkles },
       { id: "video.animate", label: "Animate an image", icon: Film },
-      // makes a video from a picture and a voice, so it is found with video (owner, 2026-11-12); its id,
-      // address, action and help stay `voice.lipsync`
-      { id: "voice.lipsync", label: "Lip sync", icon: Film },
       { id: "video.extend", label: "Extend video", icon: Maximize2 },
     ],
   },
@@ -129,6 +126,9 @@ export const MENU_GROUPS: MenuGroupDef[] = [
 /** The single items above and below the groups. */
 export const CHAT_ITEM: MenuItemDef = { id: "chat", label: "New chat", icon: SquarePen };
 export const EXTRA_ITEMS: MenuItemDef[] = [
+  // its own item since ADR-0109 (decision 11): its parts are not Video's, so "Set up Video" does not fetch it.
+  // Its id, address, action and help stay `voice.lipsync`
+  { id: "voice.lipsync", label: "Lip sync", icon: Film },
   { id: "creative", label: "Creative Studio", icon: Clapperboard },
   { id: "motion", label: "Motion graphics", icon: Shapes },
   { id: "model3d", label: "3D model", icon: Box },

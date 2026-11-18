@@ -53,7 +53,7 @@ def menu() -> tuple[dict[str, str], dict[str, str]]:
         for iid, ilabel in re.findall(r'id: "([\w.]+)", label: "([^"]+)"', body):
             items[iid] = f"{glabel} › {ilabel}"
     for iid, ilabel in re.findall(
-        r'\{ id: "(chat|creative|motion|model3d|library|models|train)", label: "([^"]+)"', text
+        r'\{ id: "(chat|voice\.lipsync|creative|motion|model3d|library|models|train)", label: "([^"]+)"', text
     ):
         items[iid] = ilabel
     return items, groups

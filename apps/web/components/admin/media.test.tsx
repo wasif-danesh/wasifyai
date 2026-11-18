@@ -233,7 +233,8 @@ describe("MediaForm", () => {
     await choose("Runs on", /OpenAI/);
     expect(screen.getByLabelText(/^Model/)).toBeRequired();
     expect(screen.getByLabelText(/API key \(optional\)/)).toBeInTheDocument();
-  });
+    // two dropdowns opened in one test: about 11 s on a CI runner, so the default 15 s is too close
+  }, 45_000);
 
   it("only offers the backends the capability can use", async () => {
     await renderForm(

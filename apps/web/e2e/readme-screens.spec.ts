@@ -3,12 +3,13 @@ import { join } from "node:path";
 import { type Page, test } from "@playwright/test";
 import { mockApi } from "./mock-api";
 
-// The pictures in the README (docs/images/screens). Not a test: it writes files, and only when asked,
+// The chat pictures in the README (docs/images/screens). Not a test: it writes files, and only when asked,
 //
 //   README_SHOTS=1 pnpm --filter web exec playwright test e2e/readme-screens.spec.ts --project=desktop-light
 //
 // The web app runs against the mock of mock-api.ts, so every screen shows sample data. Re-run it after a change to how
-// the chat looks, and look at the pictures before committing them.
+// the chat looks, and look at the pictures before committing them. The pictures of the desktop window (home, models,
+// settings, the make screens) are in docs/images/screens/desktop and come from apps/desktop/scripts/ui-audit.sh.
 
 const OUT = join(__dirname, "..", "..", "..", "docs", "images", "screens");
 const ID = "0f3c1a52-7a49-4d1e-9a31-8f1d5b6c7d80";
@@ -75,12 +76,6 @@ async function shot(page: Page, name: string) {
   await page.addStyleTag({ content: 'a[href^="/creations?show=videos"] { visibility: hidden; }' });
   await page.screenshot({ path: join(OUT, name) });
 }
-
-test("home", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: /^Attach/ }).waitFor();
-  await shot(page, "home.png");
-});
 
 test("a chat with a picture, the web, and two versions of an answer", async ({ page }) => {
   await saved(
@@ -216,20 +211,6 @@ test("files in the box", async ({ page }) => {
     .fill("Summarise the plan and tell me what the sketch shows.");
   await shot(page, "attach.png");
 });
-
-for (const [name, path, heading] of [
-  ["images", "/image", /make a picture/i],
-  ["video", "/video", /make a video/i],
-  ["voice", "/voice/speak", /text to speech/i],
-  ["music", "/voice/music", /create music/i],
-  ["notebooks", "/notebooks", /notebooks/i],
-] as const) {
-  test(`the ${name} screen`, async ({ page }) => {
-    await page.goto(path);
-    await page.getByRole("heading", { name: heading }).first().waitFor();
-    await shot(page, `${name}.png`);
-  });
-}
 
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, colorScheme: "dark", hasTouch: true });

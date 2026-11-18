@@ -51,7 +51,7 @@ with a cloud model, sends what it reads to that model's provider.
 ## Needs
 
 - A coding session, and the coding engine set up (Settings, under Optional parts).
-- For Claude Sonnet 5.5: your own Anthropic key, saved in Settings under Your keys.
+- For Claude Sonnet 5.5: your own Anthropic key, saved in Settings under Cloud keys.
 
 ## Examples
 

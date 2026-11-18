@@ -9,6 +9,8 @@ by meaning in any language.
 The desktop app (macOS first; Windows and Linux are built by CI) runs models on your computer, in the cloud, or both.
 The web app runs the same screens on cloud models only.
 
+![The home window: the chat box, the model button in the top bar, quick starts for each thing you can make, and the menu on the left](docs/images/screens/desktop/home.png)
+
 ## Three ways to use a model
 
 You choose where each product runs with the model button at the top of every screen. Each product can be set on its
@@ -48,6 +50,35 @@ own: for example, chat on your computer, video in the cloud, and code on your Cl
   ([ADR-0107](docs/decisions/0107-harnesses-the-persons-own-agent-program.md)).
 - **Set-up:** it is an optional part (about 694 MB), installed only when you ask for it.
 
+## The model button, the Model hub and Settings
+
+The model button opens a small list with the tabs Recommended, On this computer and Cloud. A model is downloaded only
+after you have seen its size.
+
+| Recommended | On this computer |
+|---|---|
+| ![The model list on its Recommended tab: chat models with their size and what they need](docs/images/screens/desktop/model-picker.png) | ![The model list on its On this computer tab: models already here](docs/images/screens/desktop/model-picker-local.png) |
+
+The **Model hub** shows the same choices for every job at once.
+
+| Model hub: chat models | Model hub: image models |
+|---|---|
+| ![The Model hub on its Chat tab](docs/images/screens/desktop/model-hub.png) | ![The Model hub on its Images tab, with sizes and memory needs](docs/images/screens/desktop/model-hub-images.png) |
+
+Three groups of Settings matter on the first day.
+
+**On this computer** says what this computer can do right now, job by job, and lists the optional parts.
+
+![Settings, On this computer: a list of jobs, each marked ready with the model it uses](docs/images/screens/desktop/settings-computer.png)
+
+**Cloud keys** is where you add your own keys. Without a key, everything runs on this computer's models.
+
+![Settings, Cloud keys: text providers, media providers, and a table of what each key covers](docs/images/screens/desktop/settings-keys.png)
+
+**Privacy** lists everything that can leave the computer. Web search is off until you allow it.
+
+![Settings, Privacy: what leaves this computer, and the web search service](docs/images/screens/desktop/settings-privacy.png)
+
 ## What you can make
 
 | Product | What it does |
@@ -66,6 +97,24 @@ own: for example, chat on your computer, video in the cloud, and code on your Cl
 Other apps can use Wasify AI as a tool through its MCP server ([docs](docs/desktop/connections.md)). Nothing a person
 makes is moderated, marked or limited per day
 ([ADR-0094](docs/decisions/0094-no-safeguards-marks-or-licence-data-in-v1.md)).
+
+## More screens
+
+The pictures on this page are of the real desktop window on a Mac with its models installed, so the names and sizes
+are that computer's. To take them again:
+`WASIFYAI_AUDIT_OUT=$PWD/docs/images/screens/desktop apps/desktop/scripts/ui-audit.sh light readme`.
+
+| Images | Video |
+|---|---|
+| ![Make a picture: a prompt, aspect ratio, styles, and recent pictures](docs/images/screens/desktop/images.png) | ![Make a video: a prompt, length and shape](docs/images/screens/desktop/video.png) |
+
+| Text to speech | Music |
+|---|---|
+| ![Text to speech: language, words and a list of voices](docs/images/screens/desktop/speech.png) | ![Create music: a description, lyrics and length](docs/images/screens/desktop/music.png) |
+
+| Motion graphics | Train models |
+|---|---|
+| ![Motion graphics: say what you want to promote, or start from a template](docs/images/screens/desktop/motion.png) | ![Train models: four cards for pictures, language, decisions and video](docs/images/screens/desktop/train.png) |
 
 ## How it works
 

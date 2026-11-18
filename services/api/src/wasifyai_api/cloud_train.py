@@ -140,7 +140,7 @@ class CloudLookTrainer:
             return None
         return (
             f"With your key, Train teaches looks for {look.title}. Choose {look.title}, or run "
-            "Train on this computer again in Settings › Your keys."
+            "Train on this computer again in Settings › Cloud keys."
         )
 
     def ready(self, *a: Any) -> bool:

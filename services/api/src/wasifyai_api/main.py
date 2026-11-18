@@ -59,6 +59,7 @@ from wasifyai_api.routes import router
 from wasifyai_api.run_tracing import TracingMiddleware
 from wasifyai_api.service_styles import admin_router as admin_styles_router
 from wasifyai_api.service_styles import router as styles_router
+from wasifyai_api.setup_groups import router as setup_groups_router
 from wasifyai_api.training_setup import router as training_setup_router
 from wasifyai_api.uploads import router as uploads_router
 from wasifyai_api.video_setup import router as video_setup_router
@@ -171,6 +172,7 @@ def create_app(given: Injected | None = None) -> FastAPI:
         app.include_router(desktop_save_router)
         app.include_router(desktop_discovery_router)
         app.include_router(desktop_styles_router)
+        app.include_router(setup_groups_router)
         app.include_router(desktop_llm_router)
         app.include_router(desktop_coding_router)
         app.include_router(coding_gateway_router)

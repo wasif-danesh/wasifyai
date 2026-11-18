@@ -24,27 +24,41 @@ export async function componentInstall(
   await componentsApi.install(id, bytes, repair);
 }
 
-/** Every status change of every component, until the returned function is called. */
-export async function onComponentStatus(
-  fn: (id: string, s: ComponentStatus) => void,
-): Promise<() => void> {
-  const stop = new AbortController();
-  let wait = 1000;
-  void (async () => {
-    // the stream ends when the engine restarts: listen again, waiting a little longer each time
-    while (!stop.signal.aborted) {
-      try {
-        await componentsApi.events((id, s) => {
-          wait = 1000;
-          fn(id, s);
-        }, stop.signal);
-      } catch {
-        // the engine is not there yet, or restarting
+type Listener = (id: string, s: ComponentStatus) => void;
+const listeners = new Set<Listener>();
+let stream: AbortController | null = null;
+
+/** Every status change of every component, until the returned function is called. One stream serves every
+ * listener in the window: a stream each would use up the few connections the window may hold open to the engine,
+ * and every other request would wait behind them. */
+export async function onComponentStatus(fn: Listener): Promise<() => void> {
+  listeners.add(fn);
+  if (!stream) {
+    const stop = new AbortController();
+    stream = stop;
+    let wait = 1000;
+    void (async () => {
+      // the stream ends when the engine restarts: listen again, waiting a little longer each time
+      while (!stop.signal.aborted) {
+        try {
+          await componentsApi.events((id, s) => {
+            wait = 1000;
+            for (const l of [...listeners]) l(id, s);
+          }, stop.signal);
+        } catch {
+          // the engine is not there yet, or restarting
+        }
+        if (stop.signal.aborted) return;
+        await new Promise((r) => setTimeout(r, wait));
+        wait = Math.min(wait * 2, 15_000);
       }
-      if (stop.signal.aborted) return;
-      await new Promise((r) => setTimeout(r, wait));
-      wait = Math.min(wait * 2, 15_000);
+    })();
+  }
+  return () => {
+    listeners.delete(fn);
+    if (listeners.size === 0 && stream) {
+      stream.abort();
+      stream = null;
     }
-  })();
-  return () => stop.abort();
+  };
 }

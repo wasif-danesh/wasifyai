@@ -334,6 +334,108 @@ for (const scheme of ["light", "dark"]) {
       if (scheme === "light" && TALL.has(name)) await shot(page, `${name}-tall`, 2000);
     });
   }
+  if (names.has("first-run")) {
+    // ADR-0109 stage FR5, on a fresh data folder: the Welcome's one button, then Ready. With Ollama running the
+    // button uses its model (no download); without, it downloads the chat model for real.
+    await attempt("first-run", async () => {
+      const log = [];
+      const t = Date.now();
+      page.on("console", (m) => log.push(`${m.type()} ${m.text().slice(0, 200)}`));
+      page.on("pageerror", (e) => log.push(`pageerror ${String(e).slice(0, 300)}`));
+      page.on("request", (r) =>
+        log.push(`> ${Math.round((Date.now() - t) / 100) / 10}s ${r.url().slice(0, 120)}`),
+      );
+      page.on("requestfinished", (r) =>
+        log.push(`< ${Math.round((Date.now() - t) / 100) / 10}s ${r.url().slice(0, 120)}`),
+      );
+      page.on("requestfailed", (r) =>
+        log.push(`x ${r.url().slice(0, 120)} ${r.failure()?.errorText}`),
+      );
+      process.on("exit", () => process.env.WASIFYAI_FIRST_RUN_LOG && console.log(log.join("\n")));
+      await open(page, "/");
+      await page.evaluate(() => localStorage.removeItem("wasify.first-run.done"));
+      await page.reload();
+      await page.getByRole("heading", { name: "Welcome to Wasify AI" }).waitFor({ timeout: 30000 });
+      const t0 = Date.now();
+      await page
+        .getByRole("button", { name: /^Get started/ })
+        .first()
+        .waitFor({ timeout: 45000 })
+        .catch(async (e) => {
+          await shot(page, "first-run-stuck");
+          console.log(
+            "  stuck at:",
+            (await page.locator("#main").innerText()).replace(/\s+/g, " "),
+          );
+          throw e;
+        });
+      console.log(`  the button came after ${Math.round((Date.now() - t0) / 1000)} s`);
+      await shot(page, `first-run-welcome${suffix}`);
+      if (scheme === "light") {
+        console.log("  it says:", (await page.locator("#main").innerText()).replace(/\s+/g, " "));
+        await page.getByRole("button", { name: "Get started", exact: true }).click();
+        await page.getByRole("heading", { name: "You’re ready" }).waitFor({ timeout: 5 * 60_000 });
+        await shot(page, "first-run-ready");
+        await page.getByRole("button", { name: "Start chatting" }).click();
+        await page.waitForTimeout(1500);
+        await shot(page, "first-run-home");
+      }
+    });
+  }
+  if (names.has("setup-groups")) {
+    // ADR-0109 stage FR4: each group's one card in place of its screens, and one group set up for real
+    const cards = [
+      ["music-create", "/music/create", "Music"],
+      ["voice-speak", "/voice/speak", "Voice"],
+      ["voice-edit", "/voice/edit-speech", "Voice"],
+      ["image-create", "/images/create", "Images"],
+      ["video-create", "/video/create", "Video"],
+      ["voice-lipsync", "/voice/lip-sync", "Lip sync"],
+      ["creative", "/creative", "Creative Studio"],
+      ["video-builder", "/video/builder", "Motion graphics"],
+      ["model3d", "/images/3d", "3D model"],
+      ["meetings", "/meetings", "Meetings"],
+      ["notebooks", "/notebooks", "Notebook"],
+      ["code", "/code", "Code"],
+    ];
+    for (const [name, path, label] of cards) {
+      await attempt(`setup-${name}`, async () => {
+        await open(page, path);
+        await page
+          .getByRole("heading", { name: `Get started with ${label}` })
+          .waitFor({ timeout: 15000 });
+        await shot(page, `setup-${name}${suffix}`);
+        if (scheme === "light")
+          console.log(
+            `  ${label}:`,
+            (await page.locator("section[aria-label^='Set up']").innerText()).replace(/\s+/g, " "),
+          );
+      });
+    }
+    if (scheme === "light" && process.env.WASIFYAI_SETUP_GROUP) {
+      // one group set up for real by its button: the card goes, the screen opens, and its other items open too
+      const [path, label, other] = process.env.WASIFYAI_SETUP_GROUP.split("|");
+      await attempt("setup-run", async () => {
+        await open(page, path);
+        const card = page.getByRole("heading", { name: `Get started with ${label}` });
+        await card.waitFor({ timeout: 15000 });
+        await page.getByRole("button", { name: new RegExp(`^Set up ${label}`) }).click();
+        await page.waitForTimeout(3000);
+        await shot(page, "setup-run-working");
+        await card.waitFor({ state: "detached", timeout: 150 * 60_000 });
+        await page.waitForTimeout(2000);
+        await shot(page, "setup-run-done");
+        // every other screen the group should now open, "a,b,c"
+        for (const [n, o] of (other ? other.split(",") : []).entries()) {
+          await open(page, o);
+          await page.waitForTimeout(1500);
+          const again = await page.getByRole("heading", { name: /^Get started with / }).count();
+          console.log(`  ${o} after the setup: ${again ? "still a card" : "the screen"}`);
+          await shot(page, n === 0 ? "setup-run-other" : `setup-run-other-${n}`);
+        }
+      });
+    }
+  }
   if (scheme === "light" && names.has("image-make")) {
     // the check of stage U3: a real picture made in the window, the stage pictured while it works and when it is done
     await attempt("image-make", async () => {
@@ -1194,7 +1296,7 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("button", { name: "Make the video" }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("button", { name: "Make the video" }).click();
-      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 45000 });
       seen.video = await dialog.locator("video").getAttribute("src");
       console.log(`ARRANGE ${JSON.stringify(seen)}`);
     });
@@ -1403,7 +1505,7 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("button", { name: "Make the video" }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("button", { name: "Make the video" }).click();
-      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 45000 });
       await shot(page, "motion-editor-made");
       seen.check = await dialog.getByText(/Checked:/).innerText();
       seen.video = await dialog.locator("video").getAttribute("src");

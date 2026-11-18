@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>First run: mockup</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(20% 0.014 255));
+    --surface-2: light-dark(oklch(95.5% 0.006 250), oklch(25% 0.016 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(32% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 12%, transparent);
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --ok: light-dark(oklch(52% 0.13 155), oklch(74% 0.14 155));
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
+  .note, .tabs, .what { max-width: 1040px; margin: 10px auto 0; padding: 0 16px; }
+  .note { margin-top: 18px; color: var(--muted); font-size: 13px; } .note b, .what b { color: var(--text); }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .tabs button, .theme button { border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .tabs button[aria-selected="true"], .theme button[aria-pressed="true"] { background: var(--accent);
+    border-color: var(--accent); color: var(--on-accent); }
+  .tabs select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px;
+    padding: 4px 10px; font: inherit; font-size: 13px; }
+  .theme { display: flex; gap: 6px; margin-left: auto; }
+  .what { font-size: 13px; color: var(--muted); }
+
+  .win { max-width: 1040px; margin: 10px auto 24px; border: 1px solid var(--border); border-radius: 14px;
+         background: var(--bg); min-height: 620px; overflow: hidden; display: grid; grid-template-rows: 44px 1fr;
+         position: relative; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border);
+         background: var(--surface); font-size: 13px; white-space: nowrap; overflow: hidden; }
+  .bar .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px;
+          padding: 1px 10px; font-size: 12.5px; background: var(--surface); color: var(--text); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--accent); flex: none; }
+  .dot.ok { background: var(--ok); }
+
+  .hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 10px;
+         padding: 7px 14px; font: inherit; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .btn.big { padding: 12px 26px; font-size: 16px; border-radius: 12px; flex-direction: column; gap: 0; }
+  .btn.big small { font-weight: 400; font-size: 12.5px; opacity: .85; }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 0; }
+  .btn:focus-visible, .tabs button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .meter { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--accent); }
+
+  /* welcome */
+  .welcome { display: grid; place-items: center; padding: 40px 20px; }
+  .welcome .in { display: grid; gap: 18px; justify-items: center; text-align: center; max-width: 460px; }
+  .logo { width: 64px; height: 64px; border-radius: 18px; background: var(--accent); color: var(--on-accent);
+          display: grid; place-items: center; font-size: 28px; font-weight: 800; }
+  .welcome h1 { margin: 0; font-size: 30px; letter-spacing: -0.01em; }
+  .welcome .lead { margin: 0; color: var(--muted); font-size: 15px; }
+
+  /* app */
+  .app { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 576px; }
+  .side { background: var(--surface-2); border-right: 1px solid var(--border); padding: 14px 10px; display: grid;
+          align-content: start; gap: 2px; font-size: 13.5px; }
+  .side span { padding: 6px 10px; border-radius: 8px; } .side .on { background: var(--accent-soft); }
+  .chat { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; }
+  .thread { padding: 24px 28px; display: grid; gap: 14px; align-content: start; max-width: 720px; width: 100%;
+            margin: 0 auto; }
+  .ready { border: 1px solid var(--border); background: var(--surface); border-radius: 14px; padding: 14px 16px;
+           display: grid; gap: 8px; }
+  .ready .head { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; flex-wrap: wrap; }
+  .sugg { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sugg span { border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; background: var(--surface);
+               font-size: 13px; }
+  .me { justify-self: end; background: var(--accent-soft); border-radius: 14px; padding: 8px 13px; max-width: 85%; }
+  .bot { max-width: 92%; }
+  .composer { margin: 0 auto 18px; max-width: 720px; width: calc(100% - 40px); border: 1px solid var(--border);
+              background: var(--surface); border-radius: 16px; padding: 10px 14px; display: flex; gap: 10px;
+              align-items: center; color: var(--muted); }
+  .composer .send { margin-left: auto; width: 30px; height: 30px; border-radius: 50%; background: var(--accent);
+                    color: var(--on-accent); display: grid; place-items: center; font-weight: 700; }
+  .composer.off { opacity: .6; } .composer.off .send { background: var(--surface-2); color: var(--muted); }
+  .main { padding: 24px 28px; display: grid; gap: 16px; align-content: start; min-width: 0; }
+  .start { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 14px; padding: 18px;
+           display: grid; gap: 10px; justify-items: start; }
+  .start h2 { margin: 0; font-size: 16px; }
+  .canvas { border: 1px dashed var(--border); border-radius: 14px; min-height: 200px; display: grid; place-items: center;
+            color: var(--muted); }
+
+  /* key dialog */
+  .scrim { position: absolute; inset: 44px 0 0; background: rgb(0 0 0 / .35); display: grid; place-items: center;
+           padding: 16px; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px;
+            width: min(440px, 100%); display: grid; gap: 12px; box-shadow: 0 14px 36px rgb(0 0 0 / .25); }
+  .dialog h2 { margin: 0; font-size: 17px; }
+  .dialog input { width: 100%; border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+                  color: var(--text); padding: 9px 11px; font: inherit; }
+
+  /* every menu item */
+  .side.full { gap: 0; overflow: auto; max-height: 576px; }
+  .side.full .g { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+                  letter-spacing: .04em; padding: 10px 10px 2px; }
+  .side.full button { all: unset; display: flex; justify-content: space-between; gap: 6px; padding: 5px 10px;
+                      border-radius: 8px; cursor: pointer; font-size: 13.5px; }
+  .side.full button[aria-current="true"] { background: var(--accent-soft); }
+  .side.full button:focus-visible { outline: 2px solid var(--accent); }
+  .side.full .tick { color: var(--ok); font-size: 12px; }
+  .side.full .sep { border: 0; border-top: 1px solid var(--border); margin: 8px 6px; width: auto; }
+  .parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; width: 100%; }
+  .parts li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+  .parts li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .parts li.have span { color: var(--ok); }
+  .have-row { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .have-row label { display: inline-flex; gap: 6px; align-items: center; }
+  .done { border: 1px solid var(--border); border-radius: 14px; padding: 18px; color: var(--muted); }
+  #s6pick { display: none; }
+
+  .screen { display: none; } .screen.on { display: grid; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: minmax(0, 1fr); } .side { display: none; }
+    .thread, .main { padding: 18px 16px; } .welcome h1 { font-size: 24px; }
+    #s6pick { display: inline-flex; gap: 6px; align-items: center; }
+  }
+</style>
+</head>
+<body>
+<p class="note"><b>Mockup, not built.</b> The desktop app's first launch asks one thing: <b>Get started</b>. The
+  button says what it costs, and pressing it is the consent to that one download. Everything else is offered where it
+  is needed, one recommended button at a time. Sizes are the real ones from the catalogue.</p>
+<div class="tabs" role="tablist" aria-label="Screens">
+  <button role="tab" aria-selected="true" data-s="s1">1 · Welcome</button>
+  <button role="tab" aria-selected="false" data-s="s2">2 · Getting ready</button>
+  <button role="tab" aria-selected="false" data-s="s3">3 · Ready</button>
+  <button role="tab" aria-selected="false" data-s="s4">4 · First visit to Pictures</button>
+  <button role="tab" aria-selected="false" data-s="s5">Or · Use an API key</button>
+  <button role="tab" aria-selected="false" data-s="s6">5 · Every menu item</button>
+  <label class="hint" style="display:inline-flex;gap:6px;align-items:center">This computer
+    <select id="pc" aria-label="This computer">
+      <option value="mac24">Mac, 24 GB, nothing found</option>
+      <option value="ollama">Mac, 24 GB, Ollama running</option>
+      <option value="small">Mac, 8 GB</option>
+      <option value="big">Mac, 64 GB</option>
+    </select></label>
+  <div class="theme"><button aria-pressed="false" data-t="light">Light</button><button aria-pressed="false" data-t="dark">Dark</button></div>
+</div>
+<p class="what" id="what"></p>
+
+<div class="win">
+  <div class="bar"><b>Wasify AI</b><span class="hint" id="crumb"></span><div class="right" id="barright"></div></div>
+
+  <!-- 1 welcome -->
+  <section class="screen welcome" id="s1" aria-label="Welcome">
+    <div class="in">
+      <div class="logo" aria-hidden="true">W</div>
+      <h1>Welcome to Wasify AI</h1>
+      <p class="lead">Chat, pictures, video, voice, meetings and code, on your Mac.</p>
+      <button class="btn primary big" id="go" data-go="s2"><span id="goT">Get started</span><small id="goS"></small></button>
+      <p class="hint" id="goWhy"></p>
+      <button class="btn link" id="keylink" data-go="s5">I'd rather use an API key</button>
+    </div>
+  </section>
+
+  <!-- 2 getting ready -->
+  <section class="screen" id="s2" aria-label="Getting ready">
+    <div class="app">
+      <nav class="side" aria-label="Products"><span class="on">Chat</span><span>Pictures</span><span>Video</span>
+        <span>Voice</span><span>Meetings</span><span>Notebooks</span><span>3D</span><span>Code</span><span>My creations</span></nav>
+      <div class="chat">
+        <div class="thread">
+          <div class="ready">
+            <div class="head"><span id="r2t">Getting your chat model ready</span><span class="hint" id="r2n"></span></div>
+            <div class="meter"><i id="r2m" style="width:46%"></i></div>
+            <p class="hint">You can look around while it downloads. Chat starts by itself when it is ready.</p>
+            <div class="row"><button class="btn">Pause</button></div>
+          </div>
+        </div>
+        <div class="composer off">Ask anything — ready when the download finishes<span class="send">↑</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 ready -->
+  <section class="screen" id="s3" aria-label="Ready">
+    <div class="app">
+      <nav class="side" aria-label="Products"><span class="on">Chat</span><span>Pictures</span><span>Video</span>
+        <span>Voice</span><span>Meetings</span><span>Notebooks</span><span>3D</span><span>Code</span><span>My creations</span></nav>
+      <div class="chat">
+        <div class="thread">
+          <div class="ready">
+            <div class="head"><span>✓ Ready. Ask anything.</span><span class="hint" id="r3n"></span></div>
+            <div class="sugg"><span>Write a birthday message for my sister</span><span>What can this app do?</span>
+              <span>Make a picture of a red teapot</span></div>
+          </div>
+          <div class="me">Make a picture of a red teapot</div>
+          <div class="bot">Pictures need a picture model first. <button class="btn link">Get started with pictures</button>
+            and I'll make it straight after.</div>
+        </div>
+        <div class="composer">Ask anything<span class="send">↑</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 pictures -->
+  <section class="screen" id="s4" aria-label="First visit to Pictures">
+    <div class="app">
+      <nav class="side" aria-label="Products"><span>Chat</span><span class="on">Pictures</span><span>Video</span>
+        <span>Voice</span><span>Meetings</span><span>Notebooks</span><span>3D</span><span>Code</span><span>My creations</span></nav>
+      <div class="main">
+        <div class="start">
+          <h2>Get started with pictures</h2>
+          <p class="hint" id="p4why"></p>
+          <button class="btn primary" id="p4go"></button>
+          <button class="btn link">Other choices</button>
+        </div>
+        <div class="canvas">The picture screen, as today</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 every menu item -->
+  <section class="screen" id="s6" aria-label="Every menu item">
+    <div class="app">
+      <nav class="side full" id="s6nav" aria-label="Menu"></nav>
+      <div class="main">
+        <label class="hint" id="s6pick">Menu item <select id="s6sel"></select></label>
+        <div class="have-row"><span>In this preview, already set up:</span>
+          <label><input type="checkbox" id="haveChat" checked> Chat model</label>
+          <label><input type="checkbox" id="haveVoice"> Voice</label></div>
+        <div id="s6card"></div>
+        <div class="canvas" id="s6canvas">The screen, as today</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 key -->
+  <section class="screen" id="s5" aria-label="Use an API key">
+    <div class="welcome" style="opacity:.35"><div class="in"><div class="logo">W</div><h1>Welcome to Wasify AI</h1></div></div>
+    <div class="scrim">
+      <div class="dialog" role="dialog" aria-label="Use an API key">
+        <h2>Use an API key</h2>
+        <p class="hint">Paste an Anthropic key. Chat runs on Claude Haiku 5.5, nothing is downloaded, and you pay
+          Anthropic for what you use. The key stays in this Mac's keychain.</p>
+        <input type="password" value="sk-ant-0000000000000000" aria-label="Anthropic key">
+        <p class="hint" style="color:var(--ok)">✓ The key works.</p>
+        <div class="row" style="justify-content:space-between">
+          <button class="btn link">Another provider</button>
+          <span class="row"><button class="btn" data-go="s1">Back</button><button class="btn primary" data-go="s3">Start</button></span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  const pcs = {
+    mac24: { go: "Get started", sub: "Downloads a 2.5 GB chat model", why: "Qwen3 4B, chosen for this Mac. It runs here, privately.",
+             n: "1.2 of 2.5 GB", model: "Qwen3 4B",
+             pic: ["Add a key for pictures · about $0.01 each", "The picture model that runs here needs about 24 GB of memory, all of this Mac's, so a key is recommended. Other choices include downloading it (16.1 GB)."] },
+    ollama: { go: "Get started", sub: "Uses Qwen3 8B from Ollama · no download", why: "Found on this Mac. It runs here, privately.",
+             n: "", model: "Qwen3 8B (Ollama)",
+             pic: ["Add a key for pictures · about $0.01 each", "The picture model that runs here needs about 24 GB of memory, all of this Mac's, so a key is recommended. Other choices include downloading it (16.1 GB)."] },
+    small: { go: "Get started with an API key", sub: "Nothing to download", why: "This Mac's 8 GB is too little for a good chat model. With a key, chat runs on Claude Haiku 5.5.",
+             n: "", model: "Claude Haiku 5.5",
+             pic: ["Add a key for pictures · about $0.01 each", "Picture models need more memory than this Mac has."] },
+    big: { go: "Get started", sub: "Downloads a 5 GB chat model", why: "Qwen3 8B, chosen for this Mac. It runs here, privately.",
+             n: "2.3 of 5 GB", model: "Qwen3 8B",
+             pic: ["Download the picture model · 16.1 GB", "FLUX.2 klein 4B makes and edits pictures here, privately."] },
+  };
+  const what = {
+    s1: "<b>Welcome.</b> One decision. The button names what it will do and how big it is; the line under it says why. The key link is for people who already know they want one. On a small Mac the key becomes the main button.",
+    s2: "<b>Getting ready.</b> The person is in the app at once, on Chat. The download shows in the chat itself and in the top bar. The other products can be opened; each shows its own Get started card.",
+    s3: "<b>Ready.</b> Starter questions, one of which shows what the app can do. Asking for something that needs another model gets a one-click way to it, in place.",
+    s4: "<b>First visit to a product.</b> One recommended button, chosen for this computer: a key where the local model would not fit well, the download where it does. Other choices opens the model button (local, keys, subscription).",
+    s5: "<b>Or: a key.</b> From the welcome's small link. One field, checked at once for free, then straight into chat.",
+    s6: "<b>Every menu item: one card per group.</b> The first item opened in a group shows the group's card; its one button sets up every item of the group, so there are no further cards. Lip sync is its own item. A model this Mac cannot run well is left out and the card says which item it affects. Where a key can do the whole group and the model would need most of the memory, the key is the main button. Creative Studio's button also sets up Video and Voice. ✓: ready, no card.",
+  };
+  let cur = "s1";
+  const pc = () => pcs[document.getElementById("pc").value];
+  const render = () => {
+    const p = pc(), small = document.getElementById("pc").value === "small", ollama = document.getElementById("pc").value === "ollama";
+    document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === cur));
+    document.querySelectorAll(".tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.s === cur));
+    document.getElementById("what").innerHTML = what[cur];
+    document.getElementById("goT").textContent = p.go;
+    document.getElementById("goS").textContent = p.sub;
+    document.getElementById("goWhy").textContent = p.why;
+    document.getElementById("go").dataset.go = small ? "s5" : (ollama ? "s3" : "s2");
+    document.getElementById("keylink").style.display = small ? "none" : "";
+    document.getElementById("r2n").textContent = p.n;
+    document.getElementById("r3n").textContent = p.model;
+    document.getElementById("p4go").textContent = p.pic[0];
+    document.getElementById("p4why").textContent = p.pic[1];
+    document.getElementById("crumb").textContent = { s1: "", s2: "Chat", s3: "Chat", s4: "Pictures", s5: "", s6: "" }[cur];
+    if (window.renderAll) window.renderAll();
+    const model = cur === "s4" ? "Model: none yet ▾" : `Model: ${p.model} ▾`;
+    document.getElementById("barright").innerHTML =
+      cur === "s1" || cur === "s5" || cur === "s6" ? "" :
+      (cur === "s2" && p.n ? `<span class="pill"><span class="dot"></span>Getting ready · 46%</span>` : "") +
+      `<span class="pill">${model}</span>`;
+  };
+  const show = id => { cur = id; render(); };
+  document.querySelectorAll("[data-s]").forEach(b => b.onclick = () => show(b.dataset.s));
+  document.addEventListener("click", e => { const g = e.target.closest("[data-go]"); if (g) show(g.dataset.go); });
+  document.getElementById("pc").onchange = render;
+  document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
+    document.documentElement.dataset.theme = b.dataset.t;
+    document.querySelectorAll("[data-t]").forEach(x => x.setAttribute("aria-pressed", x === b));
+  });
+  // ---- every menu item, one card per group: the group's download makes every item in it work. What each needs is
+  // from docs/contracts/actions.json `requires`, the darwin-arm64 manifest and each product's models.yaml.
+  // P: [name, download GB, memory GB while it works (approx_ram_gb / need_gb)]
+  const P = {
+    llama: ["Language engine (llama.cpp)", 0.012], chat: ["Chat model (Qwen3 4B)", 2.5],
+    embed: ["Search model (BGE small)", 0.07], reader: ["Document reader", 0.42],
+    speech: ["Speech engine (audio.cpp)", 0.042], kokoro: ["Kokoro, text to speech", 0.19],
+    parakeet: ["Parakeet, speech to text", 0.92], speakers: ["Speaker models (Sortformer, ERes2Net)", 0.52],
+    comfy: ["Image engine (ComfyUI)", 0.013], klein: ["FLUX.2 klein 4B", 16.1, 24], ltx: ["LTX-Video 2B", 16.1, 14],
+    museEnv: ["Lip sync engine (MuseTalk)", 2.1], muse: ["MuseTalk weights", 4.17, 12],
+    clone: ["Qwen3-TTS 0.6B, copies a voice", 1.99, 5], design: ["Qwen3-TTS 1.7B, a voice from a description", 2.82, 6],
+    vc: ["Tone Color VC, changes a voice", 0.07], dots: ["dots TTS edit, edits speech", 2.96, 7],
+    ace: ["ACE-Step 1.5 Turbo, makes music", 6.19, 4], demucs: ["HTDemucs, splits a song", 0.06],
+    song: ["Song analysis (beat tracking)", 0.97], vb: ["Video builder (Node, Chrome shell, FFmpeg)", 0.32],
+    coding: ["Coding engine (OpenHands)", 0.375], pixal: ["Pixal3D and BiRefNet cut-out", 8.98, 19.5],
+  };
+  const CHAT = ["llama", "chat"];
+  // groups: id, label, menu items [label, the parts it cannot work without, a part it can do without],
+  // key = a key can do every item of the group, extra = a line on the card, uses = other groups it needs
+  const G = [
+    { id: "chat", label: "New chat", items: [["New chat", CHAT]], key: "Chat on Claude Haiku 5.5 with a key" },
+    { id: "nb", label: "Notebook", items: [["Create", ["embed", "reader"]], ["View notebooks", ["embed", "reader", ...CHAT]]] },
+    { id: "meet", label: "Meetings", items: [["Record", ["speech", "parakeet", "speakers"]],
+      ["View meetings", ["speech", "parakeet", "speakers", "embed", "reader", ...CHAT]], ["People", ["speakers"]]],
+      extra: "Asking about a meeting uses Notebooks, so its two parts come too." },
+    { id: "img", label: "Images", items: ["Create", "Edit", "Inpaint", "Reference"].map(l => [l, ["comfy", "klein"]]),
+      key: "Add a key for pictures · from $0.006 each", extra: "Styles are optional extras, offered on the Create screen." },
+    { id: "vid", label: "Video", items: ["Create", "Animate an image", "Extend video"].map(l => [l, ["comfy", "ltx"]]),
+      key: "Add a key for video" },
+    { id: "voice", label: "Voice", items: [["Text to speech", ["speech", "kokoro"]], ["Speech to text", ["speech", "parakeet"]],
+      ["Voices", ["speech", "clone"], "design"], ["Change a voice", ["speech", "vc"]], ["Edit speech", ["speech", "dots"]],
+      ["Dub a recording", ["speech", "parakeet", "kokoro", ...CHAT]], ["Audiobook", ["speech", "kokoro"]]] },
+    { id: "music", label: "Music", items: [["Create", ["speech", "ace"]], ["Lyrics", CHAT], ["Split into parts", ["speech", "demucs"]]] },
+    { id: "code", label: "Code", items: ["Projects", "Scheduled", "Extensions"].map(l => [l, ["coding", ...CHAT]]),
+      extra: "Running on your Claude or ChatGPT plan instead adds the agent programs (694 MB), in Other choices." },
+    { id: "lip", label: "Lip sync", items: [["Lip sync", ["museEnv", "muse"]]], key: "Add a key for lip sync",
+      extra: "Apple-silicon Macs only. Now its own menu item: it uses neither Video's nor Voice's models." },
+    { id: "creative", label: "Creative Studio", items: [["Creative Studio", ["song", ...CHAT]]], uses: ["vid", "voice"] },
+    { id: "motion", label: "Motion graphics", items: [["Motion graphics", ["vb", ...CHAT]]] },
+    { id: "3d", label: "3D model", items: [["3D model", ["pixal"]]], key: "Add a key for 3D models" },
+    { id: "train", label: "Train models", items: [["Train models", []]],
+      extra: "Each kind of training sets itself up when it is chosen: pictures 1.8 GB plus the picture model, writing 64 MB plus a Qwen3 model, decisions 168 MB plus Laya, video 182 MB plus LTX-Video." },
+    { id: "library", label: "Library", items: [["Library", []]] },
+    { id: "models", label: "Model hub", items: [["Model hub", []]] },
+  ];
+  const mem = () => ({ mac24: 24, ollama: 24, small: 8, big: 64 })[document.getElementById("pc").value];
+  const have = () => new Set([...(document.getElementById("haveChat").checked ? CHAT : []),
+    ...(document.getElementById("haveVoice").checked ? ["speech", "kokoro", "parakeet", "clone", "design", "vc", "dots"] : [])]);
+  const ram = k => P[k][2] || 0;
+  const fits = k => ram(k) < mem() * 0.75;        // the real app asks its fit check (desktop_fit)
+  const heavy = k => ram(k) > mem() / 2;
+  const fmt = gb => gb < 1 ? `${Math.max(1, Math.round(gb * 1000))} MB` : `${gb.toFixed(1)} GB`;
+  const byId = id => G.find(g => g.id === id);
+  const partsOf = g => [...new Set(g.items.flatMap(([, need, opt]) => [...need, ...(opt ? [opt] : [])]))];
+  // what pressing the group's button would do on this Mac
+  function plan(g) {
+    const parts = partsOf(g), h = have();
+    const todo = parts.filter(k => !h.has(k));
+    const big = parts.some(heavy), keyFirst = g.key && big;
+    const get = keyFirst ? [] : todo.filter(fits);
+    const skipped = keyFirst ? [] : todo.filter(k => !fits(k));
+    const works = ([, need]) => need.every(k => h.has(k) || get.includes(k));
+    const ready = g.items.filter(works).length;
+    return { parts, todo, get, skipped, keyFirst, ready, gb: get.reduce((s, k) => s + P[k][1], 0),
+             canLocal: parts.every(k => ram(k) <= mem()) };
+  }
+  let cur6 = "img";
+  function card(g) {
+    const p = plan(g), h = have();
+    if (!p.parts.length) return g.extra ? `<div class="start"><h2>${g.label}</h2><p class="hint">${g.extra}</p></div>`
+                                        : `<div class="done">Nothing to set up: ${g.label} works as it is.</div>`;
+    const uses = (g.uses || []).map(byId).filter(d => plan(d).todo.length);
+    if (!p.todo.length && !uses.length) return `<div class="done">✓ Ready: every part of ${g.label} is set up. No card.</div>`;
+    const n = g.items.length;
+    let why;
+    if (p.keyFirst) {
+      const m = Math.max(...p.parts.map(ram));
+      why = m > mem() ? `This needs about ${m} GB of memory and this Mac has ${mem()} GB, so a key does it.`
+                      : `This needs about ${m} GB of memory, most of this Mac's ${mem()} GB, so a key is recommended.`;
+    } else if (p.skipped.length) {
+      const lost = g.items.filter(([, need]) => !need.every(k => h.has(k) || p.get.includes(k))).map(([l]) => l);
+      const optLost = g.items.filter(([, , o]) => o && p.skipped.includes(o)).map(([l]) => l);
+      why = `${g.label}: ${n - lost.length} of ${n} ready on this Mac.` +
+        (lost.length ? ` ${lost.join(", ")} needs a bigger Mac.` : "") +
+        (optLost.length ? ` ${optLost.join(", ")} works, but describing a voice needs a bigger Mac.` : "");
+    } else why = n > 1 ? `Sets up all ${n} items of ${g.label}. Runs on this Mac, privately.` : `Runs on this Mac, privately.`;
+    let extraGb = 0, extraKey = [];
+    for (const d of uses) { const dp = plan(d); if (dp.keyFirst) extraKey.push(d.label); else extraGb += dp.gb; }
+    const usesLine = uses.length ? ` It also uses ${uses.map(d => d.label).join(" and ")}: the button sets them up too.` : "";
+    const total = p.gb + extraGb;
+    const name = uses.length ? `${g.label}, ${uses.map(d => d.label).join(" and ")}` : g.label;
+    const keyPart = extraKey.length ? ` + a key for ${extraKey.join(" and ")}` : "";
+    const primary = p.keyFirst ? g.key : `Set up ${name} · ${fmt(total)}${keyPart}`;
+    const second = p.keyFirst && p.canLocal ? `<button class="btn">Download instead · ${fmt(p.todo.reduce((s, k) => s + P[k][1], 0))}</button>` : "";
+    const row = k => {
+      const st = h.has(k) ? "✓ set up" : p.keyFirst ? "not needed with a key" : p.skipped.includes(k) ? "needs a bigger Mac" : fmt(P[k][1]);
+      return `<li class="${h.has(k) ? "have" : ""}"><span>${P[k][0]}</span><span>${st}</span></li>`;
+    };
+    const depRows = uses.map(d => { const dp = plan(d);
+      return `<li><span>${d.label} (all of it)</span><span>${dp.keyFirst ? "a key" : fmt(dp.gb)}</span></li>`; }).join("");
+    return `<div class="start"><h2>Get started with ${g.label}</h2>
+      <p class="hint">${why}${usesLine}${g.extra ? " " + g.extra : ""}</p>
+      <ul class="parts">${p.parts.map(row).join("")}${depRows}</ul>
+      <div class="row"><button class="btn primary">${primary}</button>${second}</div>
+      <button class="btn link">Other choices</button></div>`;
+  }
+  window.renderAll = () => {
+    const nav = document.getElementById("s6nav"), sel = document.getElementById("s6sel");
+    let h = "", o = "";
+    let wasGroup = false;
+    for (const g of G) {
+      const isGroup = g.items.length > 1 || g.id === "nb" || g.id === "meet";
+      if (wasGroup && !isGroup) h += `<hr class="sep">`;
+      wasGroup = isGroup;
+      const ready = partsOf(g).length && !plan(g).todo.length;
+      const tick = ready ? '<span class="tick">✓</span>' : "";
+      if (isGroup) {
+        h += `<div class="g">${g.label}${tick ? " ✓" : ""}</div>`;
+        for (const [l] of g.items) h += `<button data-g="${g.id}" aria-current="${g.id === cur6}">${l}</button>`;
+      } else h += `<button data-g="${g.id}" aria-current="${g.id === cur6}">${g.label}${tick}</button>`;
+      o += `<option value="${g.id}" ${g.id === cur6 ? "selected" : ""}>${g.label}</option>`;
+    }
+    nav.innerHTML = h; sel.innerHTML = o;
+    const g = byId(cur6);
+    document.getElementById("s6card").innerHTML = card(g);
+    document.getElementById("s6canvas").textContent = `The ${g.label} screen, as today`;
+    nav.querySelectorAll("[data-g]").forEach(b => b.onclick = () => { cur6 = b.dataset.g; renderAll(); });
+  };
+  document.getElementById("s6sel").onchange = e => { cur6 = e.target.value; renderAll(); };
+  document.getElementById("haveChat").onchange = () => renderAll();
+  document.getElementById("haveVoice").onchange = () => renderAll();
+  render();
+</script>
+</body>
+</html>

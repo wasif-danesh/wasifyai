@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code on this computer</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: light-dark(oklch(97% 0.004 250), oklch(15% 0.012 255));
+    --surface: light-dark(oklch(100% 0 0), oklch(20% 0.014 255));
+    --surface-2: light-dark(oklch(95.5% 0.006 250), oklch(25% 0.016 255));
+    --text: light-dark(oklch(21% 0.02 255), oklch(95% 0.006 250));
+    --muted: light-dark(oklch(49% 0.02 255), oklch(70% 0.016 255));
+    --border: light-dark(oklch(90% 0.01 250), oklch(32% 0.018 255));
+    --accent: light-dark(oklch(50% 0.17 258), oklch(76% 0.12 250));
+    --accent-soft: color-mix(in oklch, var(--accent) 12%, transparent);
+    --on-accent: light-dark(oklch(99% 0 0), oklch(19% 0.04 250));
+    --ok: light-dark(oklch(52% 0.13 155), oklch(74% 0.14 155));
+    --warn: light-dark(oklch(52% 0.13 70), oklch(80% 0.13 80));
+    --warn-soft: color-mix(in oklch, var(--warn) 14%, transparent);
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
+  code { font-family: var(--mono); font-size: 12.5px; }
+  .note, .tabs, .what { max-width: 1120px; margin: 10px auto 0; padding: 0 16px; }
+  .note { margin-top: 18px; color: var(--muted); font-size: 13px; }
+  .note b, .what b { color: var(--text); }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tabs button, .theme button { border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .tabs button[aria-selected="true"], .theme button[aria-pressed="true"] { background: var(--accent);
+    border-color: var(--accent); color: var(--on-accent); }
+  .theme { display: flex; gap: 6px; margin-left: auto; }
+  .what { font-size: 13px; color: var(--muted); }
+
+  .win { max-width: 1120px; margin: 10px auto 24px; border: 1px solid var(--border); border-radius: 14px;
+         background: var(--bg); display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 620px;
+         overflow: hidden; }
+  @media (max-width: 760px) { .win { grid-template-columns: minmax(0, 1fr); } .side { display: none; } }
+  .side { background: var(--surface-2); border-right: 1px solid var(--border); padding: 14px 10px; display: grid;
+          align-content: start; gap: 2px; font-size: 13.5px; }
+  .side .brand { font-weight: 700; font-size: 16px; padding: 4px 10px 12px; }
+  .side .it { padding: 6px 10px; border-radius: 8px; }
+  .side .sub { padding-left: 26px; }
+  .side .on { background: var(--accent-soft); }
+  .app { display: grid; grid-template-rows: 48px minmax(0, 1fr); min-width: 0; position: relative; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--border);
+         background: var(--surface); min-width: 0; white-space: nowrap; overflow: hidden; font-size: 13px; }
+  .bar b { font-weight: 600; } .bar .m { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .bar .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px;
+          padding: 1px 9px; font-size: 12.5px; background: var(--surface); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); }
+  .dot.none { background: transparent; border: 1.5px solid var(--muted); }
+  .mb { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 10px;
+        padding: 4px 12px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600;
+        cursor: pointer; max-width: 340px; overflow: hidden; }
+  main { min-width: 0; overflow: hidden; }
+  .pad { padding: 22px 28px; display: grid; gap: 14px; align-content: start; }
+  h1 { margin: 0; font-size: 20px; } h3 { margin: 0; font-size: 14px; }
+  .lead { margin: 0; color: var(--muted); }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px;
+         padding: 5px 12px; font: inherit; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.small { padding: 2px 10px; font-size: 12.5px; }
+  .btn.link { border: 0; background: none; color: var(--accent); padding: 0; font-size: 12.5px; }
+  .btn:focus-visible, .item:focus-visible, .tabs button:focus-visible, .mb:focus-visible, .seg button:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .proj { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px 16px;
+          display: grid; gap: 6px; opacity: .55; }
+
+  /* the model panel */
+  .panel { position: absolute; z-index: 5; top: 44px; left: 52px; width: min(430px, calc(100% - 24px));
+           background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 10px;
+           box-shadow: 0 14px 36px rgb(0 0 0 / .25); display: grid; gap: 6px; }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 999px;
+         padding: 4px; gap: 2px; }
+  .seg button { border: 0; background: none; color: var(--muted); border-radius: 999px; padding: 6px 4px;
+                font: inherit; font-size: 13px; cursor: pointer; line-height: 1.2; }
+  .seg button[aria-selected="true"] { background: var(--surface-2); color: var(--text); }
+  .gh { font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 12px 0; display: flex; gap: 8px;
+        align-items: center; justify-content: space-between; }
+  .item { display: grid; gap: 1px; text-align: left; border: 0; background: none; color: var(--text); font: inherit;
+          padding: 8px 12px; border-radius: 10px; cursor: pointer; width: 100%; }
+  .item:hover { background: var(--surface-2); }
+  .item[aria-current="true"] { background: var(--accent-soft); }
+  .item[aria-disabled="true"] { cursor: default; } .item[aria-disabled="true"]:hover { background: none; }
+  .item .t { font-weight: 500; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .item .d { color: var(--muted); font-size: 13px; }
+  .item .s { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+  .item .s.ok { color: var(--ok); } .item .s.warn { color: var(--warn); }
+  .badge { font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; font-weight: 500;
+           color: var(--muted); white-space: nowrap; }
+  .badge.warn { border-color: color-mix(in oklch, var(--warn) 50%, var(--border)); background: var(--warn-soft);
+                color: var(--text); }
+  .foot { border-top: 1px solid var(--border); margin-top: 4px; padding: 8px 12px 2px; font-size: 12.5px;
+          color: var(--muted); display: grid; gap: 6px; }
+  .new { outline: 2px dashed color-mix(in oklch, var(--accent) 55%, transparent); outline-offset: 2px; border-radius: 10px; }
+
+  /* the session */
+  .chat { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 572px; max-width: 760px; }
+  .thread { padding: 18px 22px; display: grid; gap: 12px; align-content: start; }
+  .me { justify-self: end; background: var(--accent-soft); border-radius: 14px; padding: 8px 13px; max-width: 85%; }
+  .steps { border: 1px solid var(--border); border-radius: 12px; padding: 7px 12px; color: var(--muted);
+           font-size: 13px; display: grid; gap: 3px; }
+  .steps .l { display: flex; gap: 8px; align-items: center; }
+  .notice { display: flex; gap: 8px; align-items: center; justify-content: center; color: var(--muted);
+            font-size: 12.5px; }
+  .notice::before, .notice::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+  .box { margin: 12px 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
+         padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; color: var(--muted); }
+  .send { width: 30px; height: 30px; border-radius: 8px; border: 0; background: var(--accent); color: var(--on-accent); }
+  .legend { font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<p class="note"><b>Mockup (not built), 2026-11-17, stage LM2 of <code>docs/coding-local-model-plan.md</code>.</b>
+The Code model button, for a coding session on this computer. Coding uses the language model chosen in the Model
+hub, the same as chat, so the button shows that one model and sends you to the Model hub to change it. Parts marked
+with a dashed outline are new; everything else is the button as it is today.</p>
+
+<div class="tabs" id="tabs" role="tablist" aria-label="Screens in this mockup">
+  <span class="theme"><button data-t="light">Light</button><button data-t="dark">Dark</button></span>
+</div>
+<p class="what" id="what"></p>
+
+<div class="win">
+  <nav class="side" aria-label="Menu">
+    <div class="brand">Wasify AI</div>
+    <div class="it">New chat</div><div class="it">Notebook</div><div class="it">Images</div><div class="it">Video</div>
+    <div class="it">Voice</div><div class="it">Music</div>
+    <div class="it">Code</div><div class="it sub on">Projects</div><div class="it sub">Scheduled</div>
+    <div class="it sub">Extensions</div>
+    <div class="it">Creative Studio</div><div class="it">Library</div><div class="it">Train models</div>
+    <div class="it">Model hub</div>
+  </nav>
+  <div class="app" id="app"></div>
+</div>
+
+<script>
+const SCREENS = [
+  ["chosen", "Chosen and tested",
+   "<b>On this computer</b> opened. Qwen3.8 27B is chosen in the Model hub. It was tested for coding here, so it is Recommended."],
+  ["small", "A small model",
+   "Qwen3 4B is chosen in the Model hub. It can be used, with the note \"May not manage coding well\" (your answer 3). The note names the model that is recommended for this computer."],
+  ["none", "Nothing chosen",
+   "No language model is chosen in the Model hub. The row is listed but cannot be chosen, and a button opens the Model hub."],
+  ["notready", "Cannot run here",
+   "A model is chosen but cannot run for coding. The row says why in plain words, with one button that fixes it."],
+  ["session", "In a session",
+   "A session on this computer. The model is changed in the Model hub while the session is open: the session goes on with the new model and says so once."],
+];
+let screen = new URLSearchParams(location.search).get("s") || "chosen";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+const LOCAL = "Runs on this computer: nothing is paid and nothing leaves it.";
+
+function bar(label, dot, open) {
+  return `<div class="bar"><b>Code</b>
+    <button class="mb" aria-haspopup="dialog" aria-expanded="${open}"><span class="dot ${dot}"></span>
+      <span style="overflow:hidden;text-overflow:ellipsis">${esc(label)}</span> ▾</button>
+    <span class="m">for a new session</span>
+    <span class="right"><span class="pill"><span class="dot"></span>Idle</span></span></div>`;
+}
+
+function projects() {
+  return `<main><div class="pad">
+    <div class="row" style="justify-content:space-between"><h1>Projects</h1>
+      <span class="row"><button class="btn">Start in a new, empty folder</button><button class="btn primary">Choose a folder</button></span></div>
+    <p class="lead">A project is a folder on this computer. Each one keeps its sessions.</p>
+    ${["bakery-site", "hours-site", "todo-app"].map((p) => `<div class="proj"><h3>${p}</h3><span class="lead">~/Projects/${p}</span></div>`).join("")}
+  </div></main>`;
+}
+
+function seg(on = "device") {
+  const t = [["recommended", "Recommended"], ["device", "On this computer"], ["cloud", "Cloud"], ["agent", "Your agent"]];
+  return `<div class="seg" role="tablist">${t.map(([k, v]) => `<button role="tab" aria-selected="${k === on}">${v}</button>`).join("")}</div>`;
+}
+
+function head() {
+  return `<div class="gh new"><span>Chosen in the Model hub</span><button class="btn link">Change in the Model hub ↗</button></div>`;
+}
+
+function foot(extra = "") {
+  return `<div class="foot new">${extra}<span>Coding and chat use the same model, so only one is in memory. While an
+    image or video is being made, coding waits for it to finish.</span></div>`;
+}
+
+function panel(body) {
+  return `<div class="panel" role="dialog" aria-label="Select coding model">${seg()}${body}</div>`;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  const what = SCREENS.find((s) => s[0] === screen);
+  document.getElementById("what").innerHTML = what ? what[2] : "";
+  document.querySelectorAll("#tabs [data-s]").forEach((b) => b.setAttribute("aria-selected", b.dataset.s === screen));
+
+  if (screen === "chosen") {
+    app.innerHTML = bar("Qwen3.8 27B · On this computer", "ok", true) + projects() + panel(`${head()}
+      <button class="item" aria-current="true">
+        <span class="t">Qwen3.8 27B <span class="badge">Recommended</span></span>
+        <span class="d">Tested for coding: 33 of 36 tasks here. ${LOCAL}</span>
+        <span class="s ok"><span class="dot ok"></span>In use · about 24 GB of memory while it works</span>
+      </button>${foot()}`);
+  } else if (screen === "small") {
+    app.innerHTML = bar("Qwen3 4B · On this computer", "ok", true) + projects() + panel(`${head()}
+      <button class="item" aria-current="true">
+        <span class="t">Qwen3 4B <span class="badge warn new">May not manage coding well</span></span>
+        <span class="d">Not tested for coding here. Small models often stop early or miss a step. ${LOCAL}</span>
+        <span class="s ok"><span class="dot ok"></span>In use</span>
+      </button>
+      ${foot(`<span><b style="color:var(--text)">Qwen3.8 27B</b> is the one recommended for coding on this computer
+        (64 GB). It is 16 GB to download. <button class="btn link">Get it in the Model hub ↗</button></span>`)}`);
+  } else if (screen === "none") {
+    app.innerHTML = bar("Select coding model", "none", true) + projects() + panel(`
+      <div class="gh new"><span>Chosen in the Model hub</span></div>
+      <div class="item" aria-disabled="true">
+        <span class="t" style="color:var(--muted)">No language model chosen</span>
+        <span class="d">Coding on this computer uses the language model you choose in the Model hub, the same one chat uses.</span>
+        <span class="s"><span class="dot none"></span>Choose a language model in the Model hub first</span>
+      </div>
+      <div class="new" style="padding:4px 12px 8px"><button class="btn primary small">Open the Model hub</button></div>`);
+  } else if (screen === "notready") {
+    const row = (title, why, btn) => `<div class="item" aria-disabled="true">
+        <span class="t" style="color:var(--muted)">${title}</span>
+        <span class="d">${LOCAL}</span>
+        <span class="s warn"><span class="dot warn"></span>${why}</span>
+        <span style="padding-top:6px"><button class="btn small">${btn}</button></span></div>`;
+    app.innerHTML = bar("Claude Sonnet 5.5 · Anthropic", "ok", true) + projects() + panel(`${head()}
+      <p class="legend" style="margin:2px 12px 0">One of these, whichever is true:</p>
+      ${row("Qwen3.8 27B", "Too big for this computer at the room coding needs (32,768 tokens)", "Open the Model hub")}
+      ${row("Qwen3.8 27B", "The language engine is not set up yet. Set it up in Settings first.", "Open Settings")}
+      ${row("Qwen3.8 27B", "Its file is gone. Choose it again in the Model hub.", "Open the Model hub")}
+      ${foot()}`);
+  } else {
+    app.innerHTML = `<div class="bar"><b>bakery-site</b><span class="m">Fix the opening hours on the home page</span>
+      <span class="right"><span class="pill"><span class="dot ok"></span>Qwen3 8B · On this computer</span>
+      <span class="pill"><span class="dot ok"></span>Working</span></span></div>
+      <main><div class="chat"><div class="thread">
+        <div class="me">The opening hours on the home page are wrong. It should say 9 to 5.</div>
+        <div class="steps"><span class="l">✓ Read <code>src/pages/home.html</code></span>
+          <span class="l">✓ Changed <code>src/pages/home.html</code> (1 line)</span></div>
+        <div>The home page now says "Open 9 to 5".</div>
+        <div class="me">Also put the hours in the footer.</div>
+        <div class="notice new">Now on Qwen3 8B, chosen in the Model hub (was Qwen3.8 27B)</div>
+        <div class="steps"><span class="l">… Reading <code>src/partials/footer.html</code></span></div>
+      </div>
+      <div class="box">Ask for a change, or a question about the code<button class="send" aria-label="Send">↑</button></div>
+      </div></main>`;
+  }
+}
+
+const tabs = document.getElementById("tabs");
+const theme = tabs.querySelector(".theme");
+for (const [id, label] of SCREENS) {
+  const b = document.createElement("button");
+  b.dataset.s = id; b.setAttribute("role", "tab"); b.textContent = label;
+  b.onclick = () => { screen = id; history.replaceState(null, "", `?s=${id}`); render(); };
+  tabs.insertBefore(b, theme);
+}
+theme.querySelectorAll("button").forEach((b) => {
+  b.onclick = () => {
+    document.documentElement.dataset.theme = b.dataset.t;
+    theme.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  };
+});
+render();
+</script>
+</body>
+</html>

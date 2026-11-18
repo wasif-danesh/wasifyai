@@ -122,9 +122,13 @@ function rows(
   return out;
 }
 
-/** The variant to fetch: the usual 4-bit file, else the one nearest the size the list promised. */
-export function pickVariant(variants: Variant[], promised: number): Variant | null {
-  const usual = variants.find((v) => /^Q4_K_M$/i.test(v.quant));
+/** The variant to fetch: the list's file (the usual 4-bit one), else the one nearest the size the list promised. */
+export function pickVariant(
+  variants: Variant[],
+  promised: number,
+  quant = "Q4_K_M",
+): Variant | null {
+  const usual = variants.find((v) => v.quant.toUpperCase() === quant.toUpperCase());
   if (usual) return usual;
   const sorted = [...variants].sort(
     (a, b) => Math.abs(a.size - promised) - Math.abs(b.size - promised),
@@ -222,7 +226,7 @@ export function chatChoices(deps: ChatDeps): ChoicesApi {
               // pressing "Download and use" is the consent to contact huggingface.co
               if (!(await deps.hub.state()).enabled) await deps.hub.setEnabled(true);
               const detail = await deps.hub.model(repo);
-              const variant = pickVariant(detail.variants, item.bytes);
+              const variant = pickVariant(detail.variants, item.bytes, item.quant);
               if (!variant) throw new Error("No file of this model can be run here.");
               const started = await deps.hub.download(
                 repo,

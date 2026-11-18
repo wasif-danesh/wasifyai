@@ -1014,7 +1014,7 @@ def _desktop_coding(s: ApiServices, desktop: Desktop) -> None:
         usage=desktop.usage,
         # this engine as a program on this computer reaches it; the port is the window's
         base_url=lambda: _loopback(settings.desktop_public_url),
-        ollama_url=settings.coding_ollama_url,
+        language=desktop.language,  # the Model hub's chosen model is the one on this computer
         lister=listed,
         known=known_in_catalogue,
     )

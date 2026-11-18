@@ -128,14 +128,21 @@ class LlamaServer:
         context: int = 8192,
         embedding: bool = False,
         extra_args: Sequence[str] = (),
+        at_least: bool = False,
+        speed_args: Sequence[str] = (),
     ) -> str:
-        """The base URL of a server running `model`, starting (or restarting) it if needed."""
-        want = (model, context, embedding, tuple(extra_args))
+        """The base URL of a server running `model`, starting (or restarting) it if needed.
+
+        `at_least`: a server already running the same model is kept when its context is at least
+        `context` and, if this caller asks for no `speed_args`, whatever speed options it was
+        started with. `speed_args` change how fast answers come, never what they are
+        (speculative decoding), so a caller that did not ask for them can use them."""
+        want = (model, context, embedding, tuple(extra_args), tuple(speed_args))
         async with self._lock:
             if (
                 self.running
                 and self._url
-                and self._started_with == want
+                and self._serves(want, at_least)
                 and await self._healthy(self._url)
             ):
                 return self._url
@@ -149,6 +156,15 @@ class LlamaServer:
             if not await asyncio.to_thread(model.is_file):
                 raise LlamaError("model_missing", "That model file is no longer on this computer.")
             return await self._start(found, want)
+
+    def _serves(self, want: tuple[Any, ...], at_least: bool) -> bool:
+        """Does the running server do for `want`?"""
+        had = self._started_with
+        if had == want:
+            return True
+        if had is None or not at_least or had[0] != want[0] or had[2:4] != want[2:4]:
+            return False
+        return had[1] >= want[1] and (not want[4] or had[4] == want[4])
 
     def _log_path(self) -> Path:
         return self._data_dir / "logs" / "llama-server.log"
@@ -186,7 +202,7 @@ class LlamaServer:
         )
 
     async def _start(self, found: LlamaInstall, want: tuple[Any, ...]) -> str:
-        model, context, embedding, extra = want
+        model, context, embedding, extra, speed = want
         with socket.socket() as s:  # a free port on loopback
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
@@ -203,7 +219,7 @@ class LlamaServer:
             # Measured on a Mac (E0): 58 long prompts took Qwen3 4B from 1.3 GB to 10.4 GB.
             # A small cache keeps the reuse.
             "--cache-ram", str(PROMPT_CACHE_MIB),
-            *(["--embedding"] if embedding else []), *extra,
+            *(["--embedding"] if embedding else []), *extra, *speed,
         ]  # fmt: skip
         try:
             self._proc = await asyncio.create_subprocess_exec(

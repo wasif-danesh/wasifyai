@@ -1724,6 +1724,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/wasifyai-code/code/sessions/{session_id}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install
+         * @description Install what the project lists, in Wasify AI's own sandbox, for the session's program.
+         *     It answers at once; the `code_install` events say how it goes.
+         */
+        post: operations["install_products_wasifyai_code_code_sessions__session_id__install_post"];
+        /**
+         * Not Now
+         * @description Close the install card ("Not now").
+         */
+        delete: operations["not_now_products_wasifyai_code_code_sessions__session_id__install_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/wasifyai-code/code/sessions/{session_id}/messages": {
         parameters: {
             query?: never;
@@ -11075,6 +11100,72 @@ export interface operations {
             query: {
                 q: string;
             };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_products_wasifyai_code_code_sessions__session_id__install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    not_now_products_wasifyai_code_code_sessions__session_id__install_delete: {
+        parameters: {
+            query?: never;
             header?: never;
             path: {
                 session_id: string;

@@ -67,6 +67,17 @@ export function openYourKeys() {
   window.location.hash = routePath("settings");
 }
 
+/** Where Code's model on this computer is put right (LM2): the Model hub, and Settings' language engine. */
+export const codePlaces = {
+  modelHub() {
+    window.location.hash = routePath("models");
+  },
+  languageEngine() {
+    showSettingsGroup("computer");
+    window.location.hash = routePath("settings");
+  },
+};
+
 /** The `cloud` a group's ChoicesApi carries: the product's name and the way to its keys. */
 export function cloudOf(products: string[]) {
   const titles = products.map((p) => PRODUCT_TITLES[p] ?? p);

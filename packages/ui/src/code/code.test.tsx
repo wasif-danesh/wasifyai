@@ -12,6 +12,7 @@ import type {
   CodeEvent,
   CodeExtension,
   CodeHarness,
+  CodeInstall,
   CodePreview,
   CodePreviewRun,
   CodeProject,
@@ -24,7 +25,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChoicesApi, ModelChoice } from "../models/types";
 import { type BrowserHost, pageForChat } from "./Browser";
 import { whyNot } from "./Checks";
-import { CARRY_OUT, Code, agentStop, programModelTitle } from "./Code";
+import { CARRY_OUT, Code, agentStop, localChanges, programModelTitle } from "./Code";
 import { Extensions, bringsWords } from "./Extensions";
 import { Scheduled, moreOf, outcomeOf, ruleOf } from "./Scheduled";
 import { buildThread, stepLine } from "./thread";
@@ -370,6 +371,8 @@ function api(over: Partial<CodeApi> = {}): CodeApi {
     runCheck: async () => ({ check: check(), session: session({ result: "passed" }) }),
     checkOutput: async () => ({ ...check(), output: "the whole output\n", cut: false }),
     tryAgain: async () => session({ working: true, state: "working" }),
+    install: async () => session(),
+    notNow: async () => session(),
     terminals: async () => [],
     openTerminal: async () => ({ id: "term1", folder: FOLDER, ended: false, exit_code: null }),
     terminalInput: async () => undefined,
@@ -2572,6 +2575,112 @@ describe("a session on the person's own agent program (ADR-0107, stage H2)", () 
     expect(signIn).toHaveBeenCalledWith("claude-code");
   });
 
+  describe("installing packages (stage H4)", () => {
+    const OFFER: CodeInstall = {
+      state: "offered",
+      harness: "claude-code",
+      tried: "npm install flatpickr",
+      command: "npm install",
+      from: "package.json and package-lock.json",
+    };
+
+    it("offers to install what the project lists, in Wasify AI's own sandbox, and installs on a click", async () => {
+      const open = onClaude({ install: OFFER });
+      const stream = feed();
+      const install = vi.fn(async () => onClaude({ install: { ...OFFER, state: "installing" } }));
+      render(
+        <Code
+          api={api({
+            session: async () => open,
+            sessions: async () => [open],
+            harnesses,
+            install,
+            events: () => stream.events(),
+          })}
+          {...props}
+          openId={open.id}
+        />,
+      );
+      const card = await screen.findByRole("region", { name: "Claude Code needs packages" });
+      expect(within(card).getByText("npm install flatpickr")).toBeTruthy();
+      expect(within(card).getByText(/its sandbox holds your Claude sign-in/)).toBeTruthy();
+      expect(within(card).getByText(/\(from package.json and package-lock.json\)/)).toBeTruthy();
+      await userEvent.click(within(card).getByRole("button", { name: "Install them" }));
+      expect(install).toHaveBeenCalledWith("s1");
+      expect(await screen.findByText(/Installing what the project lists/)).toBeTruthy();
+
+      stream.push(
+        ev({ event: "code_install", ...OFFER, state: "installed", output: "added 1 package" }),
+      );
+      expect(await screen.findByText("Installed what the project lists")).toBeTruthy();
+      expect(screen.getByText("added 1 package")).toBeTruthy();
+      expect(screen.getByText(/Claude Code has been told, and carries on/)).toBeTruthy();
+    });
+
+    it("closes on Not now, and says a failed install in its own words", async () => {
+      const open = onClaude({ install: OFFER });
+      const stream = feed();
+      const notNow = vi.fn(async () => onClaude({ install: null }));
+      render(
+        <Code
+          api={api({
+            session: async () => open,
+            sessions: async () => [open],
+            harnesses,
+            notNow,
+            events: () => stream.events(),
+          })}
+          {...props}
+          openId={open.id}
+        />,
+      );
+      await screen.findByRole("region", { name: "Claude Code needs packages" });
+      stream.push(
+        ev({
+          event: "code_install",
+          ...OFFER,
+          state: "failed",
+          why: "It ended with code 1.",
+          output: "npm ERR! 404",
+        }),
+      );
+      expect(await screen.findByText("The install did not work")).toBeTruthy();
+      expect(screen.getByText(/It ended with code 1. Claude Code has been told./)).toBeTruthy();
+      expect(screen.queryByRole("region", { name: "Claude Code needs packages" })).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Close" }));
+      expect(notNow).toHaveBeenCalledWith("s1");
+      await waitFor(() => expect(screen.queryByText("The install did not work")).toBeNull());
+    });
+
+    it("says when the program changed the project's list of packages", async () => {
+      const open = onClaude({ install: { ...OFFER, tried: "", changed: "package.json" } });
+      render(
+        <Code
+          api={api({ session: async () => open, sessions: async () => [open], harnesses })}
+          {...props}
+          openId={open.id}
+        />,
+      );
+      const card = await screen.findByRole("region", { name: "Claude Code needs packages" });
+      expect(card.textContent).toMatch(
+        /It changed package.json, and Claude Code cannot reach a package index/,
+      );
+    });
+
+    it("is not shown in a session on Wasify AI's own agent", async () => {
+      const open = session({ install: OFFER });
+      render(
+        <Code
+          api={api({ session: async () => open, sessions: async () => [open] })}
+          {...props}
+          openId={open.id}
+        />,
+      );
+      expect(await screen.findByRole("textbox", { name: "Ask about this project" })).toBeTruthy();
+      expect(screen.queryByRole("region", { name: /needs packages/ })).toBeNull();
+    });
+  });
+
   it("says on Projects which agent each session ran on", async () => {
     const sessions = async () => [
       onClaude({ id: "s1", title: "Closed on Mondays" }),
@@ -2788,5 +2897,22 @@ describe("a session on the person's own agent program (ADR-0107, stage H2)", () 
     expect(agentStop("Error: 429 Too Many Requests")).toBe("limit");
     expect(agentStop("Authentication failed: please log in again")).toBe("signed_out");
     expect(agentStop("The coding engine reported an error.")).toBeNull();
+  });
+});
+
+describe("a change of the Model hub's model while a session is open (LM2)", () => {
+  it("is placed once, before the turn that came after it, and kept", () => {
+    window.localStorage.clear();
+    expect(localChanges("s1", "Qwen3.8 27B", 2)).toEqual([]);
+    // the same model on the next look: nothing to say
+    expect(localChanges("s1", "Qwen3.8 27B", 3)).toEqual([]);
+    const changed = [{ at: 3, from: "Qwen3.8 27B", to: "Qwen3 8B" }];
+    expect(localChanges("s1", "Qwen3 8B", 3)).toEqual(changed);
+    // kept where it was, however many turns follow
+    expect(localChanges("s1", "Qwen3 8B", 7)).toEqual(changed);
+    // turns not here yet, or a session not on this computer: nothing new is placed
+    expect(localChanges("s1", "Qwen3 4B", -1)).toEqual(changed);
+    expect(localChanges("s1", "", 9)).toEqual(changed);
+    expect(localChanges("s2", "Qwen3 8B", 0)).toEqual([]);
   });
 });

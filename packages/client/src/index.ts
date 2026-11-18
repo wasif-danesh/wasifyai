@@ -499,6 +499,7 @@ export {
   type CodeMode,
   type CodeHarness,
   type CodeHarnessModels,
+  type CodeInstall,
   type CodeModel,
   type CodePreview,
   type CodePreviewRun,

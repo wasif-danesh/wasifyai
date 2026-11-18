@@ -104,6 +104,7 @@ class Header:
     layers: int = 0
     kv_heads: int = 0
     head_dim: int = 0
+    mtp: int = 0  # GGUF only: the model's own next-token layers (`nextn`), for drafting
 
 
 _SCALAR = {0: "<B", 1: "<b", 2: "<H", 3: "<h", 4: "<I", 5: "<i", 6: "<f", 7: "<?", 10: "<Q",
@@ -187,6 +188,7 @@ def read_gguf(path: Path) -> Header | None:
         layers=int(meta.get(f"{arch}.block_count") or 0) if arch else 0,
         kv_heads=_kv_heads(meta, arch),
         head_dim=_head_dim(meta, arch),
+        mtp=int(meta.get(f"{arch}.nextn_predict_layers") or 0) if arch else 0,
     )
 
 

@@ -187,3 +187,12 @@ This amendment holds from 2026-11-15, the day ADR-0107 was accepted.
    has the models its program offers, asked from the program.
 
 Nothing else of the decision changes.
+
+## Built (2026-11-18): the local model follows the Model hub (`docs/coding-local-model-plan.md`, LM0 to LM3)
+
+Decision 7 says other models "follow the picker that exists". Built: the one local entry, `this-computer`, is
+the language model chosen in the Model hub, run through `LanguageService.session(coding=True)` on the app's own
+`llama-server` (or a found Ollama or LM Studio model); the test-only `qwen-27b-ollama` entry is gone. The model
+button shows it by name, says why it cannot run, and marks small models "May not manage coding well". Qwen3.8
+27B (`Q4_0`) is on the Model hub's shelf; on it the 36 tasks passed 33 of 36 and the seven walks of the v1 gate
+passed (`docs/spikes/coding-local-lm0.md`). Nothing of the decision changes.

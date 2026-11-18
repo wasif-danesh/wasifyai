@@ -35,7 +35,7 @@ from wasifyai_platform_sdk.usage import (
     record_safely,
 )
 
-from wasifyai_api.desktop_discovery import can_think, gguf_chat_template
+from wasifyai_api.desktop_discovery import can_think, gguf_chat_template, read_gguf
 from wasifyai_api.desktop_fit import Fit, Machine, assess_fit, need_of_language
 from wasifyai_api.llama_server import LlamaError, LlamaServer
 from wasifyai_api.settings_store import SettingsStore
@@ -48,6 +48,33 @@ DEFAULT_CONTEXT = 8192
 NONE_CHOSEN = (
     "No language model is chosen yet. Choose one in the Model hub, under Found on this computer."
 )
+# the coding agent (docs/coding-local-model-plan.md, LM1): its prompt and tools are about 10,000
+# tokens before a file is read, so the app's own server runs at least this context for it
+CODING_CONTEXT = 32768
+CHOOSE_FIRST = "Choose a language model in the Model hub first."
+NOT_SET_UP = "The language engine is not set up yet. Set it up in Settings first."
+FILE_GONE = "The chosen language model's file is no longer on this computer."
+
+
+@dataclass(frozen=True)
+class CodingFacts:
+    """The chosen language model for a coding session (`LanguageService.coding_facts`)."""
+
+    name: str = ""  # for the person; empty when none is chosen
+    why: str | None = None  # why it cannot run a coding session now; None when it can
+    fix: str = ""  # where `why` is put right: "models" (the Model hub) or "settings"
+    memory: int = 0  # bytes it needs at the coding context (a file only; 0 when not known)
+    short: bool = False  # its own longest context is shorter than the coding context
+    file: str = ""  # a file's name, for matching it to what was measured
+
+
+def speed_args(model: Path) -> tuple[str, ...]:
+    """llama-server's speculative decoding for a coding session (LM0's speed check): the model's
+    own next-token layers draft when the file has them (`draft-mtp`), and text already in the
+    conversation is reused (`ngram-mod`), which is most of a file written back with a change.
+    Measured on Qwen 27B: edits about 7 times faster, new code about 2 times, answers the same."""
+    header = read_gguf(model)
+    return ("--spec-type", "draft-mtp,ngram-mod" if header and header.mtp > 0 else "ngram-mod")
 
 
 @dataclass(frozen=True)
@@ -317,13 +344,54 @@ class LanguageService:
         )
         return assess_fit(need, machine)
 
+    async def coding_ready(self) -> str | None:
+        """Why the chosen model cannot run a coding session now, in words; None when it can."""
+        return (await self.coding_facts()).why
+
+    async def coding_facts(self) -> CodingFacts:
+        """The chosen model as the coding model button shows it (LM2): its name, why it cannot
+        run a coding session now and where that is put right, what it needs at the coding
+        context, and whether its own longest context is shorter than that. A model of a running
+        tool is asked as it is; a file must be there, the engine set up, and it must fit."""
+        sel = self.selected
+        if sel is None:
+            return CodingFacts(why=CHOOSE_FIRST, fix="models")
+        if sel.kind != "file" or not sel.path:
+            return CodingFacts(name=sel.name)
+        path = Path(sel.path)
+        name, file = sel.name, path.name
+        if not self.llama.installed:
+            return CodingFacts(name=name, file=file, why=NOT_SET_UP, fix="settings")
+        if not await asyncio.to_thread(path.is_file):
+            return CodingFacts(name=name, file=file, why=FILE_GONE, fix="models")
+        machine = await self.machine()
+        header = await asyncio.to_thread(read_gguf, path)
+        if header is None:
+            return CodingFacts(name=name, file=file)
+        short = 0 < header.context < CODING_CONTEXT
+        if machine is None:
+            return CodingFacts(name=name, file=file, short=short)
+        size = await asyncio.to_thread(lambda: path.stat().st_size)
+        fit = self.fit_for(size, header, machine, CODING_CONTEXT)
+        if fit.verdict == "too_big":
+            why = (
+                f"Coding needs a context of {CODING_CONTEXT:,} tokens, and at that size the chosen "
+                f"model does not fit. {fit.reason}"
+            )
+            return CodingFacts(name=name, file=file, why=why, fix="models", short=short)
+        return CodingFacts(name=name, file=file, memory=fit.needed_bytes, short=short)
+
     # ---- answering -----------------------------------------------------------------------
 
     @asynccontextmanager
-    async def session(self) -> AsyncIterator[Route]:
+    async def session(self, *, coding: bool = False) -> AsyncIterator[Route]:
         """Make the chosen model ready and say where to ask it. For the app's own engine this holds
         the `chat` slot for as long as the caller keeps it: an image model is unloaded first, and an
-        image job started meanwhile waits."""
+        image job started meanwhile waits.
+
+        `coding`: for one call of a coding session. The app's own server runs at least
+        `CODING_CONTEXT`, without the picture reader (a coding session sends none) and with the
+        speed options; chat then keeps using that server rather than starting its own again."""
         sel = self.selected
         if sel is None:
             raise RunError("no_language_model", NONE_CHOSEN)
@@ -337,7 +405,7 @@ class LanguageService:
             await self.end_style()
             if self.selected is None:
                 raise RunError("no_language_model", NONE_CHOSEN)
-            async with self.session() as route:
+            async with self.session(coding=coding) as route:
                 yield route
             return
         async with AsyncExitStack() as stack:
@@ -349,9 +417,16 @@ class LanguageService:
                 )
                 with_pictures = ("--mmproj", str(sel.projector)) if has_projector else ()
                 with_adapter = ("--lora", str(sel.lora)) if sel.lora else ()
+                if coding:
+                    context, extra = max(sel.context, CODING_CONTEXT), with_adapter
+                    # drafting is not tried on a taught model's adapter: not measured
+                    speed = () if sel.lora else await asyncio.to_thread(speed_args, Path(sel.path))
+                else:
+                    context, extra, speed = sel.context, (*with_pictures, *with_adapter), ()
                 url = await self.llama.ensure_running(
-                    Path(sel.path), context=sel.context, extra_args=(*with_pictures, *with_adapter)
-                )
+                    Path(sel.path), context=context, extra_args=extra, at_least=True,
+                    speed_args=speed,
+                )  # fmt: skip
             except LlamaError as exc:
                 raise RunError(f"language_{exc.code}", exc.message) from None
             yield Route(url + "/v1", "", external=False)

@@ -10781,6 +10781,94 @@
         ]
       }
     },
+    "/products/wasifyai-code/code/sessions/{session_id}/install": {
+      "delete": {
+        "description": "Close the install card (\"Not now\").",
+        "operationId": "not_now_products_wasifyai_code_code_sessions__session_id__install_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Not Now Products Wasifyai Code Code Sessions  Session Id  Install Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Not Now",
+        "tags": [
+          "wasifyai-code"
+        ]
+      },
+      "post": {
+        "description": "Install what the project lists, in Wasify AI's own sandbox, for the session's program.\nIt answers at once; the `code_install` events say how it goes.",
+        "operationId": "install_products_wasifyai_code_code_sessions__session_id__install_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Install Products Wasifyai Code Code Sessions  Session Id  Install Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Install",
+        "tags": [
+          "wasifyai-code"
+        ]
+      }
+    },
     "/products/wasifyai-code/code/sessions/{session_id}/messages": {
       "post": {
         "description": "Begin a turn. It answers at once with the turn; the agent works on in the engine.",

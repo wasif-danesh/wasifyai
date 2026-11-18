@@ -85,9 +85,36 @@ A smoke run of one task (`bug-paginate`) went first on each program: Claude Code
 
 **Installs inside a session on a program are not built**, by choice. The program's sandbox holds the person's sign-in, so letting it reach a package index would let a hostile package publish that sign-in. A safe design (Wasify AI runs the project's own install in its own sandbox) is in the mockup `docs/spikes/coding-harness-h4-mockup.html`, with the question for the owner.
 
+## 2026-11-16 (evening): installs on a program, design A (stage H4)
+
+The owner chose **A** in `coding-harness-h4-mockup.html`: installs run outside the program, in Wasify AI's own sandbox.
+
+- **Built:** `installs.py` and `Sessions.install` / `not_now`.
+  - When the program runs an install command, the window shows "Claude Code needs packages" with what the project lists (`npm install`, or `pip install` into `.venv`).
+  - "Install them" runs it in the sandbox the person's terminal uses (`who="person"`), through the install proxy, in the background.
+  - The card says how it went, and the program is told in a new turn: at once, or when its turn ends (not after Stop).
+  - Only the project's files decide what runs, never the program's command.
+  - New routes: `POST` and `DELETE /code/sessions/{id}/install`. The contract is regenerated.
+- **Measured for real, on this Mac:**
+  - Inside our own sandbox: `~/.claude` and `~/.codex` cannot be listed, and the login keychain file cannot be read.
+  - Claude Code's keychain item is "not found" inside the sandbox (exit 44), while outside it exists (exit 0). Only exit codes were read; no secret was asked for.
+  - A real `npm install` of one package through the install proxy, in that sandbox, took 0.5 s and installed it.
+- **Tests:** 8 product tests (`test_code_installs.py`) and 3 window tests.
+- **Why the first walk could not run:** Code had never been served by the owner's own app. The app's engine runs from the shared checkout's `.venv`, which was last synced before `wasifyai-code` (and `wasifyai-meetings`) existed, so every `/code/...` call answered 404. Settings › On this computer showed "Code: Not on this computer".
+  - The owner ran `uv sync --all-packages` and signed in to Claude Code again.
+  - A plain `uv sync` would have uninstalled 138 packages.
+- **Walked in the real window, passed** (`code-agent-install`, Claude Code on Haiku, 51.6 s in all), in three steps:
+  1. Asked to add `is-number`, the program ran `npm install --save-exact is-number@7.0.0` and the card came up. "Install them" found nothing to install, since `package.json` did not list it yet, and the program was told.
+  2. The program added it to `package.json`, and the card came back. "Install them" added 1 package in 225 ms, in our sandbox.
+  3. The program was told, ran `node check.js`, and got `true`.
+- **Two faults found by the walk, fixed with tests:**
+  1. **Claude Code says each command first as an empty "Terminal" step, and what it ran only when it ends.** The reader kept the first sighting, so the install attempt was never seen. The step line also said "Terminal" for every command. Now the command known at the end goes out with the step's result (`given`, and `arguments` on `tool_result`), the card reads it, and the window's step line names it.
+  2. **Told to add a package to the list and try again, the program added it and did not try again**, so no card came. Now, once a session has needed packages, the program changing `package.json`, `requirements.txt`, `pyproject.toml` or `setup.py` offers the install again ("It changed package.json…"). The program is told not to run an install itself, but to add the package to the list and end its turn.
+- **Left as it is:** an install that runs during a program's turn is counted in that turn's changes ("Changed 8 files" in the walk), so "Undo this turn" takes the installed packages back too.
+
 ## Not done
 
 - The 17 Codex tasks that the free plan's limit stopped.
 - Codex's other models, and Claude Code's own choice (`default`). Each says "Not tested for coding here" until it is run.
 - A Scheduled screen that names the program a schedule runs on, and choosing one there (mocked up in `coding-harness-h4-mockup.html`). A schedule follows the project's newest session (or its own model).
-- Installs inside a session on a program (the owner's choice, in the H4 mockup).
+- Installs walked on Codex (its free plan's limit until 2026-12-15) and with a Python project.

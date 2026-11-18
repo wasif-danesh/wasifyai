@@ -26,8 +26,8 @@ uv run pytest products/wasifyai-code                          # SQLite; the Post
 DATABASE_URL=postgresql://... uv run pytest products/wasifyai-code   # both
 uv run pytest services/api/tests/test_coding_sessions.py services/api/tests/test_coding_gateway.py   # with the engine's parts, on the fake Agent Server
 uv run python products/wasifyai-code/evals/run_eval.py --start       # every hidden check must fail on the starting files
-CODING_OLLAMA_URL=http://127.0.0.1:11434 uv run python products/wasifyai-code/evals/run_eval.py \
-    --data "<app data with the coding engine set up>" --model qwen-27b-ollama      # the real engine, a local model
+uv run python products/wasifyai-code/evals/run_eval.py --data "<app data with the coding engine set up>" \
+    --model this-computer [--gguf <file.gguf>]   # the real engine, the Model hub's model (or this file)
 uv run python scripts/coding-engine-types.py --check          # the generated types are in step with the excerpt
 ```
 

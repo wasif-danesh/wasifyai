@@ -50,7 +50,7 @@ from typing import Any
 
 from wasifyai_platform_sdk import Identity, search_text
 
-from wasifyai_code import PRODUCT_ID, assets, checks, extensions, rules, starters
+from wasifyai_code import PRODUCT_ID, assets, checks, extensions, installs, rules, starters
 from wasifyai_code import place as places
 from wasifyai_code import preview as previews
 from wasifyai_code import store as rows
@@ -87,6 +87,8 @@ TAIL_SHOWN = 4000
 TRY_AGAIN = "The check still fails. Try again to fix what fails."
 TOOL_CALL, TOOL_RESULT = "tool_call", "tool_result"
 INTERRUPT, ASK_KIND = "interrupt", "code_ask"  # the approval card (the contract's `interrupt`)
+INSTALL = "code_install"  # the card that installs a project's packages for its program (H4)
+OFFERED, INSTALLING, INSTALLED, NOT_INSTALLED = "offered", "installing", "installed", "failed"
 TOKEN, REASONING = "token", "reasoning"  # words as they are written: relayed, never kept
 NOT_KEPT = (TOKEN, REASONING)
 NODE = "agent"
@@ -390,6 +392,12 @@ class _Hooks(Hooks):
             await self.s._confirm(owner, session, workspace, turn, flight, feed, event)
         else:
             self.s._relay(feed, session, turn, flight, event)
+            if event.kind == places.STEP and not flight.unattended:
+                self.s._offer_install(session, workspace, turn, event.data)
+            elif event.kind == places.RESULT and event.data.get("given") and not flight.unattended:
+                # a program's command or file known only once it ended (Claude Code)
+                step = {"tool": event.data.get("tool"), **event.data["given"]}
+                self.s._offer_install(session, workspace, turn, step)
 
     async def ended(
         self,
@@ -448,6 +456,15 @@ class Sessions:
         self.previews = previews.Previews(
             (lambda folder: own(folder, who="person")) if own is not None else None
         )
+        # ... and so is an install for a session on a program, which the person asks for
+        # (ADR-0107, stage H4): in our sandbox, where the program's sign-in is out of reach
+        self._install_sandbox = (
+            (lambda folder: own(folder, who="person")) if own is not None else None
+        )
+        self._installs: dict[str, dict[str, Any]] = {}  # session -> the install card's state
+        self._tell: dict[str, tuple[Owner, str]] = {}  # session -> what its program is told next
+        self._installing: dict[str, asyncio.Future[None]] = {}
+        self._wanted: set[str] = set()  # sessions whose program has needed packages
 
     # ---- what the actions and routes call ------------------------------------------------------
 
@@ -1129,6 +1146,132 @@ class Sessions:
         self._session(owner, session_id)
         return await self.terminals.close(session_id, terminal_id)
 
+    # ---- installs for a session on a program (ADR-0107, stage H4) -------------------------------
+
+    def _offer_install(
+        self,
+        session: dict[str, Any],
+        workspace: dict[str, Any],
+        turn: dict[str, Any],
+        step: dict[str, Any],
+    ) -> None:
+        """The program tried to install packages, which its sandbox cannot reach: offer to install
+        what the project lists, in our own sandbox. Once a session has needed packages, the
+        program changing the project's list of them offers it again: told to add a package to
+        the list, a program may not try to install again by itself (seen with Claude Code)."""
+        on = self.harness_of(session["model"])
+        if on is None or self._install_sandbox is None:
+            return
+        folder = Path(workspace["path"])
+        command = str(step.get("command") or "")
+        changed = ""
+        if step.get("tool") in rules.RUN_TOOLS:
+            if rules.command_kind(command) != rules.INSTALL:
+                return
+        elif step.get("tool") == "file_editor" and session["id"] in self._wanted:
+            changed = rules.path_in(folder, str(step.get("path") or "")) or ""
+            if changed not in installs.LISTS or command == "view":
+                return
+        else:
+            return
+        now = self._installs.get(session["id"])
+        if now is not None and now["state"] in (OFFERED, INSTALLING):
+            return
+        found = installs.what_installs(folder)
+        if found is None:
+            return
+        self._wanted.add(session["id"])
+        card = {"state": OFFERED, "harness": on[0], "tried": "" if changed else command[:300],
+                "changed": changed, **found.view()}  # fmt: skip
+        self._set_install(session["id"], turn["id"], card)
+
+    def _set_install(self, session_id: str, turn_id: str, card: dict[str, Any]) -> None:
+        self._installs[session_id] = card
+        self.feed(session_id).add(INSTALL, session_id, turn_id, **card)
+
+    async def install(self, owner: Owner, session_id: str) -> dict[str, Any]:
+        """Install what the project lists, for the session's program: in our own sandbox, in the
+        background. The card on the feed says how it goes; then the program is told."""
+        session = self._session(owner, session_id)
+        on = self.harness_of(session["model"])
+        if on is None:
+            raise Refused(
+                "not_on_harness",
+                "Wasify AI's own agent installs by itself, after asking you. This is for a "
+                "session on Claude Code or Codex.",
+            )
+        now = self._installs.get(session_id)
+        if now is not None and now["state"] == INSTALLING:
+            raise Refused("busy", "The packages are being installed.")
+        if self._install_sandbox is None:
+            raise Refused("no_sandbox", "Installing is not available here.")
+        workspace = self.store.get_workspace(owner, session["workspace_id"])
+        folder = Path(workspace["path"])
+        found = installs.what_installs(folder)
+        if found is None:
+            raise Refused(
+                "nothing_to_install",
+                "This project lists no packages: it has no package.json, requirements.txt or "
+                "pyproject.toml.",
+            )
+        title = on[0]
+        with contextlib.suppress(Exception):
+            title = str((await self._accounts().status(on[0])).get("title") or on[0])
+        turns = self.store.list_turns(owner, session_id)
+        turn_id = turns[-1]["id"] if turns else ""
+        base = {"harness": on[0], "tried": (now or {}).get("tried", ""),
+                "changed": (now or {}).get("changed", ""), **found.view()}  # fmt: skip
+        self._set_install(session_id, turn_id, {**base, "state": INSTALLING})
+
+        async def go() -> None:
+            try:
+                done = await installs.run(self._install_sandbox, folder, found)  # type: ignore[arg-type]
+            except Exception as e:  # noqa: BLE001  (said on the card, never raised)
+                log.warning("an install for a program's session could not run: %s", e)
+                done = {"ok": False, "exit_code": None, "output": "", "seconds": 0.0,
+                        "why": "The install could not be started."}  # fmt: skip
+            self._set_install(
+                session_id, turn_id,
+                {**base, "state": INSTALLED if done["ok"] else NOT_INSTALLED,
+                 "output": done["output"], "why": done["why"], "seconds": done["seconds"]},
+            )  # fmt: skip
+            self._tell[session_id] = (owner, installs.carry_on(title, found, done))
+            if not self.running(session_id):
+                await self._tell_after(session_id, None)
+
+        self._installing[session_id] = asyncio.ensure_future(go())
+        return self.view(owner, session_id)
+
+    def not_now(self, owner: Owner, session_id: str) -> dict[str, Any]:
+        """Close the install card. It comes back when the program tries to install again."""
+        self._session(owner, session_id)
+        card = self._installs.get(session_id)
+        if card is not None and card["state"] == INSTALLING:
+            raise Refused("busy", "The packages are being installed.")
+        if self._installs.pop(session_id, None) is not None:
+            self.feed(session_id).add(INSTALL, session_id, "", state="closed")
+        return self.view(owner, session_id)
+
+    async def _tell_after(self, session_id: str, task: Any) -> None:
+        """Tell the program how the install went, once its last turn has closed."""
+        if task is not None:
+            with contextlib.suppress(Exception):
+                await asyncio.shield(task)
+        told = self._tell.pop(session_id, None)
+        if told is None or self.running(session_id):
+            return
+        owner, text = told
+        try:
+            await self.send(owner, session_id, text)
+        except Refused as e:
+            log.warning("the program could not be told about its install: %s", e.message)
+
+    async def installed(self, session_id: str) -> None:
+        """For tests: the install that runs, once it is over."""
+        task = self._installing.get(session_id)
+        if task is not None:
+            await task
+
     # ---- changes and undo -----------------------------------------------------------------------
 
     def _cps(self, workspace: dict[str, Any]) -> CheckpointStore | None:
@@ -1286,6 +1429,8 @@ class Sessions:
         await self.stop(owner, session_id)
         await self.terminals.close_session(session_id)
         await self.previews.stop(session_id)
+        self._installs.pop(session_id, None)
+        self._tell.pop(session_id, None)
         end = getattr(self.place, "end", None)
         if session["place_session"] and end is not None:
             with contextlib.suppress(PlaceError):
@@ -1327,6 +1472,8 @@ class Sessions:
                 and any(not a.done() for a in self._turns[session_id].asks.values())
             ),
             "result": session["result"],
+            # a session on a program: the card that offers to install the project's packages
+            "install": self._installs.get(session_id),
             "turns": len(turns),
             "answer": last["answer"] if last else "",
             "ended": _outward(last)["why"] if last and last["state"] == rows.DONE else "",
@@ -1509,6 +1656,15 @@ class Sessions:
             flight = self._turns.pop(sid, None)  # closed before it is said: who hears "done"
             if flight is not None:  # and asks at once must not find it still working
                 flight.told = True
+            if sid in self._tell:
+                # an install ran while the program worked: it is told once this turn is over,
+                # unless the person stopped it
+                if more["why"] == places.STOPPED:
+                    self._tell.pop(sid, None)
+                else:
+                    asyncio.ensure_future(
+                        self._tell_after(sid, flight.task if flight is not None else None)
+                    )
         feed.add(STATE, sid, str(event["turn_id"]), state=state, cost_usd=self._cost(sid), **more)
 
     async def _closing(
@@ -1703,9 +1859,10 @@ class Sessions:
             if call in flight.marks:  # how its question was answered: yes, allow, no, allowed
                 output["answer"] = flight.marks.pop(call)
             status = "refused" if data.get("refused") else "ok" if data.get("ok") else "error"
+            more = {"arguments": dict(data["given"])} if data.get("given") else {}
             feed.add(
                 TOOL_RESULT, *ids, id=call, name=str(data.get("tool") or ""), status=status,
-                output=output,
+                output=output, **more,
             )  # fmt: skip
         elif event.kind == places.SKILLS:
             names = [str(n) for n in data.get("names") or []]

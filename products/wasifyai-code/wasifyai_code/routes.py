@@ -179,6 +179,8 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             "not_signed_in": 409,
             "harness_not_installed": 409,
             "no_harness": 404,
+            "nothing_to_install": 409,
+            "not_on_harness": 409,
         }.get(  # fmt: skip
             e.code, 422
         )
@@ -466,6 +468,29 @@ def build_routes(deps: RouteDeps) -> APIRouter:
         try:
             turn = await live.try_again(owner, session_id)
             return {"turn_id": turn["id"], "session": live.view(owner, session_id)}
+        except Refused as e:
+            raise refuse(e) from None
+
+    # ---- installs for a session on a program (ADR-0107, stage H4) -------------------------------
+
+    @router.post("/sessions/{session_id}/install", status_code=202)
+    async def install(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Install what the project lists, in Wasify AI's own sandbox, for the session's program.
+        It answers at once; the `code_install` events say how it goes."""
+        try:
+            return await sessions().install(owner_of(identity), session_id)
+        except Refused as e:
+            raise refuse(e) from None
+
+    @router.delete("/sessions/{session_id}/install")
+    async def not_now(
+        session_id: str, identity: Identity = Depends(deps.identity)
+    ) -> dict[str, Any]:
+        """Close the install card ("Not now")."""
+        try:
+            return sessions().not_now(owner_of(identity), session_id)
         except Refused as e:
             raise refuse(e) from None
 

@@ -32,6 +32,10 @@ was not done: nobody has looked at the real window.
 | `code-scheduled` | A schedule from a template, "Run now" on a copy (40 s, passed), the project byte for byte unchanged, the change applied; a plugin's hook only after approval |
 | `code-browser` | The Browser tab's bar and the stay-open switch (the pages themselves are the shell's; see its own tests) |
 
+**Run again on 2026-11-18 (LM3, `docs/spikes/coding-local-lm0.md`):** the local model is now the Model hub's
+choice on the app's own `llama-server`, not Qwen 27B through Ollama. All seven walks passed on
+`Qwen3.8-27B-Q4_0.gguf`, and the 36 tasks passed 33 of 36 through the same route.
+
 ## What the gate asks for and was not done
 
 1. **"A walk of every screen in the real window."** The walks drive the window's page in a browser, with a

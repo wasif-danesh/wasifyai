@@ -16,6 +16,7 @@ import {
 } from "@wasifyai/ui";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { openYourKeys } from "./choices/keyed";
+import { gate } from "./choices/use-ready";
 import { onComponentStatus } from "./components";
 import { chatOffer } from "./setup-groups";
 import {
@@ -152,7 +153,8 @@ export function SetupGate({ item, children }: { item: string | null; children: R
     [group, chatApi],
   );
 
-  if (!group || !needs || covered === null || covered) return <>{children}</>;
+  // the window's self-test (smoke.ts) checks the screens themselves on a computer with nothing set up
+  if (gate.open || !group || !needs || covered === null || covered) return <>{children}</>;
   if (state === "left_out" && !group.key.covers) return <>{children}</>; // the screen says what is missing
   return (
     <div className="px-4">

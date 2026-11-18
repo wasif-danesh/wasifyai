@@ -26,6 +26,8 @@ and `docs/spikes/first-run-fr1-fr5.md`.
   - A screen whose model in use is ready, a cloud model on the person's key included, opens as it is.
   - If the groups can't be read (the engine is starting, or an older engine), the screen opens: the card is a
     front door, never a wall.
+  - The window's self-test (`smoke.ts`, CI's `smoke`, `install` and `package` jobs) opens the same `gate` it
+    uses for pictures, so it passes the cards and the first run and checks the screens themselves.
 - **Lip sync** is its own menu item below the groups (`EXTRA_ITEMS`), after a divider; its address stays
   `voice.lipsync`.
 

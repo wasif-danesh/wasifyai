@@ -58,7 +58,8 @@ def menu_paths() -> dict[str, str]:
         for iid, ilabel in re.findall(r'id: "([\w.]+)", label: "([^"]+)"', body):
             paths[iid] = f"{glabel} › {ilabel}"
     extra = re.search(r"EXTRA_ITEMS[^=]*=\s*\[(.*?)\];", text, re.S)
-    # the single items below the groups: Lip sync, Creative Studio, Motion graphics, 3D model, Train models
+    # the single items below the groups: Lip sync, Creative Studio, Motion graphics, 3D model,
+    # Train models
     items = re.findall(r'\{ id: "([\w.]+)", label: "([^"]+)"', extra.group(1) if extra else "")
     for iid, ilabel in items:
         paths[iid] = ilabel

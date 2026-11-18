@@ -8,6 +8,7 @@ import { Bar, Button, type ModelChoice, formatBytes, useChoicesFor } from "@wasi
 import { useEffect, useState } from "react";
 import { refresh, useGroups, useRun } from "./SetupGate";
 import { openYourKeys } from "./choices/keyed";
+import { gate } from "./choices/use-ready";
 import { remembered } from "./remember";
 import { chatOffer, setupPorts, startSetup, stopSetup } from "./setup-groups";
 
@@ -31,7 +32,8 @@ export function useFirstRun(): { show: boolean; done: () => void } {
     }
   }, [over, chat, ready, shown]);
   return {
-    show: !over && (shown || (chat !== null && !ready)),
+    // the window's self-test (smoke.ts) uses the home itself
+    show: !gate.open && !over && (shown || (chat !== null && !ready)),
     done: () => {
       remembered.set(DONE_KEY, "1");
       setOver(true);

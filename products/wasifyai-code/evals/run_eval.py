@@ -1,9 +1,8 @@
 """Run the coding evaluation: 36 small tasks with hidden checks (ADR-0101; C0 spike 3).
 
     uv run python products/wasifyai-code/evals/run_eval.py --start
-    CODING_OLLAMA_URL=http://127.0.0.1:11434 uv run python \
-        products/wasifyai-code/evals/run_eval.py --data "<app data with the coding engine>" \
-        --model qwen-27b-ollama --out results.json
+    uv run python products/wasifyai-code/evals/run_eval.py --data "<app data with the coding \
+        engine>" --model this-computer [--gguf <file.gguf>] --out results.json
 
 `--start` runs no model. It applies each hidden check to the task's untouched starting files, to
 prove that every check can fail.
@@ -11,7 +10,10 @@ prove that every check can fail.
 `--data` runs the tasks for real, on this computer as the place (`wasifyai_code.client`): the
 coding engine that is set up in that data folder, inside its sandbox, with the model reached
 through the engine's gateway for coding (which this script serves on a loopback port of its own).
-The model is one of `wasifyai_api/coding_models.yaml`. A model on this computer needs no key. A
+The model is one of `wasifyai_api/coding_models.yaml`. `this-computer` is the language model chosen
+in the Model hub of `--data`, as a person chooses it, run the way the app runs it (a file in the
+app's own llama-server, or a model of a running Ollama or LM Studio); `--gguf` chooses a file for
+this run instead. A model on this computer needs no key. A
 cloud model costs money and reads its key from the app's own secret store: it runs only with
 `--app-keys`, and only when the owner has said so. The functions below are written against the
 place interface (`wasifyai_code.place`), so the same code runs on the pretended place in tests.
@@ -354,7 +356,7 @@ async def real_place(
     data: Path,
     folder: Path | None = None,
     *,
-    ollama_url: str = "",
+    gguf: Path | None = None,
     app_keys: bool = False,
     reported: dict[str, float] | None = None,
 ) -> AsyncIterator[tuple[Any, Any]]:
@@ -397,11 +399,12 @@ async def real_place(
             who = str(call.session_id)
             reported[who] = reported.get(who, 0.0) + float(call.usd or 0.0)
 
+    language = await local_language(data, gguf)
     gateway = CodingGateway(
         secrets=secrets,
         usage=InMemoryUsageRecorder(),
         base_url=lambda: address[0],
-        ollama_url=ollama_url,
+        language=language,
         known=known_in_catalogue,  # a vendor's model (`anthropic:<name>`) is priced as in the app
     )
     try:
@@ -414,6 +417,30 @@ async def real_place(
     finally:
         await server.close()
         await gateway.close()
+        await language.llama.close()  # the app's own llama-server, if a file was run
+
+
+async def local_language(data: Path, gguf: Path | None) -> Any:
+    """The model on this computer: the one chosen in the Model hub of `data` (its settings
+    database), or the file `gguf` for this run only."""
+    from wasifyai_api.desktop import DB_NAME
+    from wasifyai_api.desktop_language import CODING_CONTEXT, LanguageService
+    from wasifyai_api.llama_server import LlamaServer
+    from wasifyai_api.settings_store import InMemorySettingsStore
+    from wasifyai_api.sqlite_stores import SqliteSettingsStore
+    from wasifyai_platform_sdk.sqlite import create_sqlite_engine
+
+    llama = LlamaServer(data)
+    if gguf is not None:
+        language = LanguageService(InMemorySettingsStore(), llama)
+        await language.select_file(await asyncio.to_thread(gguf.resolve), gguf.stem, CODING_CONTEXT)
+        return language
+    store: Any = InMemorySettingsStore()
+    if (data / DB_NAME).is_file():
+        store = SqliteSettingsStore(create_sqlite_engine(data / DB_NAME))
+    language = LanguageService(store, llama)
+    await language.load()
+    return language
 
 
 def summary(results: Sequence[dict[str, Any]]) -> dict[str, Any]:
@@ -455,6 +482,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--app-keys",
         action="store_true",
         help="read a cloud model's key from the app's own secret store (costs money)",
+    )
+    parser.add_argument(
+        "--gguf", type=Path, help="with --model this-computer: run this file, not the Model hub's"
     )
     parser.add_argument("--work", type=Path, help="where the tasks' folders are made")
     parser.add_argument(
@@ -519,7 +549,7 @@ async def _run_for_real(
     try:
         async with real_place(
             args.data,
-            ollama_url=os.environ.get("CODING_OLLAMA_URL", ""),
+            gguf=args.gguf,
             app_keys=args.app_keys,
             reported=reported,
         ) as (place, gateway):

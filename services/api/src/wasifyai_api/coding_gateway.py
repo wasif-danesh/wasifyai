@@ -33,6 +33,10 @@ The models a session can run on, their prices and where their keys are kept are 
 `coding_models.yaml`: the ones run through the coding evaluation, and the vendors whose own list
 of models is offered beside them. Every chat model a saved key lists is a choice
 (`<vendor>:<model>`); one with no known price is counted in tokens and has a limit in tokens.
+The one model on this computer is the language model chosen in the Model hub (`local` in the file;
+docs/coding-local-model-plan.md, LM1): its address and name come from `LanguageService.session`
+at each call, which also holds the app's model slot for the call, and the gateway puts the model's
+own name and its "thinking off" switch on the body.
 Nothing here imports OpenHands' packages, and nothing here is specific to
 one provider's SDK: it is HTTP in and HTTP out.
 """
@@ -52,7 +56,7 @@ import httpx
 import yaml
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from wasifyai_platform_sdk import SecretStore
+from wasifyai_platform_sdk import RunError, SecretStore
 from wasifyai_platform_sdk.usage import (
     LLM_INPUT_TOKENS,
     LLM_OUTPUT_TOKENS,
@@ -61,6 +65,7 @@ from wasifyai_platform_sdk.usage import (
     record_safely,
 )
 
+from wasifyai_api.desktop_language import CodingFacts, thinking_fields
 from wasifyai_api.services import services_of
 
 log = logging.getLogger(__name__)
@@ -77,6 +82,7 @@ OVER_LIMIT = "This session reached its cost limit of ${limit:.2f}. Raise the lim
 OVER_TOKENS = "This session reached its limit of {limit:,} tokens. Raise the limit to go on."
 NO_KEY = "No key is saved for {title}. Save one in Settings, under Cloud keys."
 DEFAULT_LIMIT_TOKENS = 3_000_000  # for a session on a model with no known price
+LOCAL_TITLE = "The language model chosen in the Model hub"  # while none is chosen
 # a vendor's own name for a model, as it may stand in a session's row and on a provider's address
 MODEL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,110}")
 PRICE_WORDS = re.compile(r"\$([0-9.]+) in / \$([0-9.]+) out per million")
@@ -114,6 +120,7 @@ class ModelRoute:
     long_price: dict[str, float] = field(default_factory=dict)
     tested: bool = True  # run through the coding evaluation (an entry of the file's `models`)
     price_words: str = ""  # a vendor's model: its price as chat's catalogue says it
+    local: bool = False  # the Model hub's chosen model: address and name are found at each call
 
     @property
     def counted_in_tokens(self) -> bool:
@@ -127,16 +134,12 @@ class ModelRoute:
         return self.long_price if self.long_over and prompt > self.long_over else self.price
 
 
-def load_models(
-    path: Path = MODELS_FILE, *, ollama_url: str = ""
-) -> tuple[str, dict[str, ModelRoute]]:
+def load_models(path: Path = MODELS_FILE) -> tuple[str, dict[str, ModelRoute]]:
     """The default model's id and every model, from the file."""
     data = yaml.safe_load(path.read_text())
     models: dict[str, ModelRoute] = {}
     for model_id, m in data["models"].items():
         upstream = str(m["upstream"])
-        if upstream == "ollama":
-            upstream = ollama_url.rstrip("/") + "/v1"
         if m["shape"] not in (ANTHROPIC, OPENAI):
             raise ValueError(f"{path.name}: {model_id} has a shape the gateway does not know")
         models[model_id] = ModelRoute(
@@ -160,6 +163,47 @@ def load_models(
     if default not in models:
         raise ValueError(f"{path.name}: the default model is not in the list")
     return default, models
+
+
+def load_local(path: Path = MODELS_FILE) -> ModelRoute | None:
+    """The model on this computer, from the file's `local`. Its title is the chosen model's."""
+    m = yaml.safe_load(path.read_text()).get("local")
+    if not m:
+        return None
+    return ModelRoute(
+        id=str(m["id"]), title=LOCAL_TITLE, where="this-computer", shape=OPENAI,
+        provider="this-computer", engine_model=str(m["engine_model"]),
+        provider_model=str(m["provider_model"]), upstream="", secret="", price={},
+        engine_settings=dict(m.get("engine_settings") or {}), local=True,
+    )  # fmt: skip
+
+
+@dataclass(frozen=True)
+class LocalNotes:
+    """What the file's `local` says of models by name (LM2): the measured ones, with the result,
+    and the weak ones."""
+
+    measured: dict[str, str]
+    weak: tuple[str, ...]
+
+    def result(self, *names: str) -> str:
+        return next((r for k, r in self.measured.items() if _named(k, names)), "")
+
+    def is_weak(self, *names: str) -> bool:
+        return any(_named(k, names) for k in self.weak)
+
+
+def _named(key: str, names: tuple[str, ...]) -> bool:
+    """`key` names one of `names`, with the words joined by "-": "qwen3-8b" is "Qwen3 8B",
+    "Qwen3-8B-Q4_K_M.gguf" and "qwen3:8b", but not "Qwen3.8 27B" or "qwen3-80b"."""
+    at = re.compile(rf"(^|[-/]){re.escape(key.lower())}($|[-.])")
+    return any(at.search(re.sub(r"[\s_:]+", "-", n.lower())) for n in names if n)
+
+
+def load_local_notes(path: Path = MODELS_FILE) -> LocalNotes:
+    m = yaml.safe_load(path.read_text()).get("local") or {}
+    measured = {str(k): str(v) for k, v in (m.get("measured") or {}).items()}
+    return LocalNotes(measured, tuple(str(w) for w in m.get("weak") or ()))
 
 
 @dataclass(frozen=True)
@@ -499,7 +543,7 @@ class CodingGateway:
         secrets: SecretStore,
         usage: UsageRecorder,
         base_url: Callable[[], str],
-        ollama_url: str = "",
+        language: Any = None,
         models: tuple[str, dict[str, ModelRoute]] | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         vendors: tuple[dict[str, Vendor], int] | None = None,
@@ -510,9 +554,13 @@ class CodingGateway:
         known once the engine listens). `transport` is for tests: the provider, pretended.
         `lister` gives the models a vendor lists on the saved key and `known` what the app's
         catalogue says of one (its title and price): without a lister only the file's models
-        are offered."""
+        are offered. `language` is the desktop's `LanguageService`: with it, the model chosen
+        in the Model hub is offered too."""
         self._secrets, self._usage, self._base_url = secrets, usage, base_url
-        self.default, self.models = models or load_models(ollama_url=ollama_url)
+        self.default, self.models = models or load_models()
+        self._language = language
+        self.local = load_local() if language is not None else None
+        self._notes = load_local_notes()
         if vendors is None:
             vendors = ({}, DEFAULT_LIMIT_TOKENS) if models else load_vendors()
         self.vendors, self.default_limit_tokens = vendors
@@ -531,10 +579,18 @@ class CodingGateway:
     # ---- what the product asks -----------------------------------------------------------------
 
     def model(self, model_id: str | None) -> ModelRoute:
+        if self.local is not None and model_id == self.local.id:
+            return self._local_route(self.local)
         found = self.models.get(model_id or self.default) or self._vendor_model(model_id or "")
         if found is None:
             raise GatewayError("no_such_model", "That model is not one a coding session can use.")
         return found
+
+    def _local_route(self, local: ModelRoute) -> ModelRoute:
+        """The model on this computer, named after what is chosen in the Model hub now."""
+        chosen = self._language.selected if self._language is not None else None
+        title = f"{chosen.name} on this computer" if chosen is not None else LOCAL_TITLE
+        return ModelRoute(**{**local.__dict__, "title": title})
 
     def _vendor_model(self, model_id: str) -> ModelRoute | None:
         """A model named `<vendor>:<the vendor's model name>`: any model of a vendor in the file.
@@ -565,6 +621,8 @@ class CodingGateway:
     async def ready(self, model_id: str | None) -> str | None:
         """Why a session cannot run on this model now, in words; None when it can."""
         route = self.model(model_id)
+        if route.local:
+            return await self._language.coding_ready()
         if route.secret and (not self._secrets.ready or not await self._secrets.get(route.secret)):
             return NO_KEY.format(title=route.title)
         return None
@@ -573,6 +631,8 @@ class CodingGateway:
         """The models, for the person to choose from: never a key, only whether one is saved.
         The tested ones first, then every other chat model each vendor lists on its saved key."""
         routes = list(self.models.values())
+        if self.local is not None:
+            routes.append(self._local_route(self.local))
         tested = {(r.provider, r.provider_model) for r in routes}
         for vendor in self.vendors.values():
             if self._lister is None or not self._secrets.ready:
@@ -591,22 +651,43 @@ class CodingGateway:
         out = []
         for route in routes:
             vendor = self.vendors.get(route.provider)
-            out.append(
-                {
-                    "id": route.id,
-                    "title": route.title,
-                    "where": route.where,
-                    "default": route.id == self.default,
-                    "ready": await self.ready(route.id) is None,
-                    "provider": route.provider,
-                    "provider_title": vendor.title if vendor else "",
-                    "tested": route.tested,
-                    # per million tokens, in words; empty when none is known (counted in tokens)
-                    "price": route.price_words or _price_words(route.price),
-                    "counted_in": "tokens" if route.counted_in_tokens else "usd",
-                }
-            )
+            facts = await self._language.coding_facts() if route.local and self._language else None
+            why = facts.why if facts is not None else await self.ready(route.id)
+            row = {
+                "id": route.id,
+                "title": route.title,
+                "where": route.where,
+                "default": route.id == self.default,
+                "ready": why is None,
+                # why not, in words; empty when it is ready
+                "why": why or "",
+                "provider": route.provider,
+                "provider_title": vendor.title if vendor else "",
+                "tested": route.tested,
+                # per million tokens, in words; empty when none is known (counted in tokens)
+                "price": route.price_words or _price_words(route.price),
+                "counted_in": "tokens" if route.counted_in_tokens else "usd",
+            }
+            if facts is not None:
+                row.update(self._local_row(facts))
+            out.append(row)
         return out
+
+    def _local_row(self, facts: CodingFacts) -> dict[str, Any]:
+        """What the coding model button says of the model chosen in the Model hub (LM2)."""
+        measured = self._notes.result(facts.name, facts.file)
+        return {
+            "model_name": facts.name,
+            # where `why` is put right: "models" (the Model hub) or "settings"
+            "fix": facts.fix,
+            "tested": bool(measured),
+            # the coding evaluation's result on it, in words ("33 of 36 tasks")
+            "measured": measured,
+            # it may not manage coding well: it did poorly, or its longest context is too short
+            "weak": not measured and (facts.short or self._notes.is_weak(facts.name, facts.file)),
+            # bytes it needs in memory at the coding context; 0 when not known
+            "memory_bytes": facts.memory,
+        }
 
     def open(
         self,
@@ -738,6 +819,49 @@ class CodingGateway:
             key = (await self._secrets.get(route.secret) if self._secrets.ready else None) or ""
             if not key:
                 return _error(shape, 401, "authentication_error", NO_KEY.format(title=route.title))
+        base = route.upstream
+        hold: contextlib.AsyncExitStack | None = None
+        if route.local:
+            # the chosen model, made ready for this call; the slot is held until it is answered
+            hold = contextlib.AsyncExitStack()
+            try:
+                target = await hold.enter_async_context(self._language.session(coding=True))
+            except RunError as e:
+                await hold.aclose()
+                return _error(shape, 503, "api_error", e.message)
+            body["model"] = target.model or route.provider_model
+            for name, value in (
+                thinking_fields(self._language.selected, target.external, False) or {}
+            ).items():
+                had = body.get(name)
+                body[name] = {**had, **value} if isinstance(had, dict) else value
+            raw = json.dumps(body).encode()
+            base = target.base_url
+        try:
+            answer = await self._send(request, session, shape, path, body, raw, base, key, hold)
+        except BaseException:
+            if hold is not None:
+                await hold.aclose()
+            raise
+        if hold is not None and not isinstance(answer, StreamingResponse):
+            await hold.aclose()  # a stream lets it go at its end
+        return answer
+
+    async def _send(
+        self,
+        request: Request,
+        session: _Session,
+        shape: str,
+        path: str,
+        body: dict[str, Any],
+        raw: bytes,
+        base: str,
+        key: str,
+        hold: contextlib.AsyncExitStack | None,
+    ) -> Response:
+        """Send one call to `base` + `path` and answer it. A stream lets `hold` go at its end."""
+        route = session.route
+        counting = path.endswith("/count_tokens")
         streamed = bool(body.get("stream")) and not counting
         options = body.get("stream_options") or {}
         if shape == OPENAI and streamed and "include_usage" not in options:
@@ -755,7 +879,7 @@ class CodingGateway:
                 headers["anthropic-beta"] = request.headers["anthropic-beta"]
         else:
             headers["authorization"] = f"Bearer {key or 'none'}"
-        url = route.upstream + path
+        url = base + path
         try:
             upstream = await self._http.send(
                 self._http.build_request("POST", url, content=raw, headers=headers), stream=True
@@ -766,7 +890,7 @@ class CodingGateway:
         kind = upstream.headers.get("content-type", "application/json")
         if "text/event-stream" in kind and upstream.status_code == 200:
             return StreamingResponse(
-                self._stream(session, upstream, shape),
+                self._stream(session, upstream, shape, hold),
                 status_code=200,
                 media_type="text/event-stream",
                 headers={"cache-control": "no-cache", "x-accel-buffering": "no"},
@@ -805,7 +929,11 @@ class CodingGateway:
         return Response(data, status_code=upstream.status_code, media_type=kind)
 
     async def _stream(
-        self, session: _Session, upstream: httpx.Response, shape: str
+        self,
+        session: _Session,
+        upstream: httpx.Response,
+        shape: str,
+        hold: contextlib.AsyncExitStack | None = None,
     ) -> AsyncIterator[bytes]:
         reader = _AnthropicStream() if shape == ANTHROPIC else _OpenAIStream()
         buffer = b""
@@ -821,6 +949,8 @@ class CodingGateway:
             log.warning("a coding session's model stream broke off")
         finally:
             await upstream.aclose()
+            if hold is not None:
+                await hold.aclose()
             await self._count(session, reader.usage, 200, reader.refusal)
 
     async def _count(

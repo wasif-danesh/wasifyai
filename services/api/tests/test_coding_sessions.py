@@ -15,7 +15,10 @@ import pytest
 from fastapi import FastAPI
 from wasifyai_api.coding_gateway import CodingGateway
 from wasifyai_api.coding_gateway import router as gateway_router
+from wasifyai_api.desktop_language import LanguageService, Selection
+from wasifyai_api.llama_server import LlamaServer
 from wasifyai_api.services import ApiServices
+from wasifyai_api.settings_store import InMemorySettingsStore
 from wasifyai_api.tool_host import ApiToolHost
 from wasifyai_code import place as places
 from wasifyai_code.client import READ_TOOLS, WRITE_TOOLS, ThisComputer
@@ -53,9 +56,15 @@ class Box:
         self.server = server(self.data)
         self.secrets = InMemorySecretStore()
         self.usage = InMemoryUsageRecorder()
+        # the model on this computer: a model of a running Ollama chosen in the Model hub
+        self.language = LanguageService(InMemorySettingsStore(), LlamaServer(self.data))
+        self.language.selected = Selection(
+            "server", "qwen3.8:27b-mlx (ollama)", 8192, tool="ollama",
+            url="http://127.0.0.1:11434", model="qwen3.8:27b-mlx",
+        )  # fmt: skip
         self.gateway = CodingGateway(
             secrets=self.secrets, usage=self.usage,
-            base_url=lambda: "http://127.0.0.1:9", ollama_url="http://127.0.0.1:11434",
+            base_url=lambda: "http://127.0.0.1:9", language=self.language,
         )  # fmt: skip
         self.store = CodeStore.in_folder(self.data / "code")
         self.services = ApiServices(
@@ -75,7 +84,7 @@ class Box:
         return ThisComputer(self.server, self.gateway, known=self.store.workspace_paths)
 
     def spec(self, folder: Path | None = None, **more) -> SessionSpec:
-        more.setdefault("model", "qwen-27b-ollama")
+        more.setdefault("model", "this-computer")
         more.setdefault("read_only", True)
         return SessionSpec(folder or self.project, **more)
 
@@ -350,7 +359,7 @@ BASE = "/products/wasifyai-code/code"
 
 async def started(box: Box, **body) -> dict:
     body.setdefault("folder", str(box.project))
-    body.setdefault("model", "qwen-27b-ollama")
+    body.setdefault("model", "this-computer")
     r = await box.http.post(f"{BASE}/sessions", json=body)
     assert r.status_code == 201, r.text
     return r.json()
@@ -373,7 +382,7 @@ async def test_a_session_is_started_sent_to_and_answered_through_the_routes(box)
         and made["mode"] == "plan"
         and made["folder"] == str(real(box.project))
     )
-    assert made["project"] == "bakery-site" and made["model"] == "qwen-27b-ollama"
+    assert made["project"] == "bakery-site" and made["model"] == "this-computer"
     assert not box.server.running  # nothing is started until something is asked
     sent = await box.http.post(
         f"{BASE}/sessions/{made['id']}/messages", json={"text": "Analyse this codebase."}
@@ -526,7 +535,7 @@ async def test_a_model_without_its_key_and_an_unknown_model_are_refused_in_words
     assert [(m["id"], m["ready"]) for m in models] == [
         ("claude-sonnet-5-5", False),
         ("claude-haiku-5-5", False),
-        ("qwen-27b-ollama", True),
+        ("this-computer", True),
     ]  # fmt: skip  (both cloud models wait for the one key)
 
 
@@ -619,9 +628,13 @@ def test_the_desktop_engine_serves_the_coding_product_and_opens_its_store(data_d
         assert c.get(f"{BASE}/sessions").status_code == 401
         assert c.get(f"{BASE}/sessions", headers=auth()).json() == {"items": []}
         models = c.get(f"{BASE}/models", headers=auth()).json()["items"]
+        # the model on this computer is the Model hub's, and none is chosen yet
         assert [m["id"] for m in models] == [
-            "claude-sonnet-5-5", "claude-haiku-5-5", "qwen-27b-ollama",
-        ]  # fmt: skip
+            "claude-sonnet-5-5",
+            "claude-haiku-5-5",
+            "this-computer",
+        ]
+        assert models[2]["ready"] is False
         assert models[0]["default"] is True and models[0]["ready"] is False  # no key is saved
         # the gateway's door is there; a person's own token opens nothing at it, nor does no token
         for headers in ({}, auth(), {"x-api-key": "wcg-made-up"}):
@@ -1095,7 +1108,7 @@ async def test_a_schedule_is_made_from_a_template_run_now_and_let_go_through_the
     assert nightly["rule_words"] == "Every day at 02:00"
     body = {
         "workspace_id": project["id"], "request": "Add the hours. #replay:edit-asked",
-        "rule": nightly["rule"], "title": nightly["title"], "model": "qwen-27b-ollama",
+        "rule": nightly["rule"], "title": nightly["title"], "model": "this-computer",
     }  # fmt: skip
     for bad, code in (
         ({"rule": {"kind": "every", "minutes": 1}}, "bad_rule"),

@@ -188,6 +188,8 @@ function fromEvents(turn: TurnView, events: CodeEvent[]): TurnView {
       if (step) {
         step.status = e.status;
         step.text = e.output.text ?? "";
+        // a program's command is known only once it ended: the line names it then
+        if (e.arguments) step.given = { ...step.given, ...e.arguments };
         if (e.output.answer) step.answer = e.output.answer;
       }
       // the step a card asked about has its result: the card is answered

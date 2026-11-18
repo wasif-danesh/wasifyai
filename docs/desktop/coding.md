@@ -259,6 +259,7 @@ notes: `docs/spikes/coding-harness-h0.md`, `coding-harness-h1.md`, `coding-harne
 | The Your agent tab (H2) | `packages/ui/src/models/AgentTab.tsx`, in the Code model button when the window gives `agents` (`ChoicesApi.agents`). Not set up: "Use your own Claude Code or Codex" and "Set up (694 MB)", then how far it is. Set up: each program signed in (its plan, then its models: "Its own choice" first) or not ("Sign in to …"; while it waits, "Signing in…", "Open the page again" and Cancel). The rows have `place: "agent"`; the button reads "Claude Code · Sonnet". The window's side is `apps/desktop/src/choices/agents.ts` and the rows in `code-choices.ts`; a program's models are asked once per sign-in, since asking starts it |
 | A session on a program (H2) | `Code.tsx`. The note before the first session on each program, once (kept in the window's storage). A session starts in Plan. The bar names the program and its model; the pill "Your Claude plan" or "Your ChatGPT plan" opens to the tokens and cost the program reported, with no limit of ours. The mode menu has "Ask me" greyed with the reason, and "Carry out this plan" goes to Work on its own. A stop whose words say the sign-in ended has "Sign in to …"; one that says a limit was reached shows the program's words with "Try again" and "New session on another agent" (`agentStop`) |
 | Scheduled on a program (H3) | A schedule runs on the model of the project's newest session (or its own model), so a project worked on with Claude Code or Codex is run on that program, on a copy in "Work on its own", the same as on a key (`scheduled.py`). A program not set up or signed out ends the run in words ("Sign in to Claude Code first") and nothing is copied |
+| Installs on a program (H4) | The program's sandbox holds the person's sign-in, so it never reaches a package index (a hostile package there could publish the sign-in). The owner chose design A (`docs/spikes/coding-harness-h4-mockup.html`): when the program runs an install command (`rules.command_kind`), the window shows "Claude Code needs packages" with what the project lists (`installs.what_installs`: `npm install` from `package.json`; `pip install -r requirements.txt` or `-e .` into `.venv`). "Install them" runs it in our own sandbox for the project, `who="person"` (the terminal's: `/Users` closed, so no sign-in file and no keychain), through the install proxy, for at most 15 minutes, in the background. The card says how it went (`code_install` events; the session's `install`). The program is then told in a new turn, at once or when its turn ends (not after Stop), including that a package it needs must be added to the project's list first. Once a session has needed packages, the program changing `package.json`, `requirements.txt`, `pyproject.toml` or `setup.py` offers it again. A command Claude Code names only when it ends (its first sighting is an empty "Terminal") is read from the step's result. Only the project's files decide what runs, never the program's command. Routes: `POST` and `DELETE /code/sessions/{id}/install` |
 | Tested for coding (H3) | `HARNESS_TESTED` in `runtime.py` holds what the 36-task evaluation measured for each program model; `GET /code/harnesses/{harness}/models` gives it as `tested`, and the Your agent row says "Tested for coding here: …" or "Not tested for coding here." |
 | The evaluation on a program (H3) | `run_eval.py --data <data with the part set up> --model claude-code:<model>` (or `codex:<model>`): each task on the program's own sandboxed server, on the person's plan, with no `--app-keys`; the cost is what the program reported (`counted_in: "plan"`). A task the program refuses because the plan's limit was reached ends the run, and it and the rest are listed as not run with the program's words (`stopped`) |
 | Elsewhere (H2) | Projects says what each session runs on ("Claude Code · Sonnet", "Claude Sonnet 5.5 · your key"). Extensions says it is for Wasify AI's own agent only. Settings › Code, "Your agent programs" (`AgentPrograms`): each program's sign-in with "Sign in again" or "Sign in to …", and the part with Remove; removing does not sign out |
@@ -313,8 +314,8 @@ address on loopback and a token for one session, and every model call of that se
 |---|---|
 | The token | Made per session, kept in memory only, dead when the session is deleted or the app closes. It is the route's identity: the tenant, the product and the person come from it. An unknown token is refused. The real key opens nothing here |
 | The key | Read from the app's secret store for each call and put on it (`keys.chat.anthropic`, the key saved for Chat and writing in Settings › Your keys). Never answered back, logged or written |
-| The model | Only the model the session was opened with is let through. Besides the file's models, every chat model a saved key lists can be chosen (see "The models" below). The file's own list is `coding_models.yaml`: Claude Sonnet 5.5 first; Claude Haiku 5.5 second, on the same key and much cheaper (a call whose prompt is over 100,000 tokens is counted at its higher price, `long_prompt`); the local Qwen 27B through Ollama third, offered only when `CODING_OLLAMA_URL` is set |
-| The body | Passed on byte for byte, so the provider's prompt-cache marks arrive as the Agent Server wrote them |
+| The model | Only the model the session was opened with is let through. Besides the file's models, every chat model a saved key lists can be chosen (see "The models" below). The file's own list is `coding_models.yaml`: Claude Sonnet 5.5 first; Claude Haiku 5.5 second, on the same key and much cheaper (a call whose prompt is over 100,000 tokens is counted at its higher price, `long_prompt`); then the model on this computer, `this-computer` (the file's `local`): the language model chosen in the Model hub (see "The model on this computer" below) |
+| The body | Passed on byte for byte, so the provider's prompt-cache marks arrive as the Agent Server wrote them. The model on this computer is the one exception: its own name and its "thinking off" switch are put on the body |
 | Streaming | Passed through event by event |
 | Tokens and cost | Each call's tokens become usage events (`llm.input_tokens`, `llm.output_tokens`, capability `code.agent`) and its counted cost is added to the session's row. At the session's limit (5 dollars unless the session says otherwise) the next call is refused, and the turn ends saying so |
 | A refusal | When the model declines (`stop_reason: "refusal"`), the Agent Server is answered with a plain message and no tool call, which ends its turn. The turn ends as "refused" with the model's own words. It is not an error |
@@ -328,6 +329,7 @@ with. `GET /models` lists them:
 | Which | Named | Said in the picker |
 |---|---|---|
 | The models of `coding_models.yaml` (`models`) | by their id there | "Tested for coding": they were run through the 36 evaluation tasks |
+| The model on this computer: the language model chosen in the Model hub | `this-computer` | Its own name and "on this computer"; not ready, with words, when nothing is chosen |
 | Every other chat model a vendor lists on the key saved for Chat and writing: Anthropic, OpenAI, Google Gemini (`vendors` in the file) | `<vendor>:<the vendor's model name>`, for example `anthropic:claude-opus-5-5` | "Not tested for coding here", under Cloud, by provider |
 
 - **The list is the vendor's own**, asked through the same code as chat's (`OwnKeysService.vendor_models`,
@@ -361,6 +363,52 @@ Not measured: the full 36 tasks on either, and any OpenAI or Gemini model in a r
 either was saved). Those two vendors are tested against a pretended provider only
 (`services/api/tests/test_coding_gateway.py`). Walk the button for real with
 `WASIFYAI_AUDIT_FOLDER=<a project> ... ui-audit.sh light code-models` (pictures `code-models-*.png`).
+
+### The model on this computer (docs/coding-local-model-plan.md, LM1)
+
+The one local entry is the language model chosen in the Model hub, the same as chat's. Coding has no
+choice of its own and no Ollama setting (the earlier `qwen-27b-ollama` entry and `CODING_OLLAMA_URL` are
+gone). The gateway asks `LanguageService.session(coding=True)` at each call:
+
+- **A file** runs in the app's own `llama-server`, holding the `chat` model slot for the call (to the end of
+  a stream), so an image model is unloaded first and an idle session blocks nothing. The server runs at a
+  context of at least 32,768 (`CODING_CONTEXT`), without the picture reader, and with
+  `--spec-type draft-mtp,ngram-mod` when the file has its own next-token layers (`nextn_predict_layers` in
+  its header), else `--spec-type ngram-mod` (`speed_args`; not for a taught writing model). Chat then
+  keeps using that server (`ensure_running(..., at_least=True)`): a larger context and speed options do for
+  it. Chat after coding needs no restart; coding after chat restarts the server once, about 2 s for a
+  file already read. The call goes out with `chat_template_kwargs: {enable_thinking: false}`.
+- **A model of a running Ollama or LM Studio** is called where it is, by its own name; an Ollama model that
+  can think gets `think: false` (chat's `thinking_fields`).
+- **Not ready** (`coding_ready`), in words: nothing chosen ("Choose a language model in the Model hub
+  first"), the language engine not set up, the file gone, or the file too big at 32,768.
+
+LM0 measured it (`docs/spikes/coding-local-lm0.md`): Qwen 27B as `Q4_0` with the speed options passed 33 of
+the 36 evaluation tasks, median 78 s a task, 23.6 GB; Qwen3 8B is a no-go. The evaluation runs it with
+`run_eval.py --model this-computer`, on the Model hub's choice in `--data` or on `--gguf <file>`. LM3 ran the
+gate through the route (33 of 36, median 99 s; all seven walks). The Model hub offers the file: Qwen3.8 27B is
+on its shelf and in the chat list, for 32 GB or more, and its download takes `Q4_0` (`CHAT_SHELF`'s `quant`).
+The walks choose their local model the way a person does: `WASIFYAI_AUDIT_LANGUAGE_FILE=<a .gguf>` makes the
+walk choose it in the Model hub first.
+
+**The model button (LM2, mockup `docs/spikes/coding-local-lm2-mockup.html`).** The button reads "Qwen3.8 27B ·
+On this computer" while that model is in use. Under On this computer the panel lists the one row, ready or
+not, under "Chosen in the Model hub" with a link to change it there (`ChoicesApi.elsewhere`), and lines
+under it (`ChoiceList.foot`). The engine's list says of the row (`list_models`, `LanguageService.coding_facts`):
+
+- `model_name`, and `why` with `fix` when it cannot run: "models" (nothing chosen, the file gone, too big
+  at 32,768) gives the row an "Open the Model hub" button, "settings" (the language engine) "Open Settings";
+- `measured`: the evaluation's result on it ("33 of 36 tasks"), from `local.measured` in
+  `coding_models.yaml`; such a row is tested and Recommended;
+- `weak`: named in `local.weak` (the Qwen3 models LM0 found too small) or its own longest context is under
+  32,768. It can still be chosen, with the badge "May not manage coding well" and the tested model named
+  under it;
+- `memory_bytes`, what a file needs at 32,768, said as "about 24 GB of memory while it works".
+
+Names are matched with their words joined by "-", so "Qwen3.8 27B", `Qwen3.8-27B-Q4_0.gguf` and
+`qwen3.8:27b-mlx` are one. Every other model's row also carries `why`. A session on this computer whose
+Model hub model changes says so once, where it happened: "Now on Qwen3 8B, chosen in the Model hub (was
+Qwen3.8 27B)" (`localChanges` in `Code.tsx`, kept in the window's storage per session).
 
 ## The product's actions and routes
 
@@ -453,13 +501,15 @@ starts it again and cuts off every session in the middle of its turn (`docs/spik
 | `services/api/tests/test_coding_harness.py`, `test_components_harness.py` | A harness's server, profile, proxy and sign-in against the fake. The part installs from the lock with no install script, and refuses a changed lock | `make test` |
 | `products/wasifyai-code/tests/test_code_harness.py` | Sessions on a harness on the pretended place: the model, the modes, sign-in needed, no extensions, the reported cost, what the evaluation measured for a model | `make test` |
 | `products/wasifyai-code/tests/test_code_scheduled.py` (the H3 part) | A schedule on a program: a run on a copy, a signed-out program that ends the run in words, a run the plan's limit stopped said in plain words | `make test` |
+| `products/wasifyai-code/tests/test_code_installs.py` | Installs for a session on a program (H4): what the project lists, a real run through a pretended sandbox (done, failed, too slow, no sandbox), the card offered when the program tries to install, "Install them" for the person, the program told at once or after its turn, Not now, a failed install, none for Wasify AI's own agent or a project that lists nothing | `make test` |
 | `products/wasifyai-code/evals/run_eval.py --model claude-code:haiku` (and `codex:…`) | The H3 gate: the 36 tasks on each program, on the person's own plans | By hand |
 | `services/api/tests/integration/test_coding_harness_sandbox.py` | Hostile tests against a harness's real server: its sign-in only, nothing else of the home folder, only the provider through the proxy | `make test-coding`, opt-in |
 | `services/api/tests/integration/test_coding_harness_real.py` | The H1 gate: a session on each harness, on the person's own plan, changes a file, is checked and is undone | `CODING_E2E=1 CODING_HARNESS_E2E=1`, by hand |
 | `packages/ui/src/models/agent-tab.test.tsx` | The Your agent tab and Settings › Code: the program and model on the button, the plan's models, choosing one, the program's own sign-in and Cancel, the size before setting up, no tab for other groups, Sign in again, Remove only after a yes | `make test` |
-| `packages/ui/src/code/code.test.tsx` (the H2 part) | A session on a program: the bar and the plan pill with no limit of ours, "Ask me" greyed, a plan carried out on its own, a reached limit and an ended sign-in, Projects, the note before the first session and the start in Plan | `make test` |
+| `packages/ui/src/code/code.test.tsx` (the H2 and H4 parts) | A session on a program: the bar and the plan pill with no limit of ours, "Ask me" greyed, a plan carried out on its own, a reached limit and an ended sign-in, Projects, the note before the first session and the start in Plan; the install card offered, installing, installed, failed, closed, and not shown on Wasify AI's own agent | `make test` |
 | `apps/desktop/src/choices/code-choices.test.ts` (the H2 part) | The rows under Your agent: a signed-in program's models with its own choice first, none for one not signed in, asked once, the choice kept, the part set up, "Tested for coding here" | `make test` |
 | `apps/desktop/scripts/ui-audit.sh light code-agent-scheduled` | A schedule's Run now on each program in the real window: on a copy, the project untouched, the change applied; a stop by the plan's limit in words. `WASIFYAI_AUDIT_PROGRAMS` picks the programs | By hand, on a throwaway `DESKTOP_DATA_DIR` |
+| `apps/desktop/scripts/ui-audit.sh light code-agent-install` | Installs on Claude Code in the real window (H4): asked to add an npm package, the program tries and cannot, "Install them" installs it in our sandbox (read back from disk), the program is told and carries on. Passed 2026-11-16 in 51.6 s | By hand, on a throwaway `DESKTOP_DATA_DIR` |
 | `apps/desktop/scripts/ui-audit.sh light code-agent` | The H2 gate in the real window on each program, on the person's own plans | By hand, on a throwaway `DESKTOP_DATA_DIR` |
 | `apps/desktop/scripts/ui-audit.sh light coding-setup` (then `coding-repair`, `coding-remove`) | The part set up, repaired and removed from the real window's Settings, with the real downloads | By hand, on a throwaway `DESKTOP_DATA_DIR` |
 

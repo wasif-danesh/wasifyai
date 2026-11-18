@@ -57,7 +57,10 @@ function stateLine(c: ModelChoice): string {
     if (c.works === false) return `Key not working · ${c.providerTitle ?? ""}`;
     return c.chosen ? `In use · ${where}` : where;
   }
-  if (c.state === "ready") return c.chosen ? "In use" : "On this computer";
+  if (c.state === "ready") {
+    const said = c.chosen ? "In use" : "On this computer";
+    return c.detail ? `${said} · ${c.detail}` : said;
+  }
   if (c.state === "too_big") return "Too big for this computer";
   if (c.state === "unavailable") return c.unavailableReason ?? "Not available here";
   if (c.foundIn && c.engineBytes === 0) return `Found in ${c.foundIn}`;
@@ -140,7 +143,9 @@ export function ModelSelect({
   const agent = all.filter((c) => c.place === "agent");
   const choices = all.filter((c) => c.place !== "cloud" && c.place !== "agent");
   const chosen = all.find((c) => c.chosen) ?? null;
-  const onDevice = choices.filter((c) => c.state === "ready");
+  // a model chosen somewhere else (Code: the Model hub) is listed here ready or not, with why not
+  const elsewhere = api?.elsewhere;
+  const onDevice = elsewhere ? choices : choices.filter((c) => c.state === "ready");
   // only when the panel opens
   // biome-ignore lint/correctness/useExhaustiveDependencies: the tab is chosen once per opening
   useEffect(() => {
@@ -151,7 +156,7 @@ export function ModelSelect({
           ? "cloud"
           : chosen?.place === "agent" && api?.agents
             ? "agent"
-            : onDevice.length > 0
+            : onDevice.some((c) => c.state === "ready")
               ? "device"
               : "recommended",
       );
@@ -176,7 +181,9 @@ export function ModelSelect({
       ? `${chosen.providerTitle ?? ""} · ${chosen.title}`
       : chosen.place === "cloud"
         ? `${displayName(chosen.title)} · ${chosen.providerTitle ?? ""}`
-        : displayName(chosen.title)
+        : elsewhere
+          ? `${displayName(chosen.title)} · On this computer`
+          : displayName(chosen.title)
     : g.select;
 
   async function pick(c: ModelChoice) {
@@ -353,6 +360,23 @@ export function ModelSelect({
                     With your {provider} key
                   </li>
                 ) : null}
+                {tab === "device" && elsewhere ? (
+                  <li className="flex items-center justify-between gap-2 px-3 pt-1 text-xs">
+                    <span className="font-medium text-muted-foreground">{elsewhere.heading}</span>
+                    {elsewhere.change ? (
+                      <button
+                        type="button"
+                        className="rounded text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => {
+                          setOpen(false);
+                          elsewhere.change?.run();
+                        }}
+                      >
+                        {elsewhere.change.label}
+                      </button>
+                    ) : null}
+                  </li>
+                ) : null}
                 {rows.map((c) => (
                   <li key={c.id}>
                     <button
@@ -377,7 +401,11 @@ export function ModelSelect({
                             <Eye className="size-3.5" aria-label="Can read pictures" />
                           </span>
                         ) : null}
-                        {c.tier === "recommended" ? (
+                        {c.note ? (
+                          <span className="shrink-0 rounded-full border border-warn/40 bg-warn/10 px-2 py-0.5 text-xs">
+                            {c.note}
+                          </span>
+                        ) : c.tier === "recommended" ? (
                           <span className="rounded-full border px-2 py-0.5 text-xs">
                             Recommended
                           </span>
@@ -405,11 +433,49 @@ export function ModelSelect({
                         {c.fit === "tight" ? " · may be slow here" : ""}
                       </span>
                     </button>
+                    {c.fix && c.state === "unavailable" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="ms-3 mb-1"
+                        onClick={() => {
+                          setOpen(false);
+                          c.fix?.run();
+                        }}
+                      >
+                        {c.fix.label}
+                      </Button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             ))}
 
+            {tab === "device" && elsewhere && m.list?.foot?.length ? (
+              <div className="grid gap-1.5 border-t px-3 pt-2 text-muted-foreground text-xs">
+                {m.list.foot.map((f) => (
+                  <p key={f.text} className="m-0">
+                    {f.text}
+                    {f.link ? (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          className="rounded text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                          onClick={() => {
+                            setOpen(false);
+                            f.link?.run();
+                          }}
+                        >
+                          {f.link.label}
+                        </button>
+                      </>
+                    ) : null}
+                  </p>
+                ))}
+              </div>
+            ) : null}
             {tab === "more" && api?.more ? <div className="grid gap-2">{api.more}</div> : null}
           </PopoverPrimitive.Content>
         </PopoverPrimitive.Portal>

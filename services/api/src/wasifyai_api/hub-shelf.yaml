@@ -29,6 +29,10 @@ models:
     title: gpt-oss 20B
     capability: language
     note: "A large open model that shows its reasoning; about 11 to 14 GB, for computers with 32 GB or more. Not measured for the assistant yet."
+  - repo: unsloth/Qwen3.8-27B-GGUF
+    title: Qwen3.8 27B
+    capability: language
+    note: "The model for coding (docs/spikes/coding-local-lm0.md): the Q4_0 file passed 33 of 36 coding tasks on an Apple M5 Pro, a median 78 s a task. 16.1 GB to get and about 24 GB in memory at the coding agent's 32k, so for computers with 32 GB or more."
   - repo: nomic-ai/nomic-embed-text-v1.5-GGUF
     title: Nomic Embed Text v1.5
     capability: embedding

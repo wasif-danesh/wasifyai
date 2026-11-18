@@ -261,4 +261,4 @@ def test_a_model_of_the_persons_own_program_is_known_as_one():
     assert run_eval.harness_of("claude-code:haiku") == "claude-code"
     assert run_eval.harness_of("codex:default") == "codex"
     assert run_eval.harness_of("anthropic:claude-opus-5-5") == ""
-    assert run_eval.harness_of("qwen-27b-ollama") == ""
+    assert run_eval.harness_of("this-computer") == ""

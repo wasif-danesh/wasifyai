@@ -25,6 +25,19 @@ export type CodeModel = {
   price?: string;
   /** "tokens": no price is known, so its sessions are counted and limited in tokens */
   counted_in?: "usd" | "tokens";
+  /** why it is not ready, in words; empty when it is */
+  why?: string;
+  /** the model on this computer (`where: "this-computer"`): the one chosen in the Model hub, by name; empty when
+   * none is chosen */
+  model_name?: string;
+  /** where `why` is put right: "models" (the Model hub) or "settings"; empty when nothing is to be done there */
+  fix?: "" | "models" | "settings";
+  /** the coding evaluation's result on it, in words ("33 of 36 tasks"); empty when not measured */
+  measured?: string;
+  /** it may not manage coding well: it did poorly in the evaluation, or its longest context is too short */
+  weak?: boolean;
+  /** bytes it needs in memory at the coding context; 0 when not known */
+  memory_bytes?: number;
 };
 
 /** How a turn ended. A refusal is the model's own answer, not an error. */
@@ -80,8 +93,30 @@ export type CodeSession = {
   harness?: string;
   /** the most tokens (in and out) such a session may use */
   token_limit?: number;
+  /** a session on a program that tried to install: the card that installs what the project lists (ADR-0107, H4) */
+  install?: CodeInstall | null;
   created_at: string;
   updated_at: string;
+};
+
+/** Installing a project's packages for a session on the person's own program, in Wasify AI's own sandbox, where
+ * the program's sign-in is out of reach (ADR-0107, stage H4). */
+export type CodeInstall = {
+  state: "offered" | "installing" | "installed" | "failed";
+  /** the program: "claude-code", "codex" */
+  harness: string;
+  /** what the program tried to run; empty when it changed the project's list instead */
+  tried: string;
+  /** the list it changed ("package.json"), once the session has needed packages */
+  changed?: string;
+  /** what Wasify AI runs: "npm install", "pip install -r requirements.txt (into .venv)" */
+  command: string;
+  /** the files it comes from: "package.json and package-lock.json" */
+  from: string;
+  /** once it has run: its last lines, why it did not work, how long it took */
+  output?: string;
+  why?: string;
+  seconds?: number;
 };
 
 export type CodeTurn = {
@@ -403,12 +438,16 @@ export type CodeEvent = { seq: number; run_id: string; thread_id: string; ts: st
       status: "ok" | "error" | "refused";
       /** `answer`: how the step's question was answered ("allowed": its kind is allowed for the project) */
       output: { text?: string; answer?: CodeAnswer | "allowed" };
+      /** what the step was given, when it was known only once it ended (Claude Code's commands) */
+      arguments?: Record<string, unknown>;
     }
   | { event: "token" | "reasoning"; node: string; text: string }
   | { event: "code_message"; text: string }
   /** the person's message switched skills on: their names, and what a person calls them */
   | { event: "code_skills"; names: string[]; titles: string[] }
   | { event: "code_refusal"; message: string; category?: string }
+  /** the install card changed; "closed" when the person said "Not now" */
+  | ({ event: "code_install" } & (CodeInstall | { state: "closed" }))
 );
 
 /** One entry of a project's folder (the Files tab). `path` is from the project's top. */
@@ -653,6 +692,17 @@ export function createCodeApi(transport: Transport) {
         post(),
       );
       return out.session;
+    },
+    /** Install what the project lists, for the session's program, in Wasify AI's own sandbox. It answers at
+     * once; `code_install` events say how it goes, and then the program is told. */
+    install(id: string): Promise<CodeSession> {
+      return json<CodeSession>(`${BASE}/sessions/${encodeURIComponent(id)}/install`, post());
+    },
+    /** Close the install card ("Not now"). */
+    notNow(id: string): Promise<CodeSession> {
+      return json<CodeSession>(`${BASE}/sessions/${encodeURIComponent(id)}/install`, {
+        method: "DELETE",
+      });
     },
     /** The person's projects, the newest first. */
     async workspaces(): Promise<CodeWorkspace[]> {

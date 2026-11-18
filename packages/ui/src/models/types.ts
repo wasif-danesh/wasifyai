@@ -157,13 +157,24 @@ export type ModelChoice = {
   can?: string[];
   /** the id the screen's engine knows a cloud model by while it is in use (`key:lipsync`), when not this row's id */
   engineId?: string;
+  /** a caution shown as a badge on the row: "May not manage coding well" */
+  note?: string | null;
+  /** said after the row's state: "about 24 GB of memory while it works" */
+  detail?: string | null;
+  /** a button under an `unavailable` row that puts it right: "Open the Model hub" */
+  fix?: { label: string; run: () => void } | null;
 };
+
+/** A line under the rows, with a link: "Coding and chat use the same model…" */
+export type ChoiceFoot = { text: string; link?: { label: string; run: () => void } };
 
 export type ChoiceList = {
   choices: ModelChoice[];
   /** free disk space and memory, for the dialog and the order */
   diskFreeBytes: number | null;
   memoryBytes: number | null;
+  /** lines under the rows of On this computer, where the model is chosen somewhere else (`ChoicesApi.elsewhere`) */
+  foot?: ChoiceFoot[];
 };
 
 /** How far a "get and use" has got: the step in words, and how far through all of it (null: not known). */
@@ -219,4 +230,10 @@ export type ChoicesApi = {
   cloud?: { product: string; setUp?: () => void };
   /** the group can run on the person's own agent programs (Code, ADR-0107): the picker shows a Your agent tab */
   agents?: AgentsApi;
+  /** the group's model on this computer is chosen somewhere else (Code: the Model hub, LM2). On this computer then
+   * lists every row, ready or not, under `heading` with a link to that place, and the list's `foot` under them */
+  elsewhere?: {
+    heading: string;
+    change?: { label: string; run: () => void };
+  };
 };

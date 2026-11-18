@@ -2,8 +2,8 @@
 # (wasifyai_api/coding_gateway.py); the person chooses one on Code's model button.
 #
 # `models` are the ones run through the coding evaluation (products/wasifyai-code/evals): Claude
-# Sonnet 5.5 first, then Claude Haiku 5.5 (cheaper), then the local Qwen 27B. They are shown as
-# "Tested for coding".
+# Sonnet 5.5 first, then Claude Haiku 5.5 (cheaper). They are shown as "Tested for coding". The
+# model on this computer is `local`, below.
 #
 # `vendors` are the providers whose own list of models is offered as well (owner, 2026-11-15:
 # "It shouldn't be hardcoded to 1/2 options"): every chat model the key saved under Settings ›
@@ -16,9 +16,8 @@
 #                    doors it uses: "anthropic" (the Messages API) or "openai" (chat completions)
 #   engine_model     the name the Agent Server is given (its own library's name for the model)
 #   provider_model   the only model name the gateway lets through for this entry
-#   upstream         where the gateway sends the call. "ollama" is the address in OLLAMA_BASE_URL
-#   secret           where the key is in the app's secret store (Settings › Your keys). Empty for
-#                    a model on this computer, which needs none
+#   upstream         where the gateway sends the call
+#   secret           where the key is in the app's secret store (Settings › Your keys)
 #   price            US dollars per million tokens, as counted by the gateway. It is a count for
 #                    the session's limit and its header, not the provider's bill
 #   long_prompt      for a model that costs more for a long prompt: `over` (the prompt's tokens,
@@ -57,25 +56,29 @@ models:
       over: 100000
       price: { input: 0.50, output: 2.50, cache_read: 0.05, cache_write: 0.625, cache_write_1h: 1.0 }
     engine_settings: {}
-  qwen-27b-ollama:
-    title: Qwen 27B on this computer (Ollama)
-    where: this-computer
-    shape: openai
-    provider: ollama
-    engine_model: openai/qwen3.8:27b-mlx
-    provider_model: qwen3.8:27b-mlx
-    upstream: ollama
-    secret: ""
-    price: {}
-    # what the C0 spikes ran it with: no thinking, its own tool calls, one retry
-    engine_settings:
-      native_tool_calling: true
-      reasoning_effort: none
-      litellm_extra_body: { reasoning_effort: none }
-      max_input_tokens: 24000
-      max_output_tokens: 4096
-      temperature: 0.2
-      num_retries: 1
+# the one model on this computer: the language model chosen in the Model hub, the same as chat's
+# (docs/coding-local-model-plan.md, LM1). A file runs in the app's own llama-server at a context
+# of at least 32,768 with its speed options; a model of a running Ollama or LM Studio is used
+# where it is. Its name and address come from the choice at each call; the gateway puts the
+# model's own name and its "thinking off" switch on the call. It needs no key and costs nothing.
+local:
+  id: this-computer
+  engine_model: openai/local
+  provider_model: local  # the name the Agent Server sends; the gateway puts the real one on
+  # what LM0 ran the 36 tasks with: its own tool calls, one retry
+  engine_settings:
+    native_tool_calling: true
+    max_input_tokens: 24000
+    max_output_tokens: 4096
+    temperature: 0.2
+    num_retries: 1
+  # what the coding model button says of the chosen model (LM2), matched on its name or file name
+  # with the words joined by "-" ("Qwen3.8 27B", "Qwen3.8-27B-Q4_0.gguf" and "qwen3.8:27b" are all
+  # qwen3.8-27b): measured, it passed the coding evaluation through this route, with the result;
+  # weak, it did poorly in LM0 or is smaller than one that did (docs/spikes/coding-local-lm0.md)
+  measured:
+    qwen3.8-27b: 33 of 36 tasks
+  weak: [qwen3-0.6b, qwen3-1.7b, qwen3-4b, qwen3-8b]
 # every chat model a saved key lists, beside the tested ones above
 #   shape, upstream, secret   as for a model
 #   engine_prefix             put before the vendor's model name for the Agent Server

@@ -13,6 +13,8 @@ export type ChatShelfItem = {
   bytes: number;
   memoryGb: number;
   tier?: Tier;
+  /** the file to fetch when it is not the usual Q4_K_M (the one that was measured) */
+  quant?: string;
 };
 
 /**
@@ -50,6 +52,18 @@ export const CHAT_SHELF: ChatShelfItem[] = [
     bytes: 11e9,
     memoryGb: 14,
     tier: "advanced",
+  },
+  {
+    // LM3 (docs/coding-local-model-plan.md): the Q4_0 file is the one measured, and the server drafts with its
+    // own MTP layers
+    repo: "unsloth/Qwen3.8-27B-GGUF",
+    title: "Qwen3.8 27B",
+    plain:
+      "The model for coding: passed 33 of 36 coding tasks here. Needs 32 GB of memory or more.",
+    bytes: 16.1e9,
+    memoryGb: 24,
+    tier: "advanced",
+    quant: "Q4_0",
   },
 ];
 

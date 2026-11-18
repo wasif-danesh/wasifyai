@@ -12,6 +12,7 @@ import type {
   CodeAnswer,
   CodeApi,
   CodeHarness,
+  CodeInstall,
   CodeMode,
   CodeModel,
   CodeSession,
@@ -28,6 +29,7 @@ import {
   Hand,
   ListChecks,
   Lock,
+  Package,
   Plus,
   Puzzle,
   Redo2,
@@ -36,7 +38,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Markdown } from "../chat/thread/markdown/Markdown";
 import { cn } from "../cn";
 import { Button } from "../components/button";
@@ -173,6 +175,43 @@ function markNoteSeen(id: string) {
   } catch {
     // not kept: the note is shown again next time
   }
+}
+
+// The model on this computer is the one chosen in the Model hub (docs/coding-local-model-plan.md, LM2): a change
+// there carries on in an open session, and the session says so where it happened. Kept in this window only.
+type LocalChange = { at: number; from: string; to: string };
+const LOCAL_KEY = (id: string) => `wasifyai.code.local-model.${id}`;
+
+/** The changes of the Model hub's model seen in this session, each at the turn it came before. */
+export function localChanges(id: string, name: string, turns: number): LocalChange[] {
+  let seen: { name: string; changes: LocalChange[] } | null = null;
+  try {
+    const kept = window.localStorage.getItem(LOCAL_KEY(id));
+    seen = kept ? JSON.parse(kept) : null;
+  } catch {
+    seen = null;
+  }
+  // no name (not on this computer), or the turns not here yet: nothing is placed
+  if (!name || turns < 0) return seen?.changes ?? [];
+  const changes = seen?.changes ?? [];
+  const next =
+    seen && seen.name !== name ? [...changes, { at: turns, from: seen.name, to: name }] : changes;
+  if (!seen || seen.name !== name) {
+    try {
+      window.localStorage.setItem(LOCAL_KEY(id), JSON.stringify({ name, changes: next }));
+    } catch {
+      // not kept: a later change is not said
+    }
+  }
+  return next;
+}
+
+function LocalChangeLine({ change }: { change: LocalChange }) {
+  return (
+    <p className="m-0 flex items-center gap-3 text-muted-foreground text-xs before:flex-1 before:border-t after:flex-1 after:border-t">
+      Now on {change.to}, chosen in the Model hub (was {change.from})
+    </p>
+  );
 }
 
 /** Once, before the first session on a program: how it differs from Wasify AI's own agent, in four lines. */
@@ -336,6 +375,8 @@ export function Code({
         onRedo={code.redo}
         onRunCheck={code.runCheck}
         onTryAgain={code.tryAgain}
+        onInstall={code.install}
+        onNotNow={code.notNow}
         onReload={code.reload}
         onOpenSetup={onOpenSetup}
         browser={browser}
@@ -556,7 +597,7 @@ function Leaves({ model, agent }: { model: CodeModel | undefined; agent: Agent |
         ? `The parts of files the agent reads are sent to ${agent.provider} by ${agent.title}, on ${agent.payerInText}.`
         : model.where === "cloud"
           ? `The parts of files the agent reads are sent to the model you chose: ${model.title}, with your own key.`
-          : `Nothing. ${model.title} runs on this computer.`}
+          : `Nothing. ${model.model_name || model.title} runs on this computer.`}
     </Notice>
   );
 }
@@ -707,6 +748,8 @@ function Session({
   onRedo,
   onRunCheck,
   onTryAgain,
+  onInstall,
+  onNotNow,
   onReload,
   onOpenSetup,
   browser,
@@ -734,6 +777,10 @@ function Session({
   onRedo: (turnId: string) => Promise<void>;
   onRunCheck: () => Promise<void>;
   onTryAgain: () => Promise<void>;
+  /** install what the project lists, for the session's program, in Wasify AI's own sandbox */
+  onInstall: () => Promise<void>;
+  /** close the install card */
+  onNotNow: () => Promise<void>;
   /** the check was changed or tried in its dialog */
   onReload: () => Promise<void>;
   /** where an optional part is set up (Settings, Optional parts) */
@@ -771,6 +818,14 @@ function Session({
     if (await onSetMode(agent ? "own" : "ask")) onSend(CARRY_OUT);
   };
   const model = models.find((m) => m.id === session.model);
+  const localName = model?.where === "this-computer" ? (model.model_name ?? "") : "";
+  // placed once the session's turns are all here, so a change is put before the turn that came after it
+  const loaded = thread.length >= session.turns;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a change is placed when the name changes, not per turn
+  const changes = useMemo(
+    () => localChanges(session.id, localName, loaded ? thread.length : -1),
+    [session.id, localName, loaded],
+  );
   const end = useRef<HTMLDivElement | null>(null);
   const count = thread.reduce((n, t) => n + t.parts.length, thread.length);
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when something is added
@@ -870,31 +925,51 @@ function Session({
                 </div>
               ) : null}
               {thread.map((turn, n) => (
-                <Turn
-                  key={turn.id}
-                  turn={turn}
-                  mode={session.mode}
-                  agent={agent}
-                  onSignIn={() => agent && onSignIn(agent.id)}
-                  onResend={(words) => onSend(words)}
-                  onOtherAgent={onBack}
-                  last={n === thread.length - 1}
-                  idle={!working}
-                  onAnswer={onAnswer}
-                  onOpenMay={() => setMay(true)}
-                  onShowChanges={() => showSide("changes")}
-                  onUndo={onUndo}
-                  onRedo={onRedo}
-                  onCarryOut={() => void carryOut()}
-                  command={session.check_command ?? ""}
-                  standing={session.result}
-                  onStop={onStop}
-                  onRunCheck={() => void onRunCheck()}
-                  onTryAgain={() => void onTryAgain()}
-                  onOpenCheck={() => setCheck(true)}
-                  readOutput={async (id) => (await api.checkOutput(session.id, id)).output}
-                />
+                <Fragment key={turn.id}>
+                  {changes
+                    .filter((c) => c.at === n)
+                    .map((c) => (
+                      <LocalChangeLine key={`${c.at}-${c.to}`} change={c} />
+                    ))}
+                  <Turn
+                    turn={turn}
+                    mode={session.mode}
+                    agent={agent}
+                    onSignIn={() => agent && onSignIn(agent.id)}
+                    onResend={(words) => onSend(words)}
+                    onOtherAgent={onBack}
+                    last={n === thread.length - 1}
+                    idle={!working}
+                    onAnswer={onAnswer}
+                    onOpenMay={() => setMay(true)}
+                    onShowChanges={() => showSide("changes")}
+                    onUndo={onUndo}
+                    onRedo={onRedo}
+                    onCarryOut={() => void carryOut()}
+                    command={session.check_command ?? ""}
+                    standing={session.result}
+                    onStop={onStop}
+                    onRunCheck={() => void onRunCheck()}
+                    onTryAgain={() => void onTryAgain()}
+                    onOpenCheck={() => setCheck(true)}
+                    readOutput={async (id) => (await api.checkOutput(session.id, id)).output}
+                  />
+                </Fragment>
               ))}
+              {changes
+                .filter((c) => c.at >= thread.length)
+                .map((c) => (
+                  <LocalChangeLine key={`${c.at}-${c.to}`} change={c} />
+                ))}
+              {session.install && agent ? (
+                <InstallCard
+                  install={session.install}
+                  agent={agent}
+                  onInstall={() => void onInstall()}
+                  onNotNow={() => void onNotNow()}
+                  onTerminal={() => showSide("terminal")}
+                />
+              ) : null}
               {error ? (
                 <Notice
                   tone="error"
@@ -1182,6 +1257,130 @@ function Cost({
         </div>
       ) : null}
     </span>
+  );
+}
+
+/** A session on a program that tried to install (ADR-0107, stage H4): its sandbox holds the person's sign-in, so it
+ * never reaches a package index. Wasify AI installs what the project lists in its own sandbox instead, then tells it. */
+export function InstallCard({
+  install,
+  agent,
+  onInstall,
+  onNotNow,
+  onTerminal,
+}: {
+  install: CodeInstall;
+  agent: Agent;
+  onInstall: () => void;
+  onNotNow: () => void;
+  onTerminal: () => void;
+}) {
+  const what = (
+    <pre className="m-0 overflow-x-auto rounded-md bg-muted px-3 py-2 font-mono text-xs whitespace-pre-wrap">
+      {install.command}
+      <span className="text-muted-foreground">{`    (from ${install.from})`}</span>
+    </pre>
+  );
+  const output = install.output?.trim() ? (
+    <pre className="m-0 max-h-40 overflow-auto rounded-md bg-muted px-3 py-2 font-mono text-xs whitespace-pre-wrap">
+      {install.output.trim().split("\n").slice(-12).join("\n")}
+    </pre>
+  ) : null;
+  const account = ACCOUNT[agent.id] ?? agent.title;
+  if (install.state === "installing") {
+    return (
+      <section
+        aria-label="Installing packages"
+        className="grid gap-2 rounded-lg border p-4 text-sm"
+      >
+        <output className="m-0 flex items-center gap-2 font-semibold">
+          <Spinner className="size-3.5" /> Installing what the project lists…
+        </output>
+        {what}
+        <p className="m-0 text-xs text-muted-foreground">
+          In Wasify AI's own sandbox, where your {account} sign-in is out of reach. {agent.title} is
+          told when it is done.
+        </p>
+      </section>
+    );
+  }
+  if (install.state === "installed") {
+    return (
+      <section aria-label="Installed" className="grid gap-2">
+        <Notice tone="ok" title="Installed what the project lists">
+          Run in Wasify AI's own sandbox, through the install proxy. {agent.title} has been told,
+          and carries on.
+        </Notice>
+        {output}
+      </section>
+    );
+  }
+  if (install.state === "failed") {
+    return (
+      <section aria-label="The install did not work" className="grid gap-2">
+        <Notice
+          tone="error"
+          title="The install did not work"
+          actions={
+            <>
+              <Button size="sm" onClick={onInstall}>
+                Try again
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onNotNow}>
+                Close
+              </Button>
+            </>
+          }
+        >
+          {install.why} {agent.title} has been told.
+        </Notice>
+        {output}
+      </section>
+    );
+  }
+  return (
+    <section
+      aria-label={`${agent.title} needs packages`}
+      className="grid gap-2.5 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm"
+    >
+      <h3 className="m-0 flex items-center gap-2 text-sm font-semibold">
+        <Package aria-hidden="true" className="size-4" /> {agent.title} needs packages
+      </h3>
+      <p className="m-0">
+        {install.changed ? (
+          <>
+            It changed <code className="font-mono text-xs">{install.changed}</code>, and{" "}
+            {agent.title}
+          </>
+        ) : (
+          <>
+            It tried <code className="font-mono text-xs">{install.tried}</code>, but {agent.title}
+          </>
+        )}{" "}
+        cannot reach a package index: its sandbox holds your {account} sign-in. Wasify AI can
+        install what the project lists, in its own sandbox, where your sign-in is out of reach.
+      </p>
+      {what}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" onClick={onInstall}>
+          Install them
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onNotNow}>
+          Not now
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          Or run it yourself in the{" "}
+          <button
+            type="button"
+            onClick={onTerminal}
+            className="underline outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Terminal tab
+          </button>
+          .
+        </span>
+      </div>
+    </section>
   );
 }
 

@@ -10,6 +10,10 @@
 //                                                                the stage while it is made and when it is done)
 //   apps/desktop/scripts/ui-audit.sh light video-make           a real clip from the newest picture: Animate this on
 //                                                                Images, the clip made on the stage, then Extend this
+//   apps/desktop/scripts/ui-audit.sh light meetings-make        a real meeting made in the window from the recording
+//                                                                WASIFYAI_AUDIT_MEETING, while it is made and when done
+//   apps/desktop/scripts/ui-audit.sh light meetings-page        the newest finished meeting: its speakers and lines,
+//                                                                naming a speaker (ADR-0108, MT1; light and dark)
 //   apps/desktop/scripts/ui-audit.sh light speech-make          a real speech with its waveform, then a real transcript
 //                                                                of it on Speech to text
 //   apps/desktop/scripts/ui-audit.sh light studio-make          a real dub of the newest speech (into English, or
@@ -172,7 +176,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const require = createRequire(join(ROOT, "apps", "web", "package.json"));
 const { chromium } = require("@playwright/test");
-const OUT = join(ROOT, "docs", "ui-audit", "desktop");
+const OUT = process.env.WASIFYAI_AUDIT_OUT ?? join(ROOT, "docs", "ui-audit", "desktop");
 const BASE = process.env.WASIFYAI_AUDIT_BASE ?? "http://127.0.0.1:8765";
 const TOKEN = process.env.WASIFYAI_AUDIT_TOKEN ?? "";
 const WINDOW = process.env.WASIFYAI_AUDIT_WINDOW ?? "http://localhost:1420";
@@ -282,6 +286,7 @@ const SCREENS = [
   ["train", "/train"],
   ["models", "/models"],
   ["settings", "/settings"],
+  ["meetings", "/meetings"],
 ].filter(([, path]) => path);
 // screens longer than a window: a second picture in a tall window shows the whole of them
 const TALL = new Set([
@@ -308,6 +313,7 @@ const DARK = new Set([
   "train",
   "models",
   "settings",
+  "meetings",
 ]);
 
 async function open(page, path) {
@@ -377,6 +383,108 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, name + suffix);
       if (scheme === "light" && TALL.has(name)) await shot(page, `${name}-tall`, 2000);
     });
+  }
+  if (names.has("first-run")) {
+    // ADR-0109 stage FR5, on a fresh data folder: the Welcome's one button, then Ready. With Ollama running the
+    // button uses its model (no download); without, it downloads the chat model for real.
+    await attempt("first-run", async () => {
+      const log = [];
+      const t = Date.now();
+      page.on("console", (m) => log.push(`${m.type()} ${m.text().slice(0, 200)}`));
+      page.on("pageerror", (e) => log.push(`pageerror ${String(e).slice(0, 300)}`));
+      page.on("request", (r) =>
+        log.push(`> ${Math.round((Date.now() - t) / 100) / 10}s ${r.url().slice(0, 120)}`),
+      );
+      page.on("requestfinished", (r) =>
+        log.push(`< ${Math.round((Date.now() - t) / 100) / 10}s ${r.url().slice(0, 120)}`),
+      );
+      page.on("requestfailed", (r) =>
+        log.push(`x ${r.url().slice(0, 120)} ${r.failure()?.errorText}`),
+      );
+      process.on("exit", () => process.env.WASIFYAI_FIRST_RUN_LOG && console.log(log.join("\n")));
+      await open(page, "/");
+      await page.evaluate(() => localStorage.removeItem("wasify.first-run.done"));
+      await page.reload();
+      await page.getByRole("heading", { name: "Welcome to Wasify AI" }).waitFor({ timeout: 30000 });
+      const t0 = Date.now();
+      await page
+        .getByRole("button", { name: /^Get started/ })
+        .first()
+        .waitFor({ timeout: 45000 })
+        .catch(async (e) => {
+          await shot(page, "first-run-stuck");
+          console.log(
+            "  stuck at:",
+            (await page.locator("#main").innerText()).replace(/\s+/g, " "),
+          );
+          throw e;
+        });
+      console.log(`  the button came after ${Math.round((Date.now() - t0) / 1000)} s`);
+      await shot(page, `first-run-welcome${suffix}`);
+      if (scheme === "light") {
+        console.log("  it says:", (await page.locator("#main").innerText()).replace(/\s+/g, " "));
+        await page.getByRole("button", { name: "Get started", exact: true }).click();
+        await page.getByRole("heading", { name: "You’re ready" }).waitFor({ timeout: 5 * 60_000 });
+        await shot(page, "first-run-ready");
+        await page.getByRole("button", { name: "Start chatting" }).click();
+        await page.waitForTimeout(1500);
+        await shot(page, "first-run-home");
+      }
+    });
+  }
+  if (names.has("setup-groups")) {
+    // ADR-0109 stage FR4: each group's one card in place of its screens, and one group set up for real
+    const cards = [
+      ["music-create", "/music/create", "Music"],
+      ["voice-speak", "/voice/speak", "Voice"],
+      ["voice-edit", "/voice/edit-speech", "Voice"],
+      ["image-create", "/images/create", "Images"],
+      ["video-create", "/video/create", "Video"],
+      ["voice-lipsync", "/voice/lip-sync", "Lip sync"],
+      ["creative", "/creative", "Creative Studio"],
+      ["video-builder", "/video/builder", "Motion graphics"],
+      ["model3d", "/images/3d", "3D model"],
+      ["meetings", "/meetings", "Meetings"],
+      ["notebooks", "/notebooks", "Notebook"],
+      ["code", "/code", "Code"],
+    ];
+    for (const [name, path, label] of cards) {
+      await attempt(`setup-${name}`, async () => {
+        await open(page, path);
+        await page
+          .getByRole("heading", { name: `Get started with ${label}` })
+          .waitFor({ timeout: 15000 });
+        await shot(page, `setup-${name}${suffix}`);
+        if (scheme === "light")
+          console.log(
+            `  ${label}:`,
+            (await page.locator("section[aria-label^='Set up']").innerText()).replace(/\s+/g, " "),
+          );
+      });
+    }
+    if (scheme === "light" && process.env.WASIFYAI_SETUP_GROUP) {
+      // one group set up for real by its button: the card goes, the screen opens, and its other items open too
+      const [path, label, other] = process.env.WASIFYAI_SETUP_GROUP.split("|");
+      await attempt("setup-run", async () => {
+        await open(page, path);
+        const card = page.getByRole("heading", { name: `Get started with ${label}` });
+        await card.waitFor({ timeout: 15000 });
+        await page.getByRole("button", { name: new RegExp(`^Set up ${label}`) }).click();
+        await page.waitForTimeout(3000);
+        await shot(page, "setup-run-working");
+        await card.waitFor({ state: "detached", timeout: 150 * 60_000 });
+        await page.waitForTimeout(2000);
+        await shot(page, "setup-run-done");
+        // every other screen the group should now open, "a,b,c"
+        for (const [n, o] of (other ? other.split(",") : []).entries()) {
+          await open(page, o);
+          await page.waitForTimeout(1500);
+          const again = await page.getByRole("heading", { name: /^Get started with / }).count();
+          console.log(`  ${o} after the setup: ${again ? "still a card" : "the screen"}`);
+          await shot(page, n === 0 ? "setup-run-other" : `setup-run-other-${n}`);
+        }
+      });
+    }
   }
   if (scheme === "light" && names.has("image-make")) {
     // the check of stage U3: a real picture made in the window, the stage pictured while it works and when it is done
@@ -1238,7 +1346,7 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("button", { name: "Make the video" }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("button", { name: "Make the video" }).click();
-      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 45000 });
       seen.video = await dialog.locator("video").getAttribute("src");
       console.log(`ARRANGE ${JSON.stringify(seen)}`);
     });
@@ -1447,7 +1555,7 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("button", { name: "Make the video" }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("button", { name: "Make the video" }).click();
-      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 45000 });
       await shot(page, "motion-editor-made");
       seen.check = await dialog.getByText(/Checked:/).innerText();
       seen.video = await dialog.locator("video").getAttribute("src");
@@ -1622,6 +1730,49 @@ for (const scheme of ["light", "dark"]) {
       await page.getByText("Extend a video").first().waitFor();
       await page.waitForTimeout(1500);
       await shot(page, "video-extend-chosen");
+    });
+  }
+  if (scheme === "light" && names.has("meetings-make")) {
+    // Meetings (ADR-0108, MT1): a real meeting made in the window from WASIFYAI_AUDIT_MEETING (a recording),
+    // pictured while it is made and when it is done
+    await attempt("meetings-make", async () => {
+      const file = process.env.WASIFYAI_AUDIT_MEETING;
+      if (!file) throw new Error("set WASIFYAI_AUDIT_MEETING to a recording");
+      await open(page, "/meetings");
+      await page.getByLabel("Recording of a meeting").setInputFiles(file);
+      await page.getByRole("button", { name: "Stop" }).waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(1500);
+      await shot(page, "meetings-make-working");
+      await page.getByRole("region", { name: "Speakers" }).waitFor({ timeout: 600_000 });
+      await page.waitForTimeout(1200);
+      await shot(page, "meetings-make-done");
+    });
+  }
+  if (names.has("meetings-page")) {
+    // Meetings (ADR-0108, MT1): the newest finished meeting, its speakers and who said what, and naming one
+    await attempt("meetings-page", async () => {
+      const done = ((await engine("/products/wasifyai-meetings/meetings"))?.items ?? []).find(
+        (m) => m.status === "done",
+      );
+      if (!done) throw new Error("no finished meeting: make one from a file first");
+      await open(page, "/meetings");
+      await page
+        .getByRole("button", { name: new RegExp(done.title) })
+        .first()
+        .click();
+      await page.getByRole("region", { name: "Speakers" }).waitFor();
+      await page.waitForTimeout(1200);
+      await shot(page, `meetings-page${suffix}`);
+      if (scheme === "light") {
+        await shot(page, "meetings-page-tall", 2000);
+        await page
+          .getByRole("button", { name: /^Name / })
+          .first()
+          .click();
+        await page.getByRole("dialog").waitFor();
+        await shot(page, "meetings-name-speaker");
+        await page.keyboard.press("Escape");
+      }
     });
   }
   if (scheme === "light" && names.has("speech-make")) {
@@ -3685,6 +3836,90 @@ for (const scheme of ["light", "dark"]) {
       await page.waitForTimeout(800);
       await shot(page, "home-recent-opened");
     });
+  }
+  if (scheme === "light" && names.has("readme")) {
+    // The README's pictures of the desktop window (docs/images/screens/desktop). They show this computer's own
+    // models and creations, so look at each one before committing it:
+    //
+    //   WASIFYAI_AUDIT_OUT=docs/images/screens/desktop apps/desktop/scripts/ui-audit.sh light readme
+    // the Recent strip under the home's quick starts shows the person's own creations: left out of the pictures
+    const top = async (name) => {
+      await page.screenshot({
+        path: join(OUT, `${name}.png`),
+        clip: { x: 0, y: 0, width: 1440, height: 792 },
+      });
+      console.log("wrote", name);
+    };
+    await attempt("home", async () => {
+      await open(page, "/");
+      await page.getByRole("navigation", { name: "Quick starts" }).waitFor();
+      await page.waitForTimeout(1500);
+      await top("home");
+    });
+    await attempt("model-picker", async () => {
+      await open(page, "/");
+      await page.locator('button[aria-haspopup="dialog"]').first().click();
+      const tabs = page.getByRole("dialog").getByRole("tab");
+      for (const [name, tab] of [
+        ["model-picker", "Recommended"],
+        ["model-picker-local", "On this computer"],
+      ]) {
+        await tabs.filter({ hasText: tab }).click();
+        await page.waitForTimeout(1200);
+        await top(name);
+      }
+      await page.keyboard.press("Escape");
+    });
+    await attempt("model-hub", async () => {
+      await open(page, "/models");
+      await shot(page, "model-hub");
+      await page.getByRole("tab", { name: "Images" }).click();
+      await page.waitForTimeout(1500);
+      await shot(page, "model-hub-images");
+    });
+    const group = async (title) => {
+      await page
+        .getByRole("navigation", { name: "Settings groups" })
+        .getByRole("button", { name: title })
+        .click();
+      await page.getByRole("heading", { level: 1, name: title }).waitFor();
+      await page.waitForTimeout(800);
+    };
+    await attempt("settings-computer", async () => {
+      await open(page, "/settings");
+      await group("On this computer");
+      await page.getByRole("heading", { name: "What this computer can do" }).waitFor();
+      // each job reads its list; Chat's is the slowest
+      await page
+        .getByText(/^Chat$/)
+        .first()
+        .waitFor({ timeout: 90_000 });
+      await page.waitForTimeout(3000);
+      await shot(page, "settings-computer");
+    });
+    await attempt("settings-keys", async () => {
+      await group("Cloud keys");
+      await page.getByRole("region", { name: "Media" }).waitFor();
+      await shot(page, "settings-keys", 1300);
+    });
+    await attempt("settings-privacy", async () => {
+      await group("Privacy");
+      await shot(page, "settings-privacy", 1100);
+    });
+    for (const [name, path] of [
+      ["images", "/images/create"],
+      ["video", "/video/create"],
+      ["speech", "/voice/speak"],
+      ["music", "/music/create"],
+      ["motion", "/video/builder"],
+      ["train", "/train"],
+    ]) {
+      // not Notebooks, Meetings, Creative Studio, Library or Code: they list the person's own work and folders
+      await attempt(name, async () => {
+        await open(page, path);
+        await shot(page, name);
+      });
+    }
   }
   if (scheme === "light" && names.size === 0) {
     for (const [name, path] of [

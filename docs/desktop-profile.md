@@ -116,6 +116,8 @@ The rest of what is built on the desktop is one page per area under `docs/deskto
 - [Creative Studio](desktop/creative.md)
 - [Other apps: the MCP server and the launcher](desktop/connections.md)
 - [The coding engine](desktop/coding.md)
+- [Meetings](desktop/meetings.md)
+- [The first run and one setup card per group](desktop/first-run.md)
 
 ## Updates of the app
 

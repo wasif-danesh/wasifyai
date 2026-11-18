@@ -206,7 +206,7 @@ def no_offer(model_title: str, offers: Iterable[Offer], needs: Iterable[str], on
         return NoOffer(f"{model_title} cannot do {what} with any provider. Choose another model.")
     names = sorted({PROVIDER_TITLES[o.provider] for o in able}, key=str)
     return NoOffer(
-        f"{model_title} needs a key for {' or '.join(names)} to do this: Settings › Your keys."
+        f"{model_title} needs a key for {' or '.join(names)} to do this: Settings › Cloud keys."
     )
 
 

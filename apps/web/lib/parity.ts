@@ -83,6 +83,19 @@ export const PARITY: Record<string, Parity> = {
     accepted:
       "owner, 2026-11-13: desktop and Mac first; the web version of coding is not in v1 (ADR-0101, decision 8)",
   },
+  "meetings.list": {
+    status: "live",
+    note: "the shared Meetings screen (ADR-0108, MT6): from a file, written down with speakers by the cloud transcription model an admin chose; rows in Postgres, recordings in storage; questions through the person's notebooks",
+  },
+  "meetings.people": {
+    status: "live",
+    note: "the shared People screen: names only, since no voiceprints are kept on the web",
+  },
+  "meetings.record": {
+    status: "desktop-only",
+    note: "recording the microphone and the computer's sound needs the desktop app",
+    accepted: "ADR-0108 decision 7 (Accepted 2026-11-16): v1 on the web takes a file only",
+  },
   "code.scheduled": {
     status: "desktop-only",
     note: "scheduled coding runs (ADR-0105); not built on the desktop yet either",

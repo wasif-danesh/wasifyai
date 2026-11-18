@@ -19,6 +19,7 @@ import {
   Shapes,
   Shuffle,
   Trash2,
+  Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Action } from "../components/actions-row";
@@ -91,6 +92,7 @@ const ICON = {
   code_session: CodeXml,
   code_extension: Puzzle,
   code_schedule: CalendarClock,
+  meeting: Users,
   notebook: BookOpen,
   taught: GraduationCap,
 };

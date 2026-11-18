@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import type { SetupGroup, SetupPart } from "@wasifyai/client";
 import {
   ActionsRow,
   Button,
@@ -9,6 +10,7 @@ import {
   ErrorNotice,
   Experts,
   Field,
+  GroupSetupCard,
   Input,
   Player,
   RadioGroup,
@@ -66,6 +68,86 @@ function Section({ title, text, children }: { title: string; text: string; child
     </section>
   );
 }
+
+// A menu group's setup card (ADR-0109) in its states, from the engine's answer on a 64, 16 and 8 GB computer
+const GB = 1e9;
+const setupPart = (over: Partial<SetupPart>): SetupPart => ({
+  id: "component:audiocpp",
+  kind: "component",
+  ref: "audiocpp",
+  title: "Speech runtime (audio.cpp)",
+  bytes: 42e6,
+  set_up: false,
+  installing: false,
+  memory_bytes: null,
+  available: true,
+  reason: "",
+  fit: "include",
+  included: true,
+  items: [],
+  ...over,
+});
+const VOICE_ITEMS = [
+  "voice.speak",
+  "voice.transcribe",
+  "voice.voices",
+  "voice.convert",
+  "voice.edit",
+  "voice.dub",
+  "voice.audiobook",
+];
+const setupVoice = (memory: number, editFits: boolean): SetupGroup => ({
+  id: "voice",
+  items: VOICE_ITEMS.map((id) => ({
+    id,
+    parts: [],
+    state: id === "voice.edit" && !editFits ? "left_out" : "needs_setup",
+  })),
+  parts: [
+    setupPart({ set_up: true }),
+    setupPart({ id: "model:kokoro-82m", kind: "model", title: "Kokoro 82M", bytes: 0.19 * GB }),
+    setupPart({
+      id: "model:parakeet",
+      kind: "model",
+      title: "Parakeet TDT 0.6B v3",
+      bytes: 0.92 * GB,
+    }),
+    setupPart({
+      id: "model:dots",
+      kind: "model",
+      title: "dots TTS edit",
+      bytes: 2.96 * GB,
+      memory_bytes: 7 * GB,
+      fit: editFits ? "include" : "on_request",
+      included: editFits,
+    }),
+  ],
+  uses: [],
+  explain_only: false,
+  state: "needs_setup",
+  download_bytes: editFits ? 8.94 * GB : 5.98 * GB,
+  download_instead_bytes: 8.94 * GB,
+  key: { covers: false, first: false, only: false },
+  memory_bytes: memory,
+});
+const setupLip: SetupGroup = {
+  ...setupVoice(16 * GB, true),
+  id: "lipsync",
+  items: [{ id: "voice.lipsync", parts: [], state: "needs_setup" }],
+  parts: [
+    setupPart({ id: "component:musetalk", title: "Lip sync engine (MuseTalk)", bytes: 2.1 * GB }),
+    setupPart({
+      id: "model:musetalk",
+      kind: "model",
+      title: "MuseTalk 1.5",
+      bytes: 4.17 * GB,
+      memory_bytes: 12 * GB,
+    }),
+  ],
+  download_bytes: 6.27 * GB,
+  download_instead_bytes: 6.27 * GB,
+  key: { covers: true, first: true, only: false },
+};
 
 function Example({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -461,6 +543,59 @@ export function DesignPage() {
                 caption: "A lighthouse on a cliff at sunrise · 1024 × 683 · 24 s",
                 actions,
               }}
+            />
+          </Example>
+        </div>
+      </Section>
+
+      <Section
+        title="GroupSetupCard"
+        text="A menu group's one setup card: one button sets up every item of the group (ADR-0109)."
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Example label="64 GB computer, part set up">
+            <GroupSetupCard
+              group={setupVoice(64 * GB, true)}
+              run={{ state: "idle" }}
+              onSetUp={noop}
+              onKey={noop}
+              onStop={noop}
+            />
+          </Example>
+          <Example label="8 GB computer: one item left out">
+            <GroupSetupCard
+              group={setupVoice(8 * GB, false)}
+              run={{ state: "idle" }}
+              onSetUp={noop}
+              onKey={noop}
+              onStop={noop}
+            />
+          </Example>
+          <Example label="Key first, download instead">
+            <GroupSetupCard
+              group={setupLip}
+              run={{ state: "idle" }}
+              onSetUp={noop}
+              onKey={noop}
+              onStop={noop}
+            />
+          </Example>
+          <Example label="Running">
+            <GroupSetupCard
+              group={setupVoice(64 * GB, true)}
+              run={{ state: "running", label: "Downloading Kokoro 82M", fraction: 0.4 }}
+              onSetUp={noop}
+              onKey={noop}
+              onStop={noop}
+            />
+          </Example>
+          <Example label="Failed">
+            <GroupSetupCard
+              group={setupVoice(64 * GB, true)}
+              run={{ state: "failed", message: "The download failed." }}
+              onSetUp={noop}
+              onKey={noop}
+              onStop={noop}
             />
           </Example>
         </div>

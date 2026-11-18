@@ -53,7 +53,9 @@ def menu() -> tuple[dict[str, str], dict[str, str]]:
         for iid, ilabel in re.findall(r'id: "([\w.]+)", label: "([^"]+)"', body):
             items[iid] = f"{glabel} › {ilabel}"
     for iid, ilabel in re.findall(
-        r'\{ id: "(chat|creative|motion|model3d|library|models|train)", label: "([^"]+)"', text
+        r'\{ id: "(chat|voice\.lipsync|creative|motion|model3d|library|models|train)", '
+        r'label: "([^"]+)"',
+        text,
     ):
         items[iid] = ilabel
     return items, groups
@@ -183,7 +185,11 @@ def test_the_first_set_is_there(catalogue):
     # 93 with code.project.new and code.session.preview (stage C4)
     # 96 with code.extension.list, switch and add (ADR-0104; stage X2)
     # 100 with code.schedule.list, add, change and run (ADR-0105; stage C6)
-    assert 35 <= len(ids) <= 100
+    # 102 with meetings.make and meetings.name_speaker (ADR-0108; stage MT1)
+    # 103 with meetings.make_recorded (stage MT2; the window starts and stops the recording)
+    # 106 with meetings.people, rename_person and forget_person (stage MT3)
+    # 109 with meetings.write_report, add_template and delete_report (stage MT4)
+    assert 35 <= len(ids) <= 111  # 111 with meetings.add_to_notebook and meetings.ask (MT5)
     for expected in (
         "library.search", "library.list", "library.get", "library.export", "library.rename",
         "library.delete", "image.generate", "image.edit", "video.generate", "video.animate",
@@ -204,8 +210,10 @@ def test_nothing_that_configures_the_app_is_an_action(catalogue):
 
 def test_effects_and_flags_are_what_the_adr_says(catalogue):
     by = {a.id: a for a in catalogue}
+    # forgetting a person's voiceprints and deleting a report of a meeting ask first too (ADR-0108,
+    # decision 18)
     assert {a.id for a in catalogue if a.effect == "destroy"} == {
-        "library.delete", "styles.remove",
+        "library.delete", "styles.remove", "meetings.forget_person", "meetings.delete_report",
     }  # fmt: skip
     consent = {a.id for a in catalogue if "needs_consent" in a.flags}
     # the person approves a download: a model, or a style from Hugging Face; nothing else

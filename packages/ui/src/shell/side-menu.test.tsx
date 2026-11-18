@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { Shield } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 import { SideMenu } from "./SideMenu";
-import { type ItemResolver, MENU_GROUPS, placesOf, titleOf } from "./menu";
+import { EXTRA_ITEMS, type ItemResolver, MENU_GROUPS, placesOf, titleOf } from "./menu";
 
 const none: ItemResolver = () => undefined;
 
@@ -12,6 +12,7 @@ describe("the menu definition", () => {
   it("has the groups in order, each with its items", () => {
     expect(MENU_GROUPS.map((g) => g.label)).toEqual([
       "Notebook",
+      "Meetings",
       "Images",
       "Video",
       "Voice",
@@ -20,9 +21,12 @@ describe("the menu definition", () => {
     ]);
     const items = (id: string) => MENU_GROUPS.find((g) => g.id === id)?.items.map((i) => i.label);
     expect(items("notebook")).toEqual(["Create", "View notebooks"]);
+    // its own group, not under Voice (ADR-0108)
+    expect(items("meetings")).toEqual(["Record", "View meetings", "People"]);
     // the "Your …" pages are the one Library now (ADR-0093, U8)
-    // Lip sync makes a video, so it is with video (owner, 2026-11-12)
-    expect(items("video")).toEqual(["Create", "Animate an image", "Lip sync", "Extend video"]);
+    // Lip sync is its own item since ADR-0109: "Set up Video" does not fetch its parts
+    expect(items("video")).toEqual(["Create", "Animate an image", "Extend video"]);
+    expect(EXTRA_ITEMS[0]).toMatchObject({ id: "voice.lipsync", label: "Lip sync" });
     expect(items("music")).toEqual(["Create", "Lyrics", "Split into parts"]);
     expect(items("images")).toEqual(["Create", "Edit", "Inpaint", "Reference"]);
     expect(items("voice")).toHaveLength(7);

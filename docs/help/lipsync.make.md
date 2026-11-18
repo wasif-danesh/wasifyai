@@ -13,9 +13,9 @@ Make a picture talk: a video of the face saying words or a recording.
 
 ## Steps in the app
 
-1. Open **Video › Lip sync**.
+1. Open **Lip sync** in the menu.
 2. Choose the model with the model button: **On this computer** (MuseTalk 1.5) or, once a Runware, WaveSpeed or fal.ai
-   key is saved for Lip sync under Your keys in Settings, **Cloud**: Fabric 1.0 Fast, Kling Avatar v2, OmniHuman 1.5
+   key is saved for Lip sync under Cloud keys in Settings, **Cloud**: Fabric 1.0 Fast, Kling Avatar v2, OmniHuman 1.5
    or InfiniteTalk. Each cloud row says its price and how long a second of video takes. On the web, until an admin
    chooses one, lip sync runs on the cheapest model the saved keys can run at 480p (Kling Avatar v2 with a Runware or
    fal.ai key, Fabric 1.0 Fast with a WaveSpeed key alone); InfiniteTalk is never the default, only chosen.

@@ -222,6 +222,15 @@ export type {
   MakePanelMakers,
 } from "./creative/MakePanel";
 export { Model3d, type Model3dProps } from "./model3d/Model3d";
+export { Meetings, type MeetingsProps } from "./meetings/Meetings";
+export { People, type PeopleProps } from "./meetings/People";
+export {
+  type MeetingRecorder,
+  RecordMeeting,
+  type RecordMeetingProps,
+  type RecordState,
+  type RecordedMeeting,
+} from "./meetings/RecordMeeting";
 export { Code, type CodeProps } from "./code/Code";
 export { Extensions } from "./code/Extensions";
 export { Scheduled } from "./code/Scheduled";
@@ -262,3 +271,16 @@ export type {
 export { handDraft, takeDraft } from "./draft";
 export { HomeStart, type QuickStartId } from "./chat/HomeStart";
 export { mediaLibrary } from "./videobuilder/scenes/media-library";
+// a menu group's one setup card (ADR-0109)
+export {
+  GroupSetupCard,
+  type GroupSetupCardProps,
+  type SetupRun,
+} from "./setup/GroupSetupCard";
+export {
+  downloadTotal,
+  groupLabel,
+  itemLabel,
+  primaryLabel,
+  whyLine,
+} from "./setup/words";

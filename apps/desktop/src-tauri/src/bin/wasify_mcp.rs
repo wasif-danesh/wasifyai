@@ -42,7 +42,8 @@ fn runtime_path() -> PathBuf {
     let base = std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join(APP_ID));
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     let base: Option<PathBuf> = home.map(|h| h.join(APP_ID));
-    base.unwrap_or_else(|| PathBuf::from(APP_ID)).join("engine.json")
+    base.unwrap_or_else(|| PathBuf::from(APP_ID))
+        .join("engine.json")
 }
 
 #[derive(Clone, Debug)]
@@ -87,7 +88,9 @@ fn read_runtime() -> Result<Runtime, String> {
     #[cfg(not(unix))]
     let file = std::fs::File::open(&path).map_err(|e| format!("no runtime file ({e})"))?;
     let mut text = String::new();
-    { &file }.read_to_string(&mut text).map_err(|e| e.to_string())?;
+    { &file }
+        .read_to_string(&mut text)
+        .map_err(|e| e.to_string())?;
     let v: Value = serde_json::from_str(&text).map_err(|e| format!("bad runtime file: {e}"))?;
     let host = v["host"].as_str().unwrap_or("").to_string();
     if !matches!(host.as_str(), "127.0.0.1" | "::1" | "localhost") {
@@ -166,7 +169,9 @@ impl Bridge {
                 "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "wasify-mcp (app closed)", "version": "0"}}
             }).as_object().unwrap().clone())}),
             "initialize" => {
-                let v = msg["params"]["protocolVersion"].as_str().unwrap_or("2025-11-25");
+                let v = msg["params"]["protocolVersion"]
+                    .as_str()
+                    .unwrap_or("2025-11-25");
                 json!({"jsonrpc": "2.0", "id": id, "result": {
                     "protocolVersion": v, "capabilities": {"tools": {"listChanged": true}},
                     "serverInfo": {"name": "wasify-mcp (app closed)", "version": "0"}}})
@@ -187,8 +192,14 @@ impl Bridge {
     async fn headers(&self, msg: &Value, secret: &str) -> reqwest::header::HeaderMap {
         use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
         let mut h = HeaderMap::new();
-        h.insert(AUTHORIZATION, HeaderValue::from_str(&format!("Bearer {secret}")).unwrap());
-        h.insert(ACCEPT, HeaderValue::from_static("application/json, text/event-stream"));
+        h.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {secret}")).unwrap(),
+        );
+        h.insert(
+            ACCEPT,
+            HeaderValue::from_static("application/json, text/event-stream"),
+        );
         h.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         let params = &msg["params"];
         if let Some(pv) = params["_meta"][PV].as_str() {
@@ -221,18 +232,37 @@ impl Bridge {
 
     /// The engine restarted: a legacy client's session is gone. Replay its initialize quietly.
     async fn reinit(&self, rt: &Runtime) {
-        let Some(init) = self.init_msg.lock().await.clone() else { return };
+        let Some(init) = self.init_msg.lock().await.clone() else {
+            return;
+        };
         *self.session_id.lock().await = None;
         let url = format!("http://{}:{}/mcp", rt.host, rt.port);
         let headers = self.headers(&init, &rt.secret).await;
-        if let Ok(r) = self.client.post(&url).headers(headers).body(init.to_string()).send().await {
-            if let Some(sid) = r.headers().get("mcp-session-id").and_then(|v| v.to_str().ok()) {
+        if let Ok(r) = self
+            .client
+            .post(&url)
+            .headers(headers)
+            .body(init.to_string())
+            .send()
+            .await
+        {
+            if let Some(sid) = r
+                .headers()
+                .get("mcp-session-id")
+                .and_then(|v| v.to_str().ok())
+            {
                 *self.session_id.lock().await = Some(sid.to_string());
             }
         }
         let note = json!({"jsonrpc": "2.0", "method": "notifications/initialized"});
         let headers = self.headers(&note, &rt.secret).await;
-        let _ = self.client.post(&url).headers(headers).body(note.to_string()).send().await;
+        let _ = self
+            .client
+            .post(&url)
+            .headers(headers)
+            .body(note.to_string())
+            .send()
+            .await;
         log::info!("re-initialized the session after an engine restart");
     }
 
@@ -246,17 +276,35 @@ impl Bridge {
         };
         let url = format!("http://{}:{}/mcp", rt.host, rt.port);
         let headers = self.headers(&msg, &rt.secret).await;
-        let sent = self.client.post(&url).headers(headers).body(msg.to_string()).send().await;
+        let sent = self
+            .client
+            .post(&url)
+            .headers(headers)
+            .body(msg.to_string())
+            .send()
+            .await;
         let mut resp = match sent {
             Ok(r) => r,
-            Err(e) => return self.local_answer(&msg, &format!("connect error: {e}")).await,
+            Err(e) => {
+                return self
+                    .local_answer(&msg, &format!("connect error: {e}"))
+                    .await
+            }
         };
-        if let Some(sid) = resp.headers().get("mcp-session-id").and_then(|v| v.to_str().ok()) {
+        if let Some(sid) = resp
+            .headers()
+            .get("mcp-session-id")
+            .and_then(|v| v.to_str().ok())
+        {
             *self.session_id.lock().await = Some(sid.to_string());
         }
         let status = resp.status().as_u16();
         let legacy_session = self.session_id.lock().await.is_some();
-        if status == 404 && legacy_session && !retried && msg["method"].as_str() != Some("initialize") {
+        if status == 404
+            && legacy_session
+            && !retried
+            && msg["method"].as_str() != Some("initialize")
+        {
             self.reinit(&rt).await;
             return Box::pin(self.forward(msg, true)).await;
         }
@@ -332,7 +380,9 @@ async fn main() {
     let bridge = Bridge::new();
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     while let Ok(Some(line)) = lines.next_line().await {
-        let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
+        let Ok(msg) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
         if msg["method"].as_str() == Some("notifications/cancelled") {
             // closing the request is how a cancel reaches the engine
             let key = msg["params"]["requestId"].to_string();
@@ -344,11 +394,21 @@ async fn main() {
         let b = bridge.clone();
         let task = tokio::spawn(b.forward(msg.clone(), false));
         if msg.get("id").is_some() && msg.get("method").is_some() {
-            bridge.inflight.lock().await.insert(msg["id"].to_string(), task);
+            bridge
+                .inflight
+                .lock()
+                .await
+                .insert(msg["id"].to_string(), task);
         }
     }
     // stdin closed: the client is gone; let what is in flight finish briefly
-    let pending: Vec<JoinHandle<()>> = bridge.inflight.lock().await.drain().map(|(_, t)| t).collect();
+    let pending: Vec<JoinHandle<()>> = bridge
+        .inflight
+        .lock()
+        .await
+        .drain()
+        .map(|(_, t)| t)
+        .collect();
     for t in pending {
         let _ = tokio::time::timeout(Duration::from_secs(2), t).await;
     }

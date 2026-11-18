@@ -80,7 +80,7 @@ TIMEOUT = httpx.Timeout(600.0, connect=10.0)
 DECLINED = "The model declined this request."
 OVER_LIMIT = "This session reached its cost limit of ${limit:.2f}. Raise the limit to go on."
 OVER_TOKENS = "This session reached its limit of {limit:,} tokens. Raise the limit to go on."
-NO_KEY = "No key is saved for {title}. Save one in Settings, under Your keys."
+NO_KEY = "No key is saved for {title}. Save one in Settings, under Cloud keys."
 DEFAULT_LIMIT_TOKENS = 3_000_000  # for a session on a model with no known price
 LOCAL_TITLE = "The language model chosen in the Model hub"  # while none is chosen
 # a vendor's own name for a model, as it may stand in a session's row and on a provider's address

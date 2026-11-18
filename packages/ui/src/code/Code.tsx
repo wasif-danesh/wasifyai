@@ -452,7 +452,7 @@ export function Code({
           title="No model is ready for coding"
           actions={
             <Button size="sm" variant="outline" onClick={onOpenKeys}>
-              Open Your keys
+              Open Cloud keys
             </Button>
           }
         >

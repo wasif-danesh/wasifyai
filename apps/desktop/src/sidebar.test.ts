@@ -1,4 +1,4 @@
-import { MENU_GROUPS } from "@wasifyai/ui";
+import { EXTRA_ITEMS, MENU_GROUPS } from "@wasifyai/ui";
 import { describe, expect, it, vi } from "vitest";
 import { ROUTES, resolveItem, routeTitle } from "./menu";
 import { type Route, routePath } from "./router";
@@ -43,11 +43,7 @@ describe("the window's side menu", () => {
   it("points every item at a route that exists", () => {
     for (const [id, route] of Object.entries(ROUTES)) {
       expect(routePath(route), id).toBeTruthy();
-      expect(
-        ids.includes(id) ||
-          ["creative", "motion", "model3d", "library", "models", "train"].includes(id),
-        id,
-      ).toBe(true);
+      expect(ids.includes(id) || EXTRA_ITEMS.some((i) => i.id === id), id).toBe(true);
     }
   });
 

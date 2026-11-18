@@ -11,6 +11,7 @@ import {
   CalendarClock,
   Clapperboard,
   CodeXml,
+  Contact,
   FilePlus2,
   FileText,
   Film,
@@ -23,6 +24,7 @@ import {
   type LucideIcon,
   Maximize2,
   Mic,
+  MicVocal,
   Music,
   Paintbrush,
   Pencil,
@@ -52,6 +54,18 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     ],
   },
   {
+    // a recording, its transcript, its speakers and its reports as one meeting (ADR-0108): a workspace
+    // the person comes back to, like Notebook, so its own group and not under Voice
+    id: "meetings",
+    label: "Meetings",
+    icon: Users,
+    items: [
+      { id: "meetings.record", label: "Record", icon: MicVocal },
+      { id: "meetings.list", label: "View meetings", icon: Users },
+      { id: "meetings.people", label: "People", icon: Contact },
+    ],
+  },
+  {
     id: "images",
     label: "Images",
     icon: ImageIcon,
@@ -69,9 +83,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     items: [
       { id: "video.create", label: "Create", icon: Sparkles },
       { id: "video.animate", label: "Animate an image", icon: Film },
-      // makes a video from a picture and a voice, so it is found with video (owner, 2026-11-12); its id,
-      // address, action and help stay `voice.lipsync`
-      { id: "voice.lipsync", label: "Lip sync", icon: Film },
       { id: "video.extend", label: "Extend video", icon: Maximize2 },
     ],
   },
@@ -115,6 +126,9 @@ export const MENU_GROUPS: MenuGroupDef[] = [
 /** The single items above and below the groups. */
 export const CHAT_ITEM: MenuItemDef = { id: "chat", label: "New chat", icon: SquarePen };
 export const EXTRA_ITEMS: MenuItemDef[] = [
+  // its own item since ADR-0109 (decision 11): its parts are not Video's, so "Set up Video" does not fetch it.
+  // Its id, address, action and help stay `voice.lipsync`
+  { id: "voice.lipsync", label: "Lip sync", icon: Film },
   { id: "creative", label: "Creative Studio", icon: Clapperboard },
   { id: "motion", label: "Motion graphics", icon: Shapes },
   { id: "model3d", label: "3D model", icon: Box },

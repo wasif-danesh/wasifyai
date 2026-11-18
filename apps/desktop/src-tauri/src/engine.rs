@@ -818,7 +818,13 @@ mod tests {
 fn launcher_path() -> String {
     std::env::current_exe()
         .ok()
-        .map(|p| p.with_file_name(if cfg!(windows) { "wasify-mcp.exe" } else { "wasify-mcp" }))
+        .map(|p| {
+            p.with_file_name(if cfg!(windows) {
+                "wasify-mcp.exe"
+            } else {
+                "wasify-mcp"
+            })
+        })
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_default()
 }

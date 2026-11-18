@@ -2,7 +2,7 @@
 import type { CreationEntry, CreationFilter, CreationUse, CreationsNav } from "@wasifyai/ui";
 import { MyCreations } from "@wasifyai/ui";
 import { creationsApi } from "../api";
-import { type Route, codePath, openNotebook } from "../router";
+import { type Route, codePath, meetingPath, openNotebook } from "../router";
 
 /** What the window does to hand an entry to a tool ("Edit this", "Extend this"…): the shell owns those hand-offs. */
 export type HandOff = (entry: CreationEntry, action: CreationUse) => void;
@@ -56,6 +56,8 @@ export function navFor(go: (r: Route) => void, handOff?: HandOff): CreationsNav 
         go("notebook");
       } else if (entry.kind === "code_session") {
         window.location.hash = codePath(entry.id); // the session itself, at its own address
+      } else if (entry.kind === "meeting") {
+        window.location.hash = meetingPath(entry.id); // the meeting's own page
       } else if (entry.kind === "code_schedule") {
         go("scheduled"); // where a schedule's runs are read, applied and let go
       } else if (entry.kind === "code_extension") {

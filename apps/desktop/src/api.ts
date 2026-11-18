@@ -10,6 +10,7 @@ import {
   createNotebooksApi,
   createOwnKeysApi,
   createRunClient,
+  createSetupApi,
   createStylesApi,
   createVoiceApi,
 } from "@wasifyai/client";
@@ -25,6 +26,7 @@ export const client = createRunClient(transport);
 export const connectionsApi = createConnectionsApi(transport);
 export const ownKeysApi = createOwnKeysApi(transport);
 export const componentsApi = createComponentsApi(transport);
+export const setupApi = createSetupApi(transport);
 export const externalApi = createExternalApi(transport);
 export const modelsApi = createModelsApi(transport);
 export const discoveryApi = createDiscoveryApi(transport);

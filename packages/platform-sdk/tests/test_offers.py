@@ -79,7 +79,7 @@ def test_words_when_no_keyed_provider_can_do_it():
     e = no_offer("FLUX.3 klein", KLEIN, {"lora"}, None)
     assert isinstance(e, NoOffer)
     assert e.message == (
-        "FLUX.3 klein needs a key for WaveSpeed or fal.ai to do this: Settings › Your keys."
+        "FLUX.3 klein needs a key for WaveSpeed or fal.ai to do this: Settings › Cloud keys."
     )
     assert "cannot do extend" in no_offer("FLUX.3 klein", KLEIN, {"extend"}, None).message
 

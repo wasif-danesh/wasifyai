@@ -107,6 +107,7 @@ export function NameDialog({
   confirmLabel = "Save",
   onSubmit,
   onCancel,
+  choices,
 }: {
   title: string;
   label: string;
@@ -114,8 +115,11 @@ export function NameDialog({
   confirmLabel?: string;
   onSubmit: (name: string) => void;
   onCancel: () => void;
+  /** names offered as the person types (the browser's own list) */
+  choices?: string[];
 }) {
   const id = useId();
+  const listId = `${id}-choices`;
   const [value, setValue] = useState(initial);
   const next = value.trim();
   function submit(e: FormEvent) {
@@ -136,8 +140,16 @@ export function NameDialog({
             maxLength={200}
             onChange={(e) => setValue(e.target.value)}
             onFocus={(e) => e.currentTarget.select()}
+            list={choices?.length ? listId : undefined}
             className="h-10 rounded-md border bg-transparent px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
+          {choices?.length ? (
+            <datalist id={listId}>
+              {choices.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          ) : null}
         </label>
         <div className="flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" onClick={onCancel}>

@@ -84,6 +84,7 @@ from wasifyai_api.own_keys_voice import (
     clone_request,
     convert_request,
     design_request,
+    diarizes,
     made_voice,
     new_voice_id,
     speak_request,
@@ -92,6 +93,7 @@ from wasifyai_api.own_keys_voice import (
     transcribe_request,
     transcript_of,
     voice_key,
+    words_of,
 )
 
 FAL_MATTE = "fal-ai/birefnet"  # the cut-out of a picture, on the same key as the 3D model
@@ -638,9 +640,12 @@ class KeyedSpeechEngine:
         language = str(language) if language else None
         t0 = time.monotonic()
 
+        diarize = bool(options.get("diarize"))
+
         async def attempt(c: KeyChoice) -> dict[str, Any]:
             sent = await self._send(c, wav, "speech.wav")
-            body = transcribe_request(model_id, c.provider.id, sent, language)
+            told = diarize and diarizes(model_id, c.provider.id)
+            body = transcribe_request(model_id, c.provider.id, sent, language, told)
             async with self._client() as http:
                 queue = queue_for(c.provider.id, c.key, http, self._timeout, self._poll, c.base_url)
                 return await queue.call(c.offer.endpoint, body, _no_progress)
@@ -655,6 +660,7 @@ class KeyedSpeechEngine:
             seconds or _wav_seconds(wav),
             used.offer.endpoint,
             time.monotonic() - t0,
+            words=words_of(result) if diarize else (),
         )
 
     async def convert(

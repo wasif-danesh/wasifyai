@@ -297,7 +297,7 @@ export function ModelSelect({
               <div className="grid gap-2 text-sm">
                 <p className="m-0 text-muted-foreground">
                   No cloud models yet. Save a provider key for {api?.cloud?.product ?? "this"} in
-                  Settings › Your keys, and its models appear here.
+                  Settings › Cloud keys, and its models appear here.
                 </p>
                 {api?.cloud?.setUp ? (
                   <Button
@@ -310,7 +310,7 @@ export function ModelSelect({
                       api.cloud?.setUp?.();
                     }}
                   >
-                    Open Your keys
+                    Open Cloud keys
                   </Button>
                 ) : null}
               </div>

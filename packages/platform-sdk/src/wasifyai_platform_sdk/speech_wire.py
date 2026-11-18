@@ -111,7 +111,8 @@ def transcript_meta(r: TranscriptResult) -> dict[str, Any]:
 
 def transcript_result(meta: dict[str, Any]) -> TranscriptResult:
     segments = tuple(TranscriptSegment(**s) for s in meta["segments"])
-    return TranscriptResult(**{**meta, "segments": segments})
+    words = tuple(TranscriptSegment(**w) for w in meta.get("words") or ())
+    return TranscriptResult(**{**meta, "segments": segments, "words": words})
 
 
 def separate_meta(r: SeparateResult) -> dict[str, Any]:

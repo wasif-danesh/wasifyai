@@ -986,6 +986,7 @@ class AudioEngine:
         return TranscriptResult(
             text.strip(), tuple(_segments(words, text)), seconds, model.id,
             time.monotonic() - t0, held.displaced,
+            words=tuple(TranscriptSegment(round(a, 3), round(b, 3), w) for w, a, b in words),
         )  # fmt: skip
 
     async def stop(self) -> bool:

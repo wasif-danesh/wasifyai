@@ -112,7 +112,7 @@ export function codeRow(m: CodeModel, chosen: boolean, engineReady: boolean): Mo
     : m.ready
       ? null
       : cloud
-        ? "No key is saved for it: save one in Settings, under Your keys"
+        ? "No key is saved for it: save one in Settings, under Cloud keys"
         : m.why || "Not ready";
   return {
     id: m.id,

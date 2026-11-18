@@ -4,6 +4,7 @@ import type { SearchResponse } from "@wasifyai/contracts";
 import type { CodeExtension, CodeSchedule, CodeSession } from "./code";
 import type { CreativeProject } from "./creative";
 import type { ImagePage, ImageSummary } from "./images";
+import type { MeetingSummary } from "./meetings";
 import type { Model3d } from "./model3d";
 import type { NotebookSummary } from "./notebooks";
 import type { TrainedModel } from "./training";
@@ -41,6 +42,7 @@ export type CreationKind =
   | "code_session"
   | "code_extension"
   | "code_schedule"
+  | "meeting"
   | "notebook"
   | "taught";
 
@@ -59,6 +61,8 @@ export type Others = {
   codeExtensions: CodeExtension[];
   /** the schedules a person made for the coding agent (ADR-0105): desktop only */
   codeSchedules: CodeSchedule[];
+  /** meetings made from a recording (ADR-0108): desktop only for now */
+  meetings: MeetingSummary[];
   notebooks: NotebookSummary[];
   taught: TrainedModel[];
 };
@@ -117,6 +121,7 @@ const NONE: Others = {
   codeSessions: [],
   codeExtensions: [],
   codeSchedules: [],
+  meetings: [],
   notebooks: [],
   taught: [],
 };
@@ -142,7 +147,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
     optional(json<{ items: T[] }>(`${VOICE}/${route}?${query}`, signal));
   /** the kinds that live in their own tools: every one optional (a service may not offer it) */
   async function others(signal?: AbortSignal): Promise<Others> {
-    const [models3d, compositions, creativeProjects, notebooks, taught, code, added, timed] =
+    const [models3d, compositions, creativeProjects, notebooks, taught, code, added, timed, met] =
       await Promise.all([
         optional(json<{ items: Model3d[] }>("/products/wasifyai-model3d/m3d/models", signal)),
         optional(
@@ -163,6 +168,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
           json<{ items: CodeExtension[] }>("/products/wasifyai-code/code/extensions", signal),
         ),
         optional(json<{ items: CodeSchedule[] }>("/products/wasifyai-code/code/schedules", signal)),
+        optional(json<{ items: MeetingSummary[] }>("/products/wasifyai-meetings/meetings", signal)),
       ]);
     return {
       models3d: models3d?.items ?? [],
@@ -175,6 +181,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         .filter((x) => x.source === "added")
         .map((x) => ({ ...x, id: x.id.replace(/^added:/, "") })),
       codeSchedules: timed?.items ?? [],
+      meetings: met?.items ?? [],
       notebooks: Array.isArray(notebooks) ? notebooks : [],
       taught: taught?.models ?? [],
     };
@@ -258,6 +265,9 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         has("composition") ||
         has("creative_project") ||
         has("code_session") ||
+        has("code_extension") ||
+        has("code_schedule") ||
+        has("meeting") ||
         has("notebook") ||
         has("taught");
       const all = wantedOthers ? await others(signal) : NONE;
@@ -279,6 +289,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
           codeSessions: pick(all.codeSessions, "code_session"),
           codeExtensions: pick(all.codeExtensions, "code_extension"),
           codeSchedules: pick(all.codeSchedules, "code_schedule"),
+          meetings: pick(all.meetings, "meeting"),
           notebooks: pick(all.notebooks, "notebook"),
           taught: pick(all.taught, "taught"),
         },
@@ -319,6 +330,7 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         code_session: `/products/wasifyai-code/code/sessions/${at}`,
         code_extension: `/products/wasifyai-code/code/extensions/${encodeURIComponent(`added:${id}`)}`,
         code_schedule: `/products/wasifyai-code/code/schedules/${at}`,
+        meeting: `/products/wasifyai-meetings/meetings/${at}`,
         notebook: `/products/wasifyai-notebooks/notebooks/${at}`,
         taught: `/products/wasifyai-training/train/models/${at}`,
       }[kind];

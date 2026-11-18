@@ -286,6 +286,15 @@ concepts:
       - { lang: en, text: "the schedule that has the coding agent run the tests on the bakery site every night" }
       - { lang: es, text: "la tarea programada que revisa el proyecto de la panadería cada noche y arregla los fallos" }
       - { lang: de, text: "der Zeitplan, bei dem der Programmier-Agent jede Nacht die Prüfung des Projekts ausführt" }
+  - id: roof-budget-meeting
+    items:
+      - { kind: meeting, lang: en, text: "Budget call. A meeting. Asha, Tom. Good morning, shall we start? Yes, the school roof first. The quote for the new roof came in at forty thousand, so we move the playground to next year. Fine by me, but the parents should hear it before the summer." }
+      - { kind: transcript, lang: es, text: "El tejado de la casa de mis abuelos necesita tejas nuevas antes del invierno" }
+      - { kind: image, lang: de, text: "Ein Schuldach mit Gerüst, Handwerker legen neue rote Ziegel" }
+    queries:
+      - { lang: en, text: "the meeting where we talked about the cost of the school roof" }
+      - { lang: fr, text: "la réunion sur le budget du toit de l'école et le terrain de jeux" }
+      - { lang: bn, text: "স্কুলের ছাদের খরচ নিয়ে মিটিং" }
 nomatch:
   - { lang: en, text: "a submarine exploring a deep sea trench" }
   - { lang: es, text: "una panadera amasando pan en la cocina" }

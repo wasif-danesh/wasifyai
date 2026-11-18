@@ -1,5 +1,11 @@
 name: ci
-on: [push, pull_request, workflow_dispatch]
+# A branch is tested through its pull request; a push runs only on main (no second run of the same commit).
+on:
+  push:
+    branches: [main]
+    tags: ['v*']  # the images job builds on a version tag
+  pull_request:
+  workflow_dispatch:
 
 # One run per branch: a newer push (or a duplicate delivery of the same one) replaces the older run.
 concurrency:
@@ -79,6 +85,13 @@ jobs:
         env:
           GUARD_LOG: ${{ runner.temp }}/resources.txt
         run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-model3d 2>&1 | tee "$RUNNER_TEMP/pytest-4.log"
+      - name: Tests, meetings
+        if: ${{ !cancelled() }}
+        timeout-minutes: 6
+        shell: bash
+        env:
+          GUARD_LOG: ${{ runner.temp }}/resources.txt
+        run: scripts/ci/guard.sh uv run pytest -v -o faulthandler_timeout=240 products/wasifyai-meetings 2>&1 | tee "$RUNNER_TEMP/pytest-4b.log"
       - name: Tests, notebooks
         if: ${{ !cancelled() }}
         timeout-minutes: 6

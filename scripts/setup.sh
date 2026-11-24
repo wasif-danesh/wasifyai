@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One-shot, idempotent setup for a fresh clone on macOS, Linux and Windows (inside WSL2).
-# Installs missing tools, starts the container engine and Ollama, pulls the models, creates
-# .env and installs dependencies. Every install or large download asks first.
+# Installs missing tools, starts the container engine, creates .env and installs dependencies.
+# Ollama is installed, started and given models only when a default model in model_defaults.yaml
+# runs on it (none does today: the web runs on cloud models). Every install or large download asks first.
 #
 #   scripts/setup.sh [-y] [--k8s]
 #     -y     accept every prompt
@@ -33,7 +34,7 @@ confirm() {
 step "Detected $OS / $ARCH$(is_wsl && echo ' (WSL2)')"
 case "$PLATFORM" in darwin|linux) ;; *) bad "Unsupported OS: $OS. On Windows, run this inside WSL2 (docs/windows.md)."; exit 1 ;; esac
 if is_wsl && ! has_systemd; then
-  warn "systemd is not enabled in this WSL distro. Podman and Ollama still work, but enabling it is smoother:"
+  warn "systemd is not enabled in this WSL distro. Podman still works, but enabling it is smoother:"
   warn "  add '[boot]' and 'systemd=true' to /etc/wsl.conf, then run 'wsl --shutdown' from Windows."
 fi
 
@@ -52,8 +53,13 @@ pm_install() {
 }
 
 # ---- 1. Tools ----------------------------------------------------------------------------
+# Ollama is needed only when a default model runs on it; an admin who binds a model to Ollama
+# later installs and starts it themselves.
+OLLAMA_MODELS="$(required_models)"
+
 step "Checking tools"
-tools="$CONTAINER_ENGINE uv pnpm node ollama curl git make openssl"
+tools="$CONTAINER_ENGINE uv pnpm node curl git make openssl"
+[ -n "$OLLAMA_MODELS" ] && tools="$tools ollama"
 [ "$K8S" = "1" ] && tools="$tools kind helm kubectl"
 missing=""
 for t in $tools; do
@@ -138,8 +144,11 @@ if [ "$TOOLS_ONLY" != "1" ]; then
   "$CONTAINER_ENGINE" info >/dev/null 2>&1 && ok "$CONTAINER_ENGINE is running" \
     || { bad "$CONTAINER_ENGINE is not running (on Linux, rootless Podman needs no daemon; check 'podman info')"; exit 1; }
 
-  # ---- 3. Ollama and models ----------------------------------------------------------------
+  # ---- 3. Ollama and models (only when a default model runs on it) ---------------------------
   step "Ollama"
+  if [ -z "$OLLAMA_MODELS" ]; then
+    ok "not needed: no default model runs on Ollama"
+  else
   if ! ollama_up; then
     echo "Starting Ollama..."
     if [ "$PLATFORM" = "darwin" ] && have brew && brew list ollama >/dev/null 2>&1; then
@@ -178,19 +187,20 @@ if [ "$TOOLS_ONLY" != "1" ]; then
     fi
   fi
 
-  # RAM / disk heads-up for the default 20B model.
+  # RAM / disk heads-up for the models.
   if [ "$PLATFORM" = "darwin" ]; then mem_gb=$(( $(sysctl -n hw.memsize) / 1073741824 ))
   else mem_gb=$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) / 1048576 )); fi
   free_gb=$(df -Pk "$HOME" | awk 'NR==2{print int($4/1048576)}')
-  [ "$mem_gb" -ge 8 ] || warn "Only ${mem_gb} GB RAM: the default model (gemma4:e4b) needs about 8 GB and may be very slow or fail. Change the model in services/api/src/wasifyai_api/model_defaults.yaml (or in the admin area once running) to use a smaller one."
+  [ "$mem_gb" -ge 8 ] || warn "Only ${mem_gb} GB RAM: a model on Ollama may be very slow or fail. Change the model in services/api/src/wasifyai_api/model_defaults.yaml (or in the admin area once running) to use a smaller one."
   [ "$PLATFORM" = "darwin" ] && [ "$ARCH" = "x86_64" ] && warn "Intel Mac: Ollama runs CPU-only, so replies will be slow."
 
-  for m in $(required_models); do
+  for m in $OLLAMA_MODELS; do
     if ollama_has_model "$m"; then ok "model $m already pulled"; continue; fi
-    [ "$free_gb" -ge 15 ] || warn "Only ${free_gb} GB free disk; models need roughly 10 GB in total."
-    confirm "Download model $m now (gemma4:e4b is about 10 GB; embeddings about 0.3 GB)?" \
+    [ "$free_gb" -ge 15 ] || warn "Only ${free_gb} GB free disk; a model can need 10 GB or more."
+    confirm "Download model $m now (it can be several GB)?" \
       && ollama pull "$m" || { bad "Model $m not pulled"; exit 1; }
   done
+  fi
 fi
 
 # ---- 4. .env -----------------------------------------------------------------------------

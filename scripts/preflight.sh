@@ -44,9 +44,13 @@ else
   need ".env is missing"
 fi
 
-if ollama_up; then
+# Ollama is needed only when a default model runs on it (none does today).
+models="$(required_models)"
+if [ -z "$models" ]; then
+  ok "Ollama not needed: no default model runs on it"
+elif ollama_up; then
   ok "Ollama reachable at $OLLAMA_URL"
-  for m in $(required_models); do
+  for m in $models; do
     ollama_has_model "$m" && ok "model $m available" || need "model $m is not pulled (ollama pull $m)"
   done
 else

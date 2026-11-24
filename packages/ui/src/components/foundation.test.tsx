@@ -220,6 +220,23 @@ describe("ActionsRow", () => {
     await userEvent.click(await screen.findByRole("menuitem", { name: "Rename" }));
     expect(picked).toEqual(["Rename"]);
   });
+
+  it("opens its menu inside a dialog, where a person can see and use it", async () => {
+    // a modal <dialog> sits above the page: a menu put at the end of the page opened behind it, so
+    // a picture in the Library's details could not be renamed (the walk of 2026-11-20)
+    const picked: string[] = [];
+    const action = (label: string) => ({ label, onSelect: () => picked.push(label) });
+    render(
+      <dialog open aria-label="Details">
+        <ActionsRow actions={["Play", "Save", "Make again", "Rename"].map(action)} />
+      </dialog>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    const item = await screen.findByRole("menuitem", { name: "Rename" });
+    expect(item.closest("dialog")).not.toBeNull();
+    await userEvent.click(item);
+    expect(picked).toEqual(["Rename"]);
+  });
 });
 
 describe("Stage", () => {

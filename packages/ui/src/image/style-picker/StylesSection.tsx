@@ -10,7 +10,7 @@ import { Slider } from "../../components/slider";
 import { formatBytes } from "../../notebook/format";
 import { HubStyleDialog } from "./HubStyleDialog";
 import { ImportStyleDialog } from "./ImportStyleDialog";
-import { fitLine } from "./fit";
+import { fitLine, styleTitle } from "./fit";
 
 const TOO_MANY = 3; // S0: more than this and they blend and weaken each other
 
@@ -146,12 +146,12 @@ export function StylesSection({
   const unchosen = (list?.styles ?? []).filter((s) => !chosen.some((c) => c.id === s.id));
   const items: MenuItem[] = [
     ...unchosen.map((s) => ({
-      label: s.source.kind === "trained" ? `${s.title} (yours)` : s.title,
+      label: s.source.kind === "trained" ? `${styleTitle(s.title)} (yours)` : styleTitle(s.title),
       onSelect: () => add(s),
       disabled: !s.selectable || full,
     })),
     ...(list?.found ?? []).map((f) => ({
-      label: `${f.title} (${f.tool})`,
+      label: `${styleTitle(f.title)} (found in ${f.tool})`,
       onSelect: () => void addFound(f),
       disabled: full,
     })),
@@ -260,8 +260,8 @@ export function StylesSection({
           <div key={c.id} className="grid gap-2 rounded-md border px-3 py-2">
             <div className="flex items-start gap-2">
               <div className="grid min-w-0 flex-1 gap-0.5">
-                <span className="font-medium">
-                  {s.title}{" "}
+                <span className="font-medium" title={s.title}>
+                  {styleTitle(s.title)}{" "}
                   <span className="font-normal text-muted-foreground text-xs">
                     {readOnly ? "Added by your admin" : KIND_TAG[s.source.kind]}
                   </span>
@@ -300,7 +300,7 @@ export function StylesSection({
                     type="button"
                     size="icon"
                     variant="ghost"
-                    aria-label={`More for ${s.title}`}
+                    aria-label={`More for ${styleTitle(s.title)}`}
                   >
                     <Ellipsis className="size-4" aria-hidden="true" />
                   </Button>
@@ -308,7 +308,8 @@ export function StylesSection({
               />
             </div>
             <Slider
-              label={`Strength of ${s.title}`}
+              label={`Strength of ${styleTitle(s.title)}`}
+              shown="Strength"
               value={c.strength}
               min={0.05}
               max={2}
@@ -320,7 +321,9 @@ export function StylesSection({
             />
             {s.trigger ? (
               <p className="m-0 flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Word</span>
+                <span className="text-muted-foreground">
+                  The word in a prompt that brings it in:
+                </span>
                 <span className="font-mono">{s.trigger}</span>
                 <Button
                   type="button"

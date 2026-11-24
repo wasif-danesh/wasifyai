@@ -20,9 +20,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk import (
     Identity,
     RouteDeps,
+    RunContext,
     SaveRefused,
     SaveTo,
     VoiceEngineError,
+    reset_context,
+    set_context,
     write_to_path,
 )
 from wasifyai_platform_sdk.actions.helpers import save_copy
@@ -602,6 +605,9 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
                  "audio_voices": {str(k): v for k, v in chosen.items()}},
             )  # fmt: skip
 
+        # the speaking task keeps a copy of this context: on the web the speech engine is a worker
+        # job tied to the person, and without it every turn failed with "no RunContext" (2026-11-20)
+        token = set_context(RunContext(identity.tenant_id, PRODUCT_ID, identity.user_id))
         try:
             job = voicer.start(
                 engine=engine, model=model, voices=voices, turns=data["turns"],
@@ -609,6 +615,8 @@ def build_routes(deps: RouteDeps, runtime: Runtime | None = None) -> APIRouter:
             )  # fmt: skip
         except NotPossible as e:
             raise HTTPException(409, str(e)) from None
+        finally:
+            reset_context(token)
         return job.public()
 
     @router.get("/notebooks/{nid}/artifacts/{aid}/voices")

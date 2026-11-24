@@ -27,6 +27,7 @@ import socket
 import sys
 import tempfile
 import time
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -174,6 +175,14 @@ def _sha256_file(path: Path) -> str:
 
 # the one installer's error (stage F2): `str(e)` is a sentence safe to show
 InstallError = installer.InstallError
+
+
+def plain_spaces(text: Any) -> Any:
+    """Every Unicode space as a plain one. VoxCPM2's tokenizer in audio.cpp fails on a no-break
+    space ("invalid UTF-8 continuation"), which a translated dub script often holds."""
+    if not isinstance(text, str):
+        return text
+    return "".join(" " if unicodedata.category(c) == "Zs" else c for c in text)
 
 
 @dataclass
@@ -693,6 +702,9 @@ class AudioEngine:
         self, model: VoiceModel, body: dict[str, Any], voice: str | None, *, beside: bool = False
     ) -> SpeechResult:
         t0 = time.monotonic()
+        body = {
+            k: plain_spaces(v) if k in ("input", "reference_text") else v for k, v in body.items()
+        }
         r, load_s, held = await self._call_held(
             model, "/v1/audio/speech", self._ram_bytes(model) if beside else None,
             json={"model": model.id, **body},

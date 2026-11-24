@@ -24,6 +24,7 @@ from wasifyai_platform_sdk import (
     parse_ids,
     write_to_path,
 )
+from wasifyai_platform_sdk.filenames import shown_stem
 
 from wasifyai_video import prompts
 from wasifyai_video.builder.routes import build_builder_routes
@@ -181,7 +182,7 @@ def build_routes(deps: RouteDeps, store: VideoStore | None = None) -> APIRouter:
             except (ClipError, PosterError) as exc:
                 raise HTTPException(422, str(exc)) from None
         video_id = str(uuid4())
-        title = re.sub(r"\s+", " ", re.sub(r"[_\-\x00-\x1f]+", " ", Path(file.filename or "").stem))
+        title = re.sub(r"\s+", " ", re.sub(r"[_\-]+", " ", shown_stem(file.filename, "")))
         title = title.strip()[:120] or "My video"
         with deps.acting_as(identity, PRODUCT_ID):
             await deps.storage.put(f"{video_id}/video.mp4", data, "video/mp4")

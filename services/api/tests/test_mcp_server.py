@@ -106,6 +106,21 @@ async def test_the_sql_store_keeps_connections_and_their_activity(tmp_path):
     assert (await store.get(c.id)).last_used_at is not None  # type: ignore[union-attr]
 
 
+@pytest.mark.parametrize("sql", [False, True])
+async def test_a_call_that_ends_after_a_revoke_does_not_undo_it(tmp_path, sql):
+    store = (
+        SqlConnectionStore(create_sqlite_engine(tmp_path / "app.db"))
+        if sql else InMemoryConnectionStore()
+    )  # fmt: skip
+    svc = ConnectionsService(store)
+    c, _ = await svc.create("t1", "u1", "Claude Code", scopes=["make"], policy={"make": "auto"})
+    held = await store.get(c.id)  # the copy a call holds from when it was let in
+    await svc.revoke("t1", "u1", c.id)
+    await svc.touch(held)  # type: ignore[arg-type]
+    after = await store.get(c.id)
+    assert after is not None and after.revoked and after.last_used_at is not None
+
+
 # ---- the engine on a real port -----------------------------------------------------------------
 
 

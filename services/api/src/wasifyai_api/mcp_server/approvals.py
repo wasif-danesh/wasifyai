@@ -34,6 +34,7 @@ class Pending:
     status: str = "pending"  # pending, approved, denied, expired
     result: ActionResult | None = None  # what a yes came to
     done: asyncio.Event = field(default_factory=asyncio.Event)
+    answering: bool = False  # an answer is being recorded: a second one (a double click) waits out
 
     def public(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -99,13 +100,17 @@ class ApprovalDesk:
         """The person's answer from the window. A yes runs the action for the connection, with
         the approval the executor recorded; a long action becomes a job."""
         p = self._pending.get(approval_id)
-        if p is None or p.status != "pending":
+        if p is None or (p.principal.tenant_id, p.principal.user_id) != (tenant_id, user_id):
+            return None  # someone else's says nothing about it
+        if p.status != "pending" or p.answering:
             return p
-        if (p.principal.tenant_id, p.principal.user_id) != (tenant_id, user_id):
-            return None
-        recorded = await self._executor.decide_approval(
-            p.principal.identity, approval_id, approved, by="window"
-        )
+        p.answering = True  # claimed before the first await: one answer is recorded
+        try:
+            recorded = await self._executor.decide_approval(
+                p.principal.identity, approval_id, approved, by="window"
+            )
+        finally:
+            p.answering = False
         if not recorded:
             p.status = "expired"
             p.done.set()
@@ -115,9 +120,16 @@ class ApprovalDesk:
             p.done.set()
             return p
         p.status = "approved"
-        p.result = await self._executor.run_action(
-            p.action_id, p.params, p.principal.origin, actor=p.principal, policy=p.policy,
-            wait_seconds=0, approval_id=approval_id,
-        )  # fmt: skip
-        p.done.set()
+        try:
+            p.result = await self._executor.run_action(
+                p.action_id, p.params, p.principal.origin, actor=p.principal, policy=p.policy,
+                wait_seconds=0, approval_id=approval_id,
+            )  # fmt: skip
+        except Exception:
+            p.result = ActionResult(
+                status="error", action_id=p.action_id, code="failed", text="That could not be done."
+            )
+            raise
+        finally:
+            p.done.set()
         return p

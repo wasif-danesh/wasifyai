@@ -292,9 +292,11 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
   );
 }
 
-function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
+// a div, not main: the shell puts the one <main id="main"> inside it, and two main landmarks, one inside the other,
+// read as two places to land on (test F, 2026-11-21)
+function SidebarInset({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <main
+    <div
       data-slot="sidebar-inset"
       className={cn(
         "relative flex w-full min-w-0 flex-1 flex-col bg-background",

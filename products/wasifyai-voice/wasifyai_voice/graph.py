@@ -79,6 +79,7 @@ class SpeakState(TypedDict, total=False):
     voice_from: str  # dub: speaker | saved | builtin
     vocals_track: str
     background_track: str
+    note: str  # dub_script: what could not be done as asked (no separator here), in words
     transcribe_model: str
     separate_model: str
     fit: dict[str, Any]

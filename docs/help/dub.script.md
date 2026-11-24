@@ -43,3 +43,4 @@ The first step of a dub: write down what is said and translate it line by line, 
 ## Problems
 
 - **No voice for the language** Get a speech model that speaks it (Models).
+- **The music behind the voice was not kept** The part that separates a voice from music (Mel-Band RoFormer) is not set up here: the whole recording is used as the voice and the dub has no music behind it. Set it up under Models, or ask the admin on the web.

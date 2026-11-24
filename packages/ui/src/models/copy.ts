@@ -126,6 +126,9 @@ export function displayName(name: string): string {
     else if (/^(q\d.*|fp\d+|bf16|int\d|mlx|gguf|it|instruct|qat|latest|awq|gptq)$/i.test(p))
       extra.push(p.toUpperCase());
     else if (ACRONYMS.has(p.toLowerCase())) words.push(p.toUpperCase());
+    // a version written with dashes ("claude-haiku-5-5") is one number, "5.5", not "5 5" (the web's walk, 2026-11-20)
+    else if (/^\d+$/.test(p) && /^\d+(\.\d+)*$/.test(words[words.length - 1] ?? ""))
+      words[words.length - 1] += `.${p}`;
     else words.push(p.charAt(0).toUpperCase() + p.slice(1));
   }
   const tail = extra.filter((e) => e !== "LATEST" && e !== "GGUF").join(" ");

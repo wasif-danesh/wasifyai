@@ -77,7 +77,7 @@ afterEach(cleanup);
 describe("the words", () => {
   it("sets up every item of a group on a big computer", () => {
     expect(whyLine(voice())).toBe(
-      "Sets up all 7 items of Voice. Runs on this computer, privately.",
+      "Sets up everything the 7 tools of Voice need. Runs on this computer, privately.",
     );
     expect(primaryLabel(voice(), null)).toBe("Set up Voice · 9.0 GB");
   });

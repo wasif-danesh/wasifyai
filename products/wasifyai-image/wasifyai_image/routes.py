@@ -23,6 +23,7 @@ from wasifyai_platform_sdk import (
     process_image,
     write_to_path,
 )
+from wasifyai_platform_sdk.filenames import shown_stem
 
 from wasifyai_image import prompts
 from wasifyai_image.images import ImageRecord, ImageStore, image_store, thumbnail_of
@@ -135,7 +136,7 @@ def build_routes(deps: RouteDeps, store: ImageStore | None = None) -> APIRouter:
             raise HTTPException(e.status, e.message) from None
         width, height, thumb = await thumbnail_of(clean.png)
         image_id = str(uuid4())
-        title = re.sub(r"\s+", " ", re.sub(r"[_\-\x00-\x1f]+", " ", Path(file.filename or "").stem))
+        title = re.sub(r"\s+", " ", re.sub(r"[_\-]+", " ", shown_stem(file.filename, "")))
         title = title.strip()[:120] or "My picture"
         image_key, thumb_key = f"{image_id}/image.png", f"{image_id}/thumb.jpg"
         with deps.acting_as(identity, PRODUCT_ID):

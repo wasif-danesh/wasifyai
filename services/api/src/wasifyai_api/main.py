@@ -157,6 +157,10 @@ def create_app(given: Injected | None = None) -> FastAPI:
     app.include_router(attachments_router)
     app.include_router(creations_router)
     app.include_router(models_in_use_router)
+    # the person's own keys on the desktop; on the web the service's media keys, for an admin only
+    # (Admin › Media, CP11; the routes check it). Mounted on the desktop alone until 2026-11-20, so
+    # the web's Admin › Media answered "Not Found"
+    app.include_router(own_keys_router)
     if desktop_profile:
         app.include_router(files_router)
         app.include_router(desktop_models_router)
@@ -177,7 +181,6 @@ def create_app(given: Injected | None = None) -> FastAPI:
         app.include_router(desktop_coding_router)
         app.include_router(coding_gateway_router)
         app.include_router(desktop_hub_router)
-        app.include_router(own_keys_router)
         app.include_router(components_router)
         app.include_router(diagnostics_router)
 

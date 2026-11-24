@@ -63,6 +63,7 @@ from wasifyai_assistant.tools import (
     EDITED,
     EXTERNAL_TOOLS,
     MOVED_ON,
+    MOVED_ON_MODEL,
     ORIGIN,
     POLICY,
     PROPOSE,
@@ -93,8 +94,13 @@ SYSTEM_PROMPT = (
     "When the person asks how to do something, whether the app can, or what the app or one of "
     "its screens is or can do, call how_to and app_status, then answer only from what they "
     "return and from the screens listed below: give the steps, name the screens and fields "
-    "exactly as written, and say which step this computer is missing. Never describe a "
-    "feature that is not in the guides, and never answer about the app from general knowledge. "
+    "exactly as written, and say which step this computer is missing. Never invent a feature "
+    "or steps the guides do not give, and never answer about the app from general knowledge; "
+    "but never say the app cannot do something unless a guide or a tool says so: when the "
+    "guides do not cover it, say you are not sure and name the closest screen. "
+    "This chat itself takes attached files (the + under the message box: pictures, PDFs, "
+    "Word and other documents) and searches the internet when the person switches Search on; "
+    "Settings is at the bottom of the menu. "
     "End such an answer by offering to do it for them. "
     "When the person asks you to make, change or get something (draw, paint, say, compose, "
     "make a video), call propose_action at once with the action's id and its params, without "
@@ -102,7 +108,8 @@ SYSTEM_PROMPT = (
     "Ask for a required field you do not have instead of guessing; if the tool says what to fix, "
     "fix it and propose again. Use open_screen when a screen is the better place. Use a tool "
     "only when the person asks for it. Never say you made something unless a tool reported that "
-    "it did."
+    "it did. Always write a short answer before a card: answer every question in the message "
+    "and say what the card will do. Propose each thing once per message."
 )
 
 WEB_PROMPT = (
@@ -136,7 +143,10 @@ def external_prompt(names: list[str] | None) -> str:
     return EXTERNAL_PROMPT.format(names=", ".join(names)) if names else NO_SERVERS_PROMPT
 
 
-NO_ANSWER_REPLY = "I did not do that, because it was not approved."
+NO_ANSWER_REPLY = (
+    "I have not done that: the card was not answered. "
+    "Say if you still want it and I will ask again."
+)
 ESTIMATE_SAMPLE = 200  # audit entries read to find this person's last runs of an action
 # the chat's setting (ADR-0071 decision 5) as the executor's policy
 POLICIES = {"ask": ASK, "ask_costly": ApprovalPolicy(make="ask_costly"), "auto": POLICY}
@@ -753,7 +763,7 @@ def build_assistant_graph(
                 outcome: ToolOutcome | None = None
                 found: ToolOutcome | ActionResult | None = None
                 if skip_rest:
-                    outcome = ToolOutcome("refused", {"message": MOVED_ON}, MOVED_ON)
+                    outcome = ToolOutcome("refused", {"message": MOVED_ON}, MOVED_ON_MODEL)
                 elif answered:
                     executor = caps.extras["actions"]
                     who = Identity(tenant_id=ctx.tenant_id, user_id=ctx.user_id)
@@ -764,7 +774,7 @@ def build_assistant_graph(
                     edited = decision.get("params")
                     if decision.get("expired"):
                         skip_rest = True
-                        outcome = ToolOutcome("refused", {"message": MOVED_ON}, MOVED_ON)
+                        outcome = ToolOutcome("refused", {"message": MOVED_ON}, MOVED_ON_MODEL)
                     elif not approved:
                         outcome = ToolOutcome("refused", {"message": DECLINED}, DECLINED)
                     elif (

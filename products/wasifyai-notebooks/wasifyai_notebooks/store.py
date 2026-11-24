@@ -402,6 +402,28 @@ class NotebookStore:
                 )
                 return
             meta = dict(conn.execute("SELECT key, value FROM meta").fetchall())
+            changed = meta.get("embedder") != self.embedder_id or meta.get("dimension") != str(
+                self.dimension
+            )
+            empty = (
+                conn.execute("SELECT 1 FROM chunks WHERE embedding IS NOT NULL LIMIT 1").fetchone()
+                is None
+            )
+            if changed and empty:
+                # nothing was read with the old search model, so take the new one: until 2026-11-20
+                # the web made its tables for the local model's size while it can only use the
+                # gateway's, and no source was ever read there
+                conn.execute(
+                    f"ALTER TABLE chunks ALTER COLUMN embedding TYPE vector({self.dimension}) "
+                    "USING NULL"
+                )
+                conn.execute(
+                    "UPDATE meta SET value = ? WHERE key = 'embedder'", (self.embedder_id,)
+                )
+                conn.execute(
+                    "UPDATE meta SET value = ? WHERE key = 'dimension'", (str(self.dimension),)
+                )
+                return
         if meta.get("embedder") != self.embedder_id or meta.get("dimension") != str(self.dimension):
             raise Conflict(
                 f"This library was indexed with {meta.get('embedder')}; "

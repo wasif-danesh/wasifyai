@@ -18,6 +18,7 @@ from wasifyai_platform_sdk import (
     VoiceEngineError,
     parse_voice_model,
 )
+from wasifyai_platform_sdk.context import current_context
 
 
 def model(**over):
@@ -58,6 +59,7 @@ class Engine:
         self.spoken: list[tuple[str, str | None]] = []
         self.fail_at: int | None = None
         self.gate: asyncio.Event | None = None
+        self.who: list[tuple[str, str] | None] = []  # the person each turn was spoken for
 
     def resolve(self, task, model_id):
         if model_id and model_id != "kokoro-82m":
@@ -70,6 +72,8 @@ class Engine:
         if self.fail_at is not None and len(self.spoken) == self.fail_at:
             raise VoiceEngineError("out_of_memory", "No memory.")
         self.spoken.append((text, voice))
+        ctx = current_context()
+        self.who.append((ctx.tenant_id, ctx.user_id) if ctx else None)
         return SpeechResult(wav(0.5), 24000, 0.5, m.id, voice, 0.0, 0.1)
 
 
@@ -157,6 +161,8 @@ def test_an_overview_is_spoken_turn_by_turn_and_kept_with_the_output(api):
     data = c.get(f"notebooks/{nid}/artifacts/{aid}").json()["data"]
     assert data["audio"] is True and data["audio_voices"] == {"1": "af_heart", "2": "am_adam"}
     assert data["audio_model"] == "kokoro-82m" and data["turns"][0]["text"] == "Turn number 0."
+    # on the web the speech engine is a worker job tied to the person: every turn carries who asked
+    assert engine.who == [("t1", "u1")] * 4
 
 
 def test_a_failure_in_the_middle_says_why_and_keeps_no_half_audio(api):

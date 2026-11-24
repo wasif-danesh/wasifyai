@@ -143,6 +143,18 @@ export function createCreationsApi(transport: Transport): CreationsApi {
       return null;
     }
   }
+  // a product this service does not have (the coding agent on the web) answers 404: asked once, then left out,
+  // so every Library load does not ask again (the web's walk of 2026-11-20 found 404s on each load)
+  const absent = new Set<string>();
+  async function present<T>(path: string, signal?: AbortSignal): Promise<T | null> {
+    if (absent.has(path)) return null;
+    try {
+      return await json<T>(path, signal);
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 404) absent.add(path);
+      return null;
+    }
+  }
   const voice = <T>(route: string, query: string, signal?: AbortSignal) =>
     optional(json<{ items: T[] }>(`${VOICE}/${route}?${query}`, signal));
   /** the kinds that live in their own tools: every one optional (a service may not offer it) */
@@ -163,11 +175,9 @@ export function createCreationsApi(transport: Transport): CreationsApi {
         optional(
           json<{ models: TrainedModel[] }>("/products/wasifyai-training/train/models", signal),
         ),
-        optional(json<{ items: CodeSession[] }>("/products/wasifyai-code/code/sessions", signal)),
-        optional(
-          json<{ items: CodeExtension[] }>("/products/wasifyai-code/code/extensions", signal),
-        ),
-        optional(json<{ items: CodeSchedule[] }>("/products/wasifyai-code/code/schedules", signal)),
+        present<{ items: CodeSession[] }>("/products/wasifyai-code/code/sessions", signal),
+        present<{ items: CodeExtension[] }>("/products/wasifyai-code/code/extensions", signal),
+        present<{ items: CodeSchedule[] }>("/products/wasifyai-code/code/schedules", signal),
         optional(json<{ items: MeetingSummary[] }>("/products/wasifyai-meetings/meetings", signal)),
       ]);
     return {

@@ -13,7 +13,9 @@ recording is one request, because the runtime reads it faster than it plays."""
 
 import asyncio
 import base64
+import contextlib
 import logging
+from collections.abc import Iterator
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
@@ -21,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from wasifyai_platform_sdk import (
     Identity,
     RouteDeps,
+    RunContext,
     VoiceEngineError,
     VoiceRequestError,
     check_speak,
@@ -28,7 +31,10 @@ from wasifyai_platform_sdk import (
     languages,
     process_image,
     search_text,
+    set_context,
 )
+from wasifyai_platform_sdk.context import reset_context
+from wasifyai_platform_sdk.filenames import shown_name, shown_stem
 from wasifyai_platform_sdk.uploads import UploadError
 from wasifyai_platform_sdk.voice_models import (
     MAX_DESCRIPTION_CHARS,
@@ -48,6 +54,19 @@ from wasifyai_voice.runtime import PRODUCT_ID, NotAvailable, engine_for, store_f
 from wasifyai_voice.store import NotFound, VoiceStore, new_id
 
 log = logging.getLogger(__name__)
+
+
+@contextlib.contextmanager
+def _as_person(identity: Identity) -> Iterator[None]:
+    """A route that calls the speech engine itself (not through a run) gives the call a run's
+    context: on the web the engine is a worker job, tied to the person who asked; without it the
+    call fails with "no RunContext" (found by the web walk of 2026-11-20)."""
+    token = set_context(RunContext(identity.tenant_id, PRODUCT_ID, identity.user_id))
+    try:
+        yield
+    finally:
+        reset_context(token)
+
 
 TRANSCRIPT_INDEX_CHARS = 2000
 MAX_IMPORT_S = 3600.0
@@ -311,7 +330,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
     ) -> dict[str, Any]:
         """Add a recording from this computer to Your music, so the audio tools can work on it."""
         assert deps.storage is not None, "storage is required"
-        name = file.filename or "recording"
+        name = shown_name(file.filename, "recording")
         data = await file.read(audio_input.MAX_BYTES + 1)
         try:
             wav, seconds = await audio_input.at_rate(data, name, 44100, 2)
@@ -326,7 +345,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         key = f"music/{tid}.wav"
         with deps.acting_as(identity, PRODUCT_ID):
             await deps.storage.put(key, wav, "audio/wav")
-        label = (title or "").strip()[:120] or name.rsplit(".", 1)[0][:120] or "Recording"
+        label = shown_name(title, "", 120) or shown_stem(name, "Recording")
         t = await asyncio.to_thread(
             vstore().add_track, identity.tenant_id, identity.user_id, title=label,
             mode="imported", description=f"Added from the file {name[:100]}", lyrics="",
@@ -365,7 +384,8 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         try:
             chosen = engine.resolve("transcribe", body.model or None)
             wav, _ = await audio_input.at_rate(data, "audio.wav", 16000, 1)
-            result = await engine.transcribe(chosen, wav, check_transcribe(chosen, None))
+            with _as_person(identity):
+                result = await engine.transcribe(chosen, wav, check_transcribe(chosen, None))
         except audio_input.AudioInputError as e:
             raise HTTPException(422, {"code": e.code, "message": str(e)}) from None
         except VoiceRequestError as e:
@@ -399,9 +419,10 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         try:
             clip = await asyncio.to_thread(dictation.inspect, data)
             chosen = engine.resolve("transcribe", None)
-            result = await engine.transcribe(
-                chosen, data, check_transcribe(chosen, None), beside=True
-            )
+            with _as_person(identity):
+                result = await engine.transcribe(
+                    chosen, data, check_transcribe(chosen, None), beside=True
+                )
         except dictation.DictationError as e:
             raise HTTPException(422, {"code": e.code, "message": str(e)}) from None
         except VoiceRequestError as e:
@@ -445,7 +466,8 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
                 raise read_aloud.ReadAloudError("no_such_part", "There is no more to read.")
             chosen, voice = _reader(engine, body.text)
             text, voice, options = check_speak(chosen, found.items[body.part], voice, None)
-            result = await engine.speak(chosen, text, voice, options, beside=True)
+            with _as_person(identity):
+                result = await engine.speak(chosen, text, voice, options, beside=True)
         except read_aloud.ReadAloudError as e:
             status = 404 if e.code == "no_such_part" else 422
             raise HTTPException(status, {"code": e.code, "message": str(e)}) from None
@@ -854,7 +876,8 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
             if language:  # what the recording is in (voice languages plan, stage L4)
                 options["language"] = check_language(chosen, language)
             wav = await audio_input.to_wav(data, name)
-            result = await engine.transcribe(chosen, wav, options)
+            with _as_person(identity):
+                result = await engine.transcribe(chosen, wav, options)
         except audio_input.AudioInputError as e:
             raise HTTPException(422, {"code": e.code, "message": str(e)}) from None
         except VoiceRequestError as e:

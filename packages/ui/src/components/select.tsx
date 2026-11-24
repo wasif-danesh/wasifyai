@@ -4,6 +4,7 @@ import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { Select as SelectPrimitive } from "radix-ui";
 
 import { cn } from "../cn";
+import { useLayerHost } from "./layer-host";
 
 export type SelectOption = {
   value: string;
@@ -44,9 +45,11 @@ export function Select({
   "aria-invalid"?: boolean;
 }) {
   const groups: SelectGroup[] = isGrouped(options) ? options : [{ label: "", options }];
+  const [ref, host] = useLayerHost<HTMLButtonElement>();
   return (
     <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
       <SelectPrimitive.Trigger
+        ref={ref}
         id={id}
         data-slot="select-trigger"
         aria-label={ariaLabel}
@@ -66,7 +69,7 @@ export function Select({
           <ChevronDownIcon className="size-4 opacity-60" aria-hidden="true" />
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
-      <SelectPrimitive.Portal>
+      <SelectPrimitive.Portal container={host}>
         <SelectPrimitive.Content
           position="popper"
           sideOffset={4}

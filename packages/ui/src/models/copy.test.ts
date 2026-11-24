@@ -11,6 +11,8 @@ describe("displayName", () => {
     ["gpt-oss:20b", "GPT OSS 20B"],
     ["mlx-community/Qwen3-30B-A3B-4bit", "Qwen3 30B A3B 4bit"],
     ["FLUX.2 klein 4B", "FLUX.2 klein 4B"],
+    ["claude-haiku-5-5", "Claude Haiku 5.5"],
+    ["claude-opus-5", "Claude Opus 5"],
     ["llamacpp:9ba9cc2b4e02463b933096090530aef679d534dd91ecc9afadfb2dbfdc59f3c5", "Unnamed model"],
   ])("%s reads %s", (tag, words) => {
     expect(displayName(tag)).toBe(words);

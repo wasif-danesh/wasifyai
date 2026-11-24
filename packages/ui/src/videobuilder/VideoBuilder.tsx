@@ -736,7 +736,7 @@ function Editor({
                 It took {Math.max(1, Math.round(render.elapsed_s ?? 0))} seconds and is saved in
                 Your videos.
                 {renderCheck?.ok
-                  ? ` Every word on the screen was checked against what you typed (${renderCheck.checked} places).`
+                  ? ` Every word on the screen was checked against what you typed, and all ${renderCheck.checked === 1 ? "of it matches" : `${renderCheck.checked} places match`}.`
                   : ""}
                 {render.blocked > 0
                   ? ` It tried to reach outside its folder ${render.blocked} time${render.blocked === 1 ? "" : "s"}; every try was refused.`

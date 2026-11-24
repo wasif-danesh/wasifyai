@@ -67,3 +67,22 @@ describe("the one top bar", () => {
     expect(["light", "dark"]).toContain(document.documentElement.dataset.theme);
   });
 });
+
+describe("skip to the content", () => {
+  it("is the first stop of Tab and moves focus to the screen", async () => {
+    render(
+      <>
+        <AppBar title="Images" theme={false} nav={<button type="button">Back</button>} />
+        <main id="main">
+          <h1>Make a picture</h1>
+        </main>
+      </>,
+    );
+    const user = userEvent.setup();
+    await user.tab();
+    const skip = screen.getByRole("button", { name: "Skip to the content" });
+    expect(skip).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(document.getElementById("main")).toHaveFocus();
+  });
+});

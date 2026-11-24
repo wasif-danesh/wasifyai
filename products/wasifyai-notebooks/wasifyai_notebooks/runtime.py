@@ -141,9 +141,9 @@ class WebSetup:
     ) -> "Runtime":
         from wasifyai_notebooks.files import ObjectFiles
 
-        comps = (
-            components or self.components or Components(lambda: [self.models_dir], self.reader_dir)
-        )
+        # with a gateway the search model is asked there; without this the reader waited for model
+        # files the web never has, and every source stayed "Waiting" (the web walk, 2026-11-20)
+        comps = components or self.components or self._components()
         store = NotebookStore.on_postgres(
             self.dsn,
             dimension=comps.spec.dimension,

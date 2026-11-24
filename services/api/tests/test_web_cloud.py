@@ -123,6 +123,24 @@ async def test_a_job_is_sent_with_its_offers():
     assert "cloud" not in without.inputs
 
 
+async def test_a_plan_the_job_came_with_is_never_passed_on():
+    secrets = InMemorySecretStore()
+    admin = providers(secrets)
+    await admin.for_tenant("t1").save_key("media", "fal", KEY)
+    forged = {"offers": [{"offer": {}, "secret": "tenant-t1.keys.media.fal"}]}
+    inner = InMemoryJobSink()
+    job = a_job("t2")
+    job.inputs["cloud"] = forged
+    await CloudPlanSink(inner, admin).submit(job)
+    assert "cloud" not in inner.submitted[0].inputs
+
+
+async def test_the_cloud_tab_of_a_text_product_on_the_web_is_not_found():
+    with pytest.raises(own_keys.OwnKeyRefused) as e:
+        await providers().for_tenant("t1").cloud("chat")
+    assert e.value.status == 404
+
+
 # ---- the media worker ------------------------------------------------------------------------
 
 
@@ -191,6 +209,15 @@ def test_on_the_web_only_an_admin_sees_or_changes_the_service_keys():
     assert KEY not in r.text
     images = next(p for p in r.json()["products"] if p["id"] == "images")
     assert images["use"]["model"] == "gpt-image-2.5"
+
+
+def test_the_web_app_serves_admin_media_keys():
+    """The real web app, not one built for the test: Admin › Media reads these routes (they were
+    mounted on the desktop alone until 2026-11-20, and the web page said "Not Found")."""
+    from wasifyai_api.main import create_app
+
+    paths = set(create_app().openapi()["paths"])
+    assert {"/desktop/keys", "/desktop/keys/{product}/keys/{provider}"} <= paths
 
 
 # ---- Train on the web ------------------------------------------------------------------------

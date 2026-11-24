@@ -704,3 +704,12 @@ async def test_a_model_is_only_asked_for_what_it_does(engine, tmp_path):
         await engine.speech_edit(sep, type("R", (), {})(), clip)  # type: ignore[arg-type]
     assert e.value.code == "wrong_task"
     del edit
+
+
+def test_odd_spaces_reach_the_speech_server_as_plain_ones():
+    # VoxCPM2's tokenizer stops at a no-break space, which translated dub scripts hold
+    from wasifyai_api.audio_runtime import plain_spaces
+
+    assert plain_spaces("नमस्ते दोस्त हाँ　ok") == "नमस्ते दोस्त हाँ ok"
+    assert plain_spaces("क्‍ष") == "क्‍ष"  # joiners shape the script: kept
+    assert plain_spaces(None) is None

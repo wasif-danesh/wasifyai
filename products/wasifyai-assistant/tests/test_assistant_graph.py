@@ -696,9 +696,10 @@ async def test_moving_on_without_answering_closes_the_turn_without_asking_the_mo
     chats = len(rig.model.chats)
     state, events = await rig.answer({"approved": False, "expired": True})
     assert host.runs == [] and len(rig.model.chats) == chats  # no further model call
-    assert state["reply"] == "I did not do that, because it was not approved."
+    assert state["reply"].startswith("I have not done that: the card was not answered.")
     made = next(e for e in events if e["type"] == "tool_result" and e["name"] == "propose_action")
-    assert made["status"] == "refused" and "went on without answering" in made["output"]["message"]
+    assert made["status"] == "refused"
+    assert "instead of answering this card" in made["output"]["message"]
 
 
 async def test_the_taint_stays_for_the_rest_of_the_conversation(tmp_path, ctx):

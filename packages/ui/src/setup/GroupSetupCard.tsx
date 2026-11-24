@@ -8,6 +8,7 @@ import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Notice } from "../components/notice";
 import { Bar } from "../components/progress-bar";
+import { useMakingHere } from "../shell/making-here";
 import { groupLabel, insteadLabel, partStatus, primaryLabel, usesLine, whyLine } from "./words";
 
 export type SetupRun =
@@ -41,6 +42,7 @@ export function GroupSetupCard({
   const label = groupLabel(group.id);
   const instead = insteadLabel(group, chatBytes);
   const busy = run.state === "running";
+  useMakingHere(busy ? `Setting up ${label}` : null);
   return (
     <section
       aria-label={`Set up ${label}`}

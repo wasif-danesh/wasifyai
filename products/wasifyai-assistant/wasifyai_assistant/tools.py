@@ -383,7 +383,15 @@ TAINTED = (
 )
 
 DECLINED = "The person chose not to do this, so it was not done. Do not try it again."
-MOVED_ON = "The person went on without answering, so it was not done."
+# The person wrote instead of answering the card. The card says it to them; the model is told that
+# a yes in their next message is not an approval and to ask again with a new card: in the day 2
+# trial a typed "yes, go ahead" got "it was not approved" and nothing more.
+MOVED_ON = "Not done: you wrote a message instead of answering this card."
+MOVED_ON_MODEL = (
+    "The person wrote a message instead of answering the card, so it was not done. If their next "
+    "message agrees to it or asks for it again, propose it again so a new card asks them; never "
+    "say it was done."
+)
 
 
 def taint_outcome(result: ActionResult) -> ToolOutcome | None:

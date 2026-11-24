@@ -30,6 +30,28 @@ export function ThemeButton() {
 }
 
 /**
+ * The first stop of Tab: straight to the screen, past the bar and the side menu (test F, 2026-11-21: a keyboard
+ * user went through about twenty stops before any screen). Hidden until it has focus. A button, not a "#main"
+ * link: the desktop window's screens are addressed by the hash, which a link would change.
+ */
+function SkipToContent() {
+  return (
+    <button
+      type="button"
+      className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:shadow-card focus:outline-none focus:ring-[3px] focus:ring-ring/50"
+      onClick={() => {
+        const main = document.getElementById("main");
+        if (!main) return;
+        if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+        main.focus();
+      }}
+    >
+      Skip to the content
+    </button>
+  );
+}
+
+/**
  * The one top bar of the app (ADR-0093 decision 1), on the desktop window and on the web: the app's navigation
  * buttons, the title of where the person is, the screen's own tools (the model button, put here by `PageHeader`),
  * then the job tray, search (⌘K) and the theme. One height everywhere; no second bar. The screens' modes stay in
@@ -83,6 +105,7 @@ export function AppBar({
       className={cn("flex shrink-0 items-center gap-2 border-b bg-card/60 pe-2", className)}
       style={{ height: APP_BAR_PX }}
     >
+      <SkipToContent />
       {nav ? (
         <div {...dragRegion} className={cn("flex h-full shrink-0 items-center", navClassName)}>
           {nav}

@@ -19,6 +19,14 @@ NotebookSearch = Callable[[str, str, str, int], Awaitable[list[dict[str, Any]]]]
 # (tenant, user, query, limit) -> passages; raises ToolUnavailable
 
 
+def _supported(engine: Any) -> bool:
+    """Whether an engine can run on this kind of computer. A web engine is a cloud or worker one
+    with no installer of its own: it is supported (test E, 2026-11-21: app.status failed on the
+    web for 3D and Motion graphics)."""
+    installer = getattr(engine, "installer", None)
+    return installer is None or bool(installer.supported)
+
+
 class ApiToolHost:
     def __init__(
         self,
@@ -185,12 +193,15 @@ class ApiToolHost:
             return Readiness.ready()
         if need.kind == "runtime" and need.name == "video-builder":
             builder = state.video_builder
-            if builder is None or not builder.installer.supported:
+            if builder is None or not _supported(builder):
                 return Readiness.unavailable(
                     "Motion graphics is not available on this kind of computer yet."
                 )
             if not builder.ready():
-                why = builder.media_problem() if builder.install() is not None else None
+                if hasattr(builder, "install"):
+                    why = builder.media_problem() if builder.install() is not None else None
+                else:  # the web's: it says what is missing itself
+                    why = builder.problem()
                 return Readiness.needs_setup(
                     why or "Set up Motion graphics first (a download of a few hundred megabytes).",
                     ui="motion",
@@ -207,7 +218,7 @@ class ApiToolHost:
             return Readiness.ready()
         if need.kind == "runtime" and need.name == "model3d":
             engine = state.model3d
-            if engine is None or not engine.installer.supported:
+            if engine is None or not _supported(engine):
                 return Readiness.unavailable(
                     "3D models are not available on this kind of computer yet."
                 )

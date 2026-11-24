@@ -459,8 +459,8 @@ export function StudioPane(props: StudioPaneProps) {
           </p>
         ) : null}
         <p className="mt-4 px-1 text-muted-foreground text-xs">
-          Made by the chat model{hosted ? "" : " on this computer"}, only from the sources ticked on
-          the left.
+          {/* the chat model may be a cloud one (a key): "on this computer" was wrong next to Claude (2026-11-20) */}
+          Made by the chat model chosen at the top, only from the sources ticked on the left.
         </p>
       </div>
       {asking?.kind === "delete" ? (

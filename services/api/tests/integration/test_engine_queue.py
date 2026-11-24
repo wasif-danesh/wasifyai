@@ -165,6 +165,19 @@ async def test_an_expired_redis_lease_is_no_longer_in_the_way(leases):
     assert await leases.take("t1", "u1", Lease("j2", "image.generate", "normal", later), 1) is None
 
 
+async def test_a_short_lease_does_not_cut_the_life_of_a_long_one(leases, redis_conn):
+    import time
+
+    from wasifyai_platform_sdk.jobpolicy import Lease
+
+    hours = time.time() + 4 * 3600
+    soon = time.time() + 600
+    assert await leases.take("t1", "u1", Lease("train", "train", "heavy", hours), 2) is None
+    assert await leases.take("t1", "u1", Lease("pic", "image.generate", "normal", soon), 2) is None
+    for key in leases._keys("t1", "u1"):
+        assert await redis_conn.ttl(key) > 3 * 3600
+
+
 async def test_two_replicas_asking_at_once_never_both_get_the_last_place(leases):
     import time
 

@@ -50,8 +50,9 @@ SCREENS_PROMPT = (
     " The app has {n} screens in its side menu. Each line is its menu path, then what it is "
     "for:\n{list}\nWhen someone asks what the app can do, or to describe the products, give one "
     "short sentence for each menu heading (the words before the first ›) and one for each screen "
-    "that has no heading, in this order, and leave none out. When they ask about one screen, "
-    "say everything its line says."
+    "that has no heading, in this order, and leave none out. Write them as a Markdown bulleted "
+    "list, one item each, starting with the name in bold and a colon (- **Images**: ...). When "
+    "they ask about one screen, say everything its line says."
 )
 
 

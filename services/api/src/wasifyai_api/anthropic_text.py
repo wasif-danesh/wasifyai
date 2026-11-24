@@ -1,7 +1,8 @@
 """Text on Anthropic's own API, for a person's Anthropic key on the desktop (ADR-0100, stage CP2).
 
-Claude Haiku 5.5 is the default text model. Its API is not the OpenAI-compatible one the other
-vendors share, and Haiku 5.5 differs from older models in ways the code must follow:
+Claude Sonnet 5.5 is the default text model (Haiku 5.5 until 2026-11-24). Its API is not the
+OpenAI-compatible one the other vendors share, and the 5.5 models differ from older models in ways
+the code must follow:
 
 - no `temperature`, `top_p` or `top_k`, and no assistant prefill (each is a 400);
 - adaptive thinking is on by default; how much it thinks is `output_config.effort`, chosen per job

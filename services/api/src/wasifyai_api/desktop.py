@@ -124,6 +124,9 @@ class DesktopBackends:
     web: WebService | None = None  # web search: the person's choices and keys (ADR-0083)
     secrets: SecretStore | None = None  # keys and tokens: the keychain or the file (ADR-0092)
     own_keys: OwnKeysService | None = None  # the person's own provider keys (ADR-0095)
+    chat_plan: Any = (
+        None  # the chat on the person's own plan (ADR-0110), made with the text provider
+    )
     audio: AudioEngine | None = None
     video_builder: VideoBuilderService | None = (
         None  # the render engine, installed on request (ADR-0077)

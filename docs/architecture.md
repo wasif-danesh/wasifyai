@@ -58,7 +58,7 @@ The engine also finds models that other tools have already downloaded
 
 [ADR-0100](decisions/0100-haiku-text-and-cheapest-media-provider.md):
 
-- **Text** runs on Claude Haiku 5.5 by default, bought directly from Anthropic. The person can choose a model from
+- **Text** runs on Claude Sonnet 5.5 by default (Haiku 5.5 until 2026-11-24), bought directly from Anthropic. The person can choose a model from
   Anthropic, OpenAI, Google Gemini, DeepSeek, Z.ai or OpenRouter, each with its own key.
 - **Media** runs on Runware, WaveSpeed and fal.ai. Each media line in the catalogue (`own_keys_catalogue.py`) lists
   the providers that offer the model, with their prices.

@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 /**
  * The groups of models a person meets, named for what they want to do (ADR-0086). Each group is a picker:
  * every screen that needs a model of the group has the same button and the same panel.
@@ -223,13 +221,15 @@ export type ChoicesApi = {
   get(id: string, onProgress: (p: GetProgress) => void, signal: AbortSignal): Promise<void>;
   /** Take a model off the computer (the Models page); absent where the app cannot. */
   remove?(id: string): Promise<void>;
-  /** what "More models" shows: search, model folders, Hugging Face (the window gives its own) */
-  more?: ReactNode;
   /** the group can run on cloud models with the person's keys: the picker shows a Cloud tab. `product` names it
    * in words ("Lip sync"); `setUp` opens Settings › Your keys */
   cloud?: { product: string; setUp?: () => void };
-  /** the group can run on the person's own agent programs (Code, ADR-0107): the picker shows a Your agent tab */
+  /** the group can run on the person's own agent programs (Code, ADR-0107; the chat, ADR-0110): the picker shows a
+   * Your agent tab, or a tab named `agentsTab` ("Your plan") */
   agents?: AgentsApi;
+  agentsTab?: string;
+  /** the tab's own lines (`intro` before setting up, `foot` under the programs); Code's when left out */
+  agentsWords?: { intro: string; foot: string };
   /** the group's model on this computer is chosen somewhere else (Code: the Model hub, LM2). On this computer then
    * lists every row, ready or not, under `heading` with a link to that place, and the list's `foot` under them */
   elsewhere?: {

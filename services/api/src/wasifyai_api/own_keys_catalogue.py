@@ -1,7 +1,7 @@
 """The cloud models of each product (ADR-0095, amendment of 2026-11-11; ADR-0100): what the model
 picker's Cloud tab lists once a key is saved, and what the router reads.
 
-- **A text line** names its vendor and the vendor's model (Claude Haiku 5.5 first). It runs on that
+- **A text line** names its vendor and the vendor's model (Claude Sonnet 5.5 first). It runs on that
   vendor's key; the price is said in words.
 - **A media line** names a model by this app's id and lists its **offers** (`offers.py`): each a
   provider (Runware, WaveSpeed or fal.ai), that provider's endpoint for the model, its price per
@@ -60,10 +60,10 @@ def _media(
 
 PER_WORD = "per word used"
 CATALOGUE: tuple[CloudModel, ...] = (
-    # ---- chat and writing (ADR-0100: the vendors directly, Haiku 5.5 the default; prices per
+    # ---- chat and writing (ADR-0100: the vendors directly, Sonnet 5.5 the default since 2026-11-24; prices per
     # million tokens in / out, checked 2026-11-12, docs/spikes/cloud-v1-cp0.md)
-    _m("chat", "anthropic", "claude-haiku-5-5", "Claude Haiku 5.5", "Anthropic. Quick and cheap; the default.", "$0.10 in / $0.50 out per million tokens"),
-    _m("chat", "anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5", "Anthropic. For harder work.", "$2 in / $10 out per million tokens"),
+    _m("chat", "anthropic", "claude-sonnet-5-5", "Claude Sonnet 5.5", "Anthropic. Good at most work; the default.", "$2 in / $10 out per million tokens"),
+    _m("chat", "anthropic", "claude-haiku-5-5", "Claude Haiku 5.5", "Anthropic. Quick and cheap.", "$0.10 in / $0.50 out per million tokens"),
     # every other model the key lists is shown too (owner, 2026-11-13); these lines give the ones
     # Anthropic lists today their words and prices (the claude-api notes, 2026-11-03)
     _m("chat", "anthropic", "claude-fable-5-2", "Claude Fable 5.2", "Anthropic. The most capable.", "$8 in / $40 out per million tokens"),
@@ -83,8 +83,8 @@ CATALOGUE: tuple[CloudModel, ...] = (
     _m("chat", "gemini", "gemini-3.8-flash", "Gemini 3.8 Flash", "Google.", "$0.75 in / $3.75 out per million tokens"),
     _m("chat", "deepseek", "deepseek-flash", "DeepSeek V4.1 Flash", "DeepSeek, in China.", "$0.30 in / $1.20 out per million tokens"),
     _m("chat", "zai", "glm-5.3-flash", "GLM-5.3 Flash", "Z.ai, in China.", "$0.15 in / $0.50 out per million tokens"),
-    _m("chat", "openrouter", "anthropic/claude-haiku-5.5", "Claude Haiku 5.5", "Anthropic, through OpenRouter.", PER_WORD),
     _m("chat", "openrouter", "anthropic/claude-sonnet-5.5", "Claude Sonnet 5.5", "Anthropic, through OpenRouter.", PER_WORD),
+    _m("chat", "openrouter", "anthropic/claude-haiku-5.5", "Claude Haiku 5.5", "Anthropic, through OpenRouter.", PER_WORD),
     _m("chat", "openrouter", "openai/gpt-6-luna", "GPT-6 Luna", "OpenAI, through OpenRouter.", PER_WORD),
     _m("chat", "openrouter", "google/gemini-3.8-flash", "Gemini 3.8 Flash", "Google, through OpenRouter.", PER_WORD),
     _m("chat", "openrouter", "deepseek/deepseek-v4.1-flash", "DeepSeek V4.1 Flash", "DeepSeek, through OpenRouter.", PER_WORD),

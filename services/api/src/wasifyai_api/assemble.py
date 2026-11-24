@@ -114,6 +114,7 @@ from wasifyai_api.media_access import MediaAccess, media_capabilities_from, medi
 from wasifyai_api.model_access import ModelAccess, load_defaults
 from wasifyai_api.own_keys_engines import KeyedModel3d, KeyedSpeechEngine
 from wasifyai_api.own_keys_text import KeyedTextProvider
+from wasifyai_api.plan_chat import PlanChat, PlanTextProvider
 from wasifyai_api.rag import DIMENSIONS, RagService
 from wasifyai_api.routes import HEARTBEAT_S
 from wasifyai_api.run_tracing import Langfuse
@@ -941,9 +942,12 @@ def _desktop_text(desktop: Desktop | None, recorder: Any) -> Any:
     if desktop is None or desktop.language is None:
         return None
     local = LocalTextProvider(desktop.language, recorder)
-    if desktop.own_keys is None:
-        return local
-    return KeyedTextProvider(local, desktop.own_keys, recorder)
+    inner = (
+        local if desktop.own_keys is None else KeyedTextProvider(local, desktop.own_keys, recorder)
+    )
+    # the chat on the person's own Claude or ChatGPT plan, in front of both (ADR-0110)
+    desktop.chat_plan = PlanChat(desktop.settings.desktop_dir)
+    return PlanTextProvider(inner, desktop.chat_plan)
 
 
 def _taught_in(s: ApiServices, run: str) -> dict[str, str] | None:
@@ -968,6 +972,7 @@ def _desktop_services(s: ApiServices, desktop: Desktop) -> None:
     if desktop.coding is not None:  # the person's own agent programs' sign-in (ADR-0107)
         s.coding_harnesses = HarnessAccounts(desktop.settings.desktop_dir)
     _desktop_coding(s, desktop)
+    s.chat_plan = desktop.chat_plan  # the chat on the person's own plan (ADR-0110)
     s.audio = desktop.audio  # the speech runtime (ADR-0066); products reach it here
     s.video_builder = desktop.video_builder  # the render engine (ADR-0077)
     s.model3d = desktop.model3d  # the 3D engine (ADR-0080)

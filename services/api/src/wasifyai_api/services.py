@@ -50,6 +50,7 @@ class ApiServices(EngineServices):
     # on the web: speaking and 3D on the provider the admin chose in Admin › Media (ADR-0095, K5)
     admin_providers: "AdminProviders | None" = None
     service_styles: "ServiceStyles | None" = None  # the web's styles, added by an admin (ADR-0091)
+    chat_plan: Any = None  # the chat on the person's own plan (ADR-0110), desktop only
 
 
 def services_of(request: Request) -> ApiServices:

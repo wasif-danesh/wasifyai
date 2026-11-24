@@ -130,10 +130,12 @@ function Setup({
   setup,
   onSetUp,
   compact,
+  intro = CODE_WORDS.intro,
 }: {
   setup: AgentSetup;
   onSetUp: (bytes: number) => void;
   compact?: boolean;
+  intro?: string;
 }) {
   if (setup.state === "unsupported") {
     return <p className="m-0 text-muted-foreground text-sm">{setup.reason}</p>;
@@ -156,9 +158,7 @@ function Setup({
         <>
           <strong className="font-semibold">Use your own Claude Code or Codex</strong>
           <p className="m-0 text-muted-foreground">
-            Sessions can run on the agent program you already pay for, on your Claude or ChatGPT
-            plan, with no key. It works inside the same sandbox as Wasify AI's agent. Setting up
-            installs both programs{bytes ? `: ${formatBytes(bytes)}` : ""}.
+            {intro} Setting up installs both programs{bytes ? `: ${formatBytes(bytes)}` : ""}.
           </p>
         </>
       )}
@@ -183,13 +183,23 @@ function Setup({
   );
 }
 
-/** The Your agent tab of the Code model button. */
+/** What the tab says on Code's button; the chat's button gives its own (ADR-0110). */
+export const CODE_WORDS = {
+  intro:
+    "Sessions can run on the agent program you already pay for, on your Claude or ChatGPT plan, with no key. It works inside the same sandbox as Wasify AI's agent.",
+  foot: "These run the program itself, on your plan. Extensions and “Ask me” are for Wasify AI's own agent.",
+};
+
+/** The Your agent tab of the Code model button, and the Your plan tab of the chat's. */
 export function AgentTab({
   api,
   rows,
   onPick,
   onChange,
+  words = CODE_WORDS,
 }: {
+  /** the tab's lines: what setting up gives, and the line under the programs */
+  words?: { intro: string; foot: string };
   api: AgentsApi;
   /** the picker's rows with `place: "agent"` */
   rows: ModelChoice[];
@@ -213,6 +223,7 @@ export function AgentTab({
           <Setup
             setup={a.setup}
             onSetUp={(bytes) => void a.act(() => api.setUp(bytes), "The setup could not start.")}
+            intro={words.intro}
           />
         </div>
       ) : (
@@ -282,10 +293,7 @@ export function AgentTab({
           );
         })
       )}
-      <p className="m-0 px-1 text-muted-foreground text-xs">
-        These run the program itself, on your plan. Extensions and “Ask me” are for Wasify AI's own
-        agent.
-      </p>
+      <p className="m-0 px-1 text-muted-foreground text-xs">{words.foot}</p>
     </div>
   );
 }

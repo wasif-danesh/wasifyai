@@ -109,3 +109,14 @@ and offers **Use** with no question, since nothing is downloaded. Getting it add
 only the steps still needed; if the image engine is missing, the usual dialog still asks for the engine and says the model is "found in
 ComfyUI, used where it is". The matching is by file name in `apps/desktop/src/choices/catalogue-choices.ts` (`foundFor`); a model with
 any file not found is offered as a download as before. Checked on a fresh engine: one Use made klein and LTX ready with nothing fetched.
+
+## Amendment: no More tab (2026-11-24, owner)
+
+The owner asked "Why there is a more tab? Isn't it useless?" and then "Yes, remove it". The panel has no More tab.
+
+- The `advanced` tier (the large models, gpt-oss 20B and Qwen3.8 27B) is listed under **On this computer**, after
+  what is already there, below a "Larger models" heading, until it is on the computer; then it is an ordinary row of
+  that list. It is still never among the first three under Recommended.
+- Found files and other tools' servers were already under On this computer; nothing changes for them.
+- The picker's `more` slot (search, model folders and Hugging Face, which no screen filled) is gone; those stay on the
+  Models page.

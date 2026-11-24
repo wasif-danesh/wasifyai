@@ -81,9 +81,12 @@ describe("the model picker button and panel", () => {
     const list = await screen.findByRole("list", { name: "Models" });
     expect(within(list).getAllByRole("button")).toHaveLength(3);
     expect(within(list).queryByText("E (advanced)")).toBeNull();
-    // the advanced one is under More
-    await user.click(screen.getByRole("tab", { name: "More" }));
-    expect(screen.getByText("E (advanced)")).toBeInTheDocument();
+    // there is no More tab: the advanced one is under On this computer, as a larger model
+    expect(screen.queryByRole("tab", { name: "More" })).toBeNull();
+    await user.click(screen.getByRole("tab", { name: "On this computer" }));
+    const larger = await screen.findByRole("list", { name: "Larger models" });
+    expect(within(larger).getByText("E (advanced)")).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing is on this computer yet/)).toBeNull();
   });
 
   it("uses a model that is on the computer, at once, and closes", async () => {

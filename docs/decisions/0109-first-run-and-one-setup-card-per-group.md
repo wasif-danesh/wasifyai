@@ -168,3 +168,9 @@ needs a different trainer for each kind (pictures 1.8 GB, writing 64 MB, decidin
 - **How it was checked.** Walked on a fresh data folder in a browser against the real engine. Motion graphics and Voice
   (9.0 GB, 11 minutes, all seven items open) and Notebook (1.5 GB) were set up for real through their cards. Details, and what was not walked, are in `docs/spikes/first-run-fr1-fr5.md`
   and `docs/desktop/first-run.md`.
+
+## Amendment (2026-11-24, owner): the plan is offered on the first run
+
+Besides "I'd rather use an API key", the first run offers "I'd rather use my Claude or ChatGPT plan" (ADR-0110). It
+opens the chat's model button on Your plan, where the programs are set up and signed in. Nothing is downloaded until
+the person chooses it there.

@@ -158,3 +158,12 @@ for the plan in the chat.
 - ADR-0069 and `docs/mcp-security-review.md` (the server the program would call).
 - The providers' pages listed in ADR-0107's references, to be read again for question 1.
 - `docs/spikes/google-ai-plans-2026-11.md` (what a Google AI plan gives, and why Google is left out).
+
+## Amendment (2026-11-24, owner: "fix the identified issues")
+
+- **The approval card no longer says "Pauses the chat model while it runs" when the chat is not on this computer.**
+  The app's memory slot is shared only with a chat model running here, so the line is left out on the person's plan
+  and on a cloud key (`_chat_runs_here` in `services/api/src/wasifyai_api/tool_host.py`).
+- **The first run offers the plan.** Below "I'd rather use an API key", the welcome (and the home's "Get a chat model"
+  notice) says "I'd rather use my Claude or ChatGPT plan". It closes the welcome and opens the home's model button on
+  Your plan (`openOn("agent")` on the button's handle). The home's key link now opens the button on Cloud.

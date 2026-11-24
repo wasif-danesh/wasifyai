@@ -18,6 +18,8 @@ import { useModelChoices } from "./use-model-choices";
 /** What a screen can ask of the picker: open the panel (when the person presses the main button with no model). */
 export type ModelSelectHandle = {
   open(): void;
+  /** Open the panel on one tab: Cloud for a key, Your plan / Your agent for the person's own program. */
+  openOn(tab: "cloud" | "agent"): void;
   /** Ask (the download dialog) about one model, for a card that offers it. */
   ask(id: string): void;
 };
@@ -116,10 +118,16 @@ export function ModelSelect({
   const [asking, setAsking] = useState<ModelChoice | null>(null);
   const rows = useRef<ModelChoice[]>([]);
   rows.current = m.list?.choices ?? [];
+  // the tab a screen asked to open on, used once
+  const wanted = useRef<Tab | null>(null);
   useImperativeHandle(
     handleRef,
     () => ({
       open: () => setOpen(true),
+      openOn: (t) => {
+        wanted.current = t;
+        setOpen(true);
+      },
       ask: (id) => {
         const c = rows.current.find((x) => x.id === id);
         if (c) setAsking(c);
@@ -155,14 +163,20 @@ export function ModelSelect({
   useEffect(() => {
     if (open) {
       void m.reload();
+      const asked = wanted.current;
+      wanted.current = null;
+      const usable =
+        asked === "cloud" ? Boolean(api?.cloud) : asked === "agent" && Boolean(api?.agents);
       setTab(
-        chosen?.place === "cloud"
-          ? "cloud"
-          : chosen?.place === "agent" && api?.agents
-            ? "agent"
-            : onDevice.some((c) => c.state === "ready")
-              ? "device"
-              : "recommended",
+        asked && usable
+          ? asked
+          : chosen?.place === "cloud"
+            ? "cloud"
+            : chosen?.place === "agent" && api?.agents
+              ? "agent"
+              : onDevice.some((c) => c.state === "ready")
+                ? "device"
+                : "recommended",
       );
     }
   }, [open]);

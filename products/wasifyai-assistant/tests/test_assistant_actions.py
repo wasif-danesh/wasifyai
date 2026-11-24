@@ -159,6 +159,9 @@ def test_the_card_shows_an_object_field_as_json_the_person_can_read():
     assert json.loads(fields["arguments"]["value"]) == code
     assert "primitive_uv_sphere_add" in fields["arguments"]["value"]
     assert "value" not in card_fields(SimpleNamespace(input=CallIn), {"tool": "run"})[1]  # type: ignore[arg-type]
+    # an empty list or object proposed is an empty field, not "[]" (the walk of 2026-11-24)
+    empty = card_fields(SimpleNamespace(input=CallIn), {"tool": "run", "arguments": {}})  # type: ignore[arg-type]
+    assert "value" not in empty[1]
 
 
 async def test_a_proposal_leaves_an_audit_entry_and_a_usage_event(tmp_path, ctx):

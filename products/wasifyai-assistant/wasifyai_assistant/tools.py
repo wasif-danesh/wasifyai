@@ -557,7 +557,8 @@ def card_fields(action: Action, params: dict[str, Any]) -> list[dict[str, Any]]:
                 row[out] = spec[key]
         if name in params and isinstance(params[name], str | int | float | bool):
             row["value"] = params[name]
-        elif structured and isinstance(params.get(name), dict | list):
+        elif structured and isinstance(params.get(name), dict | list) and params[name]:
+            # (an empty list or object leaves the field empty, not "[]": the action's default)
             # an object (another app's tool arguments, such as the code it will run) is shown as
             # JSON the person can read and edit; the action parses the edited text back
             row["value"] = json.dumps(params[name], indent=2, ensure_ascii=False)

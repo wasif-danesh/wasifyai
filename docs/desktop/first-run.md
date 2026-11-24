@@ -12,6 +12,8 @@ and `docs/spikes/first-run-fr1-fr5.md`.
   - Otherwise it downloads the chat model the model button would pick, and says how big it is.
   - "I'd rather use an API key" opens Settings › Your keys. When the computer is too small for a chat model, the
     key is the main button and "Download a chat model instead" is the second.
+  - "I'd rather use my Claude or ChatGPT plan" (always offered, ADR-0110) closes the welcome and opens the chat's model
+    button on Your plan.
   - The steps are Welcome, then Getting ready (progress, Stop), then You're ready (Start chatting).
   - It shows once (`wasify.first-run.done` in the window's storage) and only while chat is not set up, so a person
     who had chat before never sees it. **Not now** goes to the home. While chat is still not set up, the home then

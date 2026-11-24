@@ -27,6 +27,17 @@ def _supported(engine: Any) -> bool:
     return installer is None or bool(installer.supported)
 
 
+def _chat_runs_here(state: Any) -> bool:
+    """Whether the chat answers with a model on this computer, as against the person's own plan or a
+    cloud model on a key."""
+    plan = getattr(state, "chat_plan", None)
+    if plan is not None and plan.choices.get() is not None:
+        return False
+    keys = getattr(state, "own_keys", None)
+    known = getattr(keys, "known", None)
+    return not (callable(known) and known("chat") is not None)
+
+
 class ApiToolHost:
     def __init__(
         self,
@@ -302,6 +313,7 @@ class ApiToolHost:
             )
         facts["export_folder_set"] = state.export_dir is not None
         # the desktop runs models in one memory slot (ADR-0056): an action that needs a model of its
-        # own pauses the chat model while it runs; the card says so
-        facts["one_slot"] = svc is not None
+        # own pauses the chat model while it runs; the card says so when the chat's model is on
+        # this computer (not on the person's own plan, ADR-0110, nor on a cloud key)
+        facts["one_slot"] = svc is not None and _chat_runs_here(state)
         return facts

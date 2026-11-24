@@ -67,3 +67,31 @@ def test_a_nul_in_a_run_input_is_taken_out():
 
     got = without_nul({"text": "hi\x00 there", "list": ["a\x00", 1, None], "k\x00": {"x": "\x00"}})
     assert got == {"text": "hi there", "list": ["a", 1, None], "k": {"x": ""}}
+
+
+def test_the_card_says_the_chat_model_pauses_only_when_the_chat_runs_here(tmp_path):
+    """The one memory slot is shared only with a chat model on this computer: on the person's own
+    plan (ADR-0110) or a cloud key the chat does not pause."""
+    from types import SimpleNamespace
+
+    from wasifyai_api.plan_chat import PlanChoice, PlanChoiceStore
+
+    models = SimpleNamespace(models_dir=tmp_path, catalogue={}, locate=lambda f: None)
+    plan = SimpleNamespace(choices=PlanChoiceStore(tmp_path / "chat-plan.json"))
+    routes: dict[str, object] = {}
+    keys = SimpleNamespace(known=routes.get)
+    state = SimpleNamespace(desktop_models=models, export_dir=None, chat_plan=plan, own_keys=keys)
+    host = ApiToolHost(lambda: None, lambda: None, state=lambda: state)
+    assert host.facts()["one_slot"] is True
+    plan.choices.set(PlanChoice("claude-code", "sonnet"))
+    assert host.facts()["one_slot"] is False
+    plan.choices.set(None)
+    routes["chat"] = object()  # the chat runs on a cloud model with a key
+    assert host.facts()["one_slot"] is False
+    # the web has no memory slot at all
+    web = ApiToolHost(
+        lambda: None,
+        lambda: None,
+        state=lambda: SimpleNamespace(desktop_models=None, export_dir=None),
+    )
+    assert web.facts()["one_slot"] is False

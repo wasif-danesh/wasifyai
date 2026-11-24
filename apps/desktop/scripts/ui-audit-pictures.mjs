@@ -29,12 +29,15 @@
 //   apps/desktop/scripts/ui-audit.sh light coding-setup         The coding engine (ADR-0102, C1a) set up from Settings,
 //                                                               Optional parts, with the real downloads; then
 //                                                               coding-repair and coding-remove the same way
+//   The code-* walks run on the model a new session starts with. On a throwaway data folder with no key that is
+//   Code's "On this computer": set WASIFYAI_AUDIT_LANGUAGE_FILE=<a .gguf> and the walk first chooses that file
+//   in the Model hub, as a person does (the v1 gate's walks ran on Qwen3.8-27B-Q4_0.gguf, LM3)
 //   WASIFYAI_AUDIT_FOLDER=<a project> apps/desktop/scripts/ui-audit.sh light code-plan
 //                                                               Code (ADR-0101, C1b): the first screen, a folder
 //                                                               chosen, a question asked of a real model in Plan
 //                                                               and its answer; needs the coding engine set up and
-//                                                               a model that is ready (CODING_OLLAMA_URL for the
-//                                                               local one); use a throwaway DESKTOP_DATA_DIR
+//                                                               a model that is ready (the Model hub's chosen
+//                                                               model for the local one); use a throwaway DESKTOP_DATA_DIR
 //   WASIFYAI_AUDIT_FOLDER=<a project> apps/desktop/scripts/ui-audit.sh light code-edit
 //                                                               Code (C2): a session in "Ask me" on a real model: a
 //                                                               change, the card for a file Undo cannot put back
@@ -78,6 +81,14 @@
 //                                                               changes applied. WASIFYAI_AUDIT_PROGRAMS picks
 //                                                               them (claude-code,codex). Same needs as code-agent,
 //                                                               with engine/harness set up
+//   WASIFYAI_AUDIT_FOLDER=<an empty folder> apps/desktop/scripts/ui-audit.sh light code-agent-install
+//                                                               Installs for a session on Claude Code (ADR-0107,
+//                                                               H4): asked to add an npm package, the program tries
+//                                                               to install and cannot; the card's "Install them"
+//                                                               runs the project's own npm install in Wasify AI's
+//                                                               sandbox, read back from disk, and the program is
+//                                                               told and carries on. Same needs as
+//                                                               code-agent-scheduled
 //   WASIFYAI_AUDIT_FOLDER=<an empty folder> apps/desktop/scripts/ui-audit.sh light code-extensions
 //                                                               Extensions (X2): the short list for a project, a
 //                                                               public skill's text, one of ours firing in a real
@@ -97,6 +108,13 @@
 //                                                               it, and Code's line in "What this computer can
 //                                                               do". A throwaway DESKTOP_DATA_DIR with the coding
 //                                                               engine and DESKTOP_SECRET_STORE=keychain (paid)
+//   WASIFYAI_AUDIT_FOLDER=<a project> WASIFYAI_AUDIT_GGUF_FOLDERS=<dir>:<dir> \
+//     apps/desktop/scripts/ui-audit.sh light code-local          Code's model on this computer, the Model hub's
+//                                                               choice (LM2): nothing chosen, Qwen3 8B (the
+//                                                               caution), Qwen3.8 27B (Q4_0) chosen, a session
+//                                                               on it, then on Qwen3 8B with the line that says
+//                                                               so. A throwaway DESKTOP_DATA_DIR with the coding
+//                                                               and language engines; the folders hold the files
 //   apps/desktop/scripts/ui-audit.sh light settings-make        Settings as redesigned on 2026-11-15: each of the six
 //                                                                groups, the Media keys and what they cover, a Privacy
 //                                                                link to its group, Other apps (Connect an app, For
@@ -195,6 +213,38 @@ window.isTauri = true;
 async function engine(path) {
   const res = await fetch(`${BASE}${path}`, { headers: { authorization: `Bearer ${TOKEN}` } });
   return res.ok ? res.json() : null;
+}
+// a change through the engine's own route, as a screen makes it (`method` PUT or POST)
+async function engineSend(method, path, body) {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+// the GGUF language files in `folders`, as the Model hub's discovery finds them (it is switched on and scanned)
+async function foundGguf(folders) {
+  await engineSend("PUT", "/desktop/discovery/settings", { enabled: true, folders });
+  await engineSend("POST", "/desktop/discovery/scan", {});
+  let items = [];
+  for (let n = 0; n < 120; n++) {
+    const found = await engine("/desktop/discovery");
+    items = (found?.items ?? []).filter((i) => i.kind === "language" && i.format === "gguf");
+    if (!found?.running && items.length) break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return items;
+}
+// WASIFYAI_AUDIT_LANGUAGE_FILE: the Model hub's language model for every walk, chosen as a person does (LM3), so
+// Code's "On this computer" runs on it
+if (process.env.WASIFYAI_AUDIT_LANGUAGE_FILE) {
+  const file = process.env.WASIFYAI_AUDIT_LANGUAGE_FILE;
+  const item = (await foundGguf([dirname(file)])).find((i) => i.path === file);
+  if (!item) throw new Error(`the Model hub did not find ${file}`);
+  await engineSend("PUT", "/desktop/language", { item_id: item.id, context: 8192 });
+  console.log(`the Model hub's language model: ${item.name ?? file}`);
 }
 // a saved notebook and a saved chat, so the pictures show real content
 const notebooks = (await engine("/products/wasifyai-notebooks/notebooks")) ?? [];
@@ -333,6 +383,108 @@ for (const scheme of ["light", "dark"]) {
       await shot(page, name + suffix);
       if (scheme === "light" && TALL.has(name)) await shot(page, `${name}-tall`, 2000);
     });
+  }
+  if (names.has("first-run")) {
+    // ADR-0109 stage FR5, on a fresh data folder: the Welcome's one button, then Ready. With Ollama running the
+    // button uses its model (no download); without, it downloads the chat model for real.
+    await attempt("first-run", async () => {
+      const log = [];
+      const t = Date.now();
+      page.on("console", (m) => log.push(`${m.type()} ${m.text().slice(0, 200)}`));
+      page.on("pageerror", (e) => log.push(`pageerror ${String(e).slice(0, 300)}`));
+      page.on("request", (r) =>
+        log.push(`> ${Math.round((Date.now() - t) / 100) / 10}s ${r.url().slice(0, 120)}`),
+      );
+      page.on("requestfinished", (r) =>
+        log.push(`< ${Math.round((Date.now() - t) / 100) / 10}s ${r.url().slice(0, 120)}`),
+      );
+      page.on("requestfailed", (r) =>
+        log.push(`x ${r.url().slice(0, 120)} ${r.failure()?.errorText}`),
+      );
+      process.on("exit", () => process.env.WASIFYAI_FIRST_RUN_LOG && console.log(log.join("\n")));
+      await open(page, "/");
+      await page.evaluate(() => localStorage.removeItem("wasify.first-run.done"));
+      await page.reload();
+      await page.getByRole("heading", { name: "Welcome to Wasify AI" }).waitFor({ timeout: 30000 });
+      const t0 = Date.now();
+      await page
+        .getByRole("button", { name: /^Get started/ })
+        .first()
+        .waitFor({ timeout: 45000 })
+        .catch(async (e) => {
+          await shot(page, "first-run-stuck");
+          console.log(
+            "  stuck at:",
+            (await page.locator("#main").innerText()).replace(/\s+/g, " "),
+          );
+          throw e;
+        });
+      console.log(`  the button came after ${Math.round((Date.now() - t0) / 1000)} s`);
+      await shot(page, `first-run-welcome${suffix}`);
+      if (scheme === "light") {
+        console.log("  it says:", (await page.locator("#main").innerText()).replace(/\s+/g, " "));
+        await page.getByRole("button", { name: "Get started", exact: true }).click();
+        await page.getByRole("heading", { name: "You’re ready" }).waitFor({ timeout: 5 * 60_000 });
+        await shot(page, "first-run-ready");
+        await page.getByRole("button", { name: "Start chatting" }).click();
+        await page.waitForTimeout(1500);
+        await shot(page, "first-run-home");
+      }
+    });
+  }
+  if (names.has("setup-groups")) {
+    // ADR-0109 stage FR4: each group's one card in place of its screens, and one group set up for real
+    const cards = [
+      ["music-create", "/music/create", "Music"],
+      ["voice-speak", "/voice/speak", "Voice"],
+      ["voice-edit", "/voice/edit-speech", "Voice"],
+      ["image-create", "/images/create", "Images"],
+      ["video-create", "/video/create", "Video"],
+      ["voice-lipsync", "/voice/lip-sync", "Lip sync"],
+      ["creative", "/creative", "Creative Studio"],
+      ["video-builder", "/video/builder", "Motion graphics"],
+      ["model3d", "/images/3d", "3D model"],
+      ["meetings", "/meetings", "Meetings"],
+      ["notebooks", "/notebooks", "Notebook"],
+      ["code", "/code", "Code"],
+    ];
+    for (const [name, path, label] of cards) {
+      await attempt(`setup-${name}`, async () => {
+        await open(page, path);
+        await page
+          .getByRole("heading", { name: `Get started with ${label}` })
+          .waitFor({ timeout: 15000 });
+        await shot(page, `setup-${name}${suffix}`);
+        if (scheme === "light")
+          console.log(
+            `  ${label}:`,
+            (await page.locator("section[aria-label^='Set up']").innerText()).replace(/\s+/g, " "),
+          );
+      });
+    }
+    if (scheme === "light" && process.env.WASIFYAI_SETUP_GROUP) {
+      // one group set up for real by its button: the card goes, the screen opens, and its other items open too
+      const [path, label, other] = process.env.WASIFYAI_SETUP_GROUP.split("|");
+      await attempt("setup-run", async () => {
+        await open(page, path);
+        const card = page.getByRole("heading", { name: `Get started with ${label}` });
+        await card.waitFor({ timeout: 15000 });
+        await page.getByRole("button", { name: new RegExp(`^Set up ${label}`) }).click();
+        await page.waitForTimeout(3000);
+        await shot(page, "setup-run-working");
+        await card.waitFor({ state: "detached", timeout: 150 * 60_000 });
+        await page.waitForTimeout(2000);
+        await shot(page, "setup-run-done");
+        // every other screen the group should now open, "a,b,c"
+        for (const [n, o] of (other ? other.split(",") : []).entries()) {
+          await open(page, o);
+          await page.waitForTimeout(1500);
+          const again = await page.getByRole("heading", { name: /^Get started with / }).count();
+          console.log(`  ${o} after the setup: ${again ? "still a card" : "the screen"}`);
+          await shot(page, n === 0 ? "setup-run-other" : `setup-run-other-${n}`);
+        }
+      });
+    }
   }
   if (scheme === "light" && names.has("image-make")) {
     // the check of stage U3: a real picture made in the window, the stage pictured while it works and when it is done
@@ -1194,7 +1346,7 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("button", { name: "Make the video" }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("button", { name: "Make the video" }).click();
-      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 45000 });
       seen.video = await dialog.locator("video").getAttribute("src");
       console.log(`ARRANGE ${JSON.stringify(seen)}`);
     });
@@ -1403,7 +1555,7 @@ for (const scheme of ["light", "dark"]) {
       await page.getByRole("button", { name: "Make the video" }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByRole("button", { name: "Make the video" }).click();
-      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 180000 });
+      await dialog.getByText("Your video is in the Library").waitFor({ timeout: 45000 });
       await shot(page, "motion-editor-made");
       seen.check = await dialog.getByText(/Checked:/).innerText();
       seen.video = await dialog.locator("video").getAttribute("src");
@@ -1963,6 +2115,88 @@ for (const scheme of ["light", "dark"]) {
       await line.waitFor({ timeout: 20_000 });
       console.log(`  Settings says: ${(await line.innerText()).replace(/\s+/g, " ")}`);
       await shot(page, "code-models-can-do", 1200);
+    });
+  }
+  // LM2 (docs/coding-local-model-plan.md): Code's model on this computer is the one chosen in the Model hub
+  if (scheme === "light" && names.has("code-local")) {
+    await attempt("code-local", async () => {
+      const folders = (process.env.WASIFYAI_AUDIT_GGUF_FOLDERS ?? "").split(":").filter(Boolean);
+      await engineSend("PUT", "/desktop/language", { clear: true });
+      const items = await foundGguf(folders);
+      const named = (re) => {
+        const it = items.find((i) => re.test(i.path));
+        if (!it) throw new Error(`no file like ${re} in ${folders.join(", ")}`);
+        return it;
+      };
+      const big = named(/Qwen3\.8-27B-Q4_0\.gguf$/);
+      const small = named(/Qwen3-8B-Q4_K_M\.gguf$/);
+      const button = () =>
+        page.getByRole("button", { name: /On this computer|Select coding model|Claude/ }).first();
+      // the button's panel, open on On this computer, said and pictured
+      const panel = async (name) => {
+        // the walk changes the model through the engine, which the window does not hear: a fresh page reads it
+        await open(page, "/code");
+        await page.reload();
+        await page.locator("#main").waitFor();
+        await page.getByRole("button", { name: "Choose a folder" }).waitFor();
+        console.log(`${name}: the button says "${(await button().innerText()).trim()}"`);
+        await button().click();
+        const dialog = page.getByRole("dialog");
+        await dialog.waitFor();
+        await dialog.getByRole("tab", { name: "On this computer" }).click();
+        await page.waitForTimeout(800);
+        console.log(`  the panel says: ${(await dialog.innerText()).replace(/\s+/g, " ")}`);
+        await shot(page, name, 1000);
+        return dialog;
+      };
+      // nothing chosen: the row says so, and its button opens the Model hub
+      const none = await panel("code-local-none");
+      await none.getByRole("button", { name: "Open the Model hub" }).click();
+      await page.waitForURL(/#\/models/, { timeout: 10_000 });
+      console.log(`code-local: the button opened ${new URL(page.url()).hash}`);
+      // a small model: usable, with the caution and the tested one named
+      await engineSend("PUT", "/desktop/language", { item_id: small.id, context: 8192 });
+      await panel("code-local-small");
+      await page.keyboard.press("Escape");
+      // the tested model, chosen for a new session
+      await engineSend("PUT", "/desktop/language", { item_id: big.id, context: 8192 });
+      const chosen = await panel("code-local-chosen");
+      await chosen
+        .getByRole("button", { name: /Qwen3\.8[- ]27B/ })
+        .first()
+        .click();
+      await page.getByRole("button", { name: /Qwen3\.8[- ]27B · On this computer/ }).waitFor();
+      // a session on it, in Plan
+      await page.getByRole("button", { name: "Choose a folder" }).click();
+      const box = page.getByRole("textbox", { name: "Ask about this project" });
+      await box.waitFor();
+      const at = new URL(page.url()).hash.slice(1);
+      await page.getByRole("button", { name: "How much the agent asks: Ask me" }).click();
+      await page.getByRole("menuitemradio", { name: /^Plan/ }).click();
+      const ask = async (words) => {
+        const began = Date.now();
+        const before = await page.getByText("Nothing was changed").count();
+        await box.fill(words);
+        await box.press("Enter");
+        await page.getByText("Nothing was changed").nth(before).waitFor({ timeout: 900_000 });
+        return ((Date.now() - began) / 1000).toFixed(1);
+      };
+      console.log(
+        `code-local: Qwen3.8 27B answered in ${await ask("In one sentence: what is this project?")} s`,
+      );
+      // the Model hub's model changes while the session is open: the session goes on with it, and says so
+      await engineSend("PUT", "/desktop/language", { item_id: small.id, context: 8192 });
+      await open(page, at);
+      await page.reload();
+      await box.waitFor();
+      const line = page.getByText(/^Now on .*, chosen in the Model hub/);
+      await line.waitFor({ timeout: 20_000 });
+      console.log(`code-local: the session says "${(await line.innerText()).trim()}"`);
+      console.log(
+        `code-local: Qwen3 8B answered in ${await ask("Which file would you read first, and why?")} s`,
+      );
+      await page.waitForTimeout(800);
+      await shot(page, "code-local-session", 1100);
     });
   }
   // stage C1b of the coding agent: Code, from the first screen to an answer in Plan, with a real model
@@ -3249,6 +3483,107 @@ for (const scheme of ["light", "dark"]) {
         console.log(`code-agent-scheduled: ${prog.id} applied: ${fixed.replace(/\n/g, " ⏎ ")}`);
         await shot(page, `agent-scheduled-applied-${prog.id}`, 1200);
       }
+    });
+  }
+  if (scheme === "light" && names.has("code-agent-install")) {
+    await attempt("code-agent-install", async () => {
+      const { existsSync, mkdirSync: mk, readFileSync, writeFileSync } = await import("node:fs");
+      const base = process.env.WASIFYAI_AUDIT_FOLDER ?? "";
+      if (!base) throw new Error("WASIFYAI_AUDIT_FOLDER is not set");
+      const folder = join(base, "tally");
+      mk(folder, { recursive: true });
+      writeFileSync(
+        join(folder, "package.json"),
+        '{\n  "name": "tally",\n  "version": "1.0.0",\n  "private": true\n}\n',
+      );
+      writeFileSync(join(folder, "check.js"), "console.log('nothing checked yet');\n");
+      const installed = () => existsSync(join(folder, "node_modules", "is-number", "package.json"));
+      const modelButton = () =>
+        page
+          .locator('button[aria-haspopup="dialog"]')
+          .filter({ hasNotText: /Search/ })
+          .first();
+      await open(page, "/code");
+      await modelButton().waitFor({ timeout: 60_000 });
+      await modelButton().click();
+      const panel = page.getByRole("dialog", { name: "Select coding model" });
+      await panel.getByRole("tab", { name: "Your agent" }).click();
+      const list = panel.getByRole("list", { name: "Claude Code" });
+      await list.getByRole("button", { name: /^Haiku/ }).waitFor({ timeout: 300_000 });
+      await list.getByRole("button", { name: /^Haiku/ }).click();
+      await page
+        .locator('button[aria-haspopup="dialog"]')
+        .filter({ hasText: /Claude Code ·/ })
+        .first()
+        .waitFor();
+      await page.evaluate((f) => {
+        window.__wasifyAuditFolder = f;
+      }, folder);
+      await page.getByRole("button", { name: "Choose a folder" }).first().click();
+      const note = page.getByRole("dialog", { name: "Claude Code works a little differently" });
+      const box = page.getByRole("textbox", { name: "Ask about this project" });
+      await Promise.race([note.waitFor(), box.waitFor()]);
+      if (await note.count()) await note.getByRole("button", { name: "Start the session" }).click();
+      await box.waitFor({ timeout: 60_000 });
+      await page.getByRole("button", { name: "How much the agent asks: Plan" }).click();
+      await page.getByRole("menuitemradio", { name: /Work on its own/ }).click();
+      await box.fill(
+        "Add the npm package is-number, version 7.0.0, to this project's dependencies in package.json and install it with npm. Then make check.js print isNumber(5) using it, and run node check.js.",
+      );
+      await box.press("Enter");
+      const began = Date.now();
+      const card = page.getByRole("region", { name: "Claude Code needs packages" });
+      const stop = page.getByRole("button", { name: "Stop" });
+      let rounds = 0;
+      // the program tries to install, the card offers the project's own install; once installed the program is told
+      // and carries on. It may try again after adding the package to package.json: then the card comes back.
+      for (;;) {
+        if (Date.now() - began > 900_000) throw new Error("no end after 15 minutes");
+        if (await card.count()) {
+          rounds += 1;
+          const tried = (await card.innerText()).replace(/\s+/g, " ");
+          console.log(`code-agent-install: round ${rounds}: ${tried.slice(0, 400)}`);
+          if (rounds === 1) await shot(page, "agent-install-offered", 1000);
+          await card.getByRole("button", { name: "Install them" }).click();
+          await page
+            .getByRole("region", { name: /^(Installed|The install did not work)$/ })
+            .waitFor({ timeout: 600_000 });
+          const done = (
+            await page
+              .getByRole("region", { name: /^(Installed|The install did not work)$/ })
+              .innerText()
+          ).replace(/\s+/g, " ");
+          console.log(`code-agent-install: round ${rounds} done: ${done.slice(0, 400)}`);
+          if (rounds === 1) await shot(page, "agent-install-installed", 1000);
+          if (rounds > 3) throw new Error("the card came back more than three times");
+        }
+        const stopped = page.getByText(
+          /^(Claude Code is not signed in any more|Claude Code stopped: your plan's limit is reached)$/,
+        );
+        if (await stopped.count()) {
+          await shot(page, "agent-install-stopped", 1000);
+          throw new Error(`the program stopped: ${await stopped.first().innerText()}`);
+        }
+        if (installed() && !(await stop.count()) && !(await card.count())) {
+          await page.waitForTimeout(3000);
+          if (!(await stop.count()) && !(await card.count())) break;
+        }
+        await page.waitForTimeout(2000);
+      }
+      const told = page.getByText(/^I installed the project's packages for you/);
+      console.log(`code-agent-install: the program was told: ${(await told.count()) > 0}`);
+      console.log(
+        `code-agent-install: ended after ${((Date.now() - began) / 1000).toFixed(1)} s; is-number installed: ${installed()}; package.json: ${readFileSync(join(folder, "package.json"), "utf8").replace(/\s+/g, " ")}`,
+      );
+      console.log(
+        `code-agent-install: check.js: ${readFileSync(join(folder, "check.js"), "utf8").replace(/\n/g, " ⏎ ")}`,
+      );
+      const thread = (await page.getByRole("region", { name: "Chat" }).innerText()).replace(
+        /\s+/g,
+        " ",
+      );
+      console.log(`code-agent-install: the chat ends: ${thread.slice(-700)}`);
+      await shot(page, "agent-install-carried-on", 1200);
     });
   }
   if (scheme === "light" && names.has("code-browser")) {

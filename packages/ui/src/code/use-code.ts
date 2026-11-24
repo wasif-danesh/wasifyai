@@ -129,6 +129,19 @@ export function useCode(api: CodeApi) {
                   filesTick: s.filesTick + 1,
                 }));
               }
+            } else if (event.event === "code_install") {
+              // the install card for a session on a program: offered, installing, how it went, or closed
+              const { seq: _s, run_id: _r, thread_id: _t, ts: _ts, event: _e, ...card } = event;
+              const ran = card.state === "installed" || card.state === "failed";
+              setState((s) =>
+                s.session?.id === openId
+                  ? {
+                      ...s,
+                      session: { ...s.session, install: card.state === "closed" ? null : card },
+                      filesTick: ran ? s.filesTick + 1 : s.filesTick,
+                    }
+                  : s,
+              );
             } else if (event.event === "code_state" && event.state === "checking") {
               // the bar says "Checking" while the check runs
               setState((s) =>
@@ -333,6 +346,26 @@ export function useCode(api: CodeApi) {
     [api, patch],
   );
 
+  /** Install what the project lists for the session's program; the card follows on the stream. */
+  const install = useCallback(async () => {
+    if (!openId) return;
+    try {
+      patch({ session: await api.install(openId), error: null });
+    } catch (e) {
+      patch({ error: say(e, "The packages could not be installed.") });
+    }
+  }, [api, openId, patch]);
+
+  /** "Not now": close the install card. It comes back when the program tries to install again. */
+  const notNow = useCallback(async () => {
+    if (!openId) return;
+    try {
+      patch({ session: await api.notNow(openId), error: null });
+    } catch (e) {
+      patch({ error: say(e, "The card could not be closed.") });
+    }
+  }, [api, openId, patch]);
+
   const setLimit = useCallback(
     async (most: number, unit: "usd" | "tokens" = "usd") => {
       if (!openId) return;
@@ -368,5 +401,7 @@ export function useCode(api: CodeApi) {
     runCheck,
     tryAgain,
     signIn,
+    install,
+    notNow,
   };
 }

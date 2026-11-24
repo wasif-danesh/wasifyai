@@ -3,7 +3,8 @@ import { type ChoicesApi, type ModelSelectHandle, useChoicesVersion } from "@was
 import { type RefObject, useCallback, useEffect, useState } from "react";
 import { isCloud } from "./keyed";
 
-/** The window's self-test (smoke.ts) makes placeholder pictures with no model on the computer: it asks the gate to let it. */
+/** The window's self-test (smoke.ts) makes placeholder pictures with no model on the computer: it asks the gate to let it.
+ * The setup cards and the first run (ADR-0109) let it through too, so it reaches the screens themselves. */
 export const gate = { open: false };
 
 /**

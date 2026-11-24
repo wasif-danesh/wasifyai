@@ -2,7 +2,7 @@
 import type { CodeApi, CodeHarness, CodeModel, ComponentView } from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
 import { planName } from "./agents";
-import { CODE_MODEL_KEY, chosenOf, codeChoices } from "./code-choices";
+import { CODE_MODEL_KEY, WEAK, chosenOf, codeChoices, localFoot, localRow } from "./code-choices";
 
 const model = (over: Partial<CodeModel>): CodeModel => ({
   id: "claude-sonnet-5-5",
@@ -31,7 +31,18 @@ const MODELS = [
     counted_in: "tokens",
   }),
   model({ id: "gemini:gemini-3.8-pro", title: "Gemini 3.8 Pro", ready: false, tested: false }),
-  model({ id: "qwen-27b-ollama", title: "Qwen 27B", where: "this-computer", provider: "ollama" }),
+  model({
+    id: "this-computer",
+    title: "Qwen3.8 27B on this computer",
+    where: "this-computer",
+    provider: "this-computer",
+    model_name: "Qwen3.8 27B",
+    measured: "33 of 36 tasks",
+    weak: false,
+    memory_bytes: 23.6e9,
+    fix: "",
+    why: "",
+  }),
 ];
 
 function made(installed = true, models: CodeModel[] = MODELS) {
@@ -90,6 +101,91 @@ describe("the models of Code in the picker", () => {
     const rows = (await api.list()).choices;
     expect(rows.every((r) => r.state === "unavailable")).toBe(true);
     expect(rows[0]?.unavailableReason).toMatch(/Needs the coding engine/);
+  });
+});
+
+describe("the model chosen in the Model hub, as Code's row on this computer (LM2)", () => {
+  const LOCAL = MODELS[4] as CodeModel;
+  const places = { modelHub: vi.fn(), languageEngine: vi.fn() };
+
+  it("is named by the model, tested and recommended when measured, with what it needs in memory", () => {
+    const row = localRow({ ...LOCAL }, true, true, places);
+    expect(row).toMatchObject({
+      title: "Qwen3.8 27B",
+      tier: "recommended",
+      state: "ready",
+      note: null,
+      detail: "about 24 GB of memory while it works",
+      fix: null,
+    });
+    expect(row.plain).toMatch(/^Tested for coding: 33 of 36 tasks here\. Runs on this computer/);
+    expect(localFoot(LOCAL, places).map((f) => f.text)).toEqual([
+      expect.stringMatching(/^Coding and chat use the same model/),
+    ]);
+  });
+
+  it("may be used when small, with the caution and the tested one named under it", () => {
+    const small = { ...LOCAL, model_name: "Qwen3 4B", measured: "", weak: true, memory_bytes: 0 };
+    const row = localRow(small, true, true, places);
+    expect(row).toMatchObject({
+      title: "Qwen3 4B",
+      tier: "also",
+      state: "ready",
+      note: WEAK,
+      detail: null,
+    });
+    expect(row.plain).toMatch(/^Not tested for coding here\. Small models often stop early/);
+    const foot = localFoot(small, places);
+    expect(foot[0]?.text).toMatch(/^Qwen3.8 27B passed 33 of 36/);
+    foot[0]?.link?.run();
+    expect(places.modelHub).toHaveBeenCalled();
+  });
+
+  it("says why it cannot run, with the place that puts it right", () => {
+    const none = { ...LOCAL, model_name: "", measured: "", ready: false, fix: "models" as const };
+    const row = localRow(
+      { ...none, why: "Choose a language model in the Model hub first." },
+      false,
+      true,
+      places,
+    );
+    expect(row).toMatchObject({
+      title: "No language model chosen",
+      state: "unavailable",
+      note: null,
+    });
+    expect(row.unavailableReason).toBe("Choose a language model in the Model hub first.");
+    expect(row.fix?.label).toBe("Open the Model hub");
+    const engine = localRow(
+      { ...LOCAL, ready: false, fix: "settings", why: "The language engine is not set up yet." },
+      false,
+      true,
+      places,
+    );
+    expect(engine.fix?.label).toBe("Open Settings");
+    engine.fix?.run();
+    expect(places.languageEngine).toHaveBeenCalled();
+    // the coding engine first: its own words, and nothing of the Model hub
+    const noEngine = localRow({ ...LOCAL }, false, false, places);
+    expect(noEngine.unavailableReason).toMatch(/Needs the coding engine/);
+    expect(noEngine.fix).toBeNull();
+  });
+
+  it("gives the picker the heading and the lines under the rows", async () => {
+    const kept = new Map<string, string>();
+    const memory = {
+      get: (k: string) => kept.get(k) ?? null,
+      set: (k: string, v: string) => void kept.set(k, v),
+    };
+    const code = {
+      engine: async () => ({ supported: true, installed: true, running: false }),
+      models: async () => MODELS,
+    } as unknown as CodeApi;
+    const api = codeChoices({ code, memory, places });
+    expect(api.elsewhere?.heading).toBe("Chosen in the Model hub");
+    api.elsewhere?.change?.run();
+    expect(places.modelHub).toHaveBeenCalled();
+    expect((await api.list()).foot?.length).toBe(1);
   });
 });
 

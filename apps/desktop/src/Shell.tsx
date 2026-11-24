@@ -29,12 +29,13 @@ import {
 } from "@wasifyai/ui";
 import { ArrowLeft, ArrowRight, PanelLeft } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SetupGate } from "./SetupGate";
 import { Sidebar } from "./Sidebar";
 import { client, connectionsApi, creationsApi, externalApi, voiceApi } from "./api";
 import { useItemsTheModelCannotDo } from "./engine-hooks";
 import { runningJobs } from "./jobs";
 import { onStoppedFromMenu } from "./meetings";
-import { resolveItem, titleFor } from "./menu";
+import { ROUTES, resolveItem, titleFor } from "./menu";
 import { CodePage, ExtensionsPage, ScheduledPage } from "./pages/Code";
 import { CreatePage } from "./pages/Create";
 import { CreationsPage, navFor, toolFor } from "./pages/Creations";
@@ -51,6 +52,7 @@ import { VideoPage } from "./pages/Video";
 import { VideoBuilderPage } from "./pages/VideoBuilder";
 import { remembered } from "./remember";
 import { useHistoryButtons, useRoute } from "./router";
+import { itemOfRoute } from "./setup-groups";
 import { videos } from "./videos";
 
 const COLLAPSED_KEY = "wasifyai:sidebar-collapsed";
@@ -281,118 +283,125 @@ export function Shell() {
           )}
           <div className="relative flex min-w-0 flex-1 flex-col">
             <main id="main" className="min-h-0 flex-1 overflow-auto">
-              {route === "home" ? (
-                <HomePage
-                  key={chatKey}
-                  go={go}
-                  conversationId={conversationId}
-                  onAdopt={adopt}
-                  onOpenEntry={(entry) => {
-                    setLibraryOpen({ kind: entry.kind, id: entry.id });
-                    go("creations");
-                  }}
-                />
-              ) : null}
-              {route === "create" ? (
-                <CreatePage
-                  key={`create-${again?.id ?? ""}-${startWith?.styles?.[0]?.id ?? ""}`}
-                  mode="text"
-                  go={go}
-                  preset={again ? presetOf(again) : startWith}
-                  onEditThis={(image) => {
-                    setEditSource({ url: image.image_url, name: `${image.id}.png`, id: image.id });
-                    go("edit");
-                  }}
-                  onAnimateThis={animateThis}
-                />
-              ) : null}
-              {route === "edit" ? (
-                <CreatePage
-                  key={`edit-${editSource?.url ?? ""}`}
-                  mode="image"
-                  go={go}
-                  source={editSource}
-                  onAnimateThis={animateThis}
-                />
-              ) : null}
-              {route === "reference" ? (
-                <CreatePage mode="reference" go={go} onAnimateThis={animateThis} />
-              ) : null}
-              {route === "inpaint" ? (
-                <CreatePage mode="inpaint" go={go} onAnimateThis={animateThis} />
-              ) : null}
-              {route === "creations" ? (
-                <CreationsPage go={go} handOff={handOff} open={libraryOpen} />
-              ) : null}
-              {/* the routes that were "Your images", "Your videos" and "Your music" (ADR-0093, U8) */}
-              {route === "library" ? (
-                <CreationsPage go={go} handOff={handOff} filter="images" />
-              ) : null}
-              {route === "videos" ? (
-                <CreationsPage go={go} handOff={handOff} filter="videos" />
-              ) : null}
-              {route === "tracks" ? (
-                <CreationsPage go={go} handOff={handOff} filter="songs" />
-              ) : null}
-              {route === "notebooks" ? <NotebooksPage /> : null}
-              {route === "notebook" && notebook ? (
-                <NotebookPage
-                  key={`notebook-${chatKey}`}
-                  notebook={notebook}
-                  onAdopt={adoptNotebook}
-                />
-              ) : null}
-              {route === "speak" ? <SpeakPage {...voice} /> : null}
-              {route === "transcribe" ? <TranscribePage {...voice} /> : null}
-              {route === "voices" ? <VoicesPage {...voice} /> : null}
-              {route === "music" ? <MusicPage {...voice} /> : null}
-              {route === "lyrics" ? <LyricsPage {...voice} /> : null}
-              {route === "lipsync" ? <LipSyncPage {...voice} /> : null}
-              {route === "audiobook" ? <AudiobookPage {...voice} /> : null}
-              {route === "dub" ? <DubPage {...voice} /> : null}
-              {route === "separate" ? <ToolPage tool="separate" {...voice} /> : null}
-              {route === "convert" ? <ToolPage tool="convert" {...voice} /> : null}
-              {route === "speechedit" ? <ToolPage tool="edit" {...voice} /> : null}
-              {route === "video" ? (
-                <VideoPage mode="text" go={go} onExtendThis={extendThis} />
-              ) : null}
-              {route === "animate" ? (
-                <VideoPage
-                  key={`animate-${animateSource?.url ?? ""}`}
-                  mode="image"
-                  go={go}
-                  onExtendThis={extendThis}
-                  sourceImage={animateSource}
-                />
-              ) : null}
-              {route === "extend" ? (
-                <VideoPage
-                  key={`extend-${extendSource?.id ?? ""}`}
-                  mode="extend"
-                  go={go}
-                  sourceVideo={extendSource}
-                />
-              ) : null}
-              {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
-              {route === "creative" ? <CreativePage go={go} /> : null}
-              {route === "model3d" ? <Model3dPage go={go} /> : null}
-              {route === "code" ? <CodePage go={go} /> : null}
-              {route === "extensions" ? <ExtensionsPage go={go} /> : null}
-              {route === "scheduled" ? <ScheduledPage go={go} /> : null}
-              {route === "meetings" ? <MeetingsPage go={go} /> : null}
-              {route === "record" ? <RecordPage go={go} /> : null}
-              {route === "people" ? <PeoplePage go={go} /> : null}
-              {route === "train" ? (
-                <TrainPage
-                  go={go}
-                  onUseInCreate={(preset) => {
-                    setStartWith(preset);
-                    go("create");
-                  }}
-                />
-              ) : null}
-              {route === "models" ? <ModelsPage /> : null}
-              {route === "settings" ? <SettingsPage /> : null}
+              {/* a group that is not set up shows its one setup card first (ADR-0109) */}
+              <SetupGate item={itemOfRoute(route, ROUTES, notebook)}>
+                {route === "home" ? (
+                  <HomePage
+                    key={chatKey}
+                    go={go}
+                    conversationId={conversationId}
+                    onAdopt={adopt}
+                    onOpenEntry={(entry) => {
+                      setLibraryOpen({ kind: entry.kind, id: entry.id });
+                      go("creations");
+                    }}
+                  />
+                ) : null}
+                {route === "create" ? (
+                  <CreatePage
+                    key={`create-${again?.id ?? ""}-${startWith?.styles?.[0]?.id ?? ""}`}
+                    mode="text"
+                    go={go}
+                    preset={again ? presetOf(again) : startWith}
+                    onEditThis={(image) => {
+                      setEditSource({
+                        url: image.image_url,
+                        name: `${image.id}.png`,
+                        id: image.id,
+                      });
+                      go("edit");
+                    }}
+                    onAnimateThis={animateThis}
+                  />
+                ) : null}
+                {route === "edit" ? (
+                  <CreatePage
+                    key={`edit-${editSource?.url ?? ""}`}
+                    mode="image"
+                    go={go}
+                    source={editSource}
+                    onAnimateThis={animateThis}
+                  />
+                ) : null}
+                {route === "reference" ? (
+                  <CreatePage mode="reference" go={go} onAnimateThis={animateThis} />
+                ) : null}
+                {route === "inpaint" ? (
+                  <CreatePage mode="inpaint" go={go} onAnimateThis={animateThis} />
+                ) : null}
+                {route === "creations" ? (
+                  <CreationsPage go={go} handOff={handOff} open={libraryOpen} />
+                ) : null}
+                {/* the routes that were "Your images", "Your videos" and "Your music" (ADR-0093, U8) */}
+                {route === "library" ? (
+                  <CreationsPage go={go} handOff={handOff} filter="images" />
+                ) : null}
+                {route === "videos" ? (
+                  <CreationsPage go={go} handOff={handOff} filter="videos" />
+                ) : null}
+                {route === "tracks" ? (
+                  <CreationsPage go={go} handOff={handOff} filter="songs" />
+                ) : null}
+                {route === "notebooks" ? <NotebooksPage /> : null}
+                {route === "notebook" && notebook ? (
+                  <NotebookPage
+                    key={`notebook-${chatKey}`}
+                    notebook={notebook}
+                    onAdopt={adoptNotebook}
+                  />
+                ) : null}
+                {route === "speak" ? <SpeakPage {...voice} /> : null}
+                {route === "transcribe" ? <TranscribePage {...voice} /> : null}
+                {route === "voices" ? <VoicesPage {...voice} /> : null}
+                {route === "music" ? <MusicPage {...voice} /> : null}
+                {route === "lyrics" ? <LyricsPage {...voice} /> : null}
+                {route === "lipsync" ? <LipSyncPage {...voice} /> : null}
+                {route === "audiobook" ? <AudiobookPage {...voice} /> : null}
+                {route === "dub" ? <DubPage {...voice} /> : null}
+                {route === "separate" ? <ToolPage tool="separate" {...voice} /> : null}
+                {route === "convert" ? <ToolPage tool="convert" {...voice} /> : null}
+                {route === "speechedit" ? <ToolPage tool="edit" {...voice} /> : null}
+                {route === "video" ? (
+                  <VideoPage mode="text" go={go} onExtendThis={extendThis} />
+                ) : null}
+                {route === "animate" ? (
+                  <VideoPage
+                    key={`animate-${animateSource?.url ?? ""}`}
+                    mode="image"
+                    go={go}
+                    onExtendThis={extendThis}
+                    sourceImage={animateSource}
+                  />
+                ) : null}
+                {route === "extend" ? (
+                  <VideoPage
+                    key={`extend-${extendSource?.id ?? ""}`}
+                    mode="extend"
+                    go={go}
+                    sourceVideo={extendSource}
+                  />
+                ) : null}
+                {route === "videobuilder" ? <VideoBuilderPage go={go} /> : null}
+                {route === "creative" ? <CreativePage go={go} /> : null}
+                {route === "model3d" ? <Model3dPage go={go} /> : null}
+                {route === "code" ? <CodePage go={go} /> : null}
+                {route === "extensions" ? <ExtensionsPage go={go} /> : null}
+                {route === "scheduled" ? <ScheduledPage go={go} /> : null}
+                {route === "meetings" ? <MeetingsPage go={go} /> : null}
+                {route === "record" ? <RecordPage go={go} /> : null}
+                {route === "people" ? <PeoplePage go={go} /> : null}
+                {route === "train" ? (
+                  <TrainPage
+                    go={go}
+                    onUseInCreate={(preset) => {
+                      setStartWith(preset);
+                      go("create");
+                    }}
+                  />
+                ) : null}
+                {route === "models" ? <ModelsPage /> : null}
+                {route === "settings" ? <SettingsPage /> : null}
+              </SetupGate>
             </main>
           </div>
         </div>

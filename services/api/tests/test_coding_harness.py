@@ -99,7 +99,7 @@ def test_a_harness_model_is_named_by_its_harness_and_anything_else_is_wasify_ais
     assert harness_model("codex:", known) == ("codex", "")
     # a vendor's model and a local one are Wasify AI's own
     assert harness_model("anthropic:claude-opus-5-5", known) is None
-    assert harness_model("qwen-27b-ollama", known) is None
+    assert harness_model("this-computer", known) is None
     assert harness_model("", known) is None
     assert harness_of("claude-code:sonnet") == (CLAUDE, "sonnet")
     assert harness_of("gemini-cli:x") is None  # not in this release (ADR-0107, question 3)

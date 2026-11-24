@@ -34,7 +34,7 @@ export function stateOf(s: ComponentStatus, name: string): EngineState {
 }
 
 /** Set a component up (or follow the set-up already under way) and wait until it is there. */
-function installStep(port: ComponentPort, id: string, label: string, bytes: number): Step {
+export function installStep(port: ComponentPort, id: string, label: string, bytes: number): Step {
   return {
     label,
     bytes,

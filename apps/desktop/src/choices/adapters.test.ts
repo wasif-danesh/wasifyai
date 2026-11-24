@@ -6,7 +6,7 @@ import type { LanguageApi, LanguageState } from "../language";
 import type { ModelEntry, ModelsApi } from "../models";
 import { CATALOGUE_GROUPS, catalogueChoices } from "./catalogue-choices";
 import { chatChoices, fitOf, pickVariant } from "./chat-choices";
-import { recommendedChat } from "./copy";
+import { CHAT_SHELF, recommendedChat } from "./copy";
 import { cloudRow } from "./keyed";
 import { model3dChoices } from "./model3d-choices";
 import type { Step } from "./steps";
@@ -825,6 +825,19 @@ describe("chat", () => {
     expect(pickVariant([v("Q8_0", 4e9), v("Q4_K_M", 2.5e9)], 5e9)?.quant).toBe("Q4_K_M");
     expect(pickVariant([v("Q8_0", 4e9), v("Q2_K", 1.5e9)], 1.4e9)?.quant).toBe("Q2_K");
     expect(pickVariant([], 1)).toBeNull();
+    // the coding model's list names the file that was measured
+    expect(pickVariant([v("Q4_K_M", 16.6e9), v("Q4_0", 16.1e9)], 16.1e9, "Q4_0")?.quant).toBe(
+      "Q4_0",
+    );
+  });
+
+  it("offers the coding model with its measured file, for computers with 32 GB or more", () => {
+    const item = CHAT_SHELF.find((s) => s.repo === "unsloth/Qwen3.8-27B-GGUF");
+    expect(item?.quant).toBe("Q4_0");
+    expect(item?.tier).toBe("advanced");
+    expect(fitOf(item?.memoryGb ?? 0, 16e9)).toBe("too_big");
+    expect(fitOf(item?.memoryGb ?? 0, 32e9)).toBe("tight");
+    expect(fitOf(item?.memoryGb ?? 0, 64e9)).toBe("fits");
   });
 });
 

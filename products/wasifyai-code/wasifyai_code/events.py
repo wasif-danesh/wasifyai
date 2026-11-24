@@ -216,14 +216,16 @@ class Reader:
         text = text_of(observation.get("content"))
         return [self._result(event.get("tool_call_id"), tool, not failed, text)]
 
-    def _result(self, call: Any, tool: Any, ok: bool, text: Any) -> tuple[str, dict[str, Any]]:
+    def _result(
+        self, call: Any, tool: Any, ok: bool, text: Any, given: dict[str, Any] | None = None
+    ) -> tuple[str, dict[str, Any]]:
         call = str(call or "")
         self._open.pop(call, None)
         name = str(tool or self._tools.get(call, ""))
-        return (
-            places.RESULT,
-            {"id": call, "tool": name, "ok": ok, "text": _cut(str(text or ""), MAX_TEXT)},
-        )
+        data = {"id": call, "tool": name, "ok": ok, "text": _cut(str(text or ""), MAX_TEXT)}
+        if given:
+            data["given"] = given  # what the step was given, known only now
+        return places.RESULT, data
 
     # ---- a harness's program (ADR-0107) --------------------------------------------------------
 
@@ -231,6 +233,7 @@ class Reader:
         call = str(event.get("tool_call_id") or event.get("id") or "")
         status = str(event.get("status") or "")
         out: list[tuple[str, dict[str, Any]]] = []
+        given: dict[str, Any] = {}
         if call not in self._acp:
             data = acp_step(event)
             data["id"] = call
@@ -239,9 +242,17 @@ class Reader:
             self._open[call] = data
             self.steps += 1
             out.append((places.STEP, data))
+        elif event.get("raw_input"):
+            # Claude Code says a call first with no input ("Terminal"), and what it ran only when
+            # it ends: what is known now goes out with its result
+            known, later = self._acp[call], acp_step(event)
+            given = {k: v for k, v in later.items() if k != "tool" and known.get(k) != v}
+            known.update(given)
         if status in ("completed", "failed"):
             failed = status == "failed" or bool(event.get("is_error"))
-            out.append(self._result(call, self._acp[call]["tool"], not failed, acp_text(event)))
+            out.append(
+                self._result(call, self._acp[call]["tool"], not failed, acp_text(event), given)
+            )
         return out
 
     def _stats(self, value: Mapping[str, Any]) -> None:

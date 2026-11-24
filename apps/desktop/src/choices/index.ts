@@ -18,6 +18,7 @@ import { CATALOGUE_GROUPS, catalogueChoices } from "./catalogue-choices";
 import { chatChoices } from "./chat-choices";
 import { codeChoices } from "./code-choices";
 import { createEngines } from "./engines";
+import { codePlaces } from "./keyed";
 import { model3dChoices } from "./model3d-choices";
 import { trainChoices } from "./train-choices";
 import { voiceChoices } from "./voice-choices";
@@ -50,7 +51,7 @@ export function createChoicesSource(engines = createEngines()): ChoicesSource {
           CATALOGUE_GROUPS[group],
         );
       case "code":
-        return codeChoices({ code, memory: remembered, parts: componentsApi });
+        return codeChoices({ code, memory: remembered, parts: componentsApi, places: codePlaces });
       case "three_d":
         return model3dChoices(model3d, ownKeysApi);
       case "train":

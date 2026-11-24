@@ -153,6 +153,83 @@ describe("the model picker button and panel", () => {
   });
 });
 
+describe("a model on this computer chosen somewhere else (Code: the Model hub)", () => {
+  function chosenElsewhere(
+    row: Partial<ModelChoice>,
+    foot = [{ text: "Coding and chat use the same model." }],
+  ) {
+    const hub = vi.fn();
+    const base = fake([choice({ id: "this-computer", source: "app", fit: null, ...row })], {
+      elsewhere: {
+        heading: "Chosen in the Model hub",
+        change: { label: "Change in the Model hub", run: hub },
+      },
+    });
+    const list = base.list;
+    const api = {
+      ...base,
+      list: vi.fn(async () => ({ ...(await list()), foot })),
+    };
+    return { api, hub };
+  }
+
+  it("names the model on the button, lists it under its heading with the link, and the lines under it", async () => {
+    const user = userEvent.setup();
+    const { api, hub } = chosenElsewhere({
+      title: "Qwen3.8 27B",
+      state: "ready",
+      chosen: true,
+      detail: "about 24 GB of memory while it works",
+    });
+    render(<ModelSelect group="code" api={api} />);
+    await user.click(await screen.findByRole("button", { name: /Qwen3.8 27B · On this computer/ }));
+    const list = await screen.findByRole("list", { name: "On this computer" });
+    expect(within(list).getByText("Chosen in the Model hub")).toBeInTheDocument();
+    expect(
+      within(list).getByText(/In use · about 24 GB of memory while it works/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Coding and chat use the same model.")).toBeInTheDocument();
+    await user.click(within(list).getByRole("button", { name: "Change in the Model hub" }));
+    expect(hub).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("list", { name: "On this computer" })).toBeNull();
+  });
+
+  it("lists it when it cannot run, says why, and offers the one button that puts it right", async () => {
+    const user = userEvent.setup();
+    const fixIt = vi.fn();
+    const { api } = chosenElsewhere({
+      title: "Qwen3.8 27B",
+      state: "unavailable",
+      unavailableReason: "The language engine is not set up yet. Set it up in Settings first.",
+      fix: { label: "Open Settings", run: fixIt },
+    });
+    render(<ModelSelect group="code" api={api} />);
+    await user.click(await screen.findByRole("button", { name: /Select coding model/ }));
+    await user.click(await screen.findByRole("tab", { name: "On this computer" }));
+    const list = screen.getByRole("list", { name: "On this computer" });
+    expect(within(list).getByRole("button", { name: /Qwen3.8 27B/ })).toBeDisabled();
+    expect(within(list).getByText(/language engine is not set up/)).toBeInTheDocument();
+    await user.click(within(list).getByRole("button", { name: "Open Settings" }));
+    expect(fixIt).toHaveBeenCalledOnce();
+  });
+
+  it("shows a caution in place of Recommended", async () => {
+    const user = userEvent.setup();
+    const { api } = chosenElsewhere({
+      title: "Qwen3 4B",
+      state: "ready",
+      chosen: true,
+      tier: "recommended",
+      note: "May not manage coding well",
+    });
+    render(<ModelSelect group="code" api={api} />);
+    await user.click(await screen.findByRole("button", { name: /Qwen3 4B/ }));
+    const list = await screen.findByRole("list", { name: "On this computer" });
+    expect(within(list).getByText("May not manage coding well")).toBeInTheDocument();
+    expect(within(list).queryByText("Recommended")).toBeNull();
+  });
+});
+
 describe("choosing a model that is not on the computer", () => {
   it("uses files another tool already has without asking, since nothing is downloaded", async () => {
     const api = fake([

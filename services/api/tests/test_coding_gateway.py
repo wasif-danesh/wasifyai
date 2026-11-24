@@ -425,22 +425,21 @@ async def test_a_refusal_in_a_chat_completions_answer_is_a_plain_message_too(box
 # ---- the list of models ----------------------------------------------------------------------------
 
 
-def test_the_shipped_list_names_sonnet_first_and_the_local_model_second():
-    default, models = load_models(ollama_url="http://127.0.0.1:11434")
+def test_the_shipped_list_names_sonnet_first_then_haiku():
+    default, models = load_models()
     assert default == "claude-sonnet-5-5"
     first = models[default]
     assert first.shape == ANTHROPIC and first.secret == "keys.chat.anthropic"
     assert first.upstream == "https://api.anthropic.com" and first.price["output"] == 10.0
-    local = models["qwen-27b-ollama"]
-    assert local.shape == OPENAI and local.secret == "" and local.price == {}
-    assert local.upstream == "http://127.0.0.1:11434/v1"
-    # the order a person is shown them in: Sonnet, the cheaper Haiku, the local one
-    assert list(models) == ["claude-sonnet-5-5", "claude-haiku-5-5", "qwen-27b-ollama"]
+    # the order a person is shown them in: Sonnet, the cheaper Haiku (the model on this computer
+    # is the Model hub's, `load_local`)
+    assert list(models) == ["claude-sonnet-5-5", "claude-haiku-5-5"]
+    assert all(m.upstream.startswith("https://") for m in models.values())
     assert first.long_over == 0 and first.price_for({"input": 500_000}) is first.price
 
 
 def test_haiku_is_offered_with_the_same_key_and_costs_five_times_as_much_for_a_long_prompt():
-    _default, models = load_models(ollama_url="")
+    _default, models = load_models()
     haiku = models["claude-haiku-5-5"]
     assert (haiku.shape, haiku.secret) == (ANTHROPIC, "keys.chat.anthropic")
     assert (haiku.provider_model, haiku.upstream) == (

@@ -472,6 +472,14 @@ export {
   createComponentsApi,
 } from "./components";
 export {
+  type SetupApi,
+  type SetupGroup,
+  type SetupItem,
+  type SetupItemState,
+  type SetupPart,
+  createSetupApi,
+} from "./setup";
+export {
   type CodeAnswer,
   type CodeApi,
   type CodeAsk,
@@ -499,6 +507,7 @@ export {
   type CodeMode,
   type CodeHarness,
   type CodeHarnessModels,
+  type CodeInstall,
   type CodeModel,
   type CodePreview,
   type CodePreviewRun,

@@ -3,6 +3,7 @@
 // them see stable functions.
 import {
   createAssistantApi,
+  createChatPlanApi,
   createComponentsApi,
   createConnectionsApi,
   createCreationsApi,
@@ -25,6 +26,7 @@ export const transport = createEngineTransport(engineSession);
 export const client = createRunClient(transport);
 export const connectionsApi = createConnectionsApi(transport);
 export const ownKeysApi = createOwnKeysApi(transport);
+export const chatPlanApi = createChatPlanApi(transport);
 export const componentsApi = createComponentsApi(transport);
 export const setupApi = createSetupApi(transport);
 export const externalApi = createExternalApi(transport);

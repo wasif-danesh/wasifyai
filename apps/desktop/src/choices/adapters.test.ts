@@ -1,11 +1,21 @@
-import type { OwnKeysApi, VoiceApi, VoiceModelInfo } from "@wasifyai/client";
+import type {
+  ChatPlan,
+  ChatPlanApi,
+  ChatPlanChoice,
+  CodeApi,
+  CodeHarness,
+  OwnKeysApi,
+  VoiceApi,
+  VoiceModelInfo,
+} from "@wasifyai/client";
 import { describe, expect, it, vi } from "vitest";
 import type { DiscoveryApi, DiscoveryState, FoundModel } from "../discovery";
 import type { HubApi } from "../hub";
 import type { LanguageApi, LanguageState } from "../language";
 import type { ModelEntry, ModelsApi } from "../models";
+import type { Parts } from "./agents";
 import { CATALOGUE_GROUPS, catalogueChoices } from "./catalogue-choices";
-import { chatChoices, fitOf, pickVariant } from "./chat-choices";
+import { chatChoices, fitOf, parsePlan, pickVariant, planId } from "./chat-choices";
 import { CHAT_SHELF, recommendedChat } from "./copy";
 import { cloudRow } from "./keyed";
 import { model3dChoices } from "./model3d-choices";
@@ -803,6 +813,98 @@ describe("chat", () => {
     await api.choose("f1");
     expect(use).toHaveBeenLastCalledWith("chat", null);
     expect(choose).toHaveBeenCalledWith({ item_id: "f1", context: 8192 });
+  });
+
+  // the person's own Claude or ChatGPT plan (ADR-0110)
+  const harness = (id: string, signedIn: boolean): CodeHarness =>
+    ({
+      id,
+      title: id === "codex" ? "Codex" : "Claude Code",
+      plan_words: id === "codex" ? "your ChatGPT plan" : "your Claude plan",
+      installed: true,
+      signed_in: signedIn,
+      how: signedIn ? "plan" : "",
+      plan: id === "codex" ? "ChatGPT" : "max",
+      signing_in: false,
+      page: "",
+    }) as CodeHarness;
+  const planDeps = (choice: ChatPlanChoice | null, signed = { claude: true, codex: false }) => {
+    let now = choice;
+    const plan: ChatPlan = {
+      choice,
+      programs: [
+        {
+          id: "claude-code",
+          title: "Claude Code",
+          models: [
+            { id: "", name: "Its own choice" },
+            { id: "sonnet", name: "Sonnet" },
+          ],
+        },
+        { id: "codex", title: "Codex", models: [{ id: "", name: "Its own choice" }] },
+      ],
+    };
+    const use = vi.fn(async (c: ChatPlanChoice | null) => {
+      now = c;
+      return { ...plan, choice: c };
+    });
+    return {
+      use,
+      plan: {
+        plan: { get: async () => ({ ...plan, choice: now }), use } as unknown as ChatPlanApi,
+        code: {
+          harnesses: async () => [
+            harness("claude-code", signed.claude),
+            harness("codex", signed.codex),
+          ],
+        } as unknown as CodeApi,
+        parts: {} as unknown as Parts,
+      },
+    };
+  };
+
+  it("lists a signed-in program's plan models under Your plan; the rest are not offered", async () => {
+    const { deps: d } = deps(language([found()]));
+    const api = chatChoices({ ...d, plan: planDeps(null).plan });
+    expect(api.agentsTab).toBe("Your plan");
+    expect(api.agents).toBeDefined();
+    const rows = (await api.list()).choices.filter((r) => r.place === "agent");
+    expect(rows.map((r) => [r.id, r.title, r.providerTitle, r.price])).toEqual([
+      ["plan:claude-code:", "Its own choice", "Claude Code", "Your Claude plan"],
+      ["plan:claude-code:sonnet", "Sonnet", "Claude Code", "Your Claude plan"],
+    ]);
+    expect(rows[0]?.plain).toContain("what you write goes to Anthropic");
+    // without the plan deps (any screen but the main chat) there is no tab and no row
+    const plain = chatChoices(d);
+    expect(plain.agents).toBeUndefined();
+    expect((await plain.list()).choices.some((r) => r.place === "agent")).toBe(false);
+  });
+
+  it("with the chat on a plan, that is the row in use and no local model is", async () => {
+    const state = language([found()]);
+    state.files = state.files.map((f) => ({ ...f, chosen: true }));
+    const { deps: d } = deps(state);
+    const { plan } = planDeps({ harness: "claude-code", model: "sonnet" });
+    const rows = (await chatChoices({ ...d, plan }).list()).choices;
+    expect(rows.filter((r) => r.chosen).map((r) => r.id)).toEqual(["plan:claude-code:sonnet"]);
+  });
+
+  it("choosing a plan row uses it; any other model takes the chat off the plan", async () => {
+    const { deps: d, choose } = deps(language([found()]));
+    const { plan, use } = planDeps(null);
+    const api = chatChoices({ ...d, plan });
+    await api.choose("plan:claude-code:sonnet");
+    expect(use).toHaveBeenCalledWith({ harness: "claude-code", model: "sonnet" });
+    expect(choose).not.toHaveBeenCalled();
+    await api.choose("f1");
+    expect(use).toHaveBeenLastCalledWith(null);
+    expect(choose).toHaveBeenCalledWith({ item_id: "f1", context: 8192 });
+  });
+
+  it("reads a plan row's id back", () => {
+    expect(parsePlan(planId("claude-code", ""))).toEqual({ harness: "claude-code", model: "" });
+    expect(parsePlan("plan:codex:gpt:5")).toEqual({ harness: "codex", model: "gpt:5" });
+    expect(parsePlan("f1")).toBeNull();
   });
 
   it("rates fit from memory", () => {

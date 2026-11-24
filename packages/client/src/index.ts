@@ -126,6 +126,13 @@ export {
   createOwnKeysApi,
 } from "./own-keys";
 export {
+  type ChatPlan,
+  type ChatPlanApi,
+  type ChatPlanChoice,
+  type ChatPlanProgram,
+  createChatPlanApi,
+} from "./chat-plan";
+export {
   type FoundStyle,
   type HubStyleFiles,
   type HubStyleJob,

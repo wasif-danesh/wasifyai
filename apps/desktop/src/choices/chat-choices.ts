@@ -2,12 +2,13 @@
 // The chat group's rows and work (ADR-0086): models already on this computer (the app's own downloads, files other
 // tools left, servers that are running) and a short list of ones worth getting from Hugging Face. A download
 // through here is the person's consent to contact huggingface.co, which the dialog says.
-import type { OwnKeysApi } from "@wasifyai/client";
+import type { ChatPlanApi, CodeApi, CodeHarness, OwnKeysApi } from "@wasifyai/client";
 import type { ChoiceList, ChoicesApi, ModelChoice, Tier } from "@wasifyai/ui";
 import type { DiscoveryApi, FoundModel } from "../discovery";
 import type { HubApi, Variant } from "../hub";
 import type { LanguageApi, LanguageState } from "../language";
 import { type ModelsApi, downloadFraction } from "../models";
+import { type Parts, agentsApi, programOf } from "./agents";
 import { CHAT_SHELF, type ChatShelfItem, recommendedChat } from "./copy";
 import { chooseCloud, cloudOf, cloudRows, withCloud } from "./keyed";
 import { type Step, pause, runSteps } from "./steps";
@@ -21,7 +22,77 @@ export type ChatDeps = {
   engines: Engines;
   /** Settings › Your keys (ADR-0095): while Chat and writing runs with the person's key, that is the chosen row */
   keys?: OwnKeysApi;
+  /** the person's own Claude or ChatGPT plan (ADR-0110): the programs Code sets up and signs in, and the chat's choice */
+  plan?: { plan: ChatPlanApi; code: CodeApi; parts: Parts };
 };
+
+/** The main chat's task: its model button also lists the person's own plan (ADR-0110). */
+export const ASSISTANT_TASK = "assistant";
+
+const PLAN = "plan:";
+/** A plan row's picker id: `plan:<program>:<model>` ("" is the program's own choice). */
+export const planId = (harness: string, model: string) => `${PLAN}${harness}:${model}`;
+export function parsePlan(id: string): { harness: string; model: string } | null {
+  if (!id.startsWith(PLAN)) return null;
+  const [harness, ...rest] = id.slice(PLAN.length).split(":");
+  return harness ? { harness, model: rest.join(":") } : null;
+}
+
+/** The Your plan tab's lines (ADR-0110). */
+export const PLAN_WORDS = {
+  intro:
+    "The chat can answer on the Claude or ChatGPT plan you already pay for, with no key, through Claude Code or Codex on this computer.",
+  foot: "The program answers on your plan; Wasify AI's actions still ask you on their cards. Pictures you attach are not sent to it.",
+};
+
+/** Where what the person writes goes, on each plan. */
+const GOES_TO: Record<string, string> = { "claude-code": "Anthropic", codex: "OpenAI" };
+
+/** A signed-in program's models as the chat's rows under Your plan, its own choice first. */
+export function planRows(
+  h: CodeHarness,
+  models: { id: string; name: string }[],
+  chosen: { harness: string; model: string } | null,
+): ModelChoice[] {
+  const p = programOf(h);
+  const goes = GOES_TO[h.id] ?? h.title;
+  return models.map((m, n) => ({
+    id: planId(h.id, m.id),
+    title: m.id ? m.name : "Its own choice",
+    plain: `${m.id ? "" : `Whatever ${h.title} picks. `}The chat answers through ${h.title} on ${h.plan_words}, so what you write goes to ${goes}. Pictures you attach are not sent. Other writing tools keep their model.`,
+    tier: n === 0 ? "recommended" : "also",
+    state: "ready",
+    chosen: chosen?.harness === h.id && chosen.model === m.id,
+    downloadBytes: 0,
+    engineBytes: 0,
+    engineName: null,
+    fit: null,
+    fitReason: null,
+    source: "server",
+    unavailableReason: null,
+    place: "agent",
+    provider: h.id,
+    providerTitle: h.title,
+    price: p.payer,
+    works: true,
+  }));
+}
+
+/** The chat's plan rows (none when the programs cannot be read), and the plan in use. */
+async function planOf(deps: ChatDeps["plan"]) {
+  if (!deps) return { rows: [] as ModelChoice[], inUse: false };
+  const [plan, listed] = await Promise.all([
+    deps.plan.get().catch(() => null),
+    deps.code.harnesses().catch(() => [] as CodeHarness[]),
+  ]);
+  if (!plan) return { rows: [], inUse: false };
+  const rows = listed
+    .filter((h) => h.installed && h.signed_in)
+    .flatMap((h) =>
+      planRows(h, plan.programs.find((p) => p.id === h.id)?.models ?? [], plan.choice),
+    );
+  return { rows, inUse: rows.some((r) => r.chosen) };
+}
 
 const EMBEDDING = /embed|bge-|minilm|e5-|gte-|arctic-embed/i;
 const HUB = "hub:";
@@ -170,15 +241,27 @@ export function chatChoices(deps: ChatDeps): ChoicesApi {
 
   return {
     cloud: cloudOf(["chat"]),
+    ...(deps.plan
+      ? {
+          agents: agentsApi({ code: deps.plan.code, parts: deps.plan.parts }),
+          agentsTab: "Your plan",
+          agentsWords: PLAN_WORDS,
+        }
+      : {}),
     async list(): Promise<ChoiceList> {
-      const [{ state, overview, engine, shelf }, cloud] = await Promise.all([
+      const [{ state, overview, engine, shelf }, cloud, plan] = await Promise.all([
         read(),
         cloudRows(deps.keys, "chat"),
+        planOf(deps.plan),
       ]);
       const local = rows(state, shelf, engine, overview?.memory_bytes ?? null);
+      const models = withCloud(local, cloud);
       return {
-        // while chat runs on a cloud model, no model on this computer is the one in use
-        choices: withCloud(local, cloud),
+        // while chat runs on a cloud model, no model on this computer is the one in use; on a plan, neither is
+        choices: [
+          ...(plan.inUse ? models.map((c) => ({ ...c, chosen: false })) : models),
+          ...plan.rows,
+        ],
         diskFreeBytes: overview?.disk_free_bytes ?? null,
         memoryBytes: overview?.memory_bytes ?? null,
       };
@@ -189,6 +272,14 @@ export function chatChoices(deps: ChatDeps): ChoicesApi {
     },
 
     async choose(id) {
+      // a plan makes the chat answer through its program; any other model takes the chat off the plan
+      const plan = parsePlan(id);
+      if (plan && deps.plan) {
+        await deps.plan.plan.use(plan);
+        return;
+      }
+      if (deps.plan && (await deps.plan.plan.get().catch(() => null))?.choice)
+        await deps.plan.plan.use(null);
       // a cloud model makes chat run there; one on this computer takes chat off the cloud (the keys stay)
       if (await chooseCloud(deps.keys, "chat", id)) return;
       const state = await deps.language.state();

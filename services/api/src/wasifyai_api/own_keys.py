@@ -2,7 +2,7 @@
 model, the model picker's Cloud tab chooses one; ADR-0100: text vendors and three media providers).
 
 Settings › Your keys keeps, for each product, a key for each provider the person uses there. Chat
-and writing run on a text vendor: Anthropic (Claude Haiku 5.5, the default), OpenAI, Google Gemini,
+and writing run on a text vendor: Anthropic (Claude Sonnet 5.5, the default), OpenAI, Google Gemini,
 DeepSeek, Z.ai or OpenRouter. The media products run on Runware, WaveSpeed and fal.ai, and their
 keys are kept once, under "Media" (`media`), for all of them (ADR-0100, amendment of 2026-11-15): a
 key given for one media product is kept there, and a product's own key saved by an older build moves
@@ -94,7 +94,7 @@ class Product:
 PROVIDERS: dict[str, Provider] = {
     p.id: p
     for p in (
-        # ADR-0100: text on the vendors (Anthropic first: Claude Haiku 5.5 is the default), media
+        # ADR-0100: text on the vendors (Anthropic first: Claude Sonnet 5.5 is the default), media
         # on Runware, WaveSpeed and fal.ai; no provider runs the other kind
         Provider("anthropic", "Anthropic", "api.anthropic.com", text_url=f"{ANTHROPIC_API}/v1/"),
         Provider("openai", "OpenAI", "api.openai.com", text_url="https://api.openai.com/v1"),

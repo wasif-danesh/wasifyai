@@ -46,10 +46,10 @@ class Provider:
 PROVIDERS: dict[str, Provider] = {
     p.id: p
     for p in (
-        # ADR-0100: the admin chooses the text vendors; Claude Haiku 5.5 on Anthropic is the
+        # ADR-0100: the admin chooses the text vendors; Claude Sonnet 5.5 on Anthropic is the
         # default. Ollama and its OpenAI-compatible route are the stack's own local models, kept
         # until the web runs on cloud models only (stage CP12 of docs/cloud-v1-plan.md).
-        Provider("anthropic", "Anthropic", "anthropic/", True, False, "claude-haiku-5-5"),
+        Provider("anthropic", "Anthropic", "anthropic/", True, False, "claude-sonnet-5-5"),
         Provider("openai", "OpenAI", "openai/", True, False, "gpt-6-luna"),
         Provider("gemini", "Google Gemini", "gemini/", True, False, "gemini-3.8-flash"),
         Provider("deepseek", "DeepSeek", "deepseek/", True, False, "deepseek-flash"),
@@ -63,7 +63,7 @@ PROVIDERS: dict[str, Provider] = {
             fixed_base=ZAI_BASE,
         ),
         Provider(
-            "openrouter", "OpenRouter", "openrouter/", True, False, "anthropic/claude-haiku-5.5"
+            "openrouter", "OpenRouter", "openrouter/", True, False, "anthropic/claude-sonnet-5.5"
         ),
         Provider("ollama", "Ollama (local)", "ollama_chat/", False, True, "gemma4:e4b", "ollama/"),
         Provider(

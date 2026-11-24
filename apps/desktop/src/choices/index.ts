@@ -3,6 +3,7 @@
 // engine routes the Models page already used. Nothing here is a new engine route.
 import type { ChoicesApi, ChoicesSource, GroupId } from "@wasifyai/ui";
 import {
+  chatPlanApi,
   componentsApi,
   discoveryApi,
   hubApi,
@@ -15,7 +16,7 @@ import { code } from "../code";
 import { model3d } from "../model3d";
 import { remembered } from "../remember";
 import { CATALOGUE_GROUPS, catalogueChoices } from "./catalogue-choices";
-import { chatChoices } from "./chat-choices";
+import { ASSISTANT_TASK, chatChoices } from "./chat-choices";
 import { codeChoices } from "./code-choices";
 import { createEngines } from "./engines";
 import { codePlaces } from "./keyed";
@@ -36,6 +37,10 @@ export function createChoicesSource(engines = createEngines()): ChoicesSource {
           models: modelsApi,
           engines,
           keys: ownKeysApi,
+          // only the main chat answers on a plan (ADR-0110); other screens' writing keeps its model
+          ...(task === ASSISTANT_TASK
+            ? { plan: { plan: chatPlanApi, code, parts: componentsApi } }
+            : {}),
         });
       case "images":
       case "video":

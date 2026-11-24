@@ -121,3 +121,21 @@ coverage table was approved on 2026-11-15 ("Yes, build it").
   still runs on this computer until a cloud model is chosen in its picker.
 - **What "covers every media product" means:** a fal.ai key alone, or Runware and WaveSpeed together (Runware has no
   speech to text, voice change, sound effects or stem split; WaveSpeed has no music edit or training).
+
+## Amendment (2026-11-24, owner): Claude Sonnet 5.5 is the default text model
+
+The owner: "make Sonnet default across the system instead of Haiku." This replaces Haiku 5.5 as the default in
+decision 1; the person's choice of vendor and model, and everything about media, are unchanged.
+
+- **The web:** every text alias in `model_defaults.yaml` (`default-chat`, `planner`, `lyrics-writer`,
+  `prompt-enhancer`, `multimodal`) is `anthropic/claude-sonnet-5-5`, with the same efforts and `max_tokens`, and still
+  no temperature. Admin › Models suggests `claude-sonnet-5-5` for Anthropic and `anthropic/claude-sonnet-5.5` for
+  OpenRouter. A new install starts on Sonnet. An install that already has its aliases keeps them (seeding only adds missing ones), so
+  each stays on Haiku until an admin presses "reset" in Admin › Models or binds it to Sonnet.
+- **The desktop:** Claude Sonnet 5.5 is the first Anthropic (and OpenRouter) line of the chat catalogue and is called
+  the default; Haiku 5.5 stays, as "Quick and cheap". A saved key is now tested against Sonnet 5.5. A product the
+  person already set to Haiku stays on Haiku.
+- **Cost:** Sonnet 5.5 is $2 in / $10 out per million tokens, about twenty times Haiku 5.5 for a short prompt. The
+  100K-token limits kept in Notebook and the long-prompt flag were set for Haiku's price above 100K; they stay.
+- **Not changed:** the coding agent already defaulted to Sonnet 5.5 (ADR-0101); the chat on a person's own plan
+  (ADR-0110) starts on the program's own choice.

@@ -35,7 +35,7 @@ own: for example, chat on your computer, video in the cloud, and code on your Cl
   already downloaded. It shows the files and their sizes before it downloads anything.
 
 **Your own keys.**
-- **Text:** Claude Haiku 5.5 by default, bought directly from Anthropic. You can pick any model from Anthropic, OpenAI,
+- **Text:** Claude Sonnet 5.5 by default, bought directly from Anthropic. You can pick any model from Anthropic, OpenAI,
   Google Gemini, DeepSeek, Z.ai (GLM) or OpenRouter.
 - **Media:** pictures, clips, voices, songs, lip sync, 3D and trained looks run on **Runware, WaveSpeed and fal.ai**.
   Each job goes to the **cheapest provider that has a key and can do it**, priced at Make

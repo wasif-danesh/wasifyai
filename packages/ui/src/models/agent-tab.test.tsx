@@ -140,6 +140,23 @@ describe("the Your agent tab", () => {
     expect(await screen.findByText(/Setting up… Installing, 40%/)).toBeTruthy();
   });
 
+  it("is the chat's Your plan tab, with the chat's own words (ADR-0110)", async () => {
+    const user = userEvent.setup();
+    const a = agents({ state: "not_installed", bytes: 694_400_000 }, []);
+    const api: ChoicesApi = {
+      ...choices([], a),
+      agentsTab: "Your plan",
+      agentsWords: { intro: "The chat can answer on your plan.", foot: "Cards still ask." },
+    };
+    render(<ModelSelect group="chat" api={api} />);
+    await user.click(await screen.findByRole("button", { name: /Select chat model/ }));
+    expect(screen.queryByRole("tab", { name: "Your agent" })).toBeNull();
+    await user.click(screen.getByRole("tab", { name: "Your plan" }));
+    expect(await screen.findByText(/The chat can answer on your plan\. Setting up/)).toBeTruthy();
+    expect(screen.getByText("Cards still ask.")).toBeTruthy();
+    expect(screen.queryByText(/Sessions can run/)).toBeNull();
+  });
+
   it("is not there for a group without agent programs", async () => {
     const user = userEvent.setup();
     const api: ChoicesApi = {

@@ -3,6 +3,7 @@
 import {
   AssistantHome,
   Bar,
+  type ChoicesApi,
   type CreationEntry,
   ModelSelect,
   type ModelSelectHandle,
@@ -10,8 +11,9 @@ import {
   type QuickStartId,
   handDraft,
   useChoicesFor,
+  useChoicesVersion,
 } from "@wasifyai/ui";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FirstRun, GetStarted, useFirstRun } from "../FirstRun";
 import { useGroups, useRun } from "../SetupGate";
 import { assistantApi, client, creationsApi, externalApi, modelsApi, voiceApi } from "../api";
@@ -30,7 +32,26 @@ const START: Record<Exclude<QuickStartId, "notebook">, Route> = {
   motion: "videobuilder",
   train: "train",
 };
+import { ASSISTANT_TASK } from "../choices/chat-choices";
 import { getSpeechModel } from "../speech-model";
+
+/** Whether the main chat answers on the person's own plan now (ADR-0110). */
+function useOnPlan(api: ChoicesApi | null): boolean {
+  const version = useChoicesVersion();
+  const [on, setOn] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the version is the trigger
+  useEffect(() => {
+    let gone = false;
+    api
+      ?.list()
+      .then((l) => !gone && setOn(l.choices.some((c) => c.chosen && c.place === "agent")))
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [api, version]);
+  return on;
+}
 
 export function HomePage({
   go,
@@ -44,18 +65,21 @@ export function HomePage({
   /** open a recent creation in the Library */
   onOpenEntry?: (entry: CreationEntry) => void;
 }) {
-  const choices = useChoicesFor("chat");
+  // the main chat may also answer on the person's own plan (ADR-0110): its button has a Your plan tab
+  const choices = useChoicesFor("chat", ASSISTANT_TASK);
   const picker = useRef<ModelSelectHandle>(null);
   const first = useFirstRun();
   const chat = useGroups()?.find((g) => g.id === "chat") ?? null;
   const run = useRun("chat");
+  const onPlan = useOnPlan(choices);
 
   // the first run, once (ADR-0109): one button that sets up chat, and nothing else
   if (first.show) return <FirstRun onDone={first.done} />;
 
   // after it, while chat is not set up, the same button on the home
   const notice =
-    chat && chat.state !== "ready" ? (
+    // a chat on the person's plan needs no model here (ADR-0110)
+    chat && chat.state !== "ready" && !onPlan ? (
       <Notice tone="info" title="Get a chat model">
         {run.state === "running" ? (
           <span className="grid gap-1" aria-live="polite">

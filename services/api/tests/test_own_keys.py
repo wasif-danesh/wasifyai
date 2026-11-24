@@ -109,13 +109,13 @@ def test_a_key_is_tested_saved_per_provider_and_never_answered_back():
     assert testers.calls[0][3] == own_keys.PROVIDERS["fal"].media_url
     c.put("/desktop/keys/chat/keys/openrouter", json={"key": GOOD + "-or"})
     assert testers.calls[-1][1:] == (
-        "anthropic/claude-haiku-5.5",
+        "anthropic/claude-sonnet-5.5",
         GOOD + "-or",
         own_keys.OPENROUTER_TEXT,
     )
     c.put("/desktop/keys/chat/keys/anthropic", json={"key": GOOD + "-an"})
     assert testers.calls[-1][1:] == (
-        "claude-haiku-5-5",
+        "claude-sonnet-5-5",
         GOOD + "-an",
         "https://api.anthropic.com/v1/",
     )
@@ -491,7 +491,7 @@ async def test_the_cloud_tab_lists_every_model_the_key_lists_newest_first():
     assert by["claude-fable-5-2"]["price"] == "$8 in / $40 out per million tokens"
     assert by["claude-opus-5-5"]["price"] == "$4 in / $20 out per million tokens"
     assert by["claude-haiku-4-5-20251001"]["price"] == "$1 in / $5 out per million tokens"
-    assert "default" in by["claude-haiku-5-5"]["about"]
+    assert "default" not in by["claude-haiku-5-5"]["about"]
     assert by["claude-mythos-9"]["title"] == "Claude Mythos 9"
     assert by["claude-mythos-9"]["price"] == "price as Anthropic lists it"
     await svc.cloud("chat")
@@ -513,7 +513,8 @@ async def test_a_listed_model_can_be_chosen_and_runs():
 async def test_when_the_list_cannot_be_read_the_catalogue_lines_are_shown():
     svc, _ = await a_service([])
     models = [m["model"] for m in (await svc.cloud("chat"))["models"]]
-    assert models[:2] == ["claude-haiku-5-5", "claude-sonnet-5-5"]
+    assert models[:2] == ["claude-sonnet-5-5", "claude-haiku-5-5"]  # the default first
+    assert "default" in (await svc.cloud("chat"))["models"][0]["about"]
     assert "claude-fable-5-2" in models and "claude-opus-5-5" in models
 
 

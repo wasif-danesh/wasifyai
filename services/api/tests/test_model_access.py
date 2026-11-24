@@ -52,16 +52,17 @@ def test_defaults_load_with_addresses_filled_in():
     assert not any("protected" in spec for spec in d.values())
 
 
-def test_every_text_alias_is_haiku_with_an_effort_and_no_temperature():
-    """ADR-0100: Claude Haiku 5.5 on Anthropic; it takes no sampling settings, thinks as much as
-    the job needs, and gets a `max_tokens` (LiteLLM would otherwise send 128000)."""
+def test_every_text_alias_is_sonnet_with_an_effort_and_no_temperature():
+    """ADR-0100 (amended 2026-11-24): Claude Sonnet 5.5 on Anthropic; it takes no sampling
+    settings, thinks as much as the job needs, and gets a `max_tokens` (LiteLLM would otherwise
+    send 128000)."""
     d = load_defaults(SUBST)
     efforts = {}
     for alias, spec in d.items():
         p = spec["litellm_params"]
         if spec["kind"] != "chat":
             continue
-        assert p["model"] == "anthropic/claude-haiku-5-5", alias
+        assert p["model"] == "anthropic/claude-sonnet-5-5", alias
         assert p["api_key"] == "os.environ/ANTHROPIC_API_KEY", alias
         assert not {"temperature", "top_p", "top_k", "think"} & set(p), alias
         assert p["max_tokens"] >= 8000, alias
@@ -127,7 +128,7 @@ async def test_seed_creates_every_alias_once():
     views = {v.alias: v for v in await models.list()}
     assert views["default-chat"].source == "default"
     assert views["default-chat"].provider == "anthropic"  # ADR-0100
-    assert views["planner"].model == "claude-haiku-5-5"
+    assert views["planner"].model == "claude-sonnet-5-5"
     assert views["embedder"].provider == "openai"
     assert all(v.key_set is False for v in views.values())
     assert set(backend.entries) == {f"alias:{a}" for a in views}

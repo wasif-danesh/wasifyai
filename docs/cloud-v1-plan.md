@@ -31,7 +31,7 @@ Where the numbers come from:
 
 ## Text
 
-**Claude Haiku 5.5 is the default** on the desktop's Cloud tab and on the web, bought from Anthropic directly. The
+**Claude Haiku 5.5 is the default** (since 2026-11-24, by the owner, **Claude Sonnet 5.5**; ADR-0100's amendment of that day) on the desktop's Cloud tab and on the web, bought from Anthropic directly. The
 person can choose another vendor and model instead (decisions 1 and 2).
 
 **Every model on the key (owner, 2026-11-13).** The desktop's Cloud tab for chat lists every model the vendor serves on

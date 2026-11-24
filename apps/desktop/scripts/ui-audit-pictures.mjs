@@ -2200,6 +2200,118 @@ for (const scheme of ["light", "dark"]) {
     });
   }
   // stage C1b of the coding agent: Code, from the first screen to an answer in Plan, with a real model
+  // the chat on the person's own plan (ADR-0110): Your plan on the main chat's button, a reply, and a card.
+  // Uses the person's own Claude plan; needs the agent programs set up and Claude Code signed in. Run it on a
+  // throwaway DESKTOP_DATA_DIR whose engine/harness is the app's own (a link).
+  if (scheme === "light" && names.has("chat-plan")) {
+    await attempt("chat-plan", async () => {
+      await open(page, "/");
+      const notNow = page.getByRole("button", { name: "Not now" });
+      if (await notNow.isVisible().catch(() => false)) await notNow.click();
+      await page
+        .getByRole("button", { name: /Select chat model|·|Qwen|Gemma/ })
+        .first()
+        .click();
+      await page.getByRole("tab", { name: "Your plan" }).click();
+      const claude = page.getByRole("list", { name: "Claude Code" });
+      await claude.waitFor({ timeout: 60_000 });
+      await shot(page, "chat-plan-tab");
+      await claude.getByRole("button", { name: /^Haiku/ }).click();
+      await page.getByRole("button", { name: /Claude Code · Haiku/ }).waitFor();
+      const box = page.getByRole("textbox").first();
+      await box.fill("Write one short line about the sea, in English and in Bengali.");
+      const began = Date.now();
+      await box.press("Enter");
+      await page.getByText(/[ঀ-৿]/).first().waitFor({ timeout: 120_000 });
+      console.log(`chat-plan: answered in ${((Date.now() - began) / 1000).toFixed(1)} s`);
+      await page.waitForTimeout(1500);
+      await shot(page, "chat-plan-reply");
+      const box2 = page.getByRole("textbox").first();
+      await box2.fill("Make a picture of a red cat on a sofa.");
+      await box2.press("Enter");
+      await page.getByRole("button", { name: "Not now" }).waitFor({ timeout: 120_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "chat-plan-card");
+      await page.getByRole("button", { name: "Not now" }).click();
+      await page
+        .getByText(/chose not to/)
+        .first()
+        .waitFor({ timeout: 60_000 });
+      await page.waitForTimeout(4000);
+      await shot(page, "chat-plan-declined");
+    });
+  }
+
+  // ADR-0086's amendment of 2026-11-24: no model button has a More tab. Opens every model button on every screen
+  // that has one, says its tabs, and pictures On this computer (with "Larger models" where there are any).
+  if (scheme === "light" && names.has("model-tabs")) {
+    await attempt("model-tabs", async () => {
+      const paths = [
+        "/",
+        "/notebooks",
+        "/images/create",
+        "/images/edit",
+        "/images/3d",
+        "/video/create",
+        "/video/animate",
+        "/video/builder",
+        "/voice/speak",
+        "/voice/transcribe",
+        "/voice/audiobook",
+        "/voice/dub",
+        "/voice/lip-sync",
+        "/music/create",
+        "/music/lyrics",
+        "/creative",
+        "/meetings",
+        "/code",
+        "/train",
+      ];
+      let buttons = 0;
+      let withMore = 0;
+      for (const path of paths) {
+        await open(page, path);
+        const notNow = page.getByRole("button", { name: "Not now" });
+        if (await notNow.isVisible().catch(() => false)) await notNow.click();
+        const triggers = page.locator('button[aria-haspopup="dialog"]:visible');
+        const count = await triggers.count();
+        const before = buttons;
+        for (let i = 0; i < count; i++) {
+          const t = triggers.nth(i);
+          if (await t.isDisabled().catch(() => true)) continue;
+          await t.click().catch(() => {});
+          const tabs = page.getByRole("tablist", { name: "Models" });
+          if (!(await tabs.isVisible({ timeout: 1500 }).catch(() => false))) {
+            await page.keyboard.press("Escape");
+            continue;
+          }
+          buttons += 1;
+          const said = (await tabs.getByRole("tab").allInnerTexts()).map((x) => x.trim());
+          if (said.includes("More")) withMore += 1;
+          const label = (await t.innerText()).replace(/\s+/g, " ").trim();
+          console.log(`model-tabs: ${path} [${label}] tabs: ${said.join(" | ")}`);
+          await tabs.getByRole("tab", { name: "On this computer" }).click();
+          await page.waitForTimeout(600);
+          const larger = await page.getByRole("list", { name: "Larger models" }).count();
+          console.log(`model-tabs: ${path} On this computer${larger ? " has Larger models" : ""}`);
+          const slug = path === "/" ? "home" : path.slice(1).replaceAll("/", "-");
+          await shot(page, `model-tabs-${slug}-${i}`);
+          await page.keyboard.press("Escape");
+          await page.waitForTimeout(300);
+        }
+        if (buttons === before) {
+          console.log(`model-tabs: ${path} has no model button open to use`);
+          await shot(
+            page,
+            `model-tabs-none-${path === "/" ? "home" : path.slice(1).replaceAll("/", "-")}`,
+          );
+        }
+      }
+      console.log(`model-tabs: ${buttons} model buttons opened, ${withMore} with a More tab`);
+      if (withMore) throw new Error(`${withMore} model buttons still have a More tab`);
+    });
+  }
+
   if (scheme === "light" && names.has("code-plan")) {
     await attempt("code-plan", async () => {
       await open(page, "/code");

@@ -9,7 +9,7 @@ environment. Differences live in env vars and Helm values overlays.
 |---|---|---|---|
 | Where | MacBook (Apple Silicon) | Home lab | AWS, GCP or Azure |
 | Orchestration | Podman + `compose.yaml`; `kind` for chart testing | k3s + Argo CD | EKS / GKE / AKS + Argo CD |
-| LLM | Hosted vendors via LiteLLM (Claude Haiku 5.5 by default, ADR-0100) | same | same |
+| LLM | Hosted vendors via LiteLLM (Claude Sonnet 5.5 by default, ADR-0100 as amended 2026-11-24) | same | same |
 | Media | Stub worker, or the cloud models of Admin › Media | Cloud models (Runware, WaveSpeed, fal.ai) | same |
 | Postgres | Container | CloudNativePG | Managed (RDS, Cloud SQL, Azure Flexible Server) |
 | Redis | Container | In-cluster | Managed |

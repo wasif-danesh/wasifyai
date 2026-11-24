@@ -68,7 +68,9 @@ function stateLine(c: ModelChoice): string {
   return `${formatBytes(c.downloadBytes + c.engineBytes)} to download`;
 }
 
-type Tab = "recommended" | "device" | "cloud" | "agent" | "more";
+type Tab = "recommended" | "device" | "cloud" | "agent";
+/** The heading of the advanced models not yet on the computer, under On this computer (no More tab, 2026-11-24). */
+const LARGER = "Larger models";
 
 /** The cloud rows by provider, in the order they came: "With your fal.ai key". */
 function byProvider(rows: ModelChoice[]): [string, ModelChoice[]][] {
@@ -146,6 +148,8 @@ export function ModelSelect({
   // a model chosen somewhere else (Code: the Model hub) is listed here ready or not, with why not
   const elsewhere = api?.elsewhere;
   const onDevice = elsewhere ? choices : choices.filter((c) => c.state === "ready");
+  // the advanced ones (large models) that are not on the computer yet: listed under On this computer, after it
+  const larger = choices.filter((c) => c.tier === "advanced" && !onDevice.includes(c));
   // only when the panel opens
   // biome-ignore lint/correctness/useExhaustiveDependencies: the tab is chosen once per opening
   useEffect(() => {
@@ -170,9 +174,7 @@ export function ModelSelect({
         ? onDevice
         : tab === "cloud"
           ? cloud
-          : tab === "agent"
-            ? []
-            : choices.filter((c) => c.tier === "advanced");
+          : [];
 
   const getting = m.working;
   // a program's model is named after the program: "Claude Code · Sonnet"
@@ -259,10 +261,7 @@ export function ModelSelect({
                   ["recommended", "Recommended"],
                   ["device", "On this computer"],
                   ...(api?.cloud ? [["cloud", "Cloud"]] : []),
-                  ...(api?.agents ? [["agent", "Your agent"]] : []),
-                  ...(api?.more || choices.some((c) => c.tier === "advanced")
-                    ? [["more", "More"]]
-                    : []),
+                  ...(api?.agents ? [["agent", api.agentsTab ?? "Your agent"]] : []),
                 ] as [Tab, string][]
               ).map(([key, text]) => (
                 <button
@@ -319,13 +318,14 @@ export function ModelSelect({
               <AgentTab
                 api={api.agents}
                 rows={agent}
+                {...(api.agentsWords ? { words: api.agentsWords } : {})}
                 onPick={(c) => void pick(c)}
                 onChange={() => void m.reload()}
               />
             ) : null}
             {m.list &&
             shown.length === 0 &&
-            tab !== "more" &&
+            !(tab === "device" && larger.length) &&
             tab !== "cloud" &&
             tab !== "agent" ? (
               <p className="text-muted-foreground text-sm">
@@ -339,7 +339,14 @@ export function ModelSelect({
               ? []
               : tab === "cloud"
                 ? byProvider(shown)
-                : [["", shown] as [string, ModelChoice[]]]
+                : tab === "device" && larger.length
+                  ? (
+                      [
+                        ["", shown],
+                        [LARGER, larger],
+                      ] as [string, ModelChoice[]][]
+                    ).filter(([, rows]) => rows.length > 0)
+                  : [["", shown] as [string, ModelChoice[]]]
             ).map(([provider, rows]) => (
               <ul
                 key={provider}
@@ -347,9 +354,11 @@ export function ModelSelect({
                 aria-label={
                   tab === "cloud"
                     ? `With your ${provider} key`
-                    : tab === "device"
-                      ? "On this computer"
-                      : "Models"
+                    : provider === LARGER
+                      ? LARGER
+                      : tab === "device"
+                        ? "On this computer"
+                        : "Models"
                 }
               >
                 {tab === "cloud" ? (
@@ -358,6 +367,17 @@ export function ModelSelect({
                     aria-hidden="true"
                   >
                     With your {provider} key
+                  </li>
+                ) : provider === LARGER ? (
+                  <li
+                    className={cn(
+                      "px-3 pt-1 font-medium text-muted-foreground text-xs",
+                      // a line between it and what is on the computer, not above the first row
+                      shown.length > 0 && "border-t pt-2",
+                    )}
+                    aria-hidden="true"
+                  >
+                    {LARGER}
                   </li>
                 ) : null}
                 {tab === "device" && elsewhere ? (
@@ -476,7 +496,6 @@ export function ModelSelect({
                 ))}
               </div>
             ) : null}
-            {tab === "more" && api?.more ? <div className="grid gap-2">{api.more}</div> : null}
           </PopoverPrimitive.Content>
         </PopoverPrimitive.Portal>
       </PopoverPrimitive.Root>

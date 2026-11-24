@@ -3,7 +3,7 @@
 `KeyedTextProvider` is the text provider the product graphs get on the desktop. While Chat and
 writing is set to a cloud model, a chat, a lyric, an enhanced prompt, a notebook answer, the
 assistant, a picture description or a training judge goes to that vendor with that key: Anthropic
-through its own Messages API (`anthropic_text.py`; Claude Haiku 5.5 is the default), every other
+through its own Messages API (`anthropic_text.py`; Claude Sonnet 5.5 is the default), every other
 vendor through the same OpenAI-compatible calls the local model gets. Otherwise everything goes to
 the model chosen on this computer (`LocalTextProvider`), as before. Embeddings always stay on this
 computer (ADR-0100, decision 4).

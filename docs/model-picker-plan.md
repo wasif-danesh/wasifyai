@@ -70,7 +70,7 @@ A shared component `ModelPicker` in `packages/ui` (desktop only; the web serves 
   It sits where the screen's chip, `<select>` and notices are now; those go. **Where, decided 2026-10-24 (owner): at the top of the screen, in the page's top bar, like chat and Images; never in the body.**
 - **The panel** opens on **Recommended for this computer**: the best model of the group that fits this computer's memory first (memory decides the order,
   using the fit check), at most three rows, each with name, one plain line, size, and a state. **On this computer** lists what is already there (also found
-  files and servers). **More models** holds the `advanced` tier, search, custom folders and Hugging Face (ADR-0064's Discover, demoted but kept).
+  files and servers). **More models** holds the `advanced` tier, search, custom folders and Hugging Face (ADR-0064's Discover, demoted but kept); since 2026-11-24 there is no More tab and the `advanced` tier is under On this computer as "Larger models" (ADR-0086's amendment).
 - **Choosing a model that is on the computer** makes it the choice for this group and loads it (the button says "Loading…", then "Ready"). It is remembered for
   the next visit and for every screen of the group.
 - **Choosing one that is not** opens a dialog, in plain words:

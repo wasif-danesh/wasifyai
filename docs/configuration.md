@@ -160,7 +160,8 @@ An alias (`default-chat`, `planner`, `lyrics-writer`, `prompt-enhancer`, `creati
 ([ADR-0025](decisions/0025-model-access-configuration.md)).
 
 - **Defaults** are in `services/api/src/wasifyai_api/model_defaults.yaml` (ADR-0100): every text alias is Claude
-  Haiku 5.5 on Anthropic (`anthropic/claude-haiku-5-5`), with no temperature (Haiku 5.5 rejects one), a
+  Sonnet 5.5 on Anthropic (`anthropic/claude-sonnet-5-5`; Haiku 5.5 until 2026-11-24), with no temperature (the 5.5
+  models reject one), a
   `max_tokens`, and a `reasoning_effort` per job: `planner` (the assistant, Creative Studio's plan, Motion graphics)
   high; `default-chat` (chat, Notebook, dubbing) medium; `lyrics-writer`, `prompt-enhancer` and `multimodal`
   (pictures in a prompt) low. LiteLLM turns the effort into adaptive thinking and `output_config.effort`. Search's

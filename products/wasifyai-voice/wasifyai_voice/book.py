@@ -145,7 +145,7 @@ def build_book(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Ref
         except VoiceEngineError as e:
             kept = len(made)
             msg = f"{e.message} " + (
-                f"Chapters 1 to {kept} were kept in Your music." if kept else "Nothing was kept."
+                f"Chapters 1 to {kept} were kept in the Library." if kept else "Nothing was kept."
             )
             raise RunError(e.code, msg, retryable=e.code in ("busy", "engine_stopped")) from None
         except (audiobook.BookError, VoiceRequestError) as e:

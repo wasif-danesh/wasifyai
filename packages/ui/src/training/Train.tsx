@@ -216,7 +216,19 @@ export function Train({
         </Notice>
       ) : null}
       {!writing && state.error ? (
-        <Notice tone="error" title="That did not work">
+        <Notice
+          tone="error"
+          title="That did not work"
+          actions={
+            // training could not be reached: a way out, not a dead end (the keyboard walk of
+            // 2026-11-24 found nothing to press on this screen)
+            home ? (
+              <Button type="button" size="sm" variant="outline" onClick={() => void t.refresh()}>
+                Try again
+              </Button>
+            ) : undefined
+          }
+        >
           {state.error}
         </Notice>
       ) : null}
@@ -295,7 +307,9 @@ function Home({
     if (f.start === "writing" || f.start === "decide") return { tone: "ok", text: "Works here" };
     const status = f.start === "video" ? video.status : state.status;
     const plan = f.start === "video" ? video.setup.setup : setup.setup;
-    if (status === null) return { tone: "no", text: "Looking…" };
+    // a failed read is said, not left at "Looking…" for ever
+    if (status === null)
+      return { tone: "no", text: state.error ? "Could not be checked" : "Looking…" };
     if (status.fit?.verdict === "too_big")
       return { tone: "no", text: `Not enough memory: ${status.fit.reason}` };
     if (status.ready) return { tone: "ok", text: "Works here" };

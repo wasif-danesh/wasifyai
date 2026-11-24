@@ -214,6 +214,23 @@ def reasoning_part(thought: str) -> list[dict[str, Any]]:
     return [{"type": "reasoning", "text": thought}] if thought.strip() else []
 
 
+def has_words(parts: list[dict[str, Any]]) -> bool:
+    return any(p.get("type") == "text" and str(p.get("text") or "").strip() for p in parts)
+
+
+def card_line(card: dict[str, Any]) -> str:
+    """The line said above a card the model asked for without a word: what it is, and that the
+    person decides."""
+    what = str(card.get("summary") or card.get("title") or "this").strip().rstrip(".")
+    return f"I'd like to do this for you: {what}. Check the details on the card and decide."
+
+
+def with_words(parts: list[dict[str, Any]], line: str) -> list[dict[str, Any]]:
+    """The message's parts with `line` after its thinking and before its tool calls."""
+    at = next((i for i, p in enumerate(parts) if p.get("type") != "reasoning"), len(parts))
+    return [*parts[:at], {"type": "text", "text": line}, *parts[at:]]
+
+
 def title_from(text: str) -> str:
     line = " ".join(text.split())
     return line if len(line) <= TITLE_CHARS else line[: TITLE_CHARS - 1].rstrip() + "…"
@@ -605,6 +622,7 @@ def build_assistant_graph(
         start = int(saved.get("index", 0))
         results: list[dict[str, Any]] = list(saved.get("results", []))
         tool_row: str | None = saved.get("tool_row")
+        round_parts: list[dict[str, Any]] = list(saved.get("round_parts") or [])
         skip_rest = False  # the person moved on without answering: nothing else runs this turn
 
         async def add_reply(parts: list[dict[str, Any]]) -> Any:
@@ -748,6 +766,7 @@ def build_assistant_graph(
                         }
                     )  # fmt: skip
                 await add_reply(parts)
+                round_parts = parts
                 results, start, tool_row = [], 0, None
 
             for i in range(start, len(pending)):
@@ -806,6 +825,15 @@ def build_assistant_graph(
                             executor, found.action_id, str(found.approval_id),
                             provenance_of(taint_from),
                         )  # fmt: skip
+                        if not has_words(round_parts):
+                            # the model asked with no words: the card is not left to explain
+                            # itself (a third of the cards in the test runs of 2026-11-21)
+                            line = card_line(card)
+                            write({"type": "token", "node": "agent", "text": line})
+                            round_parts = with_words(round_parts, line)
+                            await store.set_parts(
+                                ctx.tenant_id, ctx.user_id, conv_id, str(last_id), round_parts
+                            )
                         part = {
                             "type": "interrupt", "kind": "confirm_action", "status": "pending",
                             "tool_call_id": c["id"], "approval_id": found.approval_id,
@@ -818,7 +846,7 @@ def build_assistant_graph(
                             "openable": sorted(openable), "calls": pending,
                             "index": i, "results": results, "tool_row": tool_row,
                             "awaiting_call": c["id"], "approval_id": found.approval_id,
-                            "interrupt_part": part,
+                            "interrupt_part": part, "round_parts": round_parts,
                         }  # fmt: skip
                         ask = {"kind": "confirm_action", "tool_call_id": c["id"], **card}
                         return {"loop": loop, "awaiting": ask, "decision": {}}

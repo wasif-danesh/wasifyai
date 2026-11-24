@@ -157,9 +157,12 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
                     if e.code != "model_missing" or not source.track_id:
                         raise
                     out["vocals_track"] = source.track_id
+                    # in plain words: the model's own name means nothing to most people
                     out["note"] = (
-                        f"{e.message} The whole recording is used as the voice, and the dub has "
-                        "no music or sounds behind it."
+                        "The music and sounds behind the voice could not be kept: the model that "
+                        "takes a voice out of a recording is not set up yet (it is in the Model "
+                        "hub, with the music models). The whole recording is used as the voice, "
+                        "and the dub has no music or sounds behind it."
                     )
             if separated is not None:
                 vocals, background = separated

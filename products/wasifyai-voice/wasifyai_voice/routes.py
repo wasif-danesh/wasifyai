@@ -328,7 +328,7 @@ def build_routes(deps: RouteDeps, store: VoiceStore | None = None):
         title: str | None = Form(None, max_length=200),
         identity: Identity = Depends(deps.identity),
     ) -> dict[str, Any]:
-        """Add a recording from this computer to Your music, so the audio tools can work on it."""
+        """Add a recording from this computer to the Library, so the audio tools can work on it."""
         assert deps.storage is not None, "storage is required"
         name = shown_name(file.filename, "recording")
         data = await file.read(audio_input.MAX_BYTES + 1)

@@ -214,11 +214,12 @@ async def test_without_the_separator_the_whole_recording_is_the_voice(tmp_path, 
     async def not_set_up(*_):
         raise VoiceEngineError("model_missing", "Mel-Band RoFormer is not ready.")
 
-    rig.engine.separate = not_set_up
+    setattr(rig.engine, "separate", not_set_up)  # noqa: B010 (the fake engine's method, replaced)
     final, _ = await rig.run(task="dub_script", source_track="song", language="es", background=True)
     assert final["status"] == "done" and final["vocals_track"] == "song"
     assert "background_track" not in final
-    assert final["note"].startswith("Mel-Band RoFormer is not ready.")
+    assert final["note"].startswith("The music and sounds behind the voice could not be kept")
+    assert "RoFormer" not in final["note"]  # a model's own name means nothing to most people
 
 
 async def test_a_script_without_separating_hears_the_recording_as_it_is(tmp_path, ctx):  # noqa: F811

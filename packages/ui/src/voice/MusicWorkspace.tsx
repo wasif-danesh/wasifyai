@@ -50,7 +50,7 @@ export type MusicWorkspaceProps = {
   onModelChosen?: (id: string) => void;
   /** lyrics written elsewhere (the Lyrics screen) */
   initialLyrics?: string | null;
-  /** something to do with a track as the screen opens: it was chosen on Your music */
+  /** something to do with a track as the screen opens: it was chosen in the Library */
   initialAction?: { kind: "edit" | "again" | "take"; trackId: string } | null;
   /** take a track to Split into parts (the app opens that screen with it chosen) */
   onSplit?: (track: Track) => void;
@@ -190,7 +190,7 @@ export function MusicWorkspace({
       .catch(() => undefined);
   }, [api, loadTracks]);
   useEffect(() => () => abort.current?.abort(), []);
-  // an action chosen on Your music runs once, when the models are known
+  // an action chosen in the Library runs once, when the models are known
   const acted = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: once, when the models have loaded
   useEffect(() => {

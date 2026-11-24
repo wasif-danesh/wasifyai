@@ -5547,7 +5547,7 @@ export interface paths {
         put?: never;
         /**
          * Import Track
-         * @description Add a recording from this computer to Your music, so the audio tools can work on it.
+         * @description Add a recording from this computer to the Library, so the audio tools can work on it.
          */
         post: operations["import_track_products_wasifyai_voice_tracks_import_post"];
         delete?: never;
@@ -6203,7 +6203,7 @@ export interface components {
             style: string;
             /**
              * Track Id
-             * @description The song, from Your music. For a story, the narration once it is made.
+             * @description The song, from the Library. For a story, the narration once it is made.
              * @default
              */
             track_id: string;
@@ -7107,6 +7107,8 @@ export interface components {
         };
         /** ImportAdd */
         ImportAdd: {
+            /** Confirm Name */
+            confirm_name?: string | null;
             /** Folder */
             folder?: string | null;
             /** Name */

@@ -43,4 +43,4 @@ it; keeping it in Your videos is `creative.export`.
 ## Problems
 
 - *There are no pictures in the cut yet.* Make the stills first, on the Shots step.
-- *The song is not in Your music any more.* Choose another song in the brief.
+- *The song is not in the Library any more.* Choose another song in the brief.

@@ -72,7 +72,7 @@ const STEPS = ["Text", "Chapters", "Voice"];
 /**
  * An audiobook on the one make screen (ADR-0093, stage U6), in steps: the text, then its chapters on the stage to
  * read, rename, join or remove, then the voice from the voices panel. While it is read the stage says which
- * chapter it is on; each chapter is kept in Your music as soon as it is done, and the whole book can be one track
+ * chapter it is on; each chapter is kept in the Library as soon as it is done, and the whole book can be one track
  * too. A failure or a stop leaves the chapters already made where they are.
  */
 export function AudiobookWorkspace({
@@ -356,7 +356,7 @@ export function AudiobookWorkspace({
     ...(onOpenLibrary
       ? [
           {
-            label: "Open Your music",
+            label: "Open the Library",
             onSelect: onOpenLibrary,
             icon: <FolderOpen aria-hidden="true" />,
           },
@@ -405,7 +405,7 @@ export function AudiobookWorkspace({
           caption: (
             <span>
               {made.tracks.length} {made.tracks.length === 1 ? "chapter" : "chapters"}
-              {made.book ? " and the whole book" : ""}, kept in Your music.
+              {made.book ? " and the whole book" : ""}, kept in the Library.
             </span>
           ),
           actions: resultActions,

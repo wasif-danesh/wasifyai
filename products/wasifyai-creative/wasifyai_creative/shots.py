@@ -570,7 +570,7 @@ class ShotJobs:
                 await tracks.read(ctx, row["brief"]["track_id"]) if tracks and tracks.read else None
             )
             if song is None:
-                raise Refused("no_song", "The song is not in Your music any more.")
+                raise Refused("no_song", "The song is not in the Library any more.")
             song_path = folder / "song"
             await asyncio.to_thread(song_path.write_bytes, song)
             out = folder / "preview.mp4"

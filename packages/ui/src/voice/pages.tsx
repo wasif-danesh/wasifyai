@@ -95,7 +95,7 @@ function take(r: Remembered, key: string): string | null {
   return v || null;
 }
 
-/** Send a recording from Your music to a tool. */
+/** Send a recording from the Library to a tool. */
 export function sendToTool(r: Remembered, source: AudioSource) {
   r.set(SOURCE, `${source.kind}:${source.id}`);
 }
@@ -368,7 +368,7 @@ export function DubPage(p: VoicePageProps) {
       <DubbingWorkspace
         api={p.api}
         runs={p.runs}
-        lead="Hear a recording in another language, in the speaker's voice or one you choose. The result is kept in Your music."
+        lead="Hear a recording in another language, in the speaker's voice or one you choose. The result is kept in the Library."
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}
         onModelChosen={(id) => p.remembered.set(key, id)}
@@ -388,7 +388,7 @@ export function AudiobookPage(p: VoicePageProps) {
         lead={device(
           p,
           "Read a long text aloud, chapter by chapter, in a voice you choose. It runs on this computer.",
-          "Read a long text aloud, chapter by chapter, in a voice you choose. Every chapter is kept in Your music as it is done.",
+          "Read a long text aloud, chapter by chapter, in a voice you choose. Every chapter is kept in the Library as it is done.",
         )}
         onGetModel={getModel(p)}
         initialModel={p.remembered.get(key)}

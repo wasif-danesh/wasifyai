@@ -10,7 +10,7 @@ Action: `speech.join`
 ## What it is for
 
 Put speeches from the library one after another, with a short pause after each, and keep them as one
-recording in Your music. Each speech can be a different voice, so a story can have a narrator and
+recording in the Library. Each speech can be a different voice, so a story can have a narrator and
 characters. It says where each part starts and ends, so pictures and captions can follow the words.
 Creative Studio uses it for a story: it speaks each line, then joins them.
 
@@ -23,13 +23,13 @@ Creative Studio uses it for a story: it speaks each line, then joins them.
 ## Fields
 
 - `parts`: The speeches in order, each with `speech_id` and `pause` (seconds of quiet after it, 0 to 5).
-- `title`: What the recording is called in Your music.
+- `title`: What the recording is called in the Library.
 - `text`: What it says, so search finds it.
 
 ## Limits
 
 - Up to 400 speeches. The result is one channel at 24 kHz.
-- The speeches stay in the library; the joined recording is a new song in Your music.
+- The speeches stay in the library; the joined recording is a new recording in the Library.
 
 ## Needs
 

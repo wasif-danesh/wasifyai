@@ -517,8 +517,14 @@ describe("a server's question as a form (ADR-0070 decision 10)", () => {
     expect(screen.getByText(/sse is not supported/)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Add" })).toHaveLength(1); // jira's; the form is closed
     await user.click(screen.getByRole("button", { name: "Add" }));
+    // jira is a program: nothing is added until its name is typed again
+    expect(external.importAdd).not.toHaveBeenCalled();
+    const add = screen.getByRole("button", { name: "Add" });
+    expect(add).toBeDisabled();
+    await user.type(screen.getByLabelText("Type the name to confirm"), "jira");
+    await user.click(add);
     await waitFor(() =>
-      expect(external.importAdd).toHaveBeenCalledWith({ source: "codex" }, "jira"),
+      expect(external.importAdd).toHaveBeenCalledWith({ source: "codex" }, "jira", "jira"),
     );
     expect(await screen.findByText("added")).toBeInTheDocument();
   });

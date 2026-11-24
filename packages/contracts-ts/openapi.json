@@ -782,7 +782,7 @@
           },
           "track_id": {
             "default": "",
-            "description": "The song, from Your music. For a story, the narration once it is made.",
+            "description": "The song, from the Library. For a story, the narration once it is made.",
             "maxLength": 64,
             "title": "Track Id",
             "type": "string"
@@ -2951,6 +2951,17 @@
       },
       "ImportAdd": {
         "properties": {
+          "confirm_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm Name"
+          },
           "folder": {
             "anyOf": [
               {
@@ -23134,7 +23145,7 @@
     },
     "/products/wasifyai-voice/tracks/import": {
       "post": {
-        "description": "Add a recording from this computer to Your music, so the audio tools can work on it.",
+        "description": "Add a recording from this computer to the Library, so the audio tools can work on it.",
         "operationId": "import_track_products_wasifyai_voice_tracks_import_post",
         "requestBody": {
           "content": {

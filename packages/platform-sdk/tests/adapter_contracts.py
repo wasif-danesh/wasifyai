@@ -101,6 +101,29 @@ async def check_run_store(store, tenant: str) -> None:
     wins = await asyncio.gather(*(store.take_waiting_job(tenant, run, "job-2") for _ in range(6)))
     assert wins.count(True) == 1
 
+    # a run that is over stays over: a stop on one replica and the run's own next step on
+    # another cannot undo each other (the test run of 2026-11-22)
+    stopped = str(uuid4())
+    await store.create(_record(tenant, stopped))
+    await store.set_state(tenant, stopped, "waiting_job", waiting_job="job-3")
+    before = await store.cancel(tenant, stopped)
+    assert before is not None and (before.status, before.waiting_job) == ("waiting_job", "job-3")
+    assert await store.cancel(tenant, stopped) is None  # one stop wins
+    assert await store.set_state(tenant, stopped, "waiting_job", waiting_job="job-4") is False
+    assert await store.set_state(tenant, stopped, "done") is False
+    now = await store.get(tenant, stopped)
+    assert now is not None and (now.status, now.waiting_job) == ("cancelled", None)
+    assert await store.take_waiting_job(tenant, stopped, "job-3") is False  # not resumed
+    finished = str(uuid4())
+    await store.create(_record(tenant, finished))
+    assert await store.set_state(tenant, finished, "done") is True
+    assert await store.cancel(tenant, finished) is None  # a finished run is not relabelled
+    assert (await store.get(tenant, finished)).status == "done"  # type: ignore[union-attr]
+    racing = str(uuid4())
+    await store.create(_record(tenant, racing))
+    stops = await asyncio.gather(*(store.cancel(tenant, racing) for _ in range(6)))
+    assert sum(s is not None for s in stops) == 1
+
 
 def job(tenant: str, run: str | None = None, thread: str | None = None) -> JobRequest:
     return JobRequest(

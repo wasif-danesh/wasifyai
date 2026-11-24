@@ -298,7 +298,7 @@ export function BriefForm({
     songs()
       .then(setList)
       .catch((e: unknown) =>
-        setProblem(e instanceof Error ? e.message : "Your music could not be read."),
+        setProblem(e instanceof Error ? e.message : "The Library could not be read."),
       );
   }, [songs]);
 
@@ -372,7 +372,7 @@ export function BriefForm({
             ) : null
           }
         >
-          A project starts from a song in Your music.
+          A project starts from a song in the Library.
         </Notice>
       ) : null}
       <div className={panel}>

@@ -65,7 +65,7 @@ class Brief(BaseModel):
     skill: Skill = Field("song", description="A music video of a song, or a story told by a voice.")
     track_id: str = Field(
         "", max_length=64,
-        description="The song, from Your music. For a story, the narration once it is made.",
+        description="The song, from the Library. For a story, the narration once it is made.",
     )  # fmt: skip
     story: str | None = Field(
         None, max_length=MAX_STORY,
@@ -100,7 +100,7 @@ class Brief(BaseModel):
     @model_validator(mode="after")
     def _source(self) -> "Brief":
         if self.skill == "song" and not self.track_id:
-            raise ValueError("Choose a song from Your music.")
+            raise ValueError("Choose a song from the Library.")
         if self.skill == "story" and len((self.story or "").strip()) < 40:
             raise ValueError("Write the story, at least a few sentences.")
         return self

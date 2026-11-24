@@ -104,6 +104,22 @@ export const FILTER_KIND: Record<Filter, Entry["kind"] | null> = {
   taught: "taught",
 };
 
+/** A track's own name in the Library: a dub or an audiobook is kept with the music, but is not music. */
+const TRACK_LABEL: Record<string, string> = {
+  dubbed: "Dub",
+  audiobook: "Audiobook",
+  chapter: "Audiobook chapter",
+  stem: "Song part",
+  imported: "Recording",
+  converted: "Changed voice",
+  edited: "Edited speech",
+  joined: "Recording",
+};
+
+export function trackLabel(song: SongCard): string {
+  return TRACK_LABEL[song.mode ?? ""] ?? KIND_LABEL.song;
+}
+
 /** What each kind is called in the Library, one word a person would use (design/DESIGN.md's nouns). */
 export const KIND_LABEL: Record<Entry["kind"], string> = {
   song: "Music",
@@ -151,7 +167,7 @@ export function toRow(entry: Entry): Row {
     case "song":
       return {
         ...base,
-        kindLabel: KIND_LABEL.song,
+        kindLabel: trackLabel(entry.song),
         title: entry.song.title,
         detail: entry.song.style ?? "",
         status: "done",

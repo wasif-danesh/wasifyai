@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 // The Your agent tab of the Code model button, and Settings › Code (ADR-0107, stage H2): the person's own
 // Claude Code and Codex, set up once, each signed in on its own page, with the models its plan offers.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { AgentPrograms } from "./AgentTab";
-import { ModelSelect } from "./ModelSelect";
+import { ModelSelect, type ModelSelectHandle } from "./ModelSelect";
 import type { AgentProgram, AgentSetup, AgentsApi, ChoicesApi, ModelChoice } from "./types";
 
 const program = (over: Partial<AgentProgram> = {}): AgentProgram => ({
@@ -155,6 +156,19 @@ describe("the Your agent tab", () => {
     expect(await screen.findByText(/The chat can answer on your plan\. Setting up/)).toBeTruthy();
     expect(screen.getByText("Cards still ask.")).toBeTruthy();
     expect(screen.queryByText(/Sessions can run/)).toBeNull();
+  });
+
+  it("opens on Your plan when a screen asks (the first run's plan link, ADR-0110)", async () => {
+    const a = agents({ state: "installed", version: "1", bytes: 0 }, [program(), CODEX]);
+    const handle = createRef<ModelSelectHandle>();
+    const api: ChoicesApi = { ...choices(ROWS, a), agentsTab: "Your plan" };
+    render(<ModelSelect group="chat" api={api} handleRef={handle} />);
+    await screen.findByRole("button", { name: /Claude Code · Sonnet|Select chat model/ });
+    act(() => handle.current?.openOn("agent"));
+    expect(await screen.findByRole("tab", { name: "Your plan" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("is not there for a group without agent programs", async () => {

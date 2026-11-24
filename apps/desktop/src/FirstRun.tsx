@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The first run (ADR-0109 decisions 1 to 5, stage FR5): one button that says what it costs and sets up chat only.
 // A chat model already on the computer (Ollama, LM Studio, a found file) is used instead of a download; on a computer
-// too small for one, the key comes first. "I'd rather use an API key" is always offered. Nothing else is asked:
+// too small for one, the key comes first. "I'd rather use an API key" is always offered, and "I'd rather use my
+// Claude or ChatGPT plan" where the chat can (ADR-0110: it opens the model button on Your plan). Nothing else is asked:
 // every other part of the menu sets itself up the first time it is opened, with its group's one card.
 import type { SetupGroup } from "@wasifyai/client";
 import { Bar, Button, type ModelChoice, formatBytes, useChoicesFor } from "@wasifyai/ui";
@@ -73,11 +74,19 @@ export function GetStarted({
   group,
   onStarted,
   onKey,
+  onPlan,
 }: {
   group: SetupGroup;
   onStarted?: () => void;
   onKey: () => void;
+  /** the chat on the person's own Claude or ChatGPT plan (ADR-0110) */
+  onPlan?: () => void;
 }) {
+  const plan = onPlan ? (
+    <button type="button" className="text-primary text-sm underline" onClick={onPlan}>
+      I&rsquo;d rather use my Claude or ChatGPT plan
+    </button>
+  ) : null;
   const chatApi = useChoicesFor("chat");
   const { offer, loaded } = useChatOffer();
   const found = offer && offer.state === "ready" ? offer : null;
@@ -97,6 +106,7 @@ export function GetStarted({
         <Button type="button" variant="outline" onClick={start}>
           Download a chat model instead{bytes ? ` · ${formatBytes(bytes)}` : ""}
         </Button>
+        {plan}
       </div>
     );
   return (
@@ -112,11 +122,12 @@ export function GetStarted({
       <button type="button" className="text-primary text-sm underline" onClick={onKey}>
         I&rsquo;d rather use an API key
       </button>
+      {plan}
     </div>
   );
 }
 
-export function FirstRun({ onDone }: { onDone: () => void }) {
+export function FirstRun({ onDone, onPlan }: { onDone: () => void; onPlan?: () => void }) {
   const groups = useGroups();
   const chat = groups?.find((g) => g.id === "chat") ?? null;
   const run = useRun("chat");
@@ -166,7 +177,19 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
             </p>
           ) : null}
           {chat ? (
-            <GetStarted group={chat} onStarted={() => setStarted(true)} onKey={toKeys} />
+            <GetStarted
+              group={chat}
+              onStarted={() => setStarted(true)}
+              onKey={toKeys}
+              {...(onPlan
+                ? {
+                    onPlan: () => {
+                      onDone();
+                      onPlan();
+                    },
+                  }
+                : {})}
+            />
           ) : null}
           <button
             type="button"

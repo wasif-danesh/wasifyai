@@ -72,9 +72,17 @@ export function HomePage({
   const chat = useGroups()?.find((g) => g.id === "chat") ?? null;
   const run = useRun("chat");
   const onPlan = useOnPlan(choices);
+  // "I'd rather use my Claude or ChatGPT plan" on the first run: the home's model button opens on Your plan once
+  // the home is on the screen
+  const [toPlan, setToPlan] = useState(false);
+  useEffect(() => {
+    if (!toPlan || first.show) return;
+    picker.current?.openOn("agent");
+    setToPlan(false);
+  }, [toPlan, first.show]);
 
   // the first run, once (ADR-0109): one button that sets up chat, and nothing else
-  if (first.show) return <FirstRun onDone={first.done} />;
+  if (first.show) return <FirstRun onDone={first.done} onPlan={() => setToPlan(true)} />;
 
   // after it, while chat is not set up, the same button on the home
   const notice =
@@ -87,7 +95,11 @@ export function HomePage({
             <span className="text-sm">{run.label}</span>
           </span>
         ) : (
-          <GetStarted group={chat} onKey={() => picker.current?.open()} />
+          <GetStarted
+            group={chat}
+            onKey={() => picker.current?.openOn("cloud")}
+            onPlan={() => picker.current?.openOn("agent")}
+          />
         )}
       </Notice>
     ) : null;

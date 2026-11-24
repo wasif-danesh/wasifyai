@@ -2242,6 +2242,42 @@ for (const scheme of ["light", "dark"]) {
     });
   }
 
+  // ADR-0110's amendment of 2026-11-24: the welcome's plan link opens the chat's button on Your plan, and the card of
+  // an action asked for on the plan does not say it pauses the chat model. Needs Claude Code set up and signed in.
+  if (scheme === "light" && names.has("plan-start")) {
+    await attempt("plan-start", async () => {
+      await open(page, "/");
+      const link = page.getByRole("button", { name: /rather use my Claude or ChatGPT plan/ });
+      await link.waitFor({ timeout: 30_000 });
+      await shot(page, "plan-start-welcome");
+      await link.click();
+      const tab = page.getByRole("tab", { name: "Your plan" });
+      await tab.waitFor();
+      if ((await tab.getAttribute("aria-selected")) !== "true") throw new Error("not on Your plan");
+      const claude = page.getByRole("list", { name: "Claude Code" });
+      await claude.waitFor({ timeout: 60_000 });
+      await shot(page, "plan-start-your-plan");
+      await claude.getByRole("button", { name: /^Sonnet/ }).click();
+      await page.getByRole("button", { name: /Claude Code · Sonnet/ }).waitFor();
+      const box = page.getByRole("textbox").first();
+      await box.fill("Make a picture of a red cat on a sofa.");
+      await box.press("Enter");
+      const notNow = page.getByRole("button", { name: "Not now" });
+      await notNow.waitFor({ timeout: 120_000 });
+      await page.waitForTimeout(800);
+      await shot(page, "plan-start-card");
+      const card = notNow.locator(
+        "xpath=ancestor::*[self::section or self::article or @role='group' or @role='region'][1]",
+      );
+      const said = await card.innerText().catch(() => "");
+      console.log(`plan-start: card says pauses: ${/Pauses the chat model/.test(said)}`);
+      if (/Pauses the chat model/.test(await page.locator("#main").innerText())) {
+        throw new Error("the card still says it pauses the chat model");
+      }
+      await notNow.click();
+    });
+  }
+
   // ADR-0086's amendment of 2026-11-24: no model button has a More tab. Opens every model button on every screen
   // that has one, says its tabs, and pictures On this computer (with "Larger models" where there are any).
   if (scheme === "light" && names.has("model-tabs")) {

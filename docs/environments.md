@@ -31,10 +31,12 @@ models (ComfyUI and the rest) on the person's computer. The GPU notes below are 
 
 - **Engine:** Podman + Podman Desktop. Scripts use `${CONTAINER_ENGINE:-podman}` so Colima or
   Docker also work.
-- **Containers:** API, Next.js, LiteLLM, media worker, Postgres, Redis, SeaweedFS.
-- **Native on the host:** Ollama and ComfyUI. Containers on macOS cannot use the Metal GPU.
-  Containers reach them at `host.containers.internal`, configured through
-  `OLLAMA_BASE_URL` / `COMFYUI_BASE_URL`.
+- **Containers:** API, Next.js, LiteLLM, media worker, the embedder (bge-m3), Postgres, Redis, SeaweedFS.
+- **Native on the host:** nothing by default. Text runs on cloud models and media returns placeholders or
+  runs on cloud providers, so `make setup` and `make dev` do not need Ollama or ComfyUI.
+- **Optional, on the host:** an admin can bind a model to Ollama, and `COMFYUI_MODE=real` drives a ComfyUI.
+  Containers on macOS cannot use the Metal GPU, so both run natively and containers reach them at
+  `host.containers.internal`, configured through `OLLAMA_BASE_URL` / `COMFYUI_BASE_URL`.
 - **Media worker modes:** `COMFYUI_MODE=stub` (the default in `.env.example`) returns placeholder
   images and audio, so every machine can run the whole media flow with no key. `COMFYUI_MODE=cloud`
   (the chart's default) runs each job on the cloud offers it came with. `COMFYUI_MODE=real` drives

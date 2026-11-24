@@ -28,7 +28,7 @@ wsl --install -d Ubuntu-24.04     # reboot if asked, then finish the Ubuntu firs
 
 ## Inside Ubuntu (WSL)
 
-1. Enable systemd (recommended; Podman and Ollama services work best with it):
+1. Enable systemd (recommended; Podman services work best with it):
 
    ```bash
    printf '[boot]\nsystemd=true\n' | sudo tee /etc/wsl.conf
@@ -46,7 +46,7 @@ wsl --install -d Ubuntu-24.04     # reboot if asked, then finish the Ubuntu firs
 3. Run the normal flow:
 
    ```bash
-   make setup        # installs tools, Podman, Ollama, pulls the model, creates .env
+   make setup        # installs tools and Podman, creates .env
    make dev          # starts the stack and applies migrations
    ```
 
@@ -57,11 +57,11 @@ Podman needs cgroup delegation for kind; see [runbooks/linux-kind.md](runbooks/l
 
 ## Tips
 
-- **Memory:** WSL2 uses up to half of your RAM by default. `gemma4:e4b` needs about 8 GB (16 GB is comfortable); raise
+- **Memory:** WSL2 uses up to half of your RAM by default. The stack needs about 4 GB. If that is not enough, raise
   the limit in `%UserProfile%\.wslconfig` (`[wsl2]` then `memory=20GB`) and run `wsl --shutdown`.
 - **Docker Desktop instead of Podman:** `CONTAINER_ENGINE=docker make dev` works, because the
   repo uses the standard Compose spec. Enable WSL integration for your distro in Docker Desktop.
-- **Ollama on Windows instead of WSL:** not needed. Install it inside WSL so containers reach it
-  the same way as on Linux. If it listens on loopback only, `make setup` offers to fix that.
+- **Ollama:** not needed, because no default model runs on it. If an admin binds a model to Ollama, install it
+  inside WSL (not on Windows) so containers reach it the same way as on Linux.
 - **Line endings:** `.gitattributes` forces LF for scripts, Makefiles and Containerfiles, so a
   checkout made by Windows Git still works. Prefer cloning inside WSL anyway.

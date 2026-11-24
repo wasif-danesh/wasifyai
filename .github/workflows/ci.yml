@@ -169,17 +169,15 @@ jobs:
       - run: pnpm --filter web exec playwright install --with-deps chromium
       - run: pnpm --filter web test:e2e:layout
   setup:
-    # Proves `make setup` installs tools on a clean machine. Ollama is stubbed: its installer is
-    # the vendor's own and several GB, and the engine/model steps need a full machine.
+    # Proves `make setup` installs tools on a clean machine, with no Ollama on it: no default model
+    # runs on Ollama, so setup must not ask for it. The engine steps need a full machine.
     strategy:
       fail-fast: false
       matrix: { os: [ubuntu-latest, macos-latest] }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          sudo install -m 755 /dev/stdin /usr/local/bin/ollama <<< $'#!/bin/sh\nexit 0'
-          SETUP_TOOLS_ONLY=1 ./scripts/setup.sh -y --k8s
+      - run: SETUP_TOOLS_ONLY=1 ./scripts/setup.sh -y --k8s
       - run: |
           export PATH="$HOME/.local/bin:$PATH"
           for t in uv pnpm node kind helm kubectl podman make; do command -v $t; done

@@ -22,7 +22,7 @@ migrate:
 test:
 	uv run pytest
 	pnpm test
-# Needs the stack running (make dev): real Postgres + pgvector, SeaweedFS, LiteLLM + Ollama.
+# Needs the stack running (make dev): real Postgres + pgvector, SeaweedFS, LiteLLM.
 test-integration:
 	DATABASE_URL=postgresql+asyncpg://wasifyai:wasifyai@localhost:5432/wasifyai \
 	LITELLM_BASE_URL=http://localhost:4000 STORAGE_ENDPOINT=http://localhost:8333 \

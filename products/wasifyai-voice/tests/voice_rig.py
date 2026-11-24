@@ -23,6 +23,7 @@ from wasifyai_platform_sdk import (
     VoiceModel,
     parse_voice_model,
 )
+from wasifyai_platform_sdk.context import current_context
 
 PRODUCT = Path(__file__).parents[1]
 
@@ -84,6 +85,12 @@ class FakeEngine:
         self.beside_speak: list[bool] = []  # the same for each read-aloud passage
         self.words = "Hello there. Second sentence."
         self.displaced: str | None = None
+        # who each speak or transcribe call ran for (on the web, a worker job needs it)
+        self.contexts: list[tuple[str, str] | None] = []
+
+    def _who(self) -> None:
+        ctx = current_context()
+        self.contexts.append((ctx.tenant_id, ctx.user_id) if ctx else None)
 
     def models(self, task: str | None = None) -> list[dict[str, Any]]:
         return [
@@ -106,6 +113,7 @@ class FakeEngine:
         return m
 
     async def speak(self, model, text, voice, options, *, beside=False) -> SpeechResult:
+        self._who()
         if self.fail_with:
             raise self.fail_with
         self.spoken.append((model.id, text, voice, dict(options)))
@@ -172,6 +180,7 @@ class FakeEngine:
                              request.fps, 640, 480, model.id, 0.5, 4.0)  # fmt: skip
 
     async def transcribe(self, model, data, options, *, beside=False) -> TranscriptResult:
+        self._who()
         if self.fail_with:
             raise self.fail_with
         self.transcribed.append((model.id, len(data), dict(options)))

@@ -55,7 +55,10 @@ def process_image(
             rgba = oriented.convert("RGBA")
     except UploadError:
         raise
-    except (UnidentifiedImageError, OSError, SyntaxError, ValueError, Image.DecompressionBombError):
+    except Image.DecompressionBombError:
+        # a small file that opens as a huge picture: say what is wrong with it (test E, 2026-11-21)
+        raise UploadError(422, "That image has too many pixels. Try a smaller one.") from None
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
         raise UploadError(422, "That file could not be read as an image.") from None
     # Flatten any transparency onto white, then copy the pixels into a fresh image: nothing from
     # the original (EXIF, GPS, colour profile, comments) comes along.

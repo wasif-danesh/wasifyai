@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Respon
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from wasifyai_platform_sdk import Identity, RouteDeps
+from wasifyai_platform_sdk.filenames import shown_name
 
 from wasifyai_meetings import asking, audio, people, reports
 from wasifyai_meetings.runtime import (
@@ -159,7 +160,7 @@ def build_routes(deps: RouteDeps) -> APIRouter:
             raise HTTPException(
                 409, {"code": "busy", "message": "A meeting is being made. Wait for it to finish."}
             )
-        name = Path(file.filename or "recording").name[:200]
+        name = shown_name(file.filename, "recording")
         incoming = root_for(deps.state) / "incoming" / f"{new_id()}{Path(name).suffix[:12]}"
         got = await asyncio.to_thread(_copy_upload, file.file, incoming, audio.MAX_BYTES)
         if got > audio.MAX_BYTES:

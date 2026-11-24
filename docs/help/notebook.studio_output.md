@@ -1,7 +1,7 @@
 ---
 action: notebook.studio_output
 screen: notebook.list
-synonyms: [report, quiz, flashcards, slides, mind map, study guide, audio overview]
+synonyms: [report, quiz, flashcards, slides, slide deck, presentation, PowerPoint, Word file, docx, export to Word, PDF file, mind map, study guide, audio overview, podcast]
 ---
 # Make a Studio output
 

@@ -3,6 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../cn";
+import { useMakingHere } from "../shell/making-here";
 import { type Action, ActionsRow } from "./actions-row";
 import { Button } from "./button";
 import { EmptyState } from "./empty-state";
@@ -32,6 +33,12 @@ export type StageState =
       onReset?: () => void;
     }
   | { kind: "result"; children: ReactNode; actions?: Action[]; caption?: ReactNode };
+
+/** Tells the top bar's tray this screen is making something, while the working state shows. */
+function MadeHere({ label }: { label: string }) {
+  useMakingHere(label);
+  return null;
+}
 
 /**
  * Where the result of a make screen appears (ADR-0093): one area with its four states, so a person always knows
@@ -63,6 +70,7 @@ export function Stage({
       {state.kind === "empty" ? (
         <EmptyState icon={state.icon} title={state.title} text={state.text} action={state.action} />
       ) : null}
+      {state.kind === "working" ? <MadeHere label={state.label} /> : null}
       {state.kind === "working" ? (
         <div className="grid w-full max-w-md justify-items-center gap-3 text-center">
           <Spinner className="size-6" />

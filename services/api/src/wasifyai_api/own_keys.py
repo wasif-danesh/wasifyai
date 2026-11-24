@@ -779,7 +779,9 @@ class OwnKeysService:
         p = self._product(product)
         view = await self.view()
         by_id = {x["id"]: x for x in view["products"]}
-        row = by_id[p.id]
+        row = by_id.get(p.id)
+        if row is None:  # a text product on the web, where only media keys are kept
+            raise OwnKeyRefused("There is no such product.", 404)
         use = row["use"] or {}
         models = []
         if p.kind == "text":

@@ -10,6 +10,7 @@ import pytest
 from test_voice_graph import CTX, Rig, ctx, library_track  # noqa: F401
 from voice_rig import FakeEngine
 from wasifyai_platform_sdk import RunError
+from wasifyai_platform_sdk.voice_models import VoiceEngineError
 from wasifyai_voice import dubbing
 from wasifyai_voice.runtime import store_for
 
@@ -203,6 +204,21 @@ async def test_a_script_is_written_separating_the_voice_first(tmp_path, ctx):  #
     assert [e["node"] for e in events if e["type"] == "node"] == [
         "check_request", "separate", "transcribe", "translate",
     ]  # fmt: skip
+
+
+async def test_without_the_separator_the_whole_recording_is_the_voice(tmp_path, ctx):  # noqa: F811
+    # the web's walk of 2026-11-20: the separator was not set up and every dub stopped there
+    rig = Rig(tmp_path, turns=[array_of("Hola.", "Segunda frase.")])
+    await library_track(rig, rate=44100, channels=2, seconds=3.0)
+
+    async def not_set_up(*_):
+        raise VoiceEngineError("model_missing", "Mel-Band RoFormer is not ready.")
+
+    rig.engine.separate = not_set_up
+    final, _ = await rig.run(task="dub_script", source_track="song", language="es", background=True)
+    assert final["status"] == "done" and final["vocals_track"] == "song"
+    assert "background_track" not in final
+    assert final["note"].startswith("Mel-Band RoFormer is not ready.")
 
 
 async def test_a_script_without_separating_hears_the_recording_as_it_is(tmp_path, ctx):  # noqa: F811

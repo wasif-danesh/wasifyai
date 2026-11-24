@@ -192,10 +192,12 @@ def test_a_note_is_pending_until_indexed_and_editing_it_requeues(store):
 
 
 def test_an_index_built_with_another_embedder_is_refused(new_store):
-    new_store(dimension=64, embedder_id="a")
+    first = new_store(dimension=SPEC.dimension, embedder_id="a")
+    doc, _ = file_doc(first, first.create_notebook(T, U, "n"))
+    index(first, doc["id"], ["one passage"])  # an empty web index may switch (the test below)
     with pytest.raises(Conflict, match="indexed with a"):
-        new_store(dimension=64, embedder_id="b")
-    assert new_store(dimension=64, embedder_id="a").stats()["embedder"] == "a"
+        new_store(dimension=SPEC.dimension, embedder_id="b")
+    assert new_store(dimension=SPEC.dimension, embedder_id="a").stats()["embedder"] == "a"
 
 
 def test_a_passage_comes_with_its_neighbours(store):
@@ -237,3 +239,24 @@ def test_a_question_in_a_script_without_spaces_or_with_marks_finds_its_passage(s
     assert [h.content for h in hindi] == [texts[0]]
     assert [h.content for h in latin] == [texts[1]]
     assert latin[0].blended == 1.0  # both terms of the question are in the passage
+
+
+def test_an_empty_web_index_takes_a_new_search_model_and_a_filled_one_refuses(new_store):
+    """Until 2026-11-20 the web made its tables for the local model's size, though it can only
+    use the gateway's and read nothing: such an index switches; a filled one is read again."""
+    if new_store.backend != "postgres":
+        pytest.skip("the web profile is Postgres")
+    old = new_store(dimension=SPEC.dimension, embedder_id=SPEC.id, name="empty")
+    nb = old.create_notebook(T, U, "n")
+    waiting, _ = file_doc(old, nb)
+    switched = new_store(dimension=SPEC.dimension + 8, embedder_id="gateway:x", name="empty")
+    assert (
+        switched.get_document(T, U, nb["id"], waiting["id"])["status"] == "pending"
+    )  # sources are kept
+    assert switched.stats()["dimension"] == SPEC.dimension + 8
+
+    filled = new_store(dimension=SPEC.dimension, embedder_id=SPEC.id, name="filled")
+    doc, _ = file_doc(filled, filled.create_notebook(T, U, "n"))
+    index(filled, doc["id"], ["one passage"])
+    with pytest.raises(Conflict, match="read again"):
+        new_store(dimension=SPEC.dimension + 8, embedder_id="gateway:x", name="filled")

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "../components/button";
 import { Spinner } from "../components/spinner";
+import { useMadeHereNow, withoutListed } from "./making-here";
 
 /** One running job, in words: what is being made, since when, who asked, and how to stop it. */
 export type TrayJob = {
@@ -110,13 +111,16 @@ export function JobTray({
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [load, pollMs]);
-  const count = jobs.length;
+  const here = useMadeHereNow();
+  const all: TrayJob[] = [...withoutListed(here, jobs), ...jobs];
+  const count = all.length;
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <button
           type="button"
-          aria-label={count === 0 ? "Nothing running" : `${count} running`}
+          // the name starts with the word shown ("Idle"), so voice control finds it (test F, 2026-11-21)
+          aria-label={count === 0 ? "Idle: nothing running" : `${count} running`}
           title={count === 0 ? "Nothing running" : `${count} running`}
           data-count={count}
           className={cn(
@@ -146,7 +150,7 @@ export function JobTray({
             <p className="m-0 px-2 py-2 text-muted-foreground text-sm">Nothing is running.</p>
           ) : (
             <ul className="m-0 grid list-none gap-1 p-0">
-              {jobs.map((j) => (
+              {all.map((j) => (
                 <li key={j.id} className="flex items-center gap-3 rounded-md px-2 py-1.5">
                   <Spinner className="size-3.5 shrink-0" />
                   <div className="min-w-0 flex-1">

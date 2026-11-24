@@ -153,7 +153,7 @@ describe("the Styles section", () => {
       ["Ena (yours)", false],
       ["Ink", false],
       ["Arcane", true], // made for another model: shown, never chosen
-      ["Anime (ComfyUI)", false],
+      ["Anime (found in ComfyUI)", false],
       ["From this computer…", false],
       ["From Hugging Face…", false],
       ["Look in a folder…", false],
@@ -207,7 +207,9 @@ describe("the Styles section", () => {
     });
     render(<Harness api={api} onChosen={onChosen} />);
     await openAdd();
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Anime (ComfyUI)" }));
+    await userEvent.click(
+      await screen.findByRole("menuitem", { name: "Anime (found in ComfyUI)" }),
+    );
     await waitFor(() =>
       expect(onChosen).toHaveBeenLastCalledWith([{ id: "copy-f1", strength: 1 }]),
     );

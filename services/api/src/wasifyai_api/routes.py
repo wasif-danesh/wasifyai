@@ -17,6 +17,19 @@ HEARTBEAT_S = 15
 SSE_HEADERS = {"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"}
 
 
+def without_nul(value: Any) -> Any:
+    """The input with every NUL character taken out of its text. A NUL means nothing in what a
+    person types, and Postgres cannot keep it: on the web a run whose input held one failed when its
+    first step was saved, with only "The run failed." (test E, 2026-11-21)."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, dict):
+        return {without_nul(k): without_nul(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [without_nul(v) for v in value]
+    return value
+
+
 def _state(request: Request) -> Any:
     return services_of(request)
 
@@ -78,7 +91,7 @@ async def start_run(
             identity.tenant_id,
             identity.user_id,
             body.thread_id,
-            body.input,
+            without_nul(body.input),
             body.run_id,
             role=identity.role,
         )
@@ -118,5 +131,5 @@ async def resume_run(
     if await st.runs.store.take_awaiting(rec.tenant_id, rec.run_id) is None:
         raise HTTPException(409, "run is not waiting for input")
     after = await st.runs.log.last_seq(rec.tenant_id, rec.run_id)
-    st.runs.resume(rec, body.value)
+    st.runs.resume(rec, without_nul(body.value))
     return _sse(request, rec, after)

@@ -145,9 +145,24 @@ def build_dub(caps: Capabilities, app_state: Any, engine: Any, refuse_with: Refu
         out: dict[str, Any] = {}
         try:
             heard = source
+            separated = None
             if state.get("background"):
                 say("Separating the voice from the background", "separate")
-                vocals, background = await _separate(source, state, scratch)
+                try:
+                    separated = await _separate(source, state, scratch)
+                except VoiceEngineError as e:
+                    # the separator is not set up here (the web's walk of 2026-11-20 found every dub
+                    # stopped by it, music to keep or not): the whole recording is the voice,
+                    # and the script says the sound behind it could not be kept
+                    if e.code != "model_missing" or not source.track_id:
+                        raise
+                    out["vocals_track"] = source.track_id
+                    out["note"] = (
+                        f"{e.message} The whole recording is used as the voice, and the dub has "
+                        "no music or sounds behind it."
+                    )
+            if separated is not None:
+                vocals, background = separated
                 out["vocals_track"], out["background_track"] = (
                     vocals["track_id"],
                     background["track_id"],

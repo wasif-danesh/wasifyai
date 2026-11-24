@@ -38,7 +38,9 @@ export function ModelViewer({
   }
   if (!ready) return <output className="text-muted-foreground">Opening the viewer…</output>;
   return (
-    <div className={cn("overflow-hidden rounded-xl border bg-muted", className)}>
+    // w-full: the stage centres its result, which sizes an item to its content, and the viewer has
+    // none of its own; without it the model showed as a thin vertical line (the walk of 2026-11-20)
+    <div className={cn("w-full overflow-hidden rounded-xl border bg-muted", className)}>
       {createElement("model-viewer", {
         src,
         alt: label,

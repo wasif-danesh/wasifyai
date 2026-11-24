@@ -62,7 +62,8 @@ export function whyLine(group: SetupGroup): string {
     return s;
   }
   return items.length > 1
-    ? `Sets up all ${items.length} items of ${label}. Runs on this computer, privately.`
+    ? // the card lists the parts, not the menu items: a count of items next to a shorter list read as a part missing
+      `Sets up everything the ${items.length} tools of ${label} need. Runs on this computer, privately.`
     : "Runs on this computer, privately.";
 }
 

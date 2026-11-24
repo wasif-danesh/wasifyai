@@ -792,6 +792,7 @@ class DubScriptOut(BaseModel):
     segments: list[DubLine]
     vocals_track: str | None = None
     background_track: str | None = None
+    note: str | None = None
 
 
 def _dub_script_input(p: DubScriptIn, ctx: ActionContext) -> dict[str, Any]:
@@ -811,7 +812,7 @@ def _dub_script_result(outputs: dict[str, Any], p: DubScriptIn) -> Outcome | Non
         _clean(
             {"language": outputs.get("language", p.language), "segments": lines,
              "vocals_track": outputs.get("vocals_track"),
-             "background_track": outputs.get("background_track")}
+             "background_track": outputs.get("background_track"), "note": outputs.get("note")}
         ),
         f"The script for the dub, {len(lines)} lines. Change any line, then make the dub:\n{shown}",
     )  # fmt: skip

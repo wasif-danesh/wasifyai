@@ -199,6 +199,9 @@ class CloudPlanSink:
 
     async def submit(self, request: Any) -> None:
         plan = await self._providers.plan_of(request.tenant_id, request.product_id)
+        if "cloud" in request.inputs:  # only a plan made here names the keys the worker reads
+            inputs = {k: v for k, v in request.inputs.items() if k != "cloud"}
+            request = request.model_copy(update={"inputs": inputs})
         if plan is not None:
             inputs = {**request.inputs, "cloud": plan}
             # a look taught on a cloud trainer is loaded there by its address (CP10)

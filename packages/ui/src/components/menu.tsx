@@ -3,6 +3,7 @@
 import { DropdownMenu as MenuPrimitive } from "radix-ui";
 import type { ReactNode } from "react";
 import { cn } from "../cn";
+import { useLayerHost } from "./layer-host";
 
 export type MenuItem = {
   label: string;
@@ -26,10 +27,13 @@ export function Menu({
   items: MenuItem[];
   align?: "start" | "end";
 }) {
+  const [ref, host] = useLayerHost<HTMLButtonElement>();
   return (
     <MenuPrimitive.Root modal={false}>
-      <MenuPrimitive.Trigger asChild>{trigger}</MenuPrimitive.Trigger>
-      <MenuPrimitive.Portal>
+      <MenuPrimitive.Trigger asChild ref={ref}>
+        {trigger}
+      </MenuPrimitive.Trigger>
+      <MenuPrimitive.Portal container={host}>
         <MenuPrimitive.Content
           align={align}
           sideOffset={4}

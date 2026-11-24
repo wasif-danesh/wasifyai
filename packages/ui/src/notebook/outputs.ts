@@ -42,7 +42,7 @@ export const STUDIO_TILES: StudioTile[] = [
     key: "audio",
     label: "Audio overview",
     about:
-      "A script of two hosts talking it through. The voices come with the voice engine; for now it is the script.",
+      "Two hosts talking it through: first the script, then Speak it on the result turns it into audio.",
   },
   {
     key: "infographic",

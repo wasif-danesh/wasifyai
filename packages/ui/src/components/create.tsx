@@ -2,6 +2,7 @@
 
 import type { KeyboardEvent, ReactNode } from "react";
 import { cn } from "../cn";
+import { useMakingHere } from "../shell/making-here";
 import { chips, counter, field, fieldLabel, hint, panel } from "../styles";
 import { Button } from "./button";
 import { Chip } from "./chip";
@@ -137,6 +138,7 @@ export function WorkingCard({
   children?: ReactNode;
   onCancel?: () => void;
 }) {
+  useMakingHere(label);
   return (
     <section className={cn(panel, "@container")} aria-label="Progress">
       <div className="flex items-center gap-[0.8rem] font-semibold">

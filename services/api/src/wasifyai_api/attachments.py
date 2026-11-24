@@ -136,8 +136,9 @@ async def attach_document(
     kept = text[:MAX_TEXT_CHARS].encode("utf-8")
     UPLOADS.labels("document", "accepted").inc()
     record = new_upload(identity.tenant_id, PRODUCT_ID, identity.user_id, len(kept), "text")
-    await storage.put_for(record.owner, record.key, kept, "text/plain; charset=utf-8")
+    # the row first: the sweep forgets a row whose file never came, but finds no file without one
     await state.uploads.add(record)
+    await storage.put_for(record.owner, record.key, kept, "text/plain; charset=utf-8")
     recorder: UsageRecorder = state.usage
     await record_safely(
         recorder,

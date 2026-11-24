@@ -57,7 +57,7 @@ async def read_capped(request: Request, limit: int) -> bytes:
             )
         chunks.append(chunk)
     if not size:
-        raise UploadError(422, "No file was sent.")
+        raise UploadError(422, "That file is empty.")
     return b"".join(chunks)
 
 
@@ -84,8 +84,9 @@ async def upload_image(
         raise HTTPException(503, "file storage is not available")
     UPLOADS.labels("image", "accepted").inc()
     record = new_upload(identity.tenant_id, product_id, identity.user_id, len(image.png))
-    await storage.put_for(record.owner, record.key, image.png, "image/png")
+    # the row first: the sweep forgets a row whose file never came, but finds no file without one
     await state.uploads.add(record)
+    await storage.put_for(record.owner, record.key, image.png, "image/png")
     recorder: UsageRecorder = state.usage
     await record_safely(
         recorder,
@@ -139,8 +140,9 @@ async def upload_media(
     record = new_upload(
         identity.tenant_id, product_id, identity.user_id, len(audio.wav), "audio", audio.seconds
     )
-    await storage.put_for(record.owner, record.key, audio.wav, "audio/wav")
+    # the row first: the sweep forgets a row whose file never came, but finds no file without one
     await state.uploads.add(record)
+    await storage.put_for(record.owner, record.key, audio.wav, "audio/wav")
     recorder: UsageRecorder = state.usage
     await record_safely(
         recorder,

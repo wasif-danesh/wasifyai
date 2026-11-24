@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { cn } from "../cn";
 import { Button } from "./button";
@@ -50,9 +51,22 @@ export function Modal({
       )}
     >
       <div className="grid gap-4 p-5">
-        <h2 id={labelId} className="font-semibold text-lg">
-          {label}
-        </h2>
+        {/* a close button in sight: Escape and a click outside were the only ways out (screen review 2026-11-20) */}
+        <div className="flex items-start justify-between gap-3">
+          <h2 id={labelId} className="m-0 font-semibold text-lg">
+            {label}
+          </h2>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Close"
+            className="-me-2 -mt-1 shrink-0"
+            onClick={onClose}
+          >
+            <X className="size-4" aria-hidden="true" />
+          </Button>
+        </div>
         {children}
       </div>
     </dialog>

@@ -15,6 +15,7 @@ export function Slider({
   max = 100,
   step = 1,
   label,
+  shown,
   format = (v) => String(v),
   disabled,
   className,
@@ -27,6 +28,8 @@ export function Slider({
   step?: number;
   /** what the number is, read by assistive tech */
   label: string;
+  /** a short word shown before the track ("Strength"), for a slider with no label of its own beside it */
+  shown?: string;
   /** the value in words, shown at the end and read out */
   format?: (value: number) => string;
   disabled?: boolean;
@@ -34,6 +37,11 @@ export function Slider({
 }) {
   return (
     <div className={cn("flex items-center gap-3", className)}>
+      {shown ? (
+        <span aria-hidden="true" className="shrink-0 text-muted-foreground text-sm">
+          {shown}
+        </span>
+      ) : null}
       <SliderPrimitive.Root
         id={id}
         value={[value]}

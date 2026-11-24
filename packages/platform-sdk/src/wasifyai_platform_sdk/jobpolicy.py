@@ -128,8 +128,10 @@ if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[4]) then
 end
 redis.call('ZADD', KEYS[1], ARGV[3], ARGV[2])
 redis.call('HSET', KEYS[2], ARGV[2], ARGV[5])
-redis.call('EXPIREAT', KEYS[1], math.ceil(tonumber(ARGV[3])))
-redis.call('EXPIREAT', KEYS[2], math.ceil(tonumber(ARGV[3])))
+-- the keys live as long as the latest lease in them, not the newest (a long training lease stays)
+local last = math.ceil(tonumber(redis.call('ZRANGE', KEYS[1], -1, -1, 'WITHSCORES')[2]))
+redis.call('EXPIREAT', KEYS[1], last)
+redis.call('EXPIREAT', KEYS[2], last)
 return ''
 """
 

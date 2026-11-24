@@ -564,3 +564,14 @@ def test_runtime_and_lip_sync_state_come_from_the_local_engine(api):
     engine.lipsync_sidecar = Sidecar()
     assert c.get("runtime").json()["backend"] == "metal"
     assert c.get("lipsync-engine").json()["installed"] is True
+
+
+def test_routes_that_call_the_engine_themselves_do_it_as_the_person(api):
+    """On the web the speech engine is a worker job tied to the person who asked; a route that
+    calls it outside a run must give it that context, or it fails with "no RunContext"."""
+    c, engine, state = api
+    seed_speech(state)
+    assert upload(c).status_code == 201
+    assert c.post("words", json={"kind": "speech", "id": "abc"}).status_code == 200
+    assert c.post("read-aloud", json={"text": "Hello there."}).status_code == 200
+    assert engine.contexts == [("t1", "u1")] * 3

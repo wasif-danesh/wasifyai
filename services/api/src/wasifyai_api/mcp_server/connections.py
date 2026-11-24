@@ -201,6 +201,11 @@ class ConnectionStore(Protocol):
 
     async def save(self, connection: Connection) -> None: ...
 
+    async def touch(self, connection_id: str, when: datetime) -> None:
+        """Only the last-used time: a call that ends late must not write back an old copy (a
+        revoke, a new secret or narrower scopes made meanwhile would be undone)."""
+        ...
+
     async def record(self, entry: ActivityEntry) -> None: ...
 
     async def activity(self, connection_id: str, limit: int = 50) -> list[ActivityEntry]: ...
@@ -227,6 +232,10 @@ class InMemoryConnectionStore:
 
     async def save(self, connection: Connection) -> None:
         self.rows[connection.id] = connection
+
+    async def touch(self, connection_id: str, when: datetime) -> None:
+        if (c := self.rows.get(connection_id)) is not None:
+            self.rows[connection_id] = replace(c, last_used_at=when)
 
     async def record(self, entry: ActivityEntry) -> None:
         self.entries.append(entry)
@@ -393,6 +402,14 @@ class SqlConnectionStore:
                 self._params(connection),
             )
 
+    async def touch(self, connection_id: str, when: datetime) -> None:
+        await self._ready()
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                text("UPDATE mcp_connections SET last_used_at = :t WHERE id = :id"),
+                {"t": self._stamp(when), "id": connection_id},
+            )
+
     async def record(self, entry: ActivityEntry) -> None:
         await self._ready()
         async with self._engine.begin() as conn:
@@ -554,4 +571,4 @@ class ConnectionsService:
         return c
 
     async def touch(self, connection: Connection) -> None:
-        await self.store.save(replace(connection, last_used_at=_now()))
+        await self.store.touch(connection.id, _now())

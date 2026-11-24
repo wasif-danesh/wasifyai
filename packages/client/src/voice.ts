@@ -1155,6 +1155,8 @@ export type DubScript = {
   /** the voice and the background, kept in Your music when they were separated */
   vocalsTrack?: string;
   backgroundTrack?: string;
+  /** what could not be done as asked ("the music behind the voice could not be kept"), in words */
+  note?: string;
 };
 
 export type DubScriptResult =
@@ -1225,6 +1227,7 @@ export async function dubScript(
             ...(typeof out.background_track === "string"
               ? { backgroundTrack: out.background_track }
               : {}),
+            ...(typeof out.note === "string" ? { note: out.note } : {}),
           },
         };
       }

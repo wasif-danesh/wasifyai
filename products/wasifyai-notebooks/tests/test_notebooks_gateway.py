@@ -160,3 +160,25 @@ def test_the_worker_asks_for_a_gateway_or_model_files():
     assert got.gateway_url == "http://gw:4000" and got.embed_model == "creation-embedder"
     assert got.embed_dimension == 1024
     assert asyncio  # the module's async tests are collected above
+
+
+def test_a_web_setup_with_a_gateway_reads_sources_without_model_files(tmp_path, monkeypatch):
+    """The web has no model files: with a gateway the reader must use its search model, or every
+    source waits for files that never come (the web walk, 2026-11-20)."""
+    from wasifyai_notebooks.runtime import NotebookStore, WebSetup
+
+    made: dict = {}
+    monkeypatch.setattr(NotebookStore, "on_postgres", lambda dsn, **kw: made.update(kw) or object())
+    setup = WebSetup(
+        dsn="postgresql://u:p@localhost/x",
+        storage=memory_storage(),
+        models_dir=tmp_path / "no-models",
+        reader_dir=tmp_path / "reader",
+        tmp_dir=tmp_path / "tmp",
+        gateway_url="http://gateway:4000",
+        gateway_key="k",
+    )
+    runtime = setup.build(reads_sources=True)
+    assert isinstance(runtime.components, GatewayComponents)
+    assert runtime.components.embedder_paths() is not None  # nothing to wait for
+    assert made["dimension"] == 1024

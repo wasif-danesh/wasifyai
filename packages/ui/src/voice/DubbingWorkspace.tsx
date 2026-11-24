@@ -21,6 +21,7 @@ import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
 import { Label } from "../components/label";
 import { MakeScreen } from "../components/make-screen";
+import { Notice } from "../components/notice";
 import { Player } from "../components/player";
 import { RadioGroup } from "../components/radio-group";
 import { type RecentItem, RecentStrip } from "../components/recent-strip";
@@ -486,6 +487,11 @@ export function DubbingWorkspace({
             <p className="m-0 text-muted-foreground text-sm">
               Read the script on the right and change any line you like. Then choose the voice.
             </p>
+          ) : null}
+          {view === "script" && script?.note ? (
+            <Notice tone="info" title="Not quite as asked">
+              {script.note}
+            </Notice>
           ) : null}
 
           {view === "voice" ? (

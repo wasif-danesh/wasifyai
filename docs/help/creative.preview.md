@@ -39,4 +39,4 @@ a fast draft to watch, not the finished video.
 
 ## Problems
 
-- *The song is not in Your music any more.* The preview needs it. Choose another song in the brief.
+- *The song is not in the Library any more.* The preview needs it. Choose another song in the brief.

@@ -4,7 +4,7 @@ store)."""
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from wasifyai_platform_sdk.runstore import RunRecord
+from wasifyai_platform_sdk.runstore import FINISHED, RunRecord
 from wasifyai_platform_sdk.sqlite.engine import Migration, migrate
 
 _DDL = (
@@ -26,6 +26,8 @@ _DDL = (
 
 # the store's shape before the migration runner (stage J1); a change is a new Migration(2, ...)
 _MIGRATIONS = (Migration(1, _DDL),)
+
+_OVER = "status NOT IN (" + ", ".join(f"'{s}'" for s in FINISHED) + ")"
 
 _COLUMNS = (
     "run_id, thread_id, product_id, tenant_id, user_id, status, awaiting, waiting_job, created_at"
@@ -75,16 +77,47 @@ class SqliteRunStore:
         status: str,
         awaiting: str | None = None,
         waiting_job: str | None = None,
-    ) -> None:
+    ) -> bool:
         await self._ready()
         async with self._engine.begin() as conn:
-            await conn.execute(
+            res = await conn.execute(
                 text(
                     "UPDATE runs SET status = :s, awaiting = :a, waiting_job = :j "
-                    "WHERE tenant_id = :t AND run_id = :r"
+                    f"WHERE tenant_id = :t AND run_id = :r AND {_OVER}"
                 ),
                 {"s": status, "a": awaiting, "j": waiting_job, "t": tenant_id, "r": run_id},
             )
+            return bool(res.rowcount)
+
+    async def cancel(self, tenant_id: str, run_id: str) -> RunRecord | None:
+        """Read, then change only if the row is still as read: of two stops, or a stop and the
+        run's own next step, one wins; the loser reads again (a few times at most)."""
+        await self._ready()
+        for _ in range(5):
+            async with self._engine.begin() as conn:
+                row = (
+                    await conn.execute(
+                        text(f"SELECT {_COLUMNS} FROM runs WHERE tenant_id = :t AND run_id = :r"),
+                        {"t": tenant_id, "r": run_id},
+                    )
+                ).first()
+                if row is None or row[5] in FINISHED:
+                    return None
+                moved = await conn.execute(
+                    text(
+                        "UPDATE runs SET status = 'cancelled', awaiting = NULL, waiting_job = NULL "
+                        "WHERE tenant_id = :t AND run_id = :r AND status = :s "
+                        "AND COALESCE(waiting_job, '') = :j"
+                    ),
+                    {"t": tenant_id, "r": run_id, "s": row[5], "j": row[7] or ""},
+                )
+                if moved.rowcount:
+                    return RunRecord(
+                        run_id=row[0], thread_id=row[1], product_id=row[2], tenant_id=row[3],
+                        user_id=row[4], status=row[5], awaiting=row[6] or None,
+                        waiting_job=row[7] or None, created_at=row[8],
+                    )  # fmt: skip
+        return None
 
     async def _take(
         self, tenant_id: str, run_id: str, column: str, expect: str | None

@@ -15,8 +15,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpcore2
 import httpx2
 import jsonschema
+from httpcore2._backends.auto import AutoBackend
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
@@ -27,10 +29,70 @@ from wasifyai_api.mcp_client.servers import (
     ClientActivity,
     Server,
     ServersService,
+    checked_addresses,
     resolve_host,
 )
 
 log = logging.getLogger(__name__)
+
+
+class CheckedBackend(httpcore2.AsyncNetworkBackend):
+    """Connects only to addresses that were checked a moment before (decision 6): the name is
+    resolved here, every address is checked, and the socket goes to a checked address, never to
+    the name again. TLS still names the host, so its certificate is checked against the name."""
+
+    def __init__(self) -> None:
+        self._inner = AutoBackend()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,  # noqa: ASYNC109 (httpcore's own interface)
+        local_address: str | None = None,
+        socket_options: Any = None,
+    ) -> httpcore2.AsyncNetworkStream:
+        try:
+            ips = await asyncio.to_thread(checked_addresses, host)
+        except ValueError as e:
+            raise httpcore2.ConnectError(str(e)) from None
+        last: Exception | None = None
+        for ip in ips:
+            try:
+                return await self._inner.connect_tcp(
+                    ip, port, timeout=timeout, local_address=local_address,
+                    socket_options=socket_options,
+                )  # fmt: skip
+            except (httpcore2.ConnectError, httpcore2.ConnectTimeout) as e:
+                last = e
+            except OSError as e:
+                last = httpcore2.ConnectError(str(e))
+        raise last if last is not None else httpcore2.ConnectError(f"{host} could not be reached")
+
+    async def connect_unix_socket(
+        self,
+        path: str,
+        timeout: float | None = None,  # noqa: ASYNC109 (httpcore's own interface)
+        socket_options: Any = None,
+    ) -> httpcore2.AsyncNetworkStream:
+        raise httpcore2.ConnectError("an outside server is reached over the network only")
+
+    async def sleep(self, seconds: float) -> None:
+        await self._inner.sleep(seconds)
+
+
+def checked_http_client(headers: dict[str, str], timeout_s: float) -> httpx2.AsyncClient:
+    """An HTTP client whose every connection goes through `CheckedBackend`. No proxy from the
+    environment: a proxy would resolve the name itself, out of reach of the check."""
+    transport = httpx2.AsyncHTTPTransport(verify=True, trust_env=False)
+    transport._pool = httpcore2.AsyncConnectionPool(  # the transport's own pool, but checked
+        ssl_context=httpx2.create_ssl_context(verify=True),
+        network_backend=CheckedBackend(),
+    )
+    return httpx2.AsyncClient(
+        headers=headers, timeout=timeout_s, transport=transport, trust_env=False
+    )
+
 
 MAX_RESULT_CHARS = 20_000  # decision 5
 MAX_RESOURCE_CHARS = 200_000  # a resource attached to a message: what an attached document keeps
@@ -175,12 +237,14 @@ class ExternalClient:
             # decision 3: its output is kept, size-limited, where Settings can show it
             sess.log = (cwd / "stderr.log").open("w", encoding="utf-8", errors="replace")
             return stdio_client(params, errlog=sess.log)
-        resolve_host(s.url)  # the name is checked again at connect time (decision 6)
+        resolve_host(s.url)  # a clear refusal before anything starts (decision 6)
         headers: dict[str, str] = {}
         token = await self.servers.token_of(s)
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        hc = httpx2.AsyncClient(headers=headers, timeout=s.timeout_s, verify=True)
+        # and on every connection, to the address that was checked (the test run of 2026-11-22
+        # found a name could answer a private address after the check)
+        hc = checked_http_client(headers, s.timeout_s)
         # the SDK follows a redirect only within the same origin: a redirect to another host
         # with credentials is refused (decision 6)
         return streamable_http_client(s.url, http_client=hc)

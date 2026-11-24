@@ -155,7 +155,7 @@ class PlanJobs:
 
     async def _narrate(self, identity: Identity, row: dict[str, Any]) -> dict[str, Any]:
         """A story read aloud: each part spoken in its voice (kept as soon as it is made, so a stop loses one part at
-        most), then joined into one recording in Your music. Returns what a song's analysis would, with exact times."""
+        most), then joined into one recording in the Library. Returns what a song's analysis would, with exact times."""
         executor = self._deps.state.actions
         if executor is None:
             raise WriterFailed("The story cannot be read aloud here.")

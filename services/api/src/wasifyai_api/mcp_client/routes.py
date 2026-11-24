@@ -52,6 +52,7 @@ class ImportIn(BaseModel):
 
 class ImportAdd(ImportIn):
     name: str = Field(min_length=1, max_length=200)  # the definition to add, as listed
+    confirm_name: str | None = None  # a program's name typed again, as when it is added by hand
 
 
 class ServerPatch(BaseModel):
@@ -90,15 +91,20 @@ async def list_servers(request: Request, me: Identity = Depends(require_person))
     return {"servers": [_row(client, s) for s in rows]}
 
 
+def _confirmed(transport: str, name: str, typed: str | None) -> None:
+    """A program starts on this computer: its name must be typed again, whichever way it came."""
+    if transport == "stdio" and (typed or "").strip() != name.strip():
+        raise HTTPException(
+            422, "Type the server's name to confirm: this starts a program on this computer."
+        )
+
+
 @router.post("/external", status_code=201)
 async def add_server(
     body: ServerIn, request: Request, me: Identity = Depends(require_person)
 ) -> dict[str, Any]:
     client = _client(request)
-    if body.transport == "stdio" and (body.confirm_name or "").strip() != body.name.strip():
-        raise HTTPException(
-            422, "Type the server's name to confirm: this starts a program on this computer."
-        )
+    _confirmed(body.transport, body.name, body.confirm_name)
     try:
         s = await client.servers.create(
             me.tenant_id, me.user_id, body.name, body.transport, url=body.url,
@@ -309,6 +315,9 @@ async def import_add(
         raise HTTPException(404, "no such definition in that file")
     if d.note:
         raise HTTPException(422, d.note)
+    # a program from another app's file is installing software too (the test run of 2026-11-22
+    # found this way in skipped the typed name)
+    _confirmed(d.transport, d.name, body.confirm_name)
     try:
         s = await client.servers.create(
             me.tenant_id, me.user_id, d.name, d.transport, url=d.url, command=d.command,

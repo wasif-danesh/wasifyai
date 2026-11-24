@@ -453,7 +453,7 @@ async def _transcribe(p: TranscribeIn, ctx: ActionContext) -> Outcome:
 
 
 class AnalyseIn(Strict):
-    track_id: str = Field(min_length=1, max_length=64, description="The song in Your music.")
+    track_id: str = Field(min_length=1, max_length=64, description="The song in the Library.")
     lyrics: str | None = Field(
         None, max_length=20000,
         description="The words of the song, typed. Left out, the words the song was made with are "
@@ -959,7 +959,7 @@ class JoinOut(BaseModel):
 
 
 async def _join(p: JoinIn, ctx: ActionContext) -> Outcome:
-    """Speeches one after another, with a pause after each, kept as one recording in Your music:
+    """Speeches one after another, with a pause after each, kept as one recording in the Library:
     the narration of a story, where each line can be a different voice. Says where each part
     starts, so pictures and captions can follow."""
     deps = need_deps(ctx)
@@ -996,7 +996,7 @@ async def _join(p: JoinIn, ctx: ActionContext) -> Outcome:
     return Outcome.ok(
         {"track_id": track_id, "title": title, "seconds": seconds, "uri": _uri("track", track_id),
          "times": [[a, b] for a, b in times]},
-        f'"{title}" was joined ({seconds:.0f} seconds) and saved to Your music.',
+        f'"{title}" was joined ({seconds:.0f} seconds) and saved to the Library.',
     )  # fmt: skip
 
 
@@ -1247,7 +1247,7 @@ def actions() -> list[Action]:
             summary="Join speeches into one recording, with a pause after each.",
             description=(
                 "Put speeches of the library one after another, each followed by a pause, and "
-                "keep them as one recording in Your music: a narration where each line can be a "
+                "keep them as one recording in the Library: a narration where each line can be a "
                 "different voice. It says where each part starts and ends. It takes a few seconds."
             ),
             input=JoinIn, output=JoinOut,

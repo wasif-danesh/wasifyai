@@ -205,12 +205,17 @@ export function createExternalApi(transport: Transport) {
         headers,
         body: JSON.stringify(where),
       }),
-    /** Add one of them, as the file has it (its variables go to the keychain on the engine). */
-    importAdd: (where: ImportWhere, name: string) =>
+    /** Add one of them, as the file has it (its variables go to the keychain on the engine). A
+     * program needs its name typed again in `confirmName`, as when it is added by hand. */
+    importAdd: (where: ImportWhere, name: string, confirmName?: string) =>
       json<{ server: ExternalServer }>(transport, "/external/import/add", {
         method: "POST",
         headers,
-        body: JSON.stringify({ ...where, name }),
+        body: JSON.stringify({
+          ...where,
+          name,
+          ...(confirmName === undefined ? {} : { confirm_name: confirmName }),
+        }),
       }),
   };
 }

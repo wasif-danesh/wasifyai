@@ -21,7 +21,10 @@ this doc describes them. TypeScript types are generated into `packages/contracts
   ends with an `error` event with the code `cancelled` (`retryable: false`). The graph stops where it is, and the assistant
   keeps the text it had written; a media job it is waiting for is stopped (the media worker never starts it, or interrupts
   it) and its place in the line is given back (ADR-0088). A stop that reaches another replica is noticed by
-  the replica running the graph within a second. Not the owner's run, or no such run: 404.
+  the replica running the graph within a second. A stopped run stays stopped: the run store never moves a run out of
+  `done`, `error` or `cancelled`, so the graph's own next step on another replica (parking on a media job, ending)
+  cannot undo a stop; that replica recalls a job it had just started and sends nothing more. Not the owner's run, or
+  no such run: 404.
 - The Next.js BFF passes the upstream stream through unchanged: return the upstream
   `ReadableStream`, disable compression and buffering.
 - Heartbeat comment (`: ping`) every 15 s to keep proxies from closing idle streams.

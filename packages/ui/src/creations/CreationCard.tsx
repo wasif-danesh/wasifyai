@@ -21,7 +21,7 @@ import { clamp2, coverTile } from "../styles";
 import { clock } from "../voice/format";
 import { NavLink } from "./NavLink";
 import { styleTags, timeAgo } from "./format";
-import { type CreationsNav, type Entry, KIND_LABEL, toRow } from "./model";
+import { type CreationsNav, type Entry, KIND_LABEL, toRow, trackLabel } from "./model";
 
 /** One card in My creations: a cover, what kind it is, a title, a few tags and when it was made. */
 function Card({
@@ -219,7 +219,7 @@ export function CreationCard({
       nav={nav}
       to={entry}
       onOpen={onOpen}
-      kind="Music"
+      kind={trackLabel(entry.song)}
       cover={
         <div
           className={cn(picture, "grid place-items-center p-4 text-primary-foreground")}

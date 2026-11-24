@@ -39,7 +39,7 @@ export function SourcePicker({
   library: Library;
   value: AudioSource | null;
   onChange: (source: AudioSource | null) => void;
-  /** add a file from this computer (it joins Your music) */
+  /** add a file from this computer (it joins the Library) */
   onAdd?: (file: File) => void;
   disabled?: boolean;
 }) {
@@ -49,7 +49,7 @@ export function SourcePicker({
     ...(library.tracks.length > 0
       ? [
           {
-            label: "Your music and recordings",
+            label: "Recordings in the Library",
             options: library.tracks.map((t) => ({
               value: `track:${t.id}`,
               label: `${t.title} (${clock(t.seconds)})`,

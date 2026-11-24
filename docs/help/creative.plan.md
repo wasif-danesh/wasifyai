@@ -15,7 +15,7 @@ made at this stage, no pictures or clips. Your typed lyrics stay exactly as you 
 
 It also makes a video of a **story**: you write the story, a narrator reads it in a saved voice, and words
 in quotes are said by the person named in the same sentence, in their own saved voice. The reading is
-kept in Your music, its lines become the captions, and the cuts fall where the lines start.
+kept in the Library, its lines become the captions, and the cuts fall where the lines start.
 
 **Sing.** In a song, the close ups of the first person of the cast who is there in person sing while a
 line is sung (about one shot in six). In a story, a shot where someone of the cast speaks is a close up of
@@ -24,7 +24,7 @@ them speaking. These shots are made with lip sync on their part of the sound.
 ## Steps in the app
 
 1. Open **Creative Studio**.
-2. Choose **New project**. Pick a song from Your music, say what the video is about, and add the look,
+2. Choose **New project**. Pick a song from the Library, say what the video is about, and add the look,
    the people and the places. Type the song's words if you have them. Choose the shape and how fast it
    cuts.
 3. Choose **Plan it**. You can stop at any time and go on later from where it stopped.
@@ -33,7 +33,7 @@ them speaking. These shots are made with lip sync on their part of the sound.
 ## Fields
 
 - `brief.skill`: `song` (the default) or `story`.
-- `brief.track_id`: The song in Your music. For a story it is filled in when the reading is made.
+- `brief.track_id`: The song in the Library. For a story it is filled in when the reading is made.
 - `brief.story`: A story's text (a story only). Separate paragraphs with a blank line.
 - `brief.narrator`: The saved voice that reads a story (`voice.list`); left out, the model's own voice.
 - `brief.idea`: What the video is about.
@@ -67,7 +67,7 @@ them speaking. These shots are made with lip sync on their part of the sound.
 
 - Music analysis set up (about 970 MB, shown before it starts).
 - A language model, chosen with the model button.
-- A song in Your music, or for a story a speech model, and saved voices for its narrator and people
+- A song in the Library, or for a story a speech model, and saved voices for its narrator and people
   (Voices).
 
 ## Examples

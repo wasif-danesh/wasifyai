@@ -81,13 +81,22 @@ def typed_ip(host: str) -> bool:
 def resolve_host(url: str) -> None:
     """Refuse an address whose name resolves to a private or link-local address unless the person
     typed that address itself (the SSRF rule of decision 6). Raises ValueError."""
-    host = (urlsplit(url).hostname or "").lower()
+    checked_addresses((urlsplit(url).hostname or "").lower())
+
+
+def checked_addresses(host: str) -> list[str]:
+    """Where to connect for `host`: the host itself when it is a loopback name or an address the
+    person typed, else every address its name resolves to, each one checked. The connection
+    goes to these addresses, not to the name, so a name that answers differently a moment later
+    (DNS rebinding) cannot lead it somewhere private. Raises ValueError."""
+    host = host.lower()
     if host in LOOPBACK_NAMES or typed_ip(host):
-        return
+        return [host]
     try:
-        found = socket.getaddrinfo(host, None)
+        found = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
     except OSError as e:
         raise ValueError(f"{host} could not be found: {e}") from None
+    ips: list[str] = []
     for info in found:
         ip = str(info[4][0]).split("%", 1)[0]
         if is_private_address(ip):
@@ -95,6 +104,11 @@ def resolve_host(url: str) -> None:
                 f"{host} points at a private address ({ip}); type that address itself if "
                 "you mean it"
             )
+        if ip not in ips:
+            ips.append(ip)
+    if not ips:
+        raise ValueError(f"{host} could not be found")
+    return ips
 
 
 def check_command(raw: Any) -> str:

@@ -172,7 +172,7 @@ describe("making an audiobook", () => {
       read_titles: false,
     });
     const done = await screen.findByRole("region", { name: "Result" });
-    await waitFor(() => expect(done.textContent).toContain("2 chapters, kept in Your music"));
+    await waitFor(() => expect(done.textContent).toContain("2 chapters, kept in the Library"));
     expect(done.textContent).toContain("B - 3. The Letter");
   });
 
@@ -252,14 +252,14 @@ describe("making an audiobook", () => {
     const failing = runsThat([
       ev("error", {
         code: "engine_stopped",
-        message: "The speech runtime stopped. Chapters 1 to 1 were kept in Your music.",
+        message: "The speech runtime stopped. Chapters 1 to 1 were kept in the Library.",
       }),
     ]);
     render(<AudiobookWorkspace api={api()} runs={failing} />);
     await planBook();
     await toVoice();
     await userEvent.click(make());
-    expect((await screen.findByRole("alert")).textContent).toContain("were kept in Your music");
+    expect((await screen.findByRole("alert")).textContent).toContain("were kept in the Library");
   });
 
   it("asks for the language first, and reads with a voice of that language", async () => {

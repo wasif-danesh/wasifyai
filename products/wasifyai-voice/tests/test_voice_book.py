@@ -290,7 +290,7 @@ async def test_a_failure_in_a_later_chapter_keeps_the_chapters_before_it(tmp_pat
     with pytest.raises(RunError) as e:
         await rig.run(task="audiobook", title="B", chapters=CHAPTERS)
     assert e.value.code == "engine_stopped" and e.value.retryable
-    assert "Chapters 1 to 1 were kept in Your music." in e.value.message
+    assert "Chapters 1 to 1 were kept in the Library." in e.value.message
     assert [t["title"] for t in store_for(rig.state).list_tracks("t1", "u1")] == [
         "B - 1. The Storm"
     ]

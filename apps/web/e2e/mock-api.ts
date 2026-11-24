@@ -220,6 +220,38 @@ export async function mockApi(
     if (path.startsWith("/products/wasifyai-voice/") && method === "GET") {
       return json(route, { items: [] });
     }
+    // Train: picture teaching is ready on the service, so its card offers Start (and the screen has something to Tab to)
+    if (path === "/products/wasifyai-training/train/status" && method === "GET") {
+      return json(route, {
+        ready: true,
+        problem: null,
+        preview: false,
+        engine: {},
+        fit: null,
+        busy: false,
+        active_run: null,
+        place: "service",
+        min_pictures: 3,
+        max_pictures: 100,
+        kinds: ["character", "style", "object"],
+        base: "flux2-klein-4b",
+        steps: { character: 200, style: 250, object: 150 },
+        estimates: {
+          character: "About 25 minutes",
+          style: "About 31 minutes",
+          object: "About 19 minutes",
+        },
+      });
+    }
+    // nothing taught yet: every list the Train screen reads is empty
+    const trainLists: Record<string, string> = {
+      "/products/wasifyai-training/train/datasets": "datasets",
+      "/products/wasifyai-training/train/models": "models",
+      "/products/wasifyai-training/train/runs": "runs",
+      "/products/wasifyai-training/train/decision/sets": "sets",
+      "/products/wasifyai-training/train/writing/sets": "sets",
+    };
+    if (path in trainLists && method === "GET") return json(route, { [trainLists[path]]: [] });
     const nbase = "/products/wasifyai-notebooks";
     if (path === `${nbase}/notebooks` && method === "GET") return json(route, NOTEBOOKS);
     const notebook = new RegExp(`^${nbase}/notebooks/(\\w+)(/.*)?$`).exec(path);

@@ -214,7 +214,7 @@ async def test_without_the_separator_the_whole_recording_is_the_voice(tmp_path, 
     async def not_set_up(*_):
         raise VoiceEngineError("model_missing", "Mel-Band RoFormer is not ready.")
 
-    rig.engine.separate = not_set_up
+    rig.engine.separate = not_set_up  # type: ignore[method-assign]
     final, _ = await rig.run(task="dub_script", source_track="song", language="es", background=True)
     assert final["status"] == "done" and final["vocals_track"] == "song"
     assert "background_track" not in final

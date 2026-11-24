@@ -41,9 +41,9 @@ export type AudioToolWorkspaceProps = {
   onGetModel?: (id: string) => void;
   initialModel?: string | null;
   onModelChosen?: (id: string) => void;
-  /** a recording chosen elsewhere (Your music), to start with */
+  /** a recording chosen elsewhere (the Library), to start with */
   initialSource?: AudioSource | null;
-  /** open Your music, or the Voices screen when a voice is needed */
+  /** open the Library, or the Voices screen when a voice is needed */
   onOpenLibrary?: () => void;
   onOpenVoices?: () => void;
   /** the screen's heading and the line under it */
@@ -67,7 +67,7 @@ const TEXT: Record<
     title: "Split into parts",
     ask: "Which recording?",
     blurb:
-      "Split a song into its parts: the singing, the drums, the bass and the rest. Every part is kept in Your music.",
+      "Split a song into its parts: the singing, the drums, the bass and the rest. Every part is kept in the Library.",
     button: "Split the song",
     busy: "Splitting the song…",
     empty: "The parts appear here.",
@@ -102,7 +102,7 @@ type Library = { tracks: Track[]; speeches: Speech[] };
 /**
  * One screen for the three audio tools, with the model chosen from the list (ADR-0066): pick a recording
  * from the library (or add one from this computer), set what the tool needs, and the result is kept in
- * Your music next to what it came from.
+ * the Library next to what it came from.
  */
 export function AudioToolWorkspace({
   api,
@@ -272,7 +272,7 @@ export function AudioToolWorkspace({
     ...(library.tracks.length > 0
       ? [
           {
-            label: "Your music and recordings",
+            label: "Recordings in the Library",
             options: library.tracks.map((t) => ({
               value: `track:${t.id}`,
               label: `${t.title} (${clock(t.seconds)})`,
@@ -296,7 +296,7 @@ export function AudioToolWorkspace({
   const resultActions: Action[] = onOpenLibrary
     ? [
         {
-          label: "Open Your music",
+          label: "Open the Library",
           onSelect: onOpenLibrary,
           icon: <FolderOpen aria-hidden="true" />,
         },
@@ -332,7 +332,7 @@ export function AudioToolWorkspace({
             caption: (
               <div className="grid gap-1">
                 <span>
-                  {results.length > 1 ? "The parts are kept" : "It is kept"} in Your music, next to
+                  {results.length > 1 ? "The parts are kept" : "It is kept"} in the Library, next to
                   the recording it came from.
                 </span>
                 {problem ? (

@@ -9,7 +9,7 @@ Action: `music.analyse`
 
 ## What it is for
 
-Work out what a music video needs to know about a song in Your music: its tempo, every beat and
+Work out what a music video needs to know about a song in the Library: its tempo, every beat and
 downbeat, where its sections start and end and how loud each one is, and when each typed line is
 sung. The answer is kept with the song, so asking again is instant. Sections have no names such as
 verse or chorus: the tool gives where they change and how loud they are, nothing more.
@@ -22,7 +22,7 @@ verse or chorus: the tool gives where they change and how loud they are, nothing
 
 ## Fields
 
-- `track_id`: The song in Your music.
+- `track_id`: The song in the Library.
 - `lyrics`: The words of the song, typed. Left out, the words the song was made with are used.
   Speech recognition only finds when they are sung. It never changes them.
 

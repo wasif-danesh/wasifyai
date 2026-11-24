@@ -440,6 +440,63 @@ async def test_stop_that_reaches_another_replica_is_noticed_by_the_one_running_t
     await mgr.aclose()
 
 
+@pytest.mark.parametrize("next_step", ["job", "done"])
+async def test_a_stop_on_another_replica_is_not_undone_by_the_runs_next_step(next_step):
+    """The test run of 2026-11-22: a stop reached replica B while replica A was about to park the
+    run on a media job (or end it): A's write replaced `cancelled`, B saw `running` and did not
+    recall the job, and the stopped run went on to say `done`."""
+    import asyncio
+
+    from wasifyai_api.runs import RunManager
+
+    go = asyncio.Event()
+    reached = asyncio.Event()
+
+    def build(caps: Any, checkpointer: Any):
+        async def work(state: SlowState) -> SlowState:
+            reached.set()
+            await go.wait()
+            if next_step == "job":
+                interrupt({"kind": "job", "job_id": "job-7"})
+            return {"said": "finished"}
+
+        g = StateGraph(SlowState)
+        g.add_node("work", work)
+        g.add_edge(START, "work")
+        g.add_edge("work", END)
+        return g.compile(checkpointer=checkpointer)
+
+    log, store = InMemoryEventLog(), InMemoryRunStore()
+    mgr = RunManager(log, store, {"p": build(None, InMemorySaver())})
+    recalled: list[str] = []
+    released: list[str] = []
+
+    async def media_cancel(job_id: str) -> None:
+        recalled.append(job_id)
+
+    class Policy:
+        async def release(self, tenant_id: str, user_id: str, job_id: str) -> None:
+            released.append(job_id)
+
+    mgr.media_cancel, mgr.job_policy = media_cancel, Policy()
+    rec = await mgr.start("p", "t", "u", None, {})
+    await asyncio.wait_for(reached.wait(), 5)
+    elsewhere = RunManager(log, store, {})  # replica B: shares the store, runs nothing
+    assert await elsewhere.cancel(rec) == "cancelled"
+    go.set()  # replica A takes its next step only now
+    for _ in range(100):
+        if not mgr._by_run:
+            break
+        await asyncio.sleep(0.02)
+    now = await store.get("t", rec.run_id)
+    assert now is not None and now.status == "cancelled" and now.waiting_job is None
+    events = await log.read("t", rec.run_id, 0, 1000)
+    assert [e["event"] for e in events if e["event"] in ("done", "error")] == ["error"]
+    if next_step == "job":
+        assert recalled == ["job-7"] and released == ["job-7"]  # A let go of its own job
+    await mgr.aclose()
+
+
 @pytest.mark.parametrize("ending", ["done", "run_error", "crash"])
 async def test_a_run_is_marked_finished_only_once_its_last_event_is_in_the_log(ending):
     """A stream that finds the run finished and nothing new in the log stops: if the state said
@@ -459,11 +516,11 @@ async def test_a_run_is_marked_finished_only_once_its_last_event_is_in_the_log(e
             status: str,
             awaiting: str | None = None,
             waiting_job: str | None = None,
-        ) -> None:
+        ) -> bool:
             if status in ("done", "error"):
                 last = await log.read(tenant_id, run_id, 0, 1)
                 seen.append(last[-1]["event"] if last else None)
-            await super().set_state(tenant_id, run_id, status, awaiting, waiting_job)
+            return await super().set_state(tenant_id, run_id, status, awaiting, waiting_job)
 
     def graph(caps, checkpointer):  # noqa: ANN001, ANN202
         def node(state):  # noqa: ANN001, ANN202

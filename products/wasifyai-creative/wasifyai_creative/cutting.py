@@ -147,7 +147,7 @@ async def render(
         tracks = executor.library.get("track")
         song = await tracks.read(ctx, row["brief"]["track_id"]) if tracks and tracks.read else None
         if song is None:
-            raise CutFailed("no_song", "The song is not in Your music any more.")
+            raise CutFailed("no_song", "The song is not in the Library any more.")
         song_path = folder / "song"
         await asyncio.to_thread(song_path.write_bytes, song)
         captions = folder / "captions.ass"

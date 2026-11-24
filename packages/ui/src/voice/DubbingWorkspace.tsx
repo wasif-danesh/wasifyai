@@ -46,7 +46,7 @@ export type DubbingWorkspaceProps = {
   onGetModel?: (id: string) => void;
   initialModel?: string | null;
   onModelChosen?: (id: string) => void;
-  /** a recording chosen elsewhere (Your music), to start with */
+  /** a recording chosen elsewhere (the Library), to start with */
   initialSource?: AudioSource | null;
   onOpenLibrary?: () => void;
   title?: string;
@@ -266,7 +266,7 @@ export function DubbingWorkspace({
     ...(onOpenLibrary
       ? [
           {
-            label: "Open Your music",
+            label: "Open the Library",
             onSelect: onOpenLibrary,
             icon: <FolderOpen aria-hidden="true" />,
           },
@@ -319,10 +319,10 @@ export function DubbingWorkspace({
                   {made.fit.max_overflow_s > 0.3
                     ? `. One line runs ${made.fit.max_overflow_s.toFixed(1)} seconds past its place: shorten it in the script and make the dub again.`
                     : "."}{" "}
-                  It is kept in Your music.
+                  It is kept in the Library.
                 </span>
               ) : (
-                <span className="text-xs">{clock(made.track.seconds)} · kept in Your music</span>
+                <span className="text-xs">{clock(made.track.seconds)} · kept in the Library</span>
               )}
             </div>
           ),
@@ -441,7 +441,7 @@ export function DubbingWorkspace({
                     className="underline underline-offset-4"
                     onClick={onOpenLibrary}
                   >
-                    open Your music
+                    open the Library
                   </button>
                   .
                 </p>

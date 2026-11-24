@@ -253,7 +253,7 @@ describe("ChatScreen", () => {
     const player = await screen.findByLabelText("Summer pop");
     expect(player).toHaveAttribute("src", "http://x/a.wav");
     expect(tracks).toHaveBeenCalledWith("tr1");
-    await user.click(screen.getByRole("button", { name: "Open in Your music" }));
+    await user.click(screen.getByRole("button", { name: "Open in the Library" }));
     expect(onOpen).toHaveBeenCalledWith("track", "tr1");
   });
 

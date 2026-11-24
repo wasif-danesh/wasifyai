@@ -91,7 +91,7 @@ function MusicPlayer({
   }, [trackId, tracks]);
   if (missing)
     return <p className="text-muted-foreground text-sm">This music is no longer there.</p>;
-  if (!tracks) return <p className="text-muted-foreground text-sm">Saved to Your music.</p>;
+  if (!tracks) return <p className="text-muted-foreground text-sm">Saved to the Library.</p>;
   if (!track) return <div className="h-14 w-72 animate-pulse rounded-lg bg-muted" />;
   return (
     <figure className="m-0 grid w-full max-w-md gap-2 rounded-lg border p-3">
@@ -100,7 +100,7 @@ function MusicPlayer({
         <span className="min-w-0 flex-1 truncate font-medium">{track.title}</span>
         {onOpen ? (
           <Button type="button" size="sm" variant="outline" onClick={onOpen}>
-            Open in Your music
+            Open in the Library
           </Button>
         ) : null}
       </figcaption>

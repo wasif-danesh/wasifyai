@@ -237,6 +237,9 @@ function ImportSection({
   const [found, setFound] = useState<ImportDefinition[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
+  // a program is installing software: its name is typed again before it is added
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [typed, setTyped] = useState("");
   const where = (): ImportWhere =>
     source === "claude_code" && folder.trim() ? { source, folder: folder.trim() } : { source };
   async function find() {
@@ -251,8 +254,13 @@ function ImportSection({
   async function add(d: ImportDefinition) {
     setError(null);
     try {
-      const r = await api.importAdd(where(), d.name);
+      const r =
+        d.transport === "stdio"
+          ? await api.importAdd(where(), d.name, typed)
+          : await api.importAdd(where(), d.name);
       setAdded((s) => new Set(s).add(d.name));
+      setConfirming(null);
+      setTyped("");
       onAdded(r.server);
     } catch (e) {
       setError(problem(e));
@@ -321,8 +329,43 @@ function ImportSection({
                 <span className="text-destructive text-xs">{d.note}</span>
               ) : added.has(d.name) ? (
                 <span className="text-muted-foreground text-xs">added</span>
+              ) : d.transport === "stdio" && confirming === d.name ? (
+                <span className="flex w-full flex-wrap items-end gap-2">
+                  <span className="m-0 w-full text-sm">
+                    This starts a program on your computer, as you. Adding it is installing
+                    software: type its name to confirm.
+                  </span>
+                  <label htmlFor={`${id}-confirm`} className="grid gap-1 text-sm">
+                    <span>Type the name to confirm</span>
+                    <input
+                      id={`${id}-confirm`}
+                      value={typed}
+                      onChange={(e) => setTyped(e.target.value)}
+                      className="h-9 min-w-40 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={typed.trim() !== d.name.trim()}
+                    onClick={() => void add(d)}
+                  >
+                    Add
+                  </Button>
+                </span>
               ) : (
-                <Button type="button" size="sm" variant="outline" onClick={() => void add(d)}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (d.transport === "stdio") {
+                      setConfirming(d.name);
+                      setTyped("");
+                    } else void add(d);
+                  }}
+                >
                   Add
                 </Button>
               )}

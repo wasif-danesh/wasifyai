@@ -87,6 +87,37 @@ def test_a_name_that_points_inside_the_network_is_refused_unless_the_address_was
     sv.resolve_host("http://localhost:1/mcp")
 
 
+async def test_a_name_that_changes_its_address_after_the_check_is_still_refused(monkeypatch):
+    """DNS rebinding (the test run of 2026-11-22): the first answer is public, the next private.
+    The connection is made to an address checked at that moment, never to the name again."""
+    import httpx2
+    from wasifyai_api.mcp_client import client as cl
+
+    answers = iter(["93.184.216.34", "10.0.0.5"])
+    monkeypatch.setattr(
+        sv.socket, "getaddrinfo",
+        lambda *a, **k: [(None, None, None, None, (next(answers), 0))],
+    )  # fmt: skip
+    dialled: list[str] = []
+
+    async def connect_tcp(self, host, port, **kw):
+        dialled.append(host)
+        raise OSError("not in a test")
+
+    monkeypatch.setattr(cl.AutoBackend, "connect_tcp", connect_tcp)
+    sv.resolve_host("https://rebind.example/mcp")  # the first answer passes
+    async with cl.checked_http_client({}, 5) as http:
+        with pytest.raises(httpx2.ConnectError, match="private address"):
+            await http.get("https://rebind.example/mcp")
+    assert dialled == []  # nothing was dialled at all
+
+    answers = iter(["93.184.216.34"])
+    async with cl.checked_http_client({}, 5) as http:
+        with pytest.raises(httpx2.ConnectError):
+            await http.get("https://fine.example/mcp")
+    assert dialled == ["93.184.216.34"]  # the checked address, not the name
+
+
 async def test_secrets_live_in_the_secret_store_and_leave_with_the_server():
     svc = service()
     s = await svc.create(
@@ -683,11 +714,12 @@ def test_the_window_attaches_a_resource_answers_a_form_and_imports_a_definition(
         )
         assert r.status_code == 200 and r.json()["found"][0]["env_names"] == ["K"], r.text
         assert "s3cr3t-value" not in json.dumps(r.json()["found"][0])
-        r = c.post(
-            "/external/import/add",
-            json={"source": "claude_code", "path": str(cfg), "name": "fake2"},
-            headers=auth(),
-        )
+        add = {"source": "claude_code", "path": str(cfg), "name": "fake2"}
+        # a program is installing software: its name is typed again, as when added by hand
+        for typed in (None, "fake"):
+            r = c.post("/external/import/add", json={**add, "confirm_name": typed}, headers=auth())
+            assert r.status_code == 422 and "Type the server's name" in r.text, r.text
+        r = c.post("/external/import/add", json={**add, "confirm_name": "fake2"}, headers=auth())
         assert r.status_code == 201 and r.json()["server"]["env_names"] == ["K"], r.text
         r = c.post("/external/import", json={"source": "nope"}, headers=auth())
         assert r.status_code == 422

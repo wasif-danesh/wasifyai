@@ -36,6 +36,7 @@ from wasifyai_platform_sdk import (
     tracing,
 )
 from wasifyai_platform_sdk.context import current_context
+from wasifyai_platform_sdk.runstore import FINISHED as RUN_FINISHED
 
 from wasifyai_api.metrics import record_run
 from wasifyai_api.run_tracing import OFF as LANGFUSE_OFF
@@ -45,7 +46,7 @@ log = logging.getLogger(__name__)
 
 # a stop that reached another replica is noticed at most this often (seconds) by the one running it
 CANCEL_CHECK_S = 1.0
-FINISHED = ("done", "error", "cancelled")
+FINISHED = RUN_FINISHED  # the store's: done, error, cancelled
 
 
 class RunIdTaken(Exception):
@@ -118,29 +119,49 @@ class RunManager:
         was over already, else `cancelled`. The graph stops where it is (the assistant keeps the
         text it had written); its media jobs are not recalled. A closing `error` event with the
         code `cancelled` ends the stream for anyone still reading it."""
-        current = await self.store.get(rec.tenant_id, rec.run_id)
-        if current is None or current.status in FINISHED:
-            return current.status if current else "cancelled"
-        await self.store.set_state(rec.tenant_id, rec.run_id, "cancelled")
+        # one step on the shared store: the run's own replica cannot end it as `done` or park it
+        # on a job after this, and two stops cannot both win (the test run of 2026-11-22)
+        before = await self.store.cancel(rec.tenant_id, rec.run_id)
+        if before is None:
+            now = await self.store.get(rec.tenant_id, rec.run_id)
+            return now.status if now else "cancelled"
         task = self._by_run.get(rec.run_id)
         if task is not None:
             task.cancel()  # the run is here; on another replica its own loop notices the state
             await asyncio.gather(task, return_exceptions=True)  # let it save what it had
-        if current.status == "waiting_job":
-            if self.media_cancel is not None and current.waiting_job:
-                try:
-                    await self.media_cancel(current.waiting_job)
-                except Exception:
-                    log.warning("could not stop media job %s", current.waiting_job)
-            if self.job_policy is not None and current.waiting_job:
-                try:  # the place is free at once (ADR-0088); a lost one runs out on its own
-                    await self.job_policy.release(rec.tenant_id, rec.user_id, current.waiting_job)
-                except Exception:
-                    log.warning("could not give back the place of job %s", current.waiting_job)
-            await self._clean_up(rec)
+        if before.status == "waiting_job" and before.waiting_job:
+            await self._let_go(rec, before.waiting_job)
         record_run(rec.product_id, "cancelled")
         await self._emit(rec, ErrorEvent, code="cancelled", message="Stopped.", retryable=False)
         return "cancelled"
+
+    async def _let_go(self, rec: RunRecord, job_id: str) -> None:
+        """A stopped run's media job: recalled, its place given back at once (ADR-0088; a lost
+        one runs out on its own), and the graph's clean-up run."""
+        if self.media_cancel is not None:
+            try:
+                await self.media_cancel(job_id)
+            except Exception:
+                log.warning("could not stop media job %s", job_id)
+        if self.job_policy is not None:
+            try:
+                await self.job_policy.release(rec.tenant_id, rec.user_id, job_id)
+            except Exception:
+                log.warning("could not give back the place of job %s", job_id)
+        await self._clean_up(rec)
+
+    async def _stopped(self, rec: RunRecord) -> bool:
+        now = await self.store.get(rec.tenant_id, rec.run_id)
+        return now is not None and now.status == "cancelled"
+
+    async def _end_with_error(self, rec: RunRecord, **kw: Any) -> str:
+        """The run's own error, unless a stop came first: then the stream already ended with
+        `cancelled`, and nothing more is said."""
+        if await self._stopped(rec):
+            return "cancelled"
+        await self._emit(rec, ErrorEvent, **kw)
+        await self.store.set_state(rec.tenant_id, rec.run_id, "error")
+        return "error"
 
     async def _clean_up(self, rec: RunRecord) -> None:
         """A run stopped while it waited for a media job never runs the node that would have
@@ -290,13 +311,17 @@ class RunManager:
                     value = intr.value if isinstance(intr.value, dict) else {"value": intr.value}
                     if value.get("kind") == "job":
                         # Waiting for the media worker, not for the user: no client event.
-                        await self.store.set_state(
+                        if not await self.store.set_state(
                             rec.tenant_id, rec.run_id, "waiting_job", waiting_job=value["job_id"]
-                        )
+                        ):
+                            # stopped on another replica meanwhile: it could not see this job
+                            await self._let_go(rec, str(value["job_id"]))
+                            return "cancelled"
                         return "waiting_job"
-                    await self.store.set_state(
+                    if not await self.store.set_state(
                         rec.tenant_id, rec.run_id, "waiting_input", awaiting=intr.id
-                    )
+                    ):
+                        return "cancelled"  # stopped meanwhile: no card for a stopped run
                     await self._emit(
                         rec,
                         InterruptEvent,
@@ -314,6 +339,8 @@ class RunManager:
                 if state.values.get("status") == "refused"
                 else {}
             )
+            if await self._stopped(rec):
+                return "cancelled"  # the stream already ended with `cancelled`
             if refusal:
                 record_run(rec.product_id, "refused", refusal=str(refusal.get("code", "")))
             else:
@@ -326,31 +353,26 @@ class RunManager:
         except JobFailed as e:
             err = e.result.error
             record_run(rec.product_id, "error", code=err.code if err else "job_failed")
-            await self._emit(
+            return await self._end_with_error(
                 rec,
-                ErrorEvent,
                 code=err.code if err else "job_failed",
                 message=err.message if err else "The media job failed.",
                 retryable=err.retryable if err else False,
                 job_id=e.result.job_id,
             )
-            await self.store.set_state(rec.tenant_id, rec.run_id, "error")
-            return "error"
         except RunError as e:
             record_run(rec.product_id, "error", code=e.code)
-            await self._emit(rec, ErrorEvent, code=e.code, message=e.message, retryable=e.retryable)
-            await self.store.set_state(rec.tenant_id, rec.run_id, "error")
-            return "error"
+            return await self._end_with_error(
+                rec, code=e.code, message=e.message, retryable=e.retryable
+            )
         except asyncio.CancelledError:
             raise
         except Exception:
             log.exception("run failed", extra={"run_id": rec.run_id})
             record_run(rec.product_id, "error", code="run_failed")
-            await self._emit(
-                rec, ErrorEvent, code="run_failed", message="The run failed.", retryable=True
+            return await self._end_with_error(
+                rec, code="run_failed", message="The run failed.", retryable=True
             )
-            await self.store.set_state(rec.tenant_id, rec.run_id, "error")
-            return "error"
 
     async def _emit_custom(self, rec: RunRecord, chunk: dict[str, Any]) -> None:
         if chunk.get("type") == "token":

@@ -260,6 +260,32 @@ async def test_the_card_is_the_default_and_the_person_can_edit_it_before_running
     assert card["params"] == {"prompt": "a red fox", "size": "wide"}
 
 
+@pytest.mark.parametrize("said", ["", "I will draw it."])
+async def test_a_card_the_model_asked_for_without_a_word_still_comes_with_one(tmp_path, ctx, said):
+    """In the test runs of 2026-11-21, 15 of 38 cards came with nothing said above them."""
+    rig = Rig(
+        tmp_path,
+        [{"text": said, "tool_calls": [
+            {"name": PROPOSE, "arguments": {"action_id": "image.generate",
+                "params": {"prompt": "a fox"}}}]},
+         {"text": "Done."}],
+        FakeHost(),
+    )  # fmt: skip
+    state, events = await rig.turn_with({"text": "draw a fox", "approvals": True})
+    assert await rig.paused()
+    streamed = "".join(e["text"] for e in events if e.get("type") == "token")
+    rows = await rig.store.messages("t1", "u1", state["conversation_id"])
+    texts = [p["text"] for p in rows[1].parts if p["type"] == "text"]
+    if said:
+        # the model's own words are left alone
+        assert streamed.strip() == said and [t.strip() for t in texts] == [said]
+    else:
+        assert "Check the details on the card" in streamed and texts == [streamed]
+        assert [p["type"] for p in rows[1].parts] == ["text", "tool_call"]
+    state, _ = await rig.answer({"approved": True})
+    assert state["status"] == "done"
+
+
 async def test_the_chats_setting_decides_when_a_card_is_shown(tmp_path, ctx):
     """ADR-0071 decision 5: ask (default), ask only for what is costly or leaves, or never."""
 

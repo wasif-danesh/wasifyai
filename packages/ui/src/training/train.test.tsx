@@ -719,6 +719,24 @@ describe("Train", () => {
     await waitFor(() => expect(screen.getByText("Nothing taught yet.")).toBeTruthy());
   });
 
+  it("says when training cannot be reached, and offers to try again", async () => {
+    const { api } = fake();
+    const status = api.status;
+    let down = true;
+    api.status = vi.fn(async () => {
+      if (down) throw new Error("Training could not be reached.");
+      return status();
+    });
+    render(<Train api={api} place="service" pollMs={10} />);
+    expect(await screen.findByText("Training could not be reached.")).toBeTruthy();
+    // the cards say so instead of "Looking…" for ever
+    expect(screen.queryByText("Looking…")).toBeNull();
+    expect(screen.getAllByText("Could not be checked").length).toBeGreaterThan(0);
+    down = false;
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.queryByText("Training could not be reached.")).toBeNull());
+  });
+
   it("says where it is learnt: on this computer, or on the service", async () => {
     const { api } = fake();
     const { unmount } = render(<Train api={api} pollMs={10} />);

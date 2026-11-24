@@ -163,7 +163,7 @@ export function Creative({
               <EmptyState
                 icon={Clapperboard}
                 title="No projects yet"
-                text="A project starts from a song in Your music and a line about what the video is."
+                text="A project starts from a song in the Library and a line about what the video is."
                 action={
                   <Button type="button" onClick={() => setView({ at: "new" })}>
                     New project
@@ -216,7 +216,7 @@ export function Creative({
       {gone ? (
         <ConfirmDialog
           title={`Delete "${gone.title}"?`}
-          message="The plan goes. The song stays in Your music."
+          message="The plan goes. The song stays in the Library."
           onCancel={() => setGone(null)}
           onConfirm={() => {
             const id = gone.id;

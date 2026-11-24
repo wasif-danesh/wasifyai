@@ -2764,7 +2764,7 @@
               },
               "track_id": {
                 "default": "",
-                "description": "The song, from Your music. For a story, the narration once it is made.",
+                "description": "The song, from the Library. For a story, the narration once it is made.",
                 "maxLength": 64,
                 "title": "Track Id",
                 "type": "string"
@@ -10390,7 +10390,7 @@
         "additionalProperties": false,
         "properties": {
           "track_id": {
-            "description": "The song in Your music.",
+            "description": "The song in the Library.",
             "maxLength": 64,
             "minLength": 1,
             "title": "Track Id",
@@ -11559,7 +11559,7 @@
       "id": "speech.join",
       "title": "Join speech",
       "summary": "Join speeches into one recording, with a pause after each.",
-      "description": "Put speeches of the library one after another, each followed by a pause, and keep them as one recording in Your music: a narration where each line can be a different voice. It says where each part starts and ends. It takes a few seconds.",
+      "description": "Put speeches of the library one after another, each followed by a pause, and keep them as one recording in the Library: a narration where each line can be a different voice. It says where each part starts and ends. It takes a few seconds.",
       "input": {
         "$defs": {
           "JoinPart": {

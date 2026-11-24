@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
 TTL_SECONDS = 7 * 24 * 3600
+# a run in one of these is over: no replica moves it out again (a stop on one replica and the
+# run's own end on another must not undo each other; the test run of 2026-11-22)
+FINISHED = ("done", "error", "cancelled")
 
 
 class RunRecord(BaseModel):
@@ -35,7 +38,16 @@ class RunStore(Protocol):
         status: str,
         awaiting: str | None = None,
         waiting_job: str | None = None,
-    ) -> None: ...
+    ) -> bool:
+        """Move the run to `status`, unless it is over already (`FINISHED`): then nothing changes
+        and the answer is False. One step, so two replicas cannot both win."""
+        ...
+
+    async def cancel(self, tenant_id: str, run_id: str) -> RunRecord | None:
+        """Mark the run `cancelled` and clear what it waits for, in one step, and give back the
+        record as it was just before; None when it is over already or unknown."""
+        ...
+
     async def take_awaiting(self, tenant_id: str, run_id: str) -> str | None:
         """Atomically clear and return the pending interrupt id (None if nothing is pending)."""
         ...
@@ -66,9 +78,20 @@ class InMemoryRunStore:
         status: str,
         awaiting: str | None = None,
         waiting_job: str | None = None,
-    ) -> None:
+    ) -> bool:
         rec = self._runs[(tenant_id, run_id)]
+        if rec.status in FINISHED:
+            return False
         rec.status, rec.awaiting, rec.waiting_job = status, awaiting, waiting_job
+        return True
+
+    async def cancel(self, tenant_id: str, run_id: str) -> RunRecord | None:
+        rec = self._runs.get((tenant_id, run_id))
+        if rec is None or rec.status in FINISHED:
+            return None
+        before = rec.model_copy()
+        rec.status, rec.awaiting, rec.waiting_job = "cancelled", None, None
+        return before
 
     async def take_awaiting(self, tenant_id: str, run_id: str) -> str | None:
         rec = self._runs.get((tenant_id, run_id))
@@ -93,6 +116,23 @@ return v
 """
 
 
+_SET = """
+local s = redis.call('HGET', KEYS[1], 'status')
+if s == 'done' or s == 'error' or s == 'cancelled' then return 0 end
+redis.call('HSET', KEYS[1], 'status', ARGV[1], 'awaiting', ARGV[2], 'waiting_job', ARGV[3])
+return 1
+"""
+
+_CANCEL = """
+local s = redis.call('HGET', KEYS[1], 'status')
+if (not s) or s == 'done' or s == 'error' or s == 'cancelled' then return nil end
+local a = redis.call('HGET', KEYS[1], 'awaiting') or ''
+local j = redis.call('HGET', KEYS[1], 'waiting_job') or ''
+redis.call('HSET', KEYS[1], 'status', 'cancelled', 'awaiting', '', 'waiting_job', '')
+return {s, a, j}
+"""
+
+
 def run_key(tenant_id: str, run_id: str) -> str:
     return f"wasifyai:{tenant_id}:run:{run_id}:meta"
 
@@ -101,6 +141,8 @@ class RedisRunStore:
     def __init__(self, redis: Redis):
         self._r = redis
         self._take = redis.register_script(_TAKE)
+        self._set = redis.register_script(_SET)
+        self._cancel = redis.register_script(_CANCEL)
 
     async def create(self, rec: RunRecord) -> bool:
         key = run_key(rec.tenant_id, rec.run_id)
@@ -131,14 +173,20 @@ class RedisRunStore:
         status: str,
         awaiting: str | None = None,
         waiting_job: str | None = None,
-    ) -> None:
-        await self._r.hset(
-            run_key(tenant_id, run_id),
-            mapping={
-                "status": status,
-                "awaiting": awaiting or "",
-                "waiting_job": waiting_job or "",
-            },
+    ) -> bool:
+        done = await self._set(
+            keys=[run_key(tenant_id, run_id)], args=[status, awaiting or "", waiting_job or ""]
+        )
+        return bool(done)
+
+    async def cancel(self, tenant_id: str, run_id: str) -> RunRecord | None:
+        before = await self.get(tenant_id, run_id)
+        got = await self._cancel(keys=[run_key(tenant_id, run_id)])
+        if not got or before is None:
+            return None
+        s, a, j = ((v.decode() if isinstance(v, bytes) else v) for v in got)
+        return before.model_copy(
+            update={"status": s, "awaiting": a or None, "waiting_job": j or None}
         )
 
     async def take_awaiting(self, tenant_id: str, run_id: str) -> str | None:
